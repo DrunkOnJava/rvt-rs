@@ -11,8 +11,8 @@
 //! 2027 `rac_advanced` holds at +135 the material its 2026 copy does (RE-179).
 //! A panel type, `SysPanelFamSym`, holds a tag at +135 and its material's
 //! ElementId right after it, at +139: RE1's one panel type, whose material is
-//! the "Glass" of Revit's export, as a material followed a tag on Snowdon
-//! Towers' panel types (RE-72). A value that is not one of the file's
+//! the "Glass" of Revit's export (RE-166; the panel offset rests on RE1's
+//! panel types only). A value that is not one of the file's
 //! materials is not read as one.
 //!
 //! The value is the type's `m_renderStyleId` (RE-201, #355), and an optional
@@ -24,7 +24,6 @@
 //! read.
 // Tracker: B66.
 
-use crate::partition_room_parameters::verified_data_object;
 use crate::{Result, RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -178,18 +177,18 @@ fn scan_offsets(rf: &mut RevitFile, materials: &BTreeSet<u32>) -> Result<BTreeMa
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
+        let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
+            continue;
+        };
         let buf = inflated.bytes();
+        // From the stream's listed data objects: verifying the object around
+        // each place its class word occurs cost an Adler-32 of its payload
+        // every time, quadratic on a crafted stream (#1833). On every corpus
+        // file each object so verified is a listed one.
         for &(tag, at) in &tags {
-            // The class word ends a data object's 20-byte header.
-            let word = (0xffff_0000u32 | tag).to_le_bytes();
-            for hit in memchr::memmem::find_iter(buf, &word) {
-                let Some(start) = hit.checked_sub(16) else {
-                    continue;
-                };
-                let Some(object) = verified_data_object(buf, start) else {
-                    continue;
-                };
-                if object.class & 0xffff != tag || object.end < start + at + 8 {
+            let word = 0xffff_0000u32 | tag;
+            for &(start, object) in objects.iter().filter(|(_, object)| object.class == word) {
+                if object.end < start + at + 8 {
                     continue;
                 }
                 let Some(value) = crate::le_bytes::u64_at(buf, start + at) else {

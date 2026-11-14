@@ -198,15 +198,22 @@
         },
         "recovered_unit_identifiers": {
           "type": "array",
-          "description": "Best-effort project unit identifiers selected from Revit autodesk.unit.* records and threaded into IfcUnitAssignment.",
+          "description": "The display units of length, area, volume, angle, mass and time, as the project's UnitsElem (or the agreeing format maps of its string records) sets them (RE-445). They describe the source model; the IFC's values and unit assignment are SI.",
           "items": {
             "type": "string"
           }
         },
         "unknown_unit_identifiers": {
           "type": "array",
-          "description": "Observed autodesk.unit.* identifiers that did not map to a known IFC unit emission.",
+          "description": "Those of the six display units no IFC unit is known for.",
           "items": {
+            "type": "string"
+          }
+        },
+        "project_display_units": {
+          "type": "object",
+          "description": "The display unit of every spec the project lists, by the spec's ForgeTypeId (RE-445). Absent where none was read.",
+          "additionalProperties": {
             "type": "string"
           }
         },
@@ -360,7 +367,7 @@
                   "offset": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected among the element's frames (Revit 2024 and later: the greatest vertical extent, then the greater stream and offset; 2008 to 2023: the newest), which a body reader may not have taken: value_sources names the copy a reader took a value from. It and native.stream can name different partitions. For the global_latest_schema_walk carrier it indexes Global/Latest as the walk inflates it; that carrier is unmeasured."
+                    "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected among the element's frames (the newest: the highest-numbered partition, then on Revit 2024 and later the greatest vertical extent within it, then the later offset), which a body reader may not have taken: value_sources names the copy a reader took a value from. It and native.stream can name different partitions. For the global_latest_schema_walk carrier it indexes Global/Latest as the walk inflates it; that carrier is unmeasured."
                   },
                   "record_offset": {
                     "type": "integer",
@@ -855,7 +862,7 @@
         "unexported_element_records": {
           "type": "integer",
           "minimum": 0,
-          "description": "Element records of a recovered category found but not exported because no ElementId is attributable (element_record_without_element_id, RE-30). Non-zero means the model is incomplete and score is scaled by the exported share; zero is not a completeness claim."
+          "description": "Element records of a recovered category found but not exported because no ElementId is attributable (element_record_without_element_id, RE-30): they sit in records of ElementIds the element table does not declare. On the one model compared with Revit's export of the same save they were elements deleted since the file's last Save As, which a file saved in place keeps (#1838); if nothing was deleted the model is likely incomplete. Non-zero means the model may be incomplete, and score is scaled by the exported share; zero is not a completeness claim."
         }
       }
     },
@@ -995,7 +1002,7 @@
     },
     "export_decisions": {
       "type": "object",
-      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused, wall_end_extension_refused, wall_profile_extension_refused and saved_mesh_not_used total exported.bounding_box_bodies, bounding_box_spaces, area_body_refusals, slab_shape_refusals, wall_base_refusals, wall_end_refusals, wall_profile_refusals and saved_mesh_refusals.",
+      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams, and the work_budget_reached item, which counts readers' stops) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused, wall_end_extension_refused, wall_profile_extension_refused and saved_mesh_not_used total exported.bounding_box_bodies, bounding_box_spaces, area_body_refusals, slab_shape_refusals, wall_base_refusals, wall_end_refusals, wall_profile_refusals and saved_mesh_refusals.",
       "required": ["cap_per_reason", "dropped", "reasons", "entries"],
       "properties": {
         "cap_per_reason": {

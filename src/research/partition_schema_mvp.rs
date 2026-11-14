@@ -176,7 +176,7 @@ pub fn recover_partition_schema_mvp(
     // identity, category, box and the readers called here; nothing else 2024
     // decodes on top of records is read. ---
     if crate::partition_element_records_2023::is_32bit_release(revit_version) {
-        let references = recover_2023_records(rf, revit_version, &mut out);
+        let references = recover_2023_records(rf, revit_version, &mut out, &mut wall_reads);
         attach_room_outlines(rf, revit_version, &mut out.rooms);
         // --- Pipes' types and centrelines, from their own native record
         // (RE-370) ---
@@ -234,6 +234,12 @@ pub fn recover_partition_schema_mvp(
         }
         bind_opening_hosts(&out.walls, &mut out.doors);
         bind_opening_hosts(&out.walls, &mut out.windows);
+        // --- Each door and window in the wall its own native record names
+        // (RE-448), as RE-245 does on 2024 to 2027 ---
+        rebind_opening_hosts_to_native(rf, &out.walls, [&mut out.doors, &mut out.windows]);
+        // --- Each door's and window's opening from the outline its symbol
+        // cuts (RE-450), as on 2024 to 2027 where no type opening is read ---
+        attach_cut_loop_openings_32(rf, revit_version, [&mut out.doors, &mut out.windows]);
         // --- The Level parameters each element's own native record names
         // (RE-369) ---
         attach_levels_32(
@@ -645,7 +651,7 @@ pub fn recover_partition_schema_mvp(
     // --- Wall sweeps (RE-69) ---
     attach_wall_sweep_types(rf, revit_version, &mut out.products);
     // --- Pipes, wall sweeps and ramps typed in their own record (RE-240) ---
-    attach_native_type_names(rf, &mut out.products);
+    attach_native_type_names(rf, revit_version, &mut out.products);
     // --- Curtain mullions drawn as an extrusion of their section (RE-243) ---
     attach_mullion_plain_hosts(rf, &mut out.products);
     // --- Walls' layers and exterior side (RE-53) ---
@@ -845,6 +851,14 @@ pub fn recover_partition_schema_mvp(
                 element
                     .fields
                     .push((COLUMN_UNJOINED_FIELD.into(), InstanceField::Bool(true)));
+                // The hollow section's four quantities are written on the
+                // releases they are measured on only (#1945).
+                if HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS.contains(&revit_version) {
+                    element.fields.push((
+                        COLUMN_HOLLOW_QUANTITIES_FIELD.into(),
+                        InstanceField::Bool(true),
+                    ));
+                }
             }
         }
         // --- The elements each column's pair steps name (RE-291) ---
@@ -1074,8 +1088,20 @@ fn element_record_decoded(
 ) -> DecodedElement {
     let (cx, cy) = record.plan_centre_feet();
     let (dx, dy, dz) = record.extents_feet();
-    let level_id =
-        crate::element_record_level_refs::unique_level_reference(&record.references, level_ids);
+    // RE-454: a beam's or brace's Level is the one its record's second counted
+    // reference list names where that names any, else the first's (RE-174), the
+    // list its Reference Level is read from: Revit puts it in that Level's
+    // storey. The first list alone gave 63 beams of each BIM4LCA timber office a
+    // storey other than Revit's.
+    let level_list: &[u64] = if class == "StructuralFraming"
+        && !crate::element_record_level_refs::named_levels(&record.second_references, level_ids)
+            .is_empty()
+    {
+        &record.second_references
+    } else {
+        &record.references
+    };
+    let level_id = crate::element_record_level_refs::unique_level_reference(level_list, level_ids);
     let mut fields = vec![
         (
             "m_locationX".into(),
@@ -1148,7 +1174,7 @@ fn element_record_decoded(
     if level_id.is_none() {
         // RE-59: base and top constraint, resolved against the Levels'
         // elevations by `resolve_base_constraint_levels`.
-        let named = crate::element_record_level_refs::named_levels(&record.references, level_ids);
+        let named = crate::element_record_level_refs::named_levels(level_list, level_ids);
         if named.is_empty() {
             // RE-60: what the record names instead, resolved by
             // `resolve_hosted_levels`.
@@ -1172,7 +1198,9 @@ fn element_record_decoded(
                 ));
             }
         }
-        if named.len() == 2 {
+        // A beam or brace that names more than two keeps them too: its
+        // Reference Level is the highest (RE-175, RE-454).
+        if named.len() == 2 || (named.len() > 2 && class == "StructuralFraming") {
             fields.push((
                 crate::element_record_level_refs::CONSTRAINT_LEVELS_FIELD.into(),
                 InstanceField::Vector(

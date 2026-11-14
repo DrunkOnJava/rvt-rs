@@ -4,11 +4,12 @@ use super::*;
 
 /// Placed instances of every
 /// [`crate::partition_element_records::PRODUCT_RECORD_CATEGORIES`]
-/// category, each decoded under its class name (RE-33).
+/// category, each decoded under its class name (RE-33 added the first
+/// thirteen; the list has grown with later reports).
 ///
 /// The selection is the #211 instance rule, the same one that reproduces
 /// the exported wall, door, window and column sets; one sweep of the
-/// partitions serves all thirteen categories. Bodies are the record
+/// partitions serves every category in the list. Bodies are the record
 /// bounding box, and a Level binds only when the record's reference list
 /// names exactly one.
 pub fn product_instances_from_partition_records(
@@ -300,6 +301,59 @@ pub(super) fn bind_opening_hosts(walls: &[DecodedElement], openings: &mut [Decod
     }
 }
 
+/// Rebind each door or window that [`bind_opening_hosts`] set in a wall to
+/// the wall its own native record's `m_hostId` names, where that is another
+/// plain wall (RE-448): RE-245's rule, which the 2024 to 2027 path applies
+/// with its cut loops. The reference list's nearest wall is not the host
+/// where the list names several: on Revit 2015 to 2023, 28 doors and windows
+/// of Autodesk's `rac_advanced` and one door of `rac_basic`, each set by the
+/// same project's 2024 save in the wall its `m_hostId` names.
+pub(super) fn rebind_opening_hosts_to_native(
+    rf: &mut RevitFile,
+    walls: &[DecodedElement],
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    let plain_walls: BTreeSet<u32> = walls
+        .iter()
+        .filter(|wall| wall.class != CURTAIN_WALL_CLASS)
+        .filter_map(|wall| wall.id)
+        .collect();
+    let mut openings: Vec<&mut DecodedElement> = groups
+        .into_iter()
+        .flat_map(|group| group.iter_mut())
+        .collect();
+    let bound: BTreeSet<u64> = openings
+        .iter()
+        .filter(|element| {
+            element
+                .fields
+                .iter()
+                .any(|(name, _)| name == OPENING_HOST_FIELD)
+        })
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let Ok(hosts) = crate::native_symbol_cuts::instance_hosts(rf, &bound) else {
+        return;
+    };
+    for element in &mut openings {
+        let Some(native) = element
+            .id
+            .and_then(|id| hosts.get(&u64::from(id)))
+            .and_then(|host| u32::try_from(*host).ok())
+            .filter(|host| plain_walls.contains(host))
+        else {
+            continue;
+        };
+        for (name, value) in &mut element.fields {
+            if let InstanceField::ElementId { id, .. } = value {
+                if name == OPENING_HOST_FIELD {
+                    *id = native;
+                }
+            }
+        }
+    }
+}
+
 /// Recover door / window instances of one `BuiltInCategory` and bind
 /// each to its host wall (#222, RE-23).
 pub fn openings_from_partition_category_records(
@@ -391,18 +445,27 @@ pub(super) fn select_instance_records(
 
     // One record per ElementId: a single element can be framed more
     // than once across partitions, and the frames can disagree on the
-    // vertical extent. Keep the greatest z-extent — that is the
-    // element's full body, and it is measured: against the reference
-    // export's `IfcExtrudedAreaSolid.Depth`, first-by-(stream, offset)
-    // agrees on 67 of 80 slabs and greatest-extent on 79 of 80 (the
-    // 80th is exported as two stacked solids whose depths sum to the
-    // recorded extent) (#212, RE-22).
+    // vertical extent. Keep the **newest** frame — the greatest partition
+    // number (`PartitionElementRecord::frame_order`), and within one
+    // partition the greater z-extent, then the later offset — because a
+    // Revit 2024 project rewrites an edited element into a higher-numbered
+    // `Partitions/NN` stream and leaves the earlier copy in place (RE-444).
     //
-    // Ties go to the **newest** frame — the greatest partition number, then
-    // offset (`PartitionElementRecord::frame_order`)
-    // — because a Revit 2024 project rewrites an edited element into a
-    // higher-numbered `Partitions/NN` stream and leaves the earlier
-    // copy in place. On `2024_Core_Interior.rvt` 171 of 360 walls and
+    // This was the greatest z-extent first (#212, RE-22), measured against
+    // the reference export's `IfcExtrudedAreaSolid.Depth`:
+    // first-by-(stream, offset) agrees on 67 of 80 slabs and
+    // greatest-extent on 79 of 80 (the 80th is exported as two stacked
+    // solids whose depths sum to the recorded extent), the first frame of 12
+    // plates seeing only their topping. RE-444 set the two against
+    // Revit's body where they differ, on 546 elements of the BIM4LCA models
+    // whose frames disagree in height and whose greatest frame is not the
+    // newest: the newest frame has Revit's height on 537 and the greatest on
+    // 1, an element made shorter after an earlier save keeping its older, longer
+    // frame. Revit 2008 to 2023 keep the newest frame, with no test of
+    // the extent (`select_newest_instance_records`, RE-107, where a Level
+    // moved after an earlier save).
+    //
+    // On `2024_Core_Interior.rvt` 171 of 360 walls and
     // 96 of 132 doors carry two frames that disagree about the plan
     // box, and the newest one is the current state (RE-26 §3):
     //
@@ -429,20 +492,24 @@ pub(super) fn select_instance_records(
         if !record.is_exported_instance() || !record.has_volume() {
             continue;
         }
-        let better = match by_id.get(&record.element_id) {
-            None => true,
-            Some(existing) => {
-                let candidate = z_extent_key(&record);
-                let held = z_extent_key(existing);
-                candidate > held
-                    || (candidate == held && record.frame_order() > existing.frame_order())
-            }
-        };
+        let better = by_id
+            .get(&record.element_id)
+            .is_none_or(|existing| frame_rank(&record) > frame_rank(existing));
         if better {
             by_id.insert(record.element_id, record);
         }
     }
     without_nested_components(by_id)
+}
+
+/// How [`select_instance_records`] ranks the frames of one ElementId (RE-444):
+/// the number of the partition first, so that the newest frame wins, then within
+/// one partition the greater vertical extent (RE-22) and the later offset.
+fn frame_rank(
+    record: &crate::partition_element_records::PartitionElementRecord,
+) -> (u32, i64, &str, usize) {
+    let (partition, stream, offset) = record.frame_order();
+    (partition, z_extent_key(record), stream, offset)
 }
 
 /// `by_id` without the shared nested components of MEP devices (#96): a
@@ -497,4 +564,97 @@ pub(super) fn z_extent_key(
         return i64::MIN;
     }
     (dz * 10_000.0).round() as i64
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+    use crate::partition_element_records::{
+        CONTAINER_NONE, PLACEMENT_KIND_INSTANCE, PartitionElementRecord,
+    };
+
+    /// A placed instance of ElementId 7 framed in `stream` at `offset`, `height` feet tall.
+    fn frame(stream: &str, offset: usize, height: f64) -> PartitionElementRecord {
+        PartitionElementRecord {
+            stream: stream.to_string(),
+            offset,
+            element_id: 7,
+            flags: 0,
+            builtin_category: -2_000_011,
+            container: CONTAINER_NONE,
+            placement_kind: PLACEMENT_KIND_INSTANCE,
+            class_tag: 0,
+            bbox_feet: [0.0, 0.0, 0.0, 1.0, 1.0, height],
+            preceding_reference: None,
+            owner_reference: None,
+            references: Vec::new(),
+            second_references: Vec::new(),
+            id_from_enclosing_record: false,
+            design_option: None,
+        }
+    }
+
+    /// The stream and offset of the frame kept of `frames`, tried in both orders.
+    fn kept(frames: Vec<PartitionElementRecord>) -> (String, usize) {
+        let mut reversed = frames.clone();
+        reversed.reverse();
+        let forward = select_instance_records(frames);
+        let backward = select_instance_records(reversed);
+        let (a, b) = (&forward[&7], &backward[&7]);
+        assert_eq!(
+            (&a.stream, a.offset),
+            (&b.stream, b.offset),
+            "order of the frames"
+        );
+        (a.stream.clone(), a.offset)
+    }
+
+    // How the frame kept can be the wrong one (RE-444): the older frame of an
+    // element made shorter since is the taller; the name of a stream sorts
+    // `Partitions/9` after `Partitions/46`; a partial frame of the newest
+    // partition outranks a whole one of the same partition; a frame that is no
+    // exported instance, or has no volume, is kept for being newer.
+
+    #[test]
+    fn an_element_made_shorter_since_an_earlier_save_keeps_its_newer_frame() {
+        // 3024546 of the BIM4LCA timber office at permit: 3.75 m in
+        // `Partitions/374`, 3.70 m in `Partitions/424`.
+        let kept = kept(vec![
+            frame("Partitions/374", 100, 12.3031),
+            frame("Partitions/424", 200, 12.1391),
+        ]);
+        assert_eq!(kept, ("Partitions/424".to_string(), 200));
+    }
+
+    #[test]
+    fn the_partition_number_decides_and_not_the_name_of_its_stream() {
+        let kept = kept(vec![
+            frame("Partitions/9", 500, 12.0),
+            frame("Partitions/46", 100, 10.0),
+        ]);
+        assert_eq!(kept, ("Partitions/46".to_string(), 100));
+    }
+
+    #[test]
+    fn within_one_partition_the_greater_extent_and_then_the_later_offset_win() {
+        let taller = kept(vec![
+            frame("Partitions/46", 100, 3.5),
+            frame("Partitions/46", 300, 3.0),
+        ]);
+        assert_eq!(taller, ("Partitions/46".to_string(), 100));
+        let later = kept(vec![
+            frame("Partitions/46", 100, 3.0),
+            frame("Partitions/46", 300, 3.0),
+        ]);
+        assert_eq!(later, ("Partitions/46".to_string(), 300));
+    }
+
+    #[test]
+    fn a_newer_frame_that_is_no_exported_instance_or_has_no_volume_is_not_kept() {
+        let mut member = frame("Partitions/424", 200, 3.0);
+        member.container = 12;
+        let flat = frame("Partitions/449", 300, 0.0);
+        let kept = kept(vec![frame("Partitions/374", 100, 3.5), member, flat]);
+        assert_eq!(kept, ("Partitions/374".to_string(), 100));
+    }
 }

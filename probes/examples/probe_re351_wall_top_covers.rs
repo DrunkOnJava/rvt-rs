@@ -370,7 +370,7 @@ fn main() -> Result<()> {
             .iter()
             .skip(1)
             .filter(|object| STEP_CLASSES.contains(&object.class_name.as_str()))
-            .map(|object| json!({ "class": object.class_name, "fields": trimmed(&object.fields) }))
+            .map(|object| json!({ "class": object.class_name, "fields": trimmed(&object.fields.to_json()) }))
             .collect();
         let mut classes: BTreeMap<&str, usize> = BTreeMap::new();
         for object in &graph.objects {
@@ -383,7 +383,7 @@ fn main() -> Result<()> {
                 "id": record.identity.element_id,
                 "class": class,
                 "stream": record.source.stream,
-                "root": trimmed(&root.fields),
+                "root": trimmed(&root.fields.to_json()),
                 "classes": classes,
                 "steps": steps,
             })

@@ -62,9 +62,10 @@ pub struct TypedProductionAppend {
     pub element_type_ids: BTreeMap<u32, u32>,
     /// The standard property sets Revit's export gives each type object, by
     /// the type's ElementId and the STEP name of the type entity
-    /// (`IFCWALLTYPE`): its common set's `IsExternal`, `FireRating` and
-    /// `LoadBearing` (RE-286), and a stair or flight type's dimensions
-    /// (RE-286). A type whose elements disagree has none.
+    /// (`IFCWALLTYPE`): its common set's `FireRating` and `LoadBearing`
+    /// (RE-286; no `IsExternal`, on which Revit's exporters disagree), and a
+    /// stair or flight type's dimensions (RE-286). A type whose elements
+    /// disagree has none.
     pub type_entity_sets: BTreeMap<u32, BTreeMap<String, Vec<PropertySet>>>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
@@ -864,7 +865,27 @@ pub fn append_typed_production_elements(
             continue;
         }
 
-        let mapping = category_map::lookup(&decoded.class);
+        // #1841: a floor of the Structural Foundations category is a slab, not a
+        // footing, and a horizontal bracing is a member, not a beam; the record
+        // names its own class (RE-76) and a framing instance its usage.
+        let record_class = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(text)
+                if name == crate::partition_schema_mvp::REVIT_CLASS_FIELD =>
+            {
+                Some(text.as_str())
+            }
+            _ => None,
+        });
+        let structural_usage = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Integer { value, .. }
+                if name == crate::partition_schema_mvp::STRUCT_USAGE_FIELD =>
+            {
+                u64::try_from(*value).ok()
+            }
+            _ => None,
+        });
+        let mapping =
+            category_map::lookup_for_record(&decoded.class, record_class, structural_usage);
         if mapping.is_none() && policy.require_mapped_ifc_type {
             continue;
         }
@@ -3051,9 +3072,9 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
 /// its top down its type's thickness (RE-214) is level, and so is a slab
 /// drawn as an extrusion whose depth is its type's layers' total
 /// thickness, as a sloped or shape-edited slab's record box is deeper than
-/// its layers. Any other slab gets nothing: on the BIM4LCA office the
-/// record boxes of 8 sloped floors are drawn level, and Revit gives them
-/// 1.9 to 24 degrees.
+/// its layers. Any other slab gets nothing here: the BIM4LCA office's 8
+/// sloped floors, to which Revit gives 1.9 to 24 degrees, are drawn along
+/// their plane and take their angle from `add_shaped_floor_pitch` (RE-384).
 fn level_slab(
     ifc_type: &str,
     decoded: &DecodedElement,
@@ -3327,7 +3348,9 @@ fn add_door_window_quantities(
 /// which the arcs of its corners are missing from: the section's outside
 /// rectangle less its inside one times the length, Revit's exactly on the
 /// BIM4LCA office's three hollow-section types measured (PI-2, PI-4 and PI-5,
-/// five columns, the PI-4 arcs taking 3.4 per cent off its area's box). A
+/// five columns, the PI-4 arcs taking 3.4 per cent off its area's box). The
+/// four are written on Revit 2024 only, the one release they are measured on
+/// (`HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS`, #1945). A
 /// column drawn as its record's box gets none of these, as a round column is
 /// drawn as one too. All on a column joined by no
 /// `CleanPairGStep`
@@ -3367,7 +3390,16 @@ fn add_body_quantities(
         name: "Length".into(),
         value: PropertyValue::PositiveLengthFeet(feet),
     }];
-    if let Some((area, perimeter, rectangles)) = profile.and_then(hollow_section_area_perimeter) {
+    // Only on the releases the hollow section's quantities are measured on
+    // (`HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS`, #1945).
+    let hollow_measured = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::COLUMN_HOLLOW_QUANTITIES_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    if let Some((area, perimeter, rectangles)) = profile
+        .filter(|_| hollow_measured)
+        .and_then(hollow_section_area_perimeter)
+    {
         properties.extend([
             Property {
                 name: "CrossSectionArea".into(),
@@ -4089,15 +4121,6 @@ fn add_stair_flight_quantities(
     });
 }
 
-/// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
-/// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
-/// (CLEANROOM.md source 5) reads (#1016), also on a wall the partition
-/// reader does not draw from its centreline, from its type's layers. Its `Length` too where the partition
-/// reader gives one ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]):
-/// Revit's export writes either the wall's curve's length or the length of
-/// that curve cut back at its joins, by how it draws the wall, so a Length is
-/// written only where the two are the same (Griffin, 2026-10-26, RE-252).
-/// Nothing where the thickness is not read.
 /// Add a curtain wall's `Qto_CurtainWallQuantities.Length` to `sets`: its
 /// location curve's length ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]),
 /// which revit-ifc's `LengthCalculator` takes from the wall's location curve
@@ -4124,6 +4147,15 @@ fn add_curtain_wall_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
     });
 }
 
+/// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
+/// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
+/// (CLEANROOM.md source 5) reads (#1016), also on a wall the partition
+/// reader does not draw from its centreline, from its type's layers. Its
+/// `Length` too where the partition reader gives one ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]):
+/// Revit's export writes either the wall's curve's length or the length of
+/// that curve cut back at its joins, by how it draws the wall, so a Length is
+/// written only where the two are the same (Griffin, 2026-10-26, RE-252).
+/// Nothing where the thickness is not read.
 fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     use crate::partition_schema_mvp as mvp;
     if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
@@ -4714,19 +4746,29 @@ fn add_piece_sets(
     entities: &mut Vec<entities::IfcEntity>,
     pieces_of: Vec<(usize, std::ops::Range<usize>)>,
 ) {
+    // Each owner's sets, as entity indices in order, found once: each element
+    // in pieces scanned every entity for its sets, elements × entities
+    // (#1845). A set given to a piece is added as it is pushed, as the scan
+    // would have seen it.
+    let mut sets_of: HashMap<usize, Vec<usize>> = Default::default();
+    for (index, entity) in entities.iter().enumerate() {
+        if let entities::IfcEntity::ElementPropertySet { element, .. } = entity {
+            sets_of.entry(*element).or_default().push(index);
+        }
+    }
     for (element, pieces) in pieces_of {
-        let sets: Vec<PropertySet> = entities
-            .iter()
-            .filter_map(|entity| match entity {
-                entities::IfcEntity::ElementPropertySet {
-                    element: owner,
-                    set,
-                } if *owner == element => Some(set.clone()),
+        let sets: Vec<PropertySet> = sets_of
+            .get(&element)
+            .into_iter()
+            .flatten()
+            .filter_map(|&index| match &entities[index] {
+                entities::IfcEntity::ElementPropertySet { set, .. } => Some(set.clone()),
                 _ => None,
             })
             .collect();
         for piece in pieces {
             for set in &sets {
+                sets_of.entry(piece).or_default().push(entities.len());
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: piece,
                     set: set.clone(),
@@ -4839,6 +4881,12 @@ const ROOM_CONTENT_TYPES: [&str; 8] = [
 /// A closed plan loop, model feet.
 type PlanLoop = Vec<(f64, f64)>;
 
+/// The outline vertices [`contain_in_spaces`] may walk in all. A storey of
+/// 1,000 rooms of 20 vertices under 10,000 pieces of furniture takes 2e8 at
+/// most, every room tested for every piece; past this a crafted file is
+/// stacking spaces to hang the export (#1845).
+const SPACE_CONTAINMENT_BUDGET: usize = 1_000_000_000;
+
 /// A space's plan outline and voids in model coordinates: its body's profile
 /// moved to its placement.
 fn space_plan_outline(
@@ -4936,8 +4984,23 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             spaces.push((index, *storey, outer, voids));
         }
     }
+    // Each storey's spaces, in order: each content looked through every space
+    // of the model for its storey's (#1845).
+    let mut storey_spaces: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (at, (_, storey, ..)) in spaces.iter().enumerate() {
+        storey_spaces.entry(*storey).or_default().push(at);
+    }
+    // The outline vertices the pass's tests have walked: a crafted file can
+    // stack every space on one storey under every content, contents × spaces
+    // × vertices with no end. Past the budget nothing is contained in a
+    // space, and each content stays in its storey.
+    let work = std::cell::Cell::new(0usize);
     let mut contents: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (index, entity) in entities.iter().enumerate() {
+        if work.get() > SPACE_CONTAINMENT_BUDGET {
+            crate::budget::stopped("space_containment");
+            return;
+        }
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             storey_index: Some(storey),
@@ -4955,13 +5018,17 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             continue;
         }
         let holds = |outer: &PlanLoop, voids: &[PlanLoop], point: (f64, f64)| {
+            let vertices = outer.len() + voids.iter().map(|ring| ring.len()).sum::<usize>();
+            work.set(work.get().saturating_add(vertices));
             inside(outer, point) && !voids.iter().any(|ring| inside(ring, point))
         };
         let point = (location[0], location[1]);
         let on_storey = || {
-            spaces
-                .iter()
-                .filter(|(_, space_storey, ..)| space_storey == storey)
+            storey_spaces
+                .get(storey)
+                .into_iter()
+                .flatten()
+                .map(|&at| &spaces[at])
         };
         let mut space = on_storey()
             .find(|(_, _, outer, voids)| holds(outer, voids, point))
@@ -6762,6 +6829,9 @@ pub const WALL_ARC_BODY_SOURCE: &str = "partition_wall_arc";
 /// How far a curved wall's drawn outline may stray inside its arcs, feet.
 pub const WALL_ARC_TOLERANCE_FEET: f64 = 0.0005;
 
+/// The most chords one arc of a curved wall's outline is drawn with.
+const WALL_ARC_MAX_CHORDS: usize = 8192;
+
 /// A curved wall's plan outline: the ring sector between its arc's radius
 /// less and plus half its thickness, from its start angle to its end angle,
 /// each arc drawn as chords that stray at most [`WALL_ARC_TOLERANCE_FEET`]
@@ -6779,7 +6849,15 @@ fn wall_arc_outline(arc: &crate::partition_schema_mvp::WallArc) -> Option<Vec<(f
         * (1.0 - WALL_ARC_TOLERANCE_FEET / outer)
             .clamp(-1.0, 1.0)
             .acos();
-    let count = ((sweep / step).ceil() as usize).clamp(2, 512);
+    // The chords bound the work a crafted radius can ask for. An arc that needs
+    // more than the cap to stay within the tolerance (a radius past about
+    // 27,000 ft for a half turn) is not drawn, rather than drawn straying
+    // further than the tolerance this function promises (#1947).
+    let needed = (sweep / step).ceil();
+    if !(needed.is_finite() && needed <= WALL_ARC_MAX_CHORDS as f64) {
+        return None;
+    }
+    let count = (needed as usize).max(2);
     let angle = |index: usize| arc.angles[0] + sweep * index as f64 / count as f64;
     let mut points: Vec<(f64, f64)> = (0..=count)
         .map(|index| {

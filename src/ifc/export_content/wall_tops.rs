@@ -154,6 +154,10 @@ const STEP_TOLERANCE_SQUARE_FEET: f64 = COVER_TOLERANCE_SQUARE_FEET;
 /// The most convex pieces a wall's plan outside the elements may come to.
 const MAX_RISERS: usize = 32;
 
+/// The most parts of a wall's plan that an element covers, before they are
+/// joined into at most [`MAX_RISERS`] pieces: thirty-two times that.
+const MAX_COVERED_PARTS: usize = 32 * MAX_RISERS;
+
 /// The area under which what a floor leaves of a wall's plan, all of it inside
 /// other walls, may be a stub that Revit cuts although the floor does not cover
 /// it, square feet: the one measured, 0.0243 ft2 at the end of a wall, inside
@@ -461,6 +465,16 @@ fn embedded(pieces: &[Ring], neighbours: &[&Wall]) -> bool {
             .iter()
             .flat_map(|piece| subtract_convex(piece, part))
             .collect();
+        // Each neighbour piece can split each piece left in three, so a
+        // crafted file's neighbours grew `left` without end (#1845). Nothing
+        // left is all inside; more than `steps` holds is no stub.
+        if left.is_empty() {
+            return true;
+        }
+        if left.len() > 4 * MAX_RISERS {
+            crate::budget::stopped("wall_top_embedded_pieces");
+            return false;
+        }
     }
     left.iter().map(|piece| area(piece)).sum::<f64>() <= 0.01 * size
 }
@@ -533,6 +547,7 @@ fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)], neighbours: &[&Wall]) -> O
                     .flat_map(|piece| subtract_convex(piece, &clip))
                     .collect();
                 if pieces.len() > 4 * MAX_RISERS {
+                    crate::budget::stopped("wall_top_pieces");
                     return None;
                 }
             }
@@ -560,6 +575,7 @@ fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)], neighbours: &[&Wall]) -> O
                 }
                 held.extend(parts);
                 if held.len() > 4 * MAX_RISERS {
+                    crate::budget::stopped("wall_top_pieces");
                     return None;
                 }
             }
@@ -1086,6 +1102,14 @@ fn covered_pieces(cutter: &Cutter, wall: &Wall) -> Option<Vec<Ring>> {
             if part.len() >= 3 && area(&part) > PIECE_ROUNDING_SQUARE_FEET {
                 inside.push(part);
             }
+        }
+        // The outline is every triangle of every entity sharing the
+        // element's Tag, so a crafted file made millions of parts before the
+        // `MAX_RISERS` check below, and `join_pieces` is quadratic in them
+        // (#1845). Joining merges parts, so this bound is the looser one.
+        if inside.len() > MAX_COVERED_PARTS {
+            crate::budget::stopped("wall_top_covered_parts");
+            return None;
         }
     }
     let inside: Vec<Ring> = join_pieces(inside.into_iter().map(tidy).collect());
@@ -2911,14 +2935,14 @@ pub(super) fn extend_wall_ends(
     // past the walls the record joins; an end the rule could not read and has no
     // such evidence for is Revit's end for all the record shows, so the wall
     // carries nothing and the reason is counted from the hand-off instead
-    // (`exported.wall_end_reads_unmarked`).
+    // (`exported.wall_end_reads_unmarked`). Each end is in one map or the other,
+    // so a wall in both had one end refused with face evidence and the other
+    // without: both are counted, each in its own counter (#1947).
     for (index, reason) in unmarked {
-        if !refused.contains_key(&index) {
-            handoffs.entry(index).or_default().push(Property {
-                name: WALL_END_NOT_MARKED_PROPERTY.into(),
-                value: PropertyValue::Text(reason.into()),
-            });
-        }
+        handoffs.entry(index).or_default().push(Property {
+            name: WALL_END_NOT_MARKED_PROPERTY.into(),
+            value: PropertyValue::Text(reason.into()),
+        });
     }
     for (index, reason) in refused {
         mark_end_refusal(entities, index, reason);

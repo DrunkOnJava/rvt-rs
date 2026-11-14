@@ -4,6 +4,11 @@ use rvt::ifc::{ExportOptions, ExportQualityMode, SavedMeshChoice};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+/// The longest phase name the server takes. It keeps every phase it is asked
+/// for (so that asking again does not read the file again), and no phase of a
+/// Revit project has a name near this long.
+pub const MAX_PHASE_CHARS: usize = 256;
+
 /// The phase an argument names: none when it is left out or blank.
 pub fn phase_of(phase: &Option<String>) -> Option<&str> {
     phase
@@ -16,7 +21,10 @@ pub fn phase_of(phase: &Option<String>) -> Option<&str> {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ModelArgs {
     /// The `model_id` that `open_model` returned, or the path of a `.rvt`,
-    /// `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened.
+    /// `.rfa`, `.rte` or `.rft` file inside the server's root folder (the
+    /// folder it was started in, or `--root`); a relative path is taken from
+    /// that folder, and a path outside it is refused. A path that is not open
+    /// yet is opened.
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
     /// The project phase to read, by its name (exactly) or its ElementId,
@@ -50,9 +58,33 @@ pub struct ListElementsArgs {
     pub class: Option<String>,
     /// Only elements on the storey with this name (see `list_levels`).
     pub level: Option<String>,
-    /// How many elements to return: 100 by default, at most 1000.
+    /// How many elements to return: 100 by default, from 1 to 1000. A value
+    /// outside that range is an error.
+    #[schemars(range(min = 1, max = 1000))]
     pub limit: Option<u32>,
     /// How many matching elements to skip, for the next page.
+    pub offset: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListRoomsArgs {
+    /// The `model_id` that `open_model` returned, or the path of the file.
+    #[serde(alias = "model_id", alias = "path")]
+    pub model: String,
+    /// The project phase to read, by its name (exactly) or its ElementId,
+    /// instead of the project's last (`rvt-ifc --phase`). A phase named is
+    /// exact: naming the last phase differs from leaving `phase` out where the
+    /// last phase holds no room, since leaving it out then reads the rooms of
+    /// the latest phase that holds any. It applies to a file
+    /// path: a `model_id` names the phase its model was opened at. An unknown
+    /// phase is an error that lists the file's phases.
+    pub phase: Option<String>,
+    /// How many spaces to return: 1000 by default, from 1 to 1000. A value
+    /// outside that range is an error. The answer's `total` says how many
+    /// there are; when `returned` is less, call again with `offset`.
+    #[schemars(range(min = 1, max = 1000))]
+    pub limit: Option<u32>,
+    /// How many spaces to skip, for the next page.
     pub offset: Option<u32>,
 }
 
@@ -141,19 +173,25 @@ impl From<ModeArg> for ExportQualityMode {
 #[serde(rename_all = "snake_case")]
 pub enum MeshesArg {
     /// Every element that would be its record's bounding box, on Revit 2023 to
-    /// 2027 (the default).
+    /// 2027, and the walls that embed a curtain wall where Revit raised their
+    /// base, on Revit 2024 to 2027 (the default).
     #[default]
     Default,
-    /// Doors and windows only, on Revit 2023 to 2027: the default before #1191,
-    /// and cheaper in time and memory.
+    /// Doors and windows only, on Revit 2023 to 2027, and the walls that embed
+    /// a curtain wall as for the default: the default before #1191, and
+    /// cheaper in time and memory.
     DoorsAndWindows,
-    /// Every element that would be its record's bounding box, on every release.
+    /// Every element that would be its record's bounding box, on every
+    /// release, and the walls that embed a curtain wall as for the default.
     All,
-    /// None: every element keeps its record's box.
+    /// None: every element keeps its record's box, and a wall that embeds a
+    /// curtain wall its record's body.
     Off,
 }
 
-/// The `rvt-ifc` switches that change the model. The defaults are `rvt-ifc`'s.
+/// The `rvt-ifc` switches this server offers, some of those that change the
+/// model: `--placeholder`, `--diagnostic-proxies` and `--family-extrusions`
+/// are not among them. The defaults are `rvt-ifc`'s.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub struct IfcOptions {
     /// Required quality (`rvt-ifc --mode`).
@@ -203,8 +241,10 @@ pub struct ExportIfcArgs {
     /// The `model_id` that `open_model` returned, or the path of the file.
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
-    /// Where to write the IFC4 file. It must end in `.ifc`, must not be the
-    /// model, and must not exist unless `overwrite` is true.
+    /// Where to write the IFC4 file, inside the server's root folder (or its
+    /// `--output-dir`); a relative path is taken from that folder. It must end
+    /// in `.ifc`, must not be the model, and must not exist unless `overwrite`
+    /// is true.
     pub out_path: String,
     /// Replace `out_path` if it exists.
     #[serde(default)]
@@ -227,8 +267,10 @@ pub struct ExportGltfArgs {
     /// The `model_id` that `open_model` returned, or the path of the file.
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
-    /// Where to write the binary glTF. It must end in `.glb`, must not be the
-    /// model, and must not exist unless `overwrite` is true.
+    /// Where to write the binary glTF, inside the server's root folder (or its
+    /// `--output-dir`); a relative path is taken from that folder. It must end
+    /// in `.glb`, must not be the model, and must not exist unless `overwrite`
+    /// is true.
     pub out_path: String,
     /// Replace `out_path` if it exists.
     #[serde(default)]

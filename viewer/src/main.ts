@@ -467,6 +467,9 @@ function selectTreeRow(idx: number): void {
   document
     .querySelectorAll('.tree-node.selected')
     .forEach((el) => el.classList.remove('selected'));
+  // The row may not be built yet: the tree builds a group's rows a block at a time.
+  const item = treeItemByEntity.get(idx);
+  if (item) ensureTreeRow(item);
   const row = treeEl.querySelector<HTMLElement>(`.tree-node[data-entity-index="${idx}"]`);
   if (!row) return;
   revealTreeRow(row);
@@ -649,12 +652,38 @@ let loadAnnounced = '';
 /** Everything `announceLoad` has said on #status this open, in order, kept for the tests. */
 let loadAnnouncements: string[] = [];
 let loadMemoryWarned = false;
+/** How many of each `keepLast` has dropped this open, so a record that was cut says so. */
+let loadEventsDropped = 0;
+let loadAnnouncementsDropped = 0;
+
+/**
+ * The most reports and announcements the page keeps of one open, for the tests
+ * and the measurement; the oldest go first (#1887). The binding hands the page
+ * one report per whole percent of a stage (`forward_progress` in
+ * rvt-wasm/src/lib.rs), a few hundred in an open, so a file does not reach
+ * this: it bounds what the page holds, and writes into one attribute, if the
+ * decoder reports more often than that.
+ */
+const LOAD_RECORDS_KEPT = 2000;
+
+/**
+ * Adds `item` to `list`, which keeps its last `limit` items: it is cut in one
+ * splice when it reaches twice that, so a push stays cheap. Returns how many
+ * items the push dropped.
+ */
+function keepLast<T>(list: T[], item: T, limit: number): number {
+  list.push(item);
+  if (list.length < 2 * limit) return 0;
+  const dropped = list.length - limit;
+  list.splice(0, dropped);
+  return dropped;
+}
 
 /** Says `text` on #status unless it was the last thing said. */
 function announceLoad(text: string): void {
   if (text === loadAnnounced) return;
   loadAnnounced = text;
-  loadAnnouncements.push(text);
+  loadAnnouncementsDropped += keepLast(loadAnnouncements, text, LOAD_RECORDS_KEPT);
   setStatus(text);
 }
 
@@ -687,26 +716,39 @@ function onDecodeStage(stage: string, done: number, total: number | null, memory
       ? [`${Math.round((done / total) * 100)}%`, info.count(done, total)].filter(Boolean).join(' · ')
       : '';
   const value = loadRailEl.getAttribute('aria-valuenow');
-  loadEvents.push({
-    t: Math.round(performance.now() - loadStartedAt),
-    stage,
-    done,
-    total,
-    memoryBytes,
-    card: {
-      step: loadStepEl.textContent ?? '',
-      value: value === null ? null : Number(value),
-      hint: loadHintEl.textContent ?? '',
+  loadEventsDropped += keepLast(
+    loadEvents,
+    {
+      t: Math.round(performance.now() - loadStartedAt),
+      stage,
+      done,
+      total,
+      memoryBytes,
+      card: {
+        step: loadStepEl.textContent ?? '',
+        value: value === null ? null : Number(value),
+        hint: loadHintEl.textContent ?? '',
+      },
     },
-  });
+    LOAD_RECORDS_KEPT,
+  );
   announceLoad(label);
   loadStage = stage;
 }
 
 /** What the worker said, kept on #status for tests/load-progress.spec.ts and the measurement. */
 function saveLoadEvents(): void {
-  statusEl.dataset.loadProgress = JSON.stringify(loadEvents);
-  statusEl.dataset.loadAnnounced = JSON.stringify(loadAnnouncements);
+  statusEl.dataset.loadProgress = JSON.stringify(loadEvents.slice(-LOAD_RECORDS_KEPT));
+  statusEl.dataset.loadAnnounced = JSON.stringify(loadAnnouncements.slice(-LOAD_RECORDS_KEPT));
+  // Written only when a record was cut, so a test that finds it knows the list is not whole.
+  const dropped =
+    loadEventsDropped + Math.max(0, loadEvents.length - LOAD_RECORDS_KEPT);
+  const droppedAnnouncements =
+    loadAnnouncementsDropped + Math.max(0, loadAnnouncements.length - LOAD_RECORDS_KEPT);
+  if (dropped > 0) statusEl.dataset.loadProgressDropped = String(dropped);
+  else delete statusEl.dataset.loadProgressDropped;
+  if (droppedAnnouncements > 0) statusEl.dataset.loadAnnouncedDropped = String(droppedAnnouncements);
+  else delete statusEl.dataset.loadAnnouncedDropped;
 }
 
 /**
@@ -733,8 +775,12 @@ function startLoadOverlay(file: File): void {
   loadStage = null;
   loadAnnounced = '';
   loadAnnouncements = [];
+  loadEventsDropped = 0;
+  loadAnnouncementsDropped = 0;
   delete statusEl.dataset.loadProgress;
   delete statusEl.dataset.loadAnnounced;
+  delete statusEl.dataset.loadProgressDropped;
+  delete statusEl.dataset.loadAnnouncedDropped;
   setLoadFraction(null);
   loadStepEl.textContent = `Opening ${file.name}`;
   loadExpectationText = loadExpectation(file.size);
@@ -1016,7 +1062,7 @@ interface ExportDiagnostics {
     has_geometry?: boolean;
     has_diagnostic_proxies?: boolean;
     warning_count?: number;
-    /** RE-30 records found but not exported; non-zero means the model is incomplete. */
+    /** RE-30 records found but not exported, in records of ElementIds the file does not declare; non-zero means the model may be incomplete. */
     unexported_element_records?: number;
   };
   /** A10 — measured when denominators exist; fractions stay null when unknown. */
@@ -1149,6 +1195,15 @@ interface ProjectPhase {
 let currentPhase = '';
 
 /**
+ * The most phases the select lists (#1887). A project has a handful; a file
+ * that names more has its first ones listed and its last, the default, and the
+ * hint says how many there are.
+ */
+const PHASE_OPTIONS_SHOWN = 200;
+/** The hint as the page ships it, which `renderPhases` adds a sentence to for a file with more phases than are listed. */
+const exportPhaseHintText = exportPhaseHintEl.textContent ?? '';
+
+/**
  * Lists the file's phases in the select, in the project's order, the last as
  * the default. A file with no phases (a family, or a release whose phases are
  * not read) hides the field; a project with one shows it fixed. Where the
@@ -1157,8 +1212,16 @@ let currentPhase = '';
  */
 function renderPhases(phases: ProjectPhase[], fallbackPhase?: string): void {
   exportPhaseEl.replaceChildren();
-  phases.forEach((phase, index) => {
-    const last = index === phases.length - 1;
+  const listed =
+    phases.length > PHASE_OPTIONS_SHOWN
+      ? [...phases.slice(0, PHASE_OPTIONS_SHOWN - 1), phases[phases.length - 1]!]
+      : phases;
+  exportPhaseHintEl.textContent =
+    listed.length < phases.length
+      ? `${exportPhaseHintText} The file names ${phases.length.toLocaleString('en-US')} phases; the first ${PHASE_OPTIONS_SHOWN - 1} and the last are listed.`
+      : exportPhaseHintText;
+  listed.forEach((phase, index) => {
+    const last = index === listed.length - 1;
     const label = phase.name ? phase.name : `ElementId ${phase.id}`;
     const option = document.createElement('option');
     option.value = last ? '' : String(phase.id);
@@ -1360,11 +1423,15 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
       // a step with no count has none to give.
       loadHintEl.textContent = loadStage === null ? loadExpectationText : '';
       setLoadStep(msg.step);
-      loadEvents.push({
-        t: Math.round(performance.now() - loadStartedAt),
-        step: msg.step,
-        card: { step: msg.step, value: null, hint: loadHintEl.textContent },
-      });
+      loadEventsDropped += keepLast(
+        loadEvents,
+        {
+          t: Math.round(performance.now() - loadStartedAt),
+          step: msg.step,
+          card: { step: msg.step, value: null, hint: loadHintEl.textContent },
+        },
+        LOAD_RECORDS_KEPT,
+      );
       announceLoad(msg.step);
       return;
     }
@@ -1932,18 +1999,228 @@ function buildTreeItems(root: SceneNode): TreeItem {
   };
 }
 
-/** Element rows and the text the filter matches them by. */
-let treeFilterIndex: Array<{ wrap: HTMLElement; text: string }> = [];
+// ---------- Tree rows are built in blocks (#1887) ----------
+
+/**
+ * The most rows a group builds at once: a storey's categories, a category's
+ * elements, an element's parts. A file that puts a million elements in one
+ * category should cost the page the rows the reader opens, not a million, so a
+ * group builds its children in blocks of this many, and a "Show more" row at
+ * its end builds the next. `?treeRowsShown=` lowers it, for the browser tests.
+ */
+const TREE_ROWS_SHOWN = Math.max(
+  1,
+  Math.min(500, wholeBytesParam(new URLSearchParams(window.location.search), 'treeRowsShown') ?? 500),
+);
+/**
+ * The rows the tree builds up front, every block of every group in order,
+ * before it leaves the rest to be built as a group is opened (its first block)
+ * or its "Show more" row is used. The largest model Measure holds, the BIM4LCA
+ * office, exports 91,723 entities, so every model measured so far is built
+ * whole, as it was before this limit; a file that lists more has the rest built
+ * as the reader opens it. `?treeRowsEager=` lowers it, for the browser tests.
+ */
+const TREE_ROWS_EAGER = Math.min(
+  150_000,
+  wholeBytesParam(new URLSearchParams(window.location.search), 'treeRowsEager') ?? 150_000,
+);
+/** The most matches the filter lists, which builds their rows; the status line says how many there are. */
+const TREE_FILTER_LISTED = TREE_ROWS_SHOWN * 4;
+
+/** One group of tree rows, which builds its children a block at a time. */
+interface TreeGroup {
+  item: TreeItem;
+  /** The group's `.tree-children` element. */
+  el: HTMLElement;
+  /** The `aria-level` of its rows. */
+  level: number;
+  /** The rows of each block of TREE_ROWS_SHOWN children, once the block is built. */
+  blocks: Array<HTMLElement[] | undefined>;
+  /** How many of the children have a row. */
+  built: number;
+  /** The "Show more" row, while a child has none. */
+  more: HTMLElement | null;
+}
+
+/** The group each item with children owns, by item and by its `.tree-children` element. */
+let treeGroups = new Map<TreeItem, TreeGroup>();
+const treeGroupOfElement = new WeakMap<HTMLElement, TreeGroup>();
+/** The row (the `.tree-item` wrapper) built for an item. */
+let treeWraps = new Map<TreeItem, HTMLElement>();
+/** Where an item stands among its parent's children, for every item whether or not it has a row. */
+let treePlaces = new Map<TreeItem, { parent: TreeItem; index: number }>();
+let treeItemByEntity = new Map<number, TreeItem>();
+let treeItemByStorey = new Map<number, TreeItem>();
+let treeRowsBuilt = 0;
+/** Elements and the text the filter matches them by, over the whole tree and not the rows built. */
+let treeFilterIndex: Array<{ item: TreeItem; text: string }> = [];
+
+/** Records where every item stands, and the elements the filter matches, in the order the tree lists them. */
+function indexTreeItems(root: TreeItem): void {
+  treeFilterIndex = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const item = stack.pop()!;
+    if (item.kind === 'element') {
+      treeFilterIndex.push({ item, text: `${item.name} ${ifcTypeLabel(item.ifcType)}`.toLowerCase() });
+    }
+    if (item.entityIndex !== null && !treeItemByEntity.has(item.entityIndex)) {
+      treeItemByEntity.set(item.entityIndex, item);
+    }
+    if (item.kind === 'storey' && item.storeyIndex != null && !treeItemByStorey.has(item.storeyIndex)) {
+      treeItemByStorey.set(item.storeyIndex, item);
+    }
+    for (let i = item.children.length - 1; i >= 0; i--) {
+      const child = item.children[i]!;
+      treePlaces.set(child, { parent: item, index: i });
+      stack.push(child);
+    }
+  }
+}
 
 function renderTree(): void {
   if (!sceneGraph) return;
   treeEl.innerHTML = '';
-  treeFilterIndex = [];
-  treeEl.appendChild(buildTreeRow(buildTreeItems(sceneGraph), 1));
+  treeGroups = new Map();
+  treeWraps = new Map();
+  treePlaces = new Map();
+  treeItemByEntity = new Map();
+  treeItemByStorey = new Map();
+  treeRowsBuilt = 0;
+  const root = buildTreeItems(sceneGraph);
+  indexTreeItems(root);
+  treeEl.appendChild(buildTreeRow(root, 1));
   const first = treeEl.querySelector<HTMLElement>('.tree-node');
   if (first) first.tabIndex = 0;
   treeFilterEl.disabled = false;
   if (treeFilterEl.value.trim()) applyTreeFilter(treeFilterEl.value);
+}
+
+/**
+ * Builds block `b` of `group` (the children from `b * TREE_ROWS_SHOWN`), in its
+ * place among the blocks built already: the filter and a click in the 3-D view
+ * build the block an element is in, which need not be the next.
+ */
+function buildTreeBlock(group: TreeGroup, b: number): void {
+  if (group.blocks[b]) return;
+  const children = group.item.children;
+  const start = b * TREE_ROWS_SHOWN;
+  if (start >= children.length) return;
+  // The row the new ones go before: the first of the next block built, or the "Show more" row, or none.
+  let before: Node | null = group.more;
+  for (let k = b + 1; k < group.blocks.length; k++) {
+    const later = group.blocks[k];
+    if (later) {
+      before = later[0]!;
+      break;
+    }
+  }
+  const rows: HTMLElement[] = [];
+  for (let i = start; i < Math.min(children.length, start + TREE_ROWS_SHOWN); i++) {
+    const wrap = buildTreeRow(children[i]!, group.level);
+    group.el.insertBefore(wrap, before);
+    rows.push(wrap);
+  }
+  group.blocks[b] = rows;
+  group.built += rows.length;
+}
+
+/**
+ * Builds a group's blocks in order for as long as the page has rows to spend
+ * on them up front (TREE_ROWS_EAGER); the first block is always built.
+ */
+function fillTreeGroup(group: TreeGroup): void {
+  const blocks = Math.ceil(group.item.children.length / TREE_ROWS_SHOWN);
+  for (let b = 0; b < blocks && (b === 0 || treeRowsBuilt < TREE_ROWS_EAGER); b++) {
+    buildTreeBlock(group, b);
+  }
+  updateTreeMore(group);
+}
+
+/** The first block of `group` with no rows yet. */
+function nextTreeBlock(group: TreeGroup): number {
+  let b = 0;
+  while (group.blocks[b]) b++;
+  return b;
+}
+
+/**
+ * The "Show more" row at the end of a group, there while a child has no row:
+ * it says how many the next block adds and how many have none.
+ */
+function updateTreeMore(group: TreeGroup): void {
+  const total = group.item.children.length;
+  const remaining = total - group.built;
+  if (remaining <= 0) {
+    group.more?.remove();
+    group.more = null;
+    return;
+  }
+  if (!group.more) {
+    const wrap = document.createElement('div');
+    wrap.className = 'tree-item';
+    const row = document.createElement('div');
+    row.className = 'tree-node tree-more';
+    row.setAttribute('role', 'treeitem');
+    row.setAttribute('aria-level', String(group.level));
+    row.tabIndex = -1;
+    const caret = document.createElement('span');
+    caret.className = 'tree-caret tree-caret-none';
+    caret.setAttribute('aria-hidden', 'true');
+    row.appendChild(caret);
+    row.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      showMoreTreeRows(group, row);
+    });
+    row.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        showMoreTreeRows(group, row);
+        return;
+      }
+      moveTreeFocus(ev, row);
+    });
+    wrap.appendChild(row);
+    group.el.appendChild(wrap);
+    group.more = wrap;
+  }
+  const row = group.more.firstElementChild as HTMLElement;
+  row.querySelector('.tree-text')?.remove();
+  const adds = Math.min(TREE_ROWS_SHOWN, total - nextTreeBlock(group) * TREE_ROWS_SHOWN);
+  treeRowText(
+    row,
+    `Show ${adds.toLocaleString('en-US')} more`,
+    `${remaining.toLocaleString('en-US')} not listed`,
+  );
+}
+
+/** The "Show more" row's action: builds the group's next block. */
+function showMoreTreeRows(group: TreeGroup, from: HTMLElement): void {
+  const b = nextTreeBlock(group);
+  buildTreeBlock(group, b);
+  updateTreeMore(group);
+  // The focus stays on the row, which now says what is left; with none left it goes to the first new row.
+  const added = group.blocks[b]?.[0]?.querySelector<HTMLElement>('.tree-node');
+  focusTreeRow(group.more ? from : (added ?? from));
+}
+
+/**
+ * Builds the rows from the project down to `item`'s own, each in the block of
+ * its group that holds it, and returns the row. A reader's click on the item in
+ * the 3-D view, a jump from the element panel and the filter all need a row the
+ * tree may not have built yet.
+ */
+function ensureTreeRow(item: TreeItem): HTMLElement | null {
+  const path: Array<{ parent: TreeItem; index: number }> = [];
+  for (let at = treePlaces.get(item); at; at = treePlaces.get(at.parent)) path.push(at);
+  for (let k = path.length - 1; k >= 0; k--) {
+    const { parent, index } = path[k]!;
+    const group = treeGroups.get(parent);
+    if (!group) return null;
+    buildTreeBlock(group, Math.floor(index / TREE_ROWS_SHOWN));
+    updateTreeMore(group);
+  }
+  return (treeWraps.get(item)?.firstElementChild as HTMLElement | undefined) ?? null;
 }
 
 /**
@@ -1953,9 +2230,8 @@ function renderTree(): void {
  */
 function applyTreeFilter(query: string): void {
   const needle = query.trim().toLowerCase();
-  const wraps = treeEl.querySelectorAll<HTMLElement>('.tree-item');
   if (!needle) {
-    wraps.forEach((wrap) => {
+    treeEl.querySelectorAll<HTMLElement>('.tree-item').forEach((wrap) => {
       wrap.hidden = false;
     });
     treeEl.querySelectorAll<HTMLElement>('.tree-node[aria-expanded]').forEach((row) => {
@@ -1967,30 +2243,42 @@ function applyTreeFilter(query: string): void {
     treeFilterStatusEl.textContent = '';
     return;
   }
-  wraps.forEach((wrap) => {
+  // The matches are found over the whole tree, and the first TREE_FILTER_LISTED
+  // are listed: their rows are built, and their groups opened, before anything
+  // is hidden, so a row built for a match is hidden with the rest.
+  const matched = treeFilterIndex.filter((entry) => entry.text.includes(needle));
+  const listed = matched.slice(0, TREE_FILTER_LISTED);
+  for (const entry of listed) {
+    ensureTreeRow(entry.item);
+    for (let place = treePlaces.get(entry.item); place; place = treePlaces.get(place.parent)) {
+      const owner = treeWraps.get(place.parent)?.firstElementChild as HTMLElement | undefined;
+      if (owner) setTreeRowExpanded(owner, true);
+    }
+  }
+  treeEl.querySelectorAll<HTMLElement>('.tree-item').forEach((wrap) => {
     wrap.hidden = true;
   });
-  let matches = 0;
-  for (const entry of treeFilterIndex) {
-    if (!entry.text.includes(needle)) continue;
-    matches += 1;
-    entry.wrap.hidden = false;
-    entry.wrap.querySelectorAll<HTMLElement>('.tree-item').forEach((inner) => {
+  for (const entry of listed) {
+    const wrap = treeWraps.get(entry.item);
+    if (!wrap) continue;
+    wrap.hidden = false;
+    wrap.querySelectorAll<HTMLElement>('.tree-item').forEach((inner) => {
       inner.hidden = false;
     });
-    for (
-      let group = entry.wrap.parentElement?.closest<HTMLElement>('.tree-children');
-      group;
-      group = group.parentElement?.closest<HTMLElement>('.tree-children')
-    ) {
-      const owner = group.previousElementSibling as HTMLElement | null;
-      if (owner) setTreeRowExpanded(owner, true);
-      const holder = group.parentElement;
+    for (let place = treePlaces.get(entry.item); place; place = treePlaces.get(place.parent)) {
+      const holder = treeWraps.get(place.parent);
       if (holder) holder.hidden = false;
     }
   }
+  const matches = matched.length;
   treeFilterStatusEl.textContent =
-    matches === 0 ? 'No element matches' : matches === 1 ? '1 element matches' : `${matches} elements match`;
+    matches === 0
+      ? 'No element matches'
+      : matches === 1
+        ? '1 element matches'
+        : matches > listed.length
+          ? `${matches} elements match; the first ${listed.length} are listed`
+          : `${matches} elements match`;
 }
 
 let treeFilterTimer: number | undefined;
@@ -2118,6 +2406,12 @@ function setTreeRowExpanded(row: HTMLElement, expanded: boolean): void {
   if (!group?.classList.contains('tree-children')) return;
   row.setAttribute('aria-expanded', String(expanded));
   group.hidden = !expanded;
+  // A group the page did not build up front builds its first block when it is first opened.
+  const owned = treeGroupOfElement.get(group);
+  if (expanded && owned && !owned.blocks[0]) {
+    buildTreeBlock(owned, 0);
+    updateTreeMore(owned);
+  }
 }
 
 /** Expand every collapsed row above `row`, so a selection is never hidden. */
@@ -2140,12 +2434,8 @@ function revealTreeRow(row: HTMLElement): void {
 function buildTreeRow(item: TreeItem, level: number): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'tree-item';
-  if (item.kind === 'element') {
-    treeFilterIndex.push({
-      wrap,
-      text: `${item.name} ${ifcTypeLabel(item.ifcType)}`.toLowerCase(),
-    });
-  }
+  treeWraps.set(item, wrap);
+  treeRowsBuilt += 1;
   const row = document.createElement('div');
   row.className = `tree-node tree-${item.kind}`;
   if (item.kind === 'storey') {
@@ -2271,33 +2561,44 @@ function buildTreeRow(item: TreeItem, level: number): HTMLElement {
       if (owner instanceof HTMLElement) focusTreeRow(owner);
       return;
     }
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(ev.key)) return;
-    ev.preventDefault();
-    const items = visibleTreeRows();
-    const idx = items.indexOf(row);
-    if (idx < 0) return;
-    const next =
-      ev.key === 'Home'
-        ? items[0]
-        : ev.key === 'End'
-          ? items[items.length - 1]
-          : ev.key === 'ArrowDown'
-            ? items[Math.min(items.length - 1, idx + 1)]
-            : items[Math.max(0, idx - 1)];
-    if (next) focusTreeRow(next);
+    moveTreeFocus(ev, row);
   });
   wrap.appendChild(row);
   if (expandable) {
     const ch = document.createElement('div');
     ch.className = 'tree-children';
     ch.setAttribute('role', 'group');
-    for (const c of item.children) ch.appendChild(buildTreeRow(c, level + 1));
     wrap.appendChild(ch);
+    const group: TreeGroup = { item, el: ch, level: level + 1, blocks: [], built: 0, more: null };
+    treeGroups.set(item, group);
+    treeGroupOfElement.set(ch, group);
     // The project and its storeys open; categories and an element's
     // parts wait for a click, so a storey reads as its categories.
-    setTreeRowExpanded(row, item.kind === 'project' || item.kind === 'storey');
+    const open = item.kind === 'project' || item.kind === 'storey';
+    setTreeRowExpanded(row, open);
+    // Every group builds its rows up front while the page has the rows to
+    // spend on them; past that a group waits to be opened.
+    if (open || treeRowsBuilt < TREE_ROWS_EAGER) fillTreeGroup(group);
   }
   return wrap;
+}
+
+/** Home, End and the up and down arrows move the focus along the rows a keyboard user can reach. */
+function moveTreeFocus(ev: KeyboardEvent, row: HTMLElement): void {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(ev.key)) return;
+  ev.preventDefault();
+  const items = visibleTreeRows();
+  const idx = items.indexOf(row);
+  if (idx < 0) return;
+  const next =
+    ev.key === 'Home'
+      ? items[0]
+      : ev.key === 'End'
+        ? items[items.length - 1]
+        : ev.key === 'ArrowDown'
+          ? items[Math.min(items.length - 1, idx + 1)]
+          : items[Math.max(0, idx - 1)];
+  if (next) focusTreeRow(next);
 }
 
 function renderCategories(): void {
@@ -2705,12 +3006,27 @@ const PARAMETERS_STARTUP_MS = 20_000;
  */
 const PARAMETERS_MEASURED_WASM_BYTES = 2 ** 30;
 /**
- * The most elements whose answers are kept; the least recently selected goes
- * first. `?parametersRemembered=` lowers it, for the browser test.
+ * The most elements whose answers are kept, and the most characters of JSON
+ * they come to between them (#1887); the least recently selected goes first.
+ * The answer just read always stays, so a selection is not read again for being
+ * larger than the rest. An answer measured on the BIM4LCA office is about 2,300
+ * characters, so 64 of them are about 150,000 and the budget, 8 Mi, is fifty
+ * times that: it bounds what an element record that lists a great many
+ * parameters can make the page hold, and no real selection reaches it. The
+ * address lowers either limit, for the browser tests (`?parametersRemembered=`,
+ * `?parametersRememberedCharacters=`) and never raises it: a link cannot make
+ * the page hold more than it would have.
  */
-const PARAMETERS_REMEMBERED = Math.max(
-  1,
-  wholeBytesParam(new URLSearchParams(window.location.search), 'parametersRemembered') ?? 64,
+const PARAMETERS_REMEMBERED_MOST = 64;
+const PARAMETERS_REMEMBERED_CHARACTERS_MOST = 8 * 2 ** 20;
+function parametersLimit(name: string, most: number): number {
+  const asked = wholeBytesParam(new URLSearchParams(window.location.search), name);
+  return Math.min(most, Math.max(1, asked ?? most));
+}
+const PARAMETERS_REMEMBERED = parametersLimit('parametersRemembered', PARAMETERS_REMEMBERED_MOST);
+const PARAMETERS_REMEMBERED_CHARACTERS = parametersLimit(
+  'parametersRememberedCharacters',
+  PARAMETERS_REMEMBERED_CHARACTERS_MOST,
 );
 /** An element's answer, and the characters of its JSON, which is what the map is counted in. */
 interface RememberedParameters {
@@ -2774,7 +3090,10 @@ function recallParameters(id: number): SavedParametersReading | undefined {
   return kept.reading;
 }
 
-/** Keeps an element's answer, and lets the least recently used ones go past the limit. */
+/**
+ * Keeps an element's answer, and lets the least recently used ones go past
+ * either limit, the one just kept excepted.
+ */
 function rememberParameters(id: number, reading: SavedParametersReading): void {
   const before = savedParametersCache.get(id);
   if (before) savedParametersCacheCharacters -= before.characters;
@@ -2782,7 +3101,10 @@ function rememberParameters(id: number, reading: SavedParametersReading): void {
   savedParametersCache.delete(id);
   savedParametersCache.set(id, { reading, characters });
   savedParametersCacheCharacters += characters;
-  while (savedParametersCache.size > PARAMETERS_REMEMBERED) {
+  while (
+    savedParametersCache.size > PARAMETERS_REMEMBERED ||
+    (savedParametersCache.size > 1 && savedParametersCacheCharacters > PARAMETERS_REMEMBERED_CHARACTERS)
+  ) {
     const [oldest, gone] = savedParametersCache.entries().next().value as [number, RememberedParameters];
     savedParametersCache.delete(oldest);
     savedParametersCacheCharacters -= gone.characters;
@@ -3344,6 +3666,8 @@ function showContainerInfo(node: TreeItem): void {
 
 /** Select a storey node in the tree — the panel's storey jump. */
 function selectStorey(storeyIndex: number): void {
+  const storey = treeItemByStorey.get(storeyIndex);
+  if (storey) ensureTreeRow(storey);
   const row = treeEl.querySelector<HTMLElement>(`.tree-node[data-storey-index="${storeyIndex}"]`);
   if (!row) return;
   document.querySelectorAll('.tree-node.selected').forEach((el) => el.classList.remove('selected'));
@@ -3821,8 +4145,8 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
   if (unexported > 0) {
     return {
       kind: 'warn',
-      title: 'Incomplete model',
-      summary: `${unexported} model element records could not be exported (RE-30)`,
+      title: 'Element records not exported',
+      summary: `${unexported} element records belong to ElementIds the file does not declare. On the one model compared with Revit's export they were elements deleted since its last Save As (#1838); if none was deleted, the model is likely incomplete (RE-30)`,
     };
   }
   if (input.release_support?.status === 'experimental') {
@@ -4694,7 +5018,7 @@ function renderSupportGrid(): void {
     const outside = document.createElement('li');
     outside.className = 'support-legend-note';
     outside.textContent =
-      'Revit 2014 and earlier: outside the 1.0 range (2015 to 2027), measured only on a contributor\'s local files.';
+      'Revit 2014 and earlier: outside the 1.0 range (2024 to 2027), measured only on a contributor\'s local files.';
     supportLegendEl.appendChild(outside);
   }
   const note = document.createElement('li');

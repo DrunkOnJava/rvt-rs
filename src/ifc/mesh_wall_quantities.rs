@@ -13,11 +13,18 @@
 //! and the other three only of some (on the BIM4LCA office as built, 26 of 581
 //! walls with quantities have a `NetVolume` and nothing else), and nothing in
 //! the mesh tells them apart but that none of those 26 is a plain prism: each
-//! has five or more vertical faces. So the areas are given only of a wall with
-//! no more than four (its two sides and its two ends), and a gross area only
-//! where the two largest vertical faces, the sides, face opposite ways and
-//! agree on it, the one case in which Revit's choice between them cannot
-//! matter.
+//! has five or more vertical faces. So the areas are given of a wall with no
+//! more than four (its two sides and its two ends), or of one with more whose
+//! mesh is a vertical prism less the openings rvt-rs cuts in it, at least one
+//! of them and every vertical face beyond the four a jamb of one of them, and
+//! whose base is not attached (#1046: among Revit's own bodies of the BIM4LCA
+//! office as built and at building permit, 170 of 175 such walls have the full
+//! set and the 5 that do not all have an attached base, where 26 prisms with
+//! one keep it; a wall with no opening keeps the four-face gate, as the two
+//! such walls of the BIM4LCA housing with more have a `NetVolume` alone), and a
+//! gross area only where the two largest vertical faces, the sides, face
+//! opposite ways and agree on it, the one case in which Revit's choice between
+//! them cannot matter.
 
 use crate::native_saved_mesh::Primitive;
 use crate::vector_math::{cross, dot, sub};
@@ -38,17 +45,53 @@ const VERTICAL_TOLERANCE: f64 = 1e-6;
 /// and still be one area.
 const SIDES_AGREE: f64 = 1e-5;
 
-/// More vertical faces than this and the wall is given no area: Revit's export
-/// writes the areas and the gross volume of a wall of a plain prism's plan and of
-/// others, and the walls it writes only a volume of all have five or more.
+/// More vertical faces than this and the wall is given no area, unless its mesh
+/// is a vertical prism less the openings cut in it, at least one of them and
+/// every face beyond the four a jamb of one of them, and its base is not
+/// attached: Revit's export writes the areas and the gross volume of a wall of a
+/// plain prism's plan and of others, and the walls it writes only a volume of
+/// all have five or more.
 const MAX_VERTICAL_FACES: usize = 4;
+
+/// How close to the vertical a face's normal must be for the face to be
+/// horizontal, and so a wall's top, base or the head or sill of an opening,
+/// rather than sloped.
+const HORIZONTAL_TOLERANCE: f64 = 1e-6;
+
+/// How far, feet, a face's height may lie from an opening's top or bottom and
+/// still be the one that face makes, and how far an opening may fall short of
+/// spanning it: the saved corners are single precision and the opening is
+/// placed by its own record.
+const OPENING_TOLERANCE_FEET: f64 = 0.01;
+
+/// How far a wall's turn may be from a multiple of a right angle for a world
+/// box, which is axis aligned, to be that box's own extent in the wall's frame.
+const AXIS_TOLERANCE: f64 = 1e-6;
+
+/// The direction of a wall's own axes in its plan: the turn of its x axis
+/// about the vertical, radians.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct WallFrame {
+    pub turn: f64,
+}
+
+impl WallFrame {
+    /// Whether the frame's axes lie along the model's axes or across them, the
+    /// only turns at which a world box's extent in the frame is exact.
+    fn square(&self) -> bool {
+        (2.0 * self.turn).sin().abs() <= AXIS_TOLERANCE
+    }
+}
 
 /// The quantities a wall's mesh gives, in feet.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct WallMeshQuantities {
     /// The volume of the mesh, cubic feet.
     pub net_volume: f64,
-    /// The areas of its sides, where it has no more than four vertical faces.
+    /// The areas of its sides, where it has no more than four vertical faces,
+    /// or where it is a vertical prism less the openings cut in it, at least
+    /// one of them and every face beyond the four a jamb of one of them, and
+    /// its base is not attached.
     pub sides: Option<WallSideAreas>,
     /// The vertical span of the mesh, from its lowest corner to its highest,
     /// feet. It is the `Height` Revit's export writes, to the single
@@ -168,7 +211,12 @@ fn outer_loop_area(triangles: &[Triangle], n: [f64; 2]) -> f64 {
     };
     let mut seen: HashSet<u32> = HashSet::new();
     let mut outer = 0.0f64;
-    let starts: Vec<u32> = next.keys().copied().collect();
+    // Each loop is summed from its lowest vertex. `next` yields its keys in
+    // another order in every export, and a loop summed from another vertex
+    // adds the same terms in another order: the area moved in its last bits
+    // between two exports of one file (#1862).
+    let mut starts: Vec<u32> = next.keys().copied().collect();
+    starts.sort_unstable();
     for start in starts {
         if seen.contains(&start) {
             continue;
@@ -276,6 +324,13 @@ fn side_areas(sides: &mut [Side]) -> Option<WallSideAreas> {
     if sides.len() > MAX_VERTICAL_FACES {
         return None;
     }
+    largest_side_areas(sides)
+}
+
+/// The areas of the wall whose vertical faces are `sides`: its largest face
+/// less its holes, and the area inside the outer loops of its two largest where
+/// they face opposite ways and agree on it.
+fn largest_side_areas(sides: &mut [Side]) -> Option<WallSideAreas> {
     sides.sort_by(|x, y| y.net.total_cmp(&x.net));
     let largest = sides.first()?;
     Some(WallSideAreas {
@@ -287,10 +342,25 @@ fn side_areas(sides: &mut [Side]) -> Option<WallSideAreas> {
 }
 
 /// The quantities the saved mesh of a wall gives, or none where its faces are
-/// not all planes or they are not one closed piece wound one way.
-pub(super) fn wall_mesh_quantities(primitives: &[Primitive]) -> Option<WallMeshQuantities> {
+/// not all planes or they are not one closed piece wound one way. `frame` is
+/// the direction of the wall's own axes, `openings` the world boxes of the
+/// openings cut in it, at least one of which the areas of a prism less its
+/// openings need, and `base_attached` whether its base is joined to a roof,
+/// floor or footing, which is what those areas need (#1046).
+pub(super) fn wall_mesh_quantities(
+    primitives: &[Primitive],
+    frame: &WallFrame,
+    openings: &[[f64; 6]],
+    base_attached: bool,
+) -> Option<WallMeshQuantities> {
     let mut every: Vec<Triangle> = Vec::new();
     let mut sides: Vec<Side> = Vec::new();
+    // #1046: each horizontal face, its height and its extent along the wall and
+    // to its left, each vertical face's extent the same way and its height, and
+    // whether any face is sloped.
+    let mut horizontal: Vec<(f64, [f64; 2], [f64; 2])> = Vec::new();
+    let mut vertical: Vec<([f64; 2], [f64; 2], [f64; 2])> = Vec::new();
+    let mut sloped = false;
     for primitive in primitives {
         let triangles = oriented(primitive)?;
         if triangles.is_empty() {
@@ -298,13 +368,33 @@ pub(super) fn wall_mesh_quantities(primitives: &[Primitive]) -> Option<WallMeshQ
         }
         let unit = flat_normal(&triangles)?;
         if unit[2].abs() <= VERTICAL_TOLERANCE {
-            let horizontal = unit[0].hypot(unit[1]);
-            let normal = [unit[0] / horizontal, unit[1] / horizontal];
+            let length = unit[0].hypot(unit[1]);
+            let normal = [unit[0] / length, unit[1] / length];
             sides.push(Side {
                 net: triangles.iter().map(area).sum(),
                 gross: outer_loop_area(&triangles, normal),
                 normal,
             });
+            let (along, left) = plan_ranges(
+                frame,
+                triangles
+                    .iter()
+                    .flat_map(|&(a, b, c)| [a, b, c])
+                    .map(|point| [point[0], point[1]]),
+            );
+            vertical.push((along, left, z_range(&triangles)));
+        } else if unit[2].abs() >= 1.0 - HORIZONTAL_TOLERANCE {
+            let height = triangles.first()?.0[2];
+            let (along, left) = plan_ranges(
+                frame,
+                triangles
+                    .iter()
+                    .flat_map(|&(a, b, c)| [a, b, c])
+                    .map(|point| [point[0], point[1]]),
+            );
+            horizontal.push((height, along, left));
+        } else {
+            sloped = true;
         }
         every.extend(triangles);
     }
@@ -315,11 +405,135 @@ pub(super) fn wall_mesh_quantities(primitives: &[Primitive]) -> Option<WallMeshQ
         .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), z| {
             (low.min(z), high.max(z))
         });
+    let mut found = side_areas(&mut sides);
+    if found.is_none()
+        && !base_attached
+        && !openings.is_empty()
+        && jambs_explain(&vertical, frame, openings)
+        && prism_less_openings(&horizontal, sloped, frame, openings, low, high)
+    {
+        found = largest_side_areas(&mut sides);
+    }
     Some(WallMeshQuantities {
         net_volume,
-        sides: side_areas(&mut sides),
+        sides: found,
         height_feet: high - low,
     })
+}
+
+/// The extent, feet, of the plan points `points` along the wall's axis and to
+/// its left, in `frame`'s frame.
+fn plan_ranges(frame: &WallFrame, points: impl Iterator<Item = [f64; 2]>) -> ([f64; 2], [f64; 2]) {
+    let (sin, cos) = frame.turn.sin_cos();
+    let (axis, left) = ([cos, sin], [-sin, cos]);
+    let mut along = [f64::INFINITY, f64::NEG_INFINITY];
+    let mut offset = [f64::INFINITY, f64::NEG_INFINITY];
+    for [x, y] in points {
+        let along_it = x * axis[0] + y * axis[1];
+        let left_it = x * left[0] + y * left[1];
+        along = [along[0].min(along_it), along[1].max(along_it)];
+        offset = [offset[0].min(left_it), offset[1].max(left_it)];
+    }
+    (along, offset)
+}
+
+/// The lowest and highest point, feet, of the corners of `triangles`.
+fn z_range(triangles: &[Triangle]) -> [f64; 2] {
+    let (low, high) = triangles
+        .iter()
+        .flat_map(|&(a, b, c)| [a[2], b[2], c[2]])
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), z| {
+            (low.min(z), high.max(z))
+        });
+    [low, high]
+}
+
+/// The plan corners of the world box `[min_x, min_y, min_z, max_x, max_y,
+/// max_z]`, feet.
+fn box_corners(world: &[f64; 6]) -> [[f64; 2]; 4] {
+    [
+        [world[0], world[1]],
+        [world[3], world[1]],
+        [world[3], world[4]],
+        [world[0], world[4]],
+    ]
+}
+
+/// Whether `inner` lies within `outer`, to [`OPENING_TOLERANCE_FEET`].
+fn covers(outer: [f64; 2], inner: [f64; 2]) -> bool {
+    inner[0] >= outer[0] - OPENING_TOLERANCE_FEET && inner[1] <= outer[1] + OPENING_TOLERANCE_FEET
+}
+
+/// Whether the wall whose mesh has the horizontal faces `horizontal`, each its
+/// height and its extent along the wall and to its left, and no sloped face is a
+/// vertical prism less `openings`, each the world box of an opening cut in it,
+/// feet: every such face strictly between `low` and `high` (the mesh's lowest
+/// and highest point) is the top or the bottom of an opening that spans it along
+/// the wall and across it.
+fn prism_less_openings(
+    horizontal: &[(f64, [f64; 2], [f64; 2])],
+    sloped: bool,
+    frame: &WallFrame,
+    openings: &[[f64; 6]],
+    low: f64,
+    high: f64,
+) -> bool {
+    if sloped || !frame.square() {
+        return false;
+    }
+    let boxes: Vec<([f64; 2], [f64; 2], [f64; 2])> = openings
+        .iter()
+        .map(|world| {
+            let (along, left) = plan_ranges(frame, box_corners(world).into_iter());
+            (along, left, [world[2], world[5]])
+        })
+        .collect();
+    horizontal.iter().all(|(height, along, left)| {
+        *height <= low + OPENING_TOLERANCE_FEET
+            || *height >= high - OPENING_TOLERANCE_FEET
+            || boxes.iter().any(|(opening_along, opening_left, up)| {
+                covers(*opening_along, *along)
+                    && covers(*opening_left, *left)
+                    && ((up[0] - height).abs() <= OPENING_TOLERANCE_FEET
+                        || (up[1] - height).abs() <= OPENING_TOLERANCE_FEET)
+            })
+    })
+}
+
+/// Whether every vertical face of the wall beyond the four a prism has is a
+/// jamb of one of `openings`, each the world box of an opening cut in it, feet:
+/// a face whose extent along the wall, extent to its left and height all lie
+/// within one opening's box. A wall with no opening has no such face, so it
+/// keeps the four-face gate (#1046).
+fn jambs_explain(
+    vertical: &[([f64; 2], [f64; 2], [f64; 2])],
+    frame: &WallFrame,
+    openings: &[[f64; 6]],
+) -> bool {
+    if !frame.square() {
+        return false;
+    }
+    let boxes: Vec<([f64; 2], [f64; 2], [f64; 2])> = openings
+        .iter()
+        .map(|world| {
+            let (along, left) = plan_ranges(frame, box_corners(world).into_iter());
+            (along, left, [world[2], world[5]])
+        })
+        .collect();
+    let beyond = vertical
+        .iter()
+        .filter(|(along, left, up)| {
+            !boxes
+                .iter()
+                .any(|(opening_along, opening_left, opening_up)| {
+                    covers(*opening_along, *along)
+                        && covers(*opening_left, *left)
+                        && up[0] >= opening_up[0] - OPENING_TOLERANCE_FEET
+                        && up[1] <= opening_up[1] + OPENING_TOLERANCE_FEET
+                })
+        })
+        .count();
+    beyond <= MAX_VERTICAL_FACES
 }
 
 #[cfg(test)]
@@ -375,9 +589,21 @@ mod tests {
         ]
     }
 
+    /// The frame of a wall lying on the model's axes: the frame every wall the
+    /// tests build is in.
+    fn on_the_axes() -> WallFrame {
+        WallFrame { turn: 0.0 }
+    }
+
     #[test]
     fn a_plain_wall_gives_its_volume_and_its_sides() {
-        let found = wall_mesh_quantities(&wall([100.0, 200.0, 190.0], 10.0, 1.0, 8.0)).unwrap();
+        let found = wall_mesh_quantities(
+            &wall([100.0, 200.0, 190.0], 10.0, 1.0, 8.0),
+            &on_the_axes(),
+            &[],
+            false,
+        )
+        .unwrap();
         assert!((found.net_volume - 80.0).abs() < 1e-9);
         assert!((found.height_feet - 8.0).abs() < 1e-9);
         let sides = found.sides.unwrap();
@@ -389,14 +615,20 @@ mod tests {
     fn a_wall_missing_a_face_gives_nothing() {
         let mut faces = wall([0.0, 0.0, 0.0], 10.0, 1.0, 8.0);
         faces.remove(1);
-        assert_eq!(wall_mesh_quantities(&faces), None);
+        assert_eq!(
+            wall_mesh_quantities(&faces, &on_the_axes(), &[], false),
+            None
+        );
     }
 
     #[test]
     fn two_walls_in_one_mesh_give_nothing() {
         let mut faces = wall([0.0, 0.0, 0.0], 10.0, 1.0, 8.0);
         faces.extend(wall([50.0, 0.0, 0.0], 10.0, 1.0, 8.0));
-        assert_eq!(wall_mesh_quantities(&faces), None);
+        assert_eq!(
+            wall_mesh_quantities(&faces, &on_the_axes(), &[], false),
+            None
+        );
     }
 
     #[test]
@@ -404,12 +636,15 @@ mod tests {
         let mut faces = wall([0.0, 0.0, 0.0], 10.0, 1.0, 8.0);
         // One corner of the front face lifted out of its plane.
         faces[2].vertices[2] = [10.0, -0.3, 8.0];
-        assert_eq!(wall_mesh_quantities(&faces), None);
+        assert_eq!(
+            wall_mesh_quantities(&faces, &on_the_axes(), &[], false),
+            None
+        );
     }
 
     #[test]
     fn nothing_at_all_gives_nothing() {
-        assert_eq!(wall_mesh_quantities(&[]), None);
+        assert_eq!(wall_mesh_quantities(&[], &on_the_axes(), &[], false), None);
     }
 
     #[test]
@@ -486,5 +721,77 @@ mod tests {
         assert_eq!(agreeing_gross(&front, &side(80.0, [0.0, -1.0])), None);
         assert_eq!(agreeing_gross(&front, &side(70.0, [0.0, 1.0])), None);
         assert_eq!(agreeing_gross(&front, &side(f64::NAN, [0.0, 1.0])), None);
+    }
+
+    #[test]
+    fn a_sloped_face_is_no_prism_less_its_openings() {
+        // The face the opening ends at, and the one face of the mesh that is
+        // neither vertical nor horizontal.
+        assert!(!prism_less_openings(
+            &[(3.0, [0.0, 4.0], [0.0, 1.0])],
+            true,
+            &on_the_axes(),
+            &[[0.0, 0.0, 0.0, 4.0, 1.0, 3.0]],
+            0.0,
+            8.0
+        ));
+    }
+
+    #[test]
+    fn a_face_no_opening_reaches_is_no_prism_less_its_openings() {
+        // A step in the wall's plan: a horizontal face inside it that no
+        // opening makes.
+        assert!(!prism_less_openings(
+            &[(3.0, [0.0, 4.0], [0.0, 1.0])],
+            false,
+            &on_the_axes(),
+            &[],
+            0.0,
+            8.0
+        ));
+    }
+
+    #[test]
+    fn an_opening_must_span_the_face_and_end_at_its_height() {
+        let face = (3.0, [0.0, 4.0], [0.0, 1.0]);
+        // An opening that stops half way along the face explains none of it.
+        assert!(!prism_less_openings(
+            &[face],
+            false,
+            &on_the_axes(),
+            &[[0.0, 0.0, 0.0, 2.0, 1.0, 3.0]],
+            0.0,
+            8.0
+        ));
+        // One that spans the face and ends at its height is the face's.
+        assert!(prism_less_openings(
+            &[face],
+            false,
+            &on_the_axes(),
+            &[[0.0, 0.0, 0.0, 4.0, 1.0, 3.0]],
+            0.0,
+            8.0
+        ));
+    }
+
+    #[test]
+    fn a_wall_with_no_opening_has_no_jamb() {
+        // Five vertical faces and nothing cut in the wall: the fifth is no
+        // opening's.
+        let face = ([0.0, 10.0], [0.0, 1.0], [0.0, 8.0]);
+        assert!(!jambs_explain(&[face; 5], &on_the_axes(), &[]));
+    }
+
+    #[test]
+    fn a_face_outside_every_opening_is_no_jamb() {
+        let opening = [[0.0, 0.0, 0.0, 4.0, 1.0, 3.0]];
+        // A face at the opening's edge, as tall as it and as deep as the wall.
+        let jamb = ([4.0, 4.0], [0.0, 1.0], [0.0, 3.0]);
+        assert!(jambs_explain(&[jamb; 5], &on_the_axes(), &opening));
+        // One past the opening's edge, and one taller than the opening.
+        let past = ([6.0, 6.0], [0.0, 1.0], [0.0, 3.0]);
+        assert!(!jambs_explain(&[past; 5], &on_the_axes(), &opening));
+        let tall = ([4.0, 4.0], [0.0, 1.0], [0.0, 8.0]);
+        assert!(!jambs_explain(&[tall; 5], &on_the_axes(), &opening));
     }
 }

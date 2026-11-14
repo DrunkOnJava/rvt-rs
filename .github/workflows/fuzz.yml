@@ -159,7 +159,7 @@ jobs:
           }
           newest() {
             gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=fuzz-corpus-${TARGET}&per_page=50" \
-              --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main")] | sort_by(.created_at) | last | .id // empty'
+              --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main" and .workflow_run.head_repository_id == .workflow_run.repository_id)] | sort_by(.created_at) | last | .id // empty'
           }
           fetch() {
             rm -rf "$unpacked"

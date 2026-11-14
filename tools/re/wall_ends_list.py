@@ -20,7 +20,7 @@ Needs IfcOpenShell.
 
 Usage:
 
-    python3 tools/re/wall_ends_list.py <rvt-rs.ifc> <revit.ifc> [--list N]
+    python3 tools/re/wall_ends_list.py <rvt-rs.ifc> <revit.ifc> [--list N]   (every wall with an end off by more than the tolerance; N keeps the N largest)
 """
 
 import collections
@@ -92,7 +92,7 @@ def main():
     args = sys.argv[1:]
     if len(args) < 2:
         raise SystemExit(__doc__)
-    listing = int(args[args.index("--list") + 1]) if "--list" in args else 40
+    listing = int(args[args.index("--list") + 1]) if "--list" in args else 100000
     ours_file, ref_file = ifcopenshell.open(args[0]), ifcopenshell.open(args[1])
     ours, ref = plan_points(ours_file), plan_points(ref_file)
     _, to_internal_direction = site_to_internal(ref_file)
@@ -133,8 +133,9 @@ def main():
     print("BodySource | start (Revit's joins there) | end (Revit's joins there) | walls; short/long = rvt-rs's wall shorter/longer there")
     for (source, start, end), count in sorted(groups.items(), key=lambda kv: -kv[1]):
         print(f"  {count:>5}  {source} | {start} | {end}")
-    print(f"the {listing} largest (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):")
-    for row in sorted(rows, reverse=True)[:listing]:
+    off = [row for row in sorted(rows, reverse=True) if row[0] > TOLERANCE_FT][:listing]
+    print(f"the {len(off)} walls with an end off by more than {TOLERANCE_FT} ft, largest first (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):")
+    for row in off:
         far, tag, source, name, s, e, at_start, at_end, on_path = row
         print(f"  {tag} {source} '{name}' start {s:+.4f} end {e:+.4f} start{at_start} end{at_end} path {on_path}")
     return 0

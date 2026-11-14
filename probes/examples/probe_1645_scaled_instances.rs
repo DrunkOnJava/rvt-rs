@@ -34,7 +34,7 @@ use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_saved_mesh::pointer;
 
 /// The columns of the 3x3 of an `InstanceInfo.m_Trf`, or none where it is unreadable.
-fn columns(trf: &serde_json::Value) -> Option<[[f64; 3]; 3]> {
+fn columns(trf: &rvt::research::graph_value::Fv) -> Option<[[f64; 3]; 3]> {
     let rows = trf["m_3x3"].as_array().filter(|rows| rows.len() == 3)?;
     let mut m = [[0.0; 3]; 3];
     for (i, row) in rows.iter().enumerate() {

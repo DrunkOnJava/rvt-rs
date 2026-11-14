@@ -12,6 +12,12 @@ cargo install rvt-rs-mcp --locked
 claude mcp add rvt -- rvt-rs-mcp
 ```
 
+It reads models from, and writes exports to, one folder: `--root <folder>`
+(or the environment variable `RVT_MCP_ROOT`), else the folder the client starts
+it in, unless that is `/`, the home folder or a folder above it. A path that
+leaves the folder is refused, so text in a crafted Revit file cannot steer the
+client to other files. `--unconfined` lifts the limit.
+
 Tools: `open_model`, `get_summary`, `list_elements`, `get_element`,
 `explain_element`, `list_rooms`, `list_levels`, `get_diagnostics`, `export_ifc`,
 `export_gltf`.

@@ -29,6 +29,7 @@
       "IFCMATERIAL": 87,
       "IFCMATERIALCONSTITUENT": 6,
       "IFCMATERIALCONSTITUENTSET": 4,
+      "IFCMATERIALDEFINITIONREPRESENTATION": 86,
       "IFCMATERIALLAYER": 9,
       "IFCMATERIALLAYERSET": 8,
       "IFCMATERIALLAYERSETUSAGE": 407,
@@ -43,9 +44,9 @@
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 6598,
       "IFCPROPERTYSINGLEVALUE": 28589,
-      "IFCQUANTITYAREA": 1099,
-      "IFCQUANTITYLENGTH": 1369,
-      "IFCQUANTITYVOLUME": 1107,
+      "IFCQUANTITYAREA": 1253,
+      "IFCQUANTITYLENGTH": 1446,
+      "IFCQUANTITYVOLUME": 1184,
       "IFCRECTANGLEPROFILEDEF": 754,
       "IFCRELAGGREGATES": 13,
       "IFCRELASSOCIATESMATERIAL": 412,
@@ -64,6 +65,7 @@
       "IFCSPACE": 116,
       "IFCSPACETYPE": 116,
       "IFCSTYLEDITEM": 86,
+      "IFCSTYLEDREPRESENTATION": 86,
       "IFCSURFACESTYLE": 86,
       "IFCSURFACESTYLERENDERING": 86,
       "IFCTRIANGULATEDFACESET": 138,
@@ -705,7 +707,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "372d556a78e548a3e4471a9b2f435f0932e76e33528233b6ef86a1ba6c917732",
+  "observation_hash_sha256": "25f3862ae0bc4578015ce67a354de4c7073aa54bdedefc94bd3569dc684e95e0",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
@@ -718,9 +720,8 @@
     "partial_revit_element_parameters"
   ],
   "warnings": [
-    "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
-    "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
+    "15 building storey name(s) came from partition Level records; all 970 element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59)."
   ],
   "witness_id": "rvt-rs",
-  "witness_version": "0.18.0"
+  "witness_version": "0.22.0"
 }

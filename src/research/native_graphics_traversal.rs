@@ -1,9 +1,9 @@
 //! Bounded traversal of saved graphics under the default
 //! 3D context. This selects surface carriers, not regenerated Revit geometry.
 //! Unsupported solid-affecting filters and external instances remain explicit.
+use crate::graph_value::Fv;
 use crate::native_parameters::ObjectGraph;
 use serde::Serialize;
-use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
 /// Row-major affine matrix, operating on column vectors in saved length units.
@@ -182,6 +182,22 @@ pub const NESTED_DETAIL_FILTER_DIAGNOSTIC: &str =
 pub const VIEW_COMPONENT_DIAGNOSTIC: &str =
     "surface-bearing component requires qualified owner/view visibility";
 
+/// The calls one curves-only check may make, as many as `Walker::visit`
+/// may (#1833). A node is reached once along each path to it, so a child
+/// shared at every level doubled the calls at each, up to 2^128 within the
+/// depth limit. Over the budget a branch is not curves only: a filter's
+/// children are then walked, under `visit`'s own limit, and a component gets
+/// [`VIEW_COMPONENT_DIAGNOSTIC`].
+const CURVE_CHECK_BUDGET: usize = 100_000;
+
+/// The state of one curves-only check: the current path, which a cycle may
+/// not re-enter, and the calls made so far.
+#[derive(Default)]
+struct CurveWalk {
+    path: HashSet<usize>,
+    calls: usize,
+}
+
 struct Walker<'a, 'r> {
     edge_indexes: HashMap<usize, EdgeIndex>,
     graph: &'a ObjectGraph,
@@ -206,7 +222,7 @@ impl Walker<'_, '_> {
             message: message.into(),
         });
     }
-    fn target(&self, source: usize, p: &Value) -> Result<usize, String> {
+    fn target(&self, source: usize, p: &Fv) -> Result<usize, String> {
         let offset = p["offset"].as_u64().ok_or("missing pointer offset")? as usize;
         let token = p["pointer_token"].as_u64().ok_or("missing pointer token")?;
         let edge_slot = self.edge_indexes[&(self.graph as *const ObjectGraph as usize)]
@@ -331,10 +347,8 @@ impl Walker<'_, '_> {
                         return Ok(());
                     }
                     // Curves are deliberately outside this surface-only selector.
-                    if children
-                        .iter()
-                        .all(|&i| self.only_curves(i, &mut HashSet::new()))
-                    {
+                    let mut walk = CurveWalk::default();
+                    if children.iter().all(|&i| self.only_curves(i, &mut walk)) {
                         self.result.excluded_non_surface_branches += 1;
                         return Ok(());
                     }
@@ -435,7 +449,7 @@ impl Walker<'_, '_> {
                     .entry(target as *const ObjectGraph as usize)
                     .or_insert_with(|| edge_index(target));
                 self.graph = target;
-                let curves_only = self.only_curves(0, &mut HashSet::new());
+                let curves_only = self.only_curves(0, &mut CurveWalk::default());
                 self.graph = previous;
                 if curves_only {
                     self.result.excluded_non_surface_branches += 1;
@@ -541,8 +555,9 @@ impl Walker<'_, '_> {
             && default_representation(&info.fields, self.pre2023)
             && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rotation(&t))
     }
-    fn only_curves(&self, index: usize, seen: &mut HashSet<usize>) -> bool {
-        if seen.len() >= 128 || !seen.insert(index) {
+    fn only_curves(&self, index: usize, walk: &mut CurveWalk) -> bool {
+        walk.calls += 1;
+        if walk.calls > CURVE_CHECK_BUDGET || walk.path.len() >= 128 || !walk.path.insert(index) {
             return false;
         }
         let result = match self.graph.objects[index].class_name.as_str() {
@@ -550,10 +565,10 @@ impl Walker<'_, '_> {
             | "GPolyline" | "GPoint" => true,
             "GElement" | "GGroup" | "GFilter" => self
                 .children(index)
-                .is_ok_and(|c| c.iter().all(|&i| self.only_curves(i, seen))),
+                .is_ok_and(|c| c.iter().all(|&i| self.only_curves(i, walk))),
             _ => false,
         };
-        seen.remove(&index);
+        walk.path.remove(&index);
         result
     }
 }
@@ -578,7 +593,7 @@ fn current_graph_owner_matches(root: &crate::native_parameters::GraphObject, id:
 /// `InstanceInfo` with no `m_GRepId` is refused, as it was before RE-342: the
 /// decoder drops a field flagged transient unread, so a missing key cannot say
 /// whether the class declares one, and nothing measured should rest on it.
-fn default_representation(info: &Value, pre2023: bool) -> bool {
+fn default_representation(info: &Fv, pre2023: bool) -> bool {
     match info.get("m_GRepId") {
         Some(id) => id.as_u64() == Some(0),
         None => {
@@ -621,7 +636,7 @@ const DRAWN_HIDDEN_INSTANCE_TARGETS: u64 = 53246;
 /// Revit's body within 0.2% where the visible instance alone is 0.4 of it.
 /// Every other hidden instance stays skipped and every other target mask stays
 /// refused: no other pair is measured.
-fn drawn_hidden_instance(class_name: &str, fields: &Value) -> bool {
+fn drawn_hidden_instance(class_name: &str, fields: &Fv) -> bool {
     class_name == "GInstance"
         && fields["m_GInfo"]["m_flags"]
             .as_u64()
@@ -636,7 +651,7 @@ const DRAWN_VISIBLE_INSTANCE_TARGETS: u64 = 10;
 /// Whether `fields` are those of a `GInstance` visible in the normal draw
 /// (visibility 0) and forbidden the targets `DRAWN_VISIBLE_INSTANCE_TARGETS`.
 /// Every other mask stays refused.
-fn drawn_visible_instance(class_name: &str, fields: &Value) -> bool {
+fn drawn_visible_instance(class_name: &str, fields: &Fv) -> bool {
     class_name == "GInstance"
         && fields["m_GInfo"]["m_flags"]
             .as_u64()
@@ -657,7 +672,7 @@ fn graphics_visibility(flags: u64) -> u8 {
         2
     }
 }
-fn read_transform(v: &Value) -> Result<GraphicsTransform, String> {
+fn read_transform(v: &Fv) -> Result<GraphicsTransform, String> {
     let rows = v["m_3x3"]
         .as_array()
         .filter(|v| v.len() == 3)
@@ -702,7 +717,7 @@ fn multiply(a: GraphicsTransform, b: GraphicsTransform) -> GraphicsTransform {
 }
 // Native default context is view type4. Direction predicates6/7/8 are
 // false before negation in that context;10/11 use pi/2 +/-1e-10 thresholds.
-fn direction_condition(v: &Value, matrix: GraphicsTransform) -> Result<bool, String> {
+fn direction_condition(v: &Fv, matrix: GraphicsTransform) -> Result<bool, String> {
     let negate = v["m_negateDirCondition"]
         .as_bool()
         .ok_or("missing direction negation")?;
@@ -758,7 +773,7 @@ fn direction_condition(v: &Value, matrix: GraphicsTransform) -> Result<bool, Str
     };
     Ok(answer != negate)
 }
-fn condition_at_detail(class: &str, v: &Value, detail_level: i64) -> Result<bool, String> {
+fn condition_at_detail(class: &str, v: &Fv, detail_level: i64) -> Result<bool, String> {
     if !matches!(
         class,
         "GConditionInt"
@@ -803,6 +818,7 @@ fn condition_at_detail(class: &str, v: &Value, detail_level: i64) -> Result<bool
 #[cfg(test)]
 mod tests {
     use super::{GraphicsTransform, default_representation, rotation};
+    use crate::graph_value::Fv;
     use serde_json::json;
 
     fn matrix(m: [[f64; 3]; 3]) -> GraphicsTransform {
@@ -908,20 +924,20 @@ mod tests {
             for key in extra {
                 info[*key] = json!(0);
             }
-            info
+            Fv::from_value(&info)
         };
         assert!(default_representation(&with(&[]), true));
         assert!(!default_representation(&with(&["m_other"]), true));
         assert!(!default_representation(
-            &json!({"m_Trf": {}, "m_cda": {}}),
+            &Fv::from_value(&json!({"m_Trf": {}, "m_cda": {}})),
             true
         ));
-        assert!(!default_representation(&json!(null), true));
+        assert!(!default_representation(&Fv::Null, true));
     }
 
     #[test]
     fn a_missing_representation_id_is_refused_off_the_pre_2023_route() {
-        let exact = json!({"m_Trf": {}, "m_symbolId": {}, "m_cda": {}});
+        let exact = Fv::from_value(&json!({"m_Trf": {}, "m_symbolId": {}, "m_cda": {}}));
         assert!(default_representation(&exact, true));
         assert!(!default_representation(&exact, false));
     }
@@ -929,9 +945,10 @@ mod tests {
     #[test]
     fn a_representation_id_other_than_zero_is_not_the_default() {
         for pre2023 in [false, true] {
-            assert!(default_representation(&json!({"m_GRepId": 0}), pre2023));
-            assert!(!default_representation(&json!({"m_GRepId": 1}), pre2023));
-            assert!(!default_representation(&json!({"m_GRepId": null}), pre2023));
+            let with = |id: serde_json::Value| Fv::from_value(&json!({ "m_GRepId": id }));
+            assert!(default_representation(&with(json!(0)), pre2023));
+            assert!(!default_representation(&with(json!(1)), pre2023));
+            assert!(!default_representation(&with(json!(null)), pre2023));
         }
     }
 }

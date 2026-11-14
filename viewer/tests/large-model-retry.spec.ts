@@ -53,7 +53,9 @@ test('streams over the limits are reported, and the large-model retry reads them
   await expect(mode).toContainText("over the browser's resource limits");
   const before = await diagnosticsJson(page);
   expect(before).toContain('stream_not_read_resource_limit');
-  expect(before).toContain('Not read whole: stream BasicFileInfo ');
+  // The stream's name is quoted (it is text from the file, #1884), and the panel
+  // shows the diagnostics as JSON, which escapes the quotes.
+  expect(before).toContain('Not read whole: stream \\"BasicFileInfo\\" ');
   await expect(page.locator('#scaffold-note')).toBeVisible();
   await expect(page.locator('#scaffold-note')).toContainText('Part of the file was not read');
   await expect(page.locator('#scaffold-note')).not.toContainText(/expected result/i);

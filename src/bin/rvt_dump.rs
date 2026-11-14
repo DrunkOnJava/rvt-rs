@@ -16,9 +16,11 @@
 
 use clap::Parser;
 use rvt::{RevitFile, compression};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -27,7 +29,8 @@ use std::process::ExitCode;
     about = "Extract + decompress every OLE stream from a Revit file",
     after_help = "Examples:\n  \
         rvt-dump model.rvt -o streams/\n  \
-        rvt-dump model.rvt -o streams/ --raw"
+        rvt-dump model.rvt -o streams/ --raw\n  \
+        rvt-dump big-model.rvt -o streams/ --large-model"
 )]
 struct Cli {
     /// Path to a Revit file.
@@ -40,12 +43,40 @@ struct Cli {
     /// Also write the raw (compressed) bytes alongside the decompressed ones.
     #[arg(long = "raw")]
     raw: bool,
+
+    /// Maximum bytes of one stream read from the file (default 256 MiB). A
+    /// larger stream is listed as not read and the dump goes on (#1885).
+    #[arg(long, value_name = "BYTES")]
+    max_stream_bytes: Option<u64>,
+
+    /// Maximum inflated bytes of one compressed member (default 256 MiB). The
+    /// members of one stream may inflate to this or, whichever is larger,
+    /// 16 times their stored size, at least 1 GiB and at most 4 GiB (1 GiB
+    /// on a 32-bit build).
+    #[arg(long, value_name = "BYTES")]
+    max_inflate_bytes: Option<usize>,
+
+    /// Raise the stream and inflate limits for large models: streams up to
+    /// 2 GiB, 8 GiB inflated. A partition of 1 GiB stored needs several GB of
+    /// memory.
+    #[arg(long)]
+    large_model: bool,
+
+    /// Exit 0 although a resource limit kept a stream from being read or
+    /// inflated whole (the dump holds what could be read; without this the
+    /// exit status is 3).
+    #[arg(long)]
+    allow_partial: bool,
 }
 
 fn main() -> ExitCode {
     rvt::cli::exit_quietly_on_broken_pipe();
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
+    let cli = Cli::parse();
+    match run(&cli) {
+        Ok(true) => ExitCode::SUCCESS,
+        // A resource limit left something unread, which the report said.
+        Ok(false) if cli.allow_partial => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::from(3),
         Err(e) => {
             eprintln!("error: {e}");
             ExitCode::from(1)
@@ -53,9 +84,11 @@ fn main() -> ExitCode {
     }
 }
 
-fn run() -> anyhow::Result<()> {
-    let cli = Cli::parse();
-    let mut rf = RevitFile::open(&cli.file)?;
+/// Dumps the file; true when every stream was read whole.
+fn run(cli: &Cli) -> anyhow::Result<bool> {
+    let limits =
+        rvt::cli::open_limits(cli.max_stream_bytes, cli.max_inflate_bytes, cli.large_model);
+    let mut rf = RevitFile::open_with_limits(&cli.file, limits)?;
     fs::create_dir_all(&cli.out)?;
 
     let streams = rf.stream_names();
@@ -65,19 +98,29 @@ fn run() -> anyhow::Result<()> {
         cli.file.display()
     );
 
+    let mut taken = HashSet::new();
     for name in &streams {
-        let safe = name.replace('/', "_");
-        let raw = rf.read_stream(name)?;
+        let safe = file_stem_for(name, &mut taken);
+        // A crafted file can name a stream with control characters.
+        let shown = name.escape_debug().to_string();
+        let raw = match rf.read_stream(name) {
+            Ok(raw) => raw,
+            // Over the stream limit: the reader noted it for the report below,
+            // and the rest of the file is still worth dumping.
+            Err(rvt::Error::TooLarge { .. }) => {
+                println!("  {shown:<30}  (not read: over the stream limit)");
+                continue;
+            }
+            Err(e) => return Err(e.into()),
+        };
 
         let decoded = if raw.is_empty() {
             Err(Undecoded::Empty)
         } else if name.starts_with("Partitions/") {
             let inflated = rf.inflated_partition(name)?;
             if inflated.chunk_count() > 0 {
-                Ok(Decoded::new(
-                    inflated.bytes().to_vec(),
-                    inflated.chunk_count(),
-                ))
+                let members = inflated.chunk_count();
+                Ok(Decoded::new(Bytes::Inflated(inflated), members))
             } else {
                 Err(undecoded(name, &raw))
             }
@@ -87,7 +130,7 @@ fn run() -> anyhow::Result<()> {
         match decoded {
             Ok(decoded) => {
                 let path = cli.out.join(format!("{safe}.decomp"));
-                fs::write(&path, &decoded.bytes)?;
+                fs::write(&path, decoded.bytes.as_slice())?;
                 let members = if decoded.members > 1 {
                     format!(" ({} gzip members)", decoded.members)
                 } else {
@@ -95,21 +138,21 @@ fn run() -> anyhow::Result<()> {
                 };
                 println!(
                     "  {:<30}  raw={} bytes  decomp={} bytes{members}  -> {}",
-                    name,
+                    shown,
                     raw.len(),
-                    decoded.bytes.len(),
+                    decoded.bytes.as_slice().len(),
                     short_path(&path)
                 );
             }
-            Err(Undecoded::Empty) => println!("  {:<30}  raw=0 bytes  (empty)", name),
+            Err(Undecoded::Empty) => println!("  {:<30}  raw=0 bytes  (empty)", shown),
             Err(Undecoded::NotCompressed) => println!(
                 "  {:<30}  raw={} bytes  (not gzip-compressed)",
-                name,
+                shown,
                 raw.len()
             ),
             Err(Undecoded::Failed) => println!(
                 "  {:<30}  raw={} bytes  (gzip header found, but it did not inflate)",
-                name,
+                shown,
                 raw.len()
             ),
         }
@@ -118,18 +161,49 @@ fn run() -> anyhow::Result<()> {
             let path = cli.out.join(format!("{safe}.raw"));
             fs::write(&path, &raw)?;
         }
+        // Each stream is written once and not read again: the reader's memo of
+        // inflated partitions would otherwise hold every one of them until the
+        // end of the dump (#1885).
+        rf.release_inflated_partitions();
     }
 
-    Ok(())
+    let unread = rf.unread_streams();
+    if unread.is_empty() {
+        return Ok(true);
+    }
+    eprintln!(
+        "rvt-dump: {} stream(s) were not read whole because of a resource limit:",
+        unread.len()
+    );
+    for line in rvt::cli::unread_stream_report(unread) {
+        eprintln!("{line}");
+    }
+    Ok(false)
+}
+
+/// What a stream decoded to: the bytes a decoder returned, or the partition's
+/// inflated copy the reader shares, which is written without a second copy.
+enum Bytes {
+    Owned(Vec<u8>),
+    Inflated(Arc<compression::InflatedStream>),
+}
+
+impl Bytes {
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Owned(bytes) => bytes,
+            Self::Inflated(inflated) => inflated.bytes(),
+        }
+    }
 }
 
 struct Decoded {
-    bytes: Vec<u8>,
+    bytes: Bytes,
     members: usize,
 }
 
 impl Decoded {
-    fn new(bytes: Vec<u8>, members: usize) -> Self {
+    fn new(bytes: Bytes, members: usize) -> Self {
         Self { bytes, members }
     }
 }
@@ -149,14 +223,14 @@ fn decompress(name: &str, stored: &[u8]) -> Result<Decoded, Undecoded> {
     for off in [0, 4, 8, 16] {
         if compression::has_gzip_magic(data, off) {
             if let Ok(out) = compression::inflate_at(data, off) {
-                return Ok(Decoded::new(out, 1));
+                return Ok(Decoded::new(Bytes::Owned(out), 1));
             }
         }
     }
     let chunks = compression::inflate_all_chunks(data);
     if !chunks.is_empty() {
         let members = chunks.len();
-        return Ok(Decoded::new(chunks.concat(), members));
+        return Ok(Decoded::new(Bytes::Owned(chunks.concat()), members));
     }
     Err(undecoded(name, stored))
 }
@@ -170,6 +244,65 @@ fn undecoded(name: &str, stored: &[u8]) -> Undecoded {
     } else {
         Undecoded::Failed
     }
+}
+
+/// The file name, less its extension, that stream `name` is written under
+/// in `--out`: one no other stream of the dump has (`taken`, lowercased, as a
+/// case-insensitive file system compares names) and that Windows accepts.
+///
+/// The name is the file's own. The cfb crate refuses `\`, `:` and `!` in it,
+/// so it cannot leave `--out`. Otherwise:
+/// - `/`, a control character and `<>"|?*`, which Windows refuses in a file
+///   name and which would fail the write and stop the dump, become `_`;
+/// - a device name Windows reserves (`CON`, `NUL`, `CONIN$`, `COM1`, `LPT¹`
+///   and the like, whatever follows its first `.`) takes a `_` in front;
+/// - a name another stream already has takes `~2`, `~3` and so on, where the
+///   later write would have replaced the earlier silently.
+///
+/// A trailing dot or space cannot end the file name: `.decomp` or `.raw`
+/// follows it.
+fn file_stem_for(name: &str, taken: &mut HashSet<String>) -> String {
+    let mut stem: String = name
+        .chars()
+        .map(|c| {
+            if c == '/' || c.is_control() || matches!(c, '<' | '>' | '"' | '|' | '?' | '*') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let device = stem
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end()
+        .to_ascii_uppercase();
+    // Windows also reserves the superscript ports `COM¹` to `LPT³`, which are
+    // five bytes long.
+    let numbered = device
+        .strip_prefix("COM")
+        .or_else(|| device.strip_prefix("LPT"))
+        .is_some_and(|port| {
+            let mut chars = port.chars();
+            matches!((chars.next(), chars.next()), (Some(digit), None)
+                if digit.is_ascii_digit() || matches!(digit, '¹' | '²' | '³'))
+        });
+    if numbered
+        || matches!(
+            device.as_str(),
+            "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+        )
+    {
+        stem.insert(0, '_');
+    }
+    let mut unique = stem.clone();
+    let mut repeat = 1;
+    while !taken.insert(unique.to_lowercase()) {
+        repeat += 1;
+        unique = format!("{stem}~{repeat}");
+    }
+    unique
 }
 
 fn short_path(p: &Path) -> String {

@@ -1217,7 +1217,12 @@ def main(argv):
     timeout = float(os.environ.get("MEASURE_STEP_TIMEOUT", "2400")) - 120
     scratch = tempfile.mkdtemp(prefix="mcp-answers-", dir=os.environ.get("RUNNER_TEMP"))
     try:
-        server = mcp.Server(args.server, output_dir=scratch, timeout=timeout)
+        server = mcp.Server(
+            args.server,
+            output_dir=scratch,
+            timeout=timeout,
+            root=os.path.dirname(os.path.abspath(args.rvt)),
+        )
         try:
             answers = mcp.gather(
                 server,

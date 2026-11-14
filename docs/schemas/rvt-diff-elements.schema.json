@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://drunkonjava.github.io/rvt-rs/schemas/rvt-diff-elements.schema.json",
+  "title": "rvt-diff --elements --json",
+  "description": "The comparison rvt-diff --elements A B --json PATH writes (rvt::ifc::element_diff::ElementDiff, #1843): the elements the IFC export of each file writes, keyed by the GlobalId it writes, as added, removed, changed (with the fields that differ) or unchanged. The fields are what the export writes, not the Revit file's records, so a change rvt-rs does not read is not seen. An element whose GlobalId either export writes for more than one element is not compared: it is in none of the four lists, and duplicate_global_ids and set_aside say which and how many, so that left_elements = removed + changed + unchanged + set_aside.left and right_elements = added + changed + unchanged + set_aside.right.",
+  "type": "object",
+  "required": [
+    "left",
+    "right",
+    "left_elements",
+    "right_elements",
+    "added",
+    "removed",
+    "changed",
+    "unchanged",
+    "duplicate_global_ids",
+    "set_aside"
+  ],
+  "properties": {
+    "left": {
+      "description": "The first file's name.",
+      "type": "string"
+    },
+    "right": {
+      "description": "The second file's name.",
+      "type": "string"
+    },
+    "left_elements": {
+      "description": "The elements the first file's export writes.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "right_elements": {
+      "description": "The elements the second file's export writes.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "added": {
+      "description": "In the second export only, by GlobalId.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/element"
+      }
+    },
+    "removed": {
+      "description": "In the first export only, by GlobalId.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/element"
+      }
+    },
+    "changed": {
+      "description": "In both, with a field that differs, by GlobalId.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/change"
+      }
+    },
+    "unchanged": {
+      "description": "In both, with every field equal.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "duplicate_global_ids": {
+      "description": "The GlobalIds each export writes for more than one element, sorted. Two elements under one key cannot be told apart, so their elements are set aside.",
+      "type": "object",
+      "required": [
+        "left",
+        "right"
+      ],
+      "properties": {
+        "left": {
+          "description": "Written more than once by the first export.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "right": {
+          "description": "Written more than once by the second export.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "set_aside": {
+      "description": "The elements of each export left out of the comparison because their GlobalId is in duplicate_global_ids (of either export).",
+      "type": "object",
+      "required": [
+        "left",
+        "right"
+      ],
+      "properties": {
+        "left": {
+          "description": "Elements of the first export.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "right": {
+          "description": "Elements of the second export.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "$defs": {
+    "element": {
+      "description": "One element as the export writes it (rvt::ifc::element_diff::ElementState).",
+      "type": "object",
+      "required": [
+        "global_id",
+        "tag",
+        "ifc_type",
+        "name",
+        "storey",
+        "type_name",
+        "predefined_type",
+        "material",
+        "location_feet",
+        "rotation_radians",
+        "body",
+        "properties"
+      ],
+      "properties": {
+        "global_id": {
+          "description": "The GlobalId the IFC export writes.",
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "description": "Its Tag, the Revit ElementId.",
+          "type": ["string", "null"]
+        },
+        "ifc_type": {
+          "description": "The IFC entity, such as IFCBEAM.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "storey": {
+          "description": "The name of the storey the export puts it on.",
+          "type": ["string", "null"]
+        },
+        "type_name": {
+          "description": "The name of the type object the export writes for it.",
+          "type": ["string", "null"]
+        },
+        "predefined_type": {
+          "type": ["string", "null"]
+        },
+        "material": {
+          "type": ["string", "null"]
+        },
+        "location_feet": {
+          "description": "Where its body is placed, model feet.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rotation_radians": {
+          "type": ["number", "null"]
+        },
+        "body": {
+          "description": "A digest of the body (its extrusion, solid and mapped geometry): equal digests are equal bodies.",
+          "type": ["string", "null"]
+        },
+        "properties": {
+          "description": "Each property the export writes, keyed <set>.<property>, as {kind, value}.",
+          "type": "object"
+        }
+      }
+    },
+    "change": {
+      "description": "An element both exports write, with the fields that differ (rvt::ifc::element_diff::ElementChange).",
+      "type": "object",
+      "required": ["global_id", "tag", "ifc_type", "name", "changes"],
+      "properties": {
+        "global_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": ["string", "null"]
+        },
+        "ifc_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["field", "left", "right"],
+            "properties": {
+              "field": {
+                "description": "A field of the element, or property:<set>.<property>.",
+                "type": "string"
+              },
+              "left": {
+                "description": "Its value in the first export, null where it had none."
+              },
+              "right": {
+                "description": "Its value in the second export, null where it has none."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

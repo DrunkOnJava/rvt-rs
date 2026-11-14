@@ -47,7 +47,7 @@ fn flag(object: &GraphObject, name: &str) -> Result<bool, String> {
     object
         .fields
         .get(name)
-        .and_then(Value::as_bool)
+        .and_then(Fv::as_bool)
         .ok_or_else(|| format!("missing boolean {name}"))
 }
 
@@ -104,13 +104,13 @@ impl FormDocument {
         let params = one(graph, "ParamValueSetDouble")?
             .fields
             .get("m_paramSet")
-            .and_then(Value::as_array)
+            .and_then(Fv::as_array)
             .ok_or("angle parameter set")?;
         for p in params {
             if let Some(key @ (START_ANGLE | END_ANGLE)) = p.get("m_paramId").and_then(identifier) {
                 let value = p
                     .get("m_value")
-                    .and_then(Value::as_f64)
+                    .and_then(Fv::as_f64)
                     .filter(|x| x.is_finite())
                     .ok_or("invalid angle")?;
                 if angles.insert(key, value).is_some() {

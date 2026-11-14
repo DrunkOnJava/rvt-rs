@@ -259,26 +259,52 @@ class SignedTag(unittest.TestCase):
 
 
 class Branch(unittest.TestCase):
-    NONE = ["the tagged commit is on neither origin/main nor an origin/hotfix/* branch"]
+    NONE = [f"the tagged commit is on neither origin/main nor origin/hotfix/v{V}"]
     UNFETCHED = ["origin/main is not in the checkout, so the fetch was incomplete (the job needs fetch-depth: 0)"]
 
-    def test_a_commit_on_main_or_a_hotfix_branch_passes(self):
-        self.assertEqual(p.branch_problems({"origin/main": True}), [])
-        self.assertEqual(p.branch_problems({"origin/main": False, "origin/hotfix/v0.15.1": True}), [])
+    def test_a_commit_on_main_or_its_own_hotfix_branch_passes(self):
+        self.assertEqual(p.branch_problems({"origin/main": True}, V), [])
+        self.assertEqual(p.branch_problems({"origin/main": False, "origin/hotfix/v0.15.1": True}, "0.15.1"), [])
 
     def test_a_commit_on_no_release_branch_is_refused(self):
-        self.assertEqual(p.branch_problems({"origin/main": False}), self.NONE)
+        self.assertEqual(p.branch_problems({"origin/main": False}, V), self.NONE)
         refs = {"origin/main": False, "origin/feature/x": True, "origin/lane/1454-gates": True, "origin/release": True}
-        self.assertEqual(p.branch_problems(refs), self.NONE)
+        self.assertEqual(p.branch_problems(refs, V), self.NONE)
 
     def test_look_alike_branch_names_are_not_main_or_hotfix(self):
         for name in ("origin/main-old", "origin/mainline", "origin/hotfix", "origin/hotfix/", "origin/hotfixes/v1",
                      "origin/x/hotfix/v1", "upstream/main", "main", "origin/main/x"):
-            self.assertEqual(p.branch_problems({"origin/main": False, name: True}), self.NONE, name)
+            self.assertEqual(p.branch_problems({"origin/main": False, name: True}, V), self.NONE, name)
+
+    def test_only_the_hotfix_branch_named_for_the_version_makes_a_release_of_it(self):
+        # RELEASE.md: the tag is accepted while `hotfix/vX.Y.(Z+1)` holds the commit, not any hotfix branch.
+        for name in ("origin/hotfix/v0.16.1", "origin/hotfix/v0.15.9", "origin/hotfix/0.16.0", "origin/hotfix/v0.16.0-rc1",
+                     "origin/hotfix/v0.16.0/x", "origin/hotfix/V0.16.0"):
+            self.assertEqual(p.branch_problems({"origin/main": False, name: True}, V), self.NONE, name)
+        self.assertEqual(p.branch_problems({"origin/main": False, f"origin/hotfix/v{V}": True}, V), [])
+        # And a branch of that name that does not hold the commit is not enough.
+        self.assertEqual(p.branch_problems({"origin/main": False, f"origin/hotfix/v{V}": False}, V), self.NONE)
 
     def test_a_missing_origin_main_means_the_fetch_was_incomplete(self):
-        self.assertEqual(p.branch_problems({"origin/hotfix/v0.15.1": True}), self.UNFETCHED)
-        self.assertEqual(p.branch_problems({}), self.UNFETCHED)
+        self.assertEqual(p.branch_problems({"origin/hotfix/v0.15.1": True}, "0.15.1"), self.UNFETCHED)
+        self.assertEqual(p.branch_problems({}, V), self.UNFETCHED)
+
+
+class RunKind(unittest.TestCase):
+    """A tag decides whether the tag checks apply, not the event (#1886)."""
+
+    def test_a_push_is_a_release_of_a_tag_and_says_so_when_it_is_another_ref(self):
+        self.assertEqual(p.run_plan("push", "tag", "v0.16.0"), (True, []))
+        self.assertEqual(p.run_plan("push", "branch", "main"),
+                         (True, ["publish.yml releases tags; this run is for the branch main"]))
+
+    def test_a_manual_run_on_a_tag_is_checked_as_that_release(self):
+        # `gh workflow run publish.yml --ref v0.20.0` was passed as having no tag, with no signature check.
+        self.assertEqual(p.run_plan("workflow_dispatch", "tag", "v0.20.0"), (True, []))
+
+    def test_a_manual_run_on_a_branch_has_no_tag_to_check(self):
+        self.assertEqual(p.run_plan("workflow_dispatch", "branch", "hotfix/v0.16.1"), (False, []))
+        self.assertEqual(p.run_plan("workflow_dispatch", "branch", "checkout"), (False, []))
 
 
 class CrateState(unittest.TestCase):

@@ -118,7 +118,7 @@ fn visit(record: Record) -> Result<()> {
     }
     let id = record.identity.element_id;
     for object in &graph.objects {
-        let fields = &object.fields;
+        let fields = &object.fields.to_json();
         match object.class_name.as_str() {
             "JoinEndGStep" => println!(
                 "end {id} {} real {} geom {} omitted {} weak {} exposed {}",
@@ -165,7 +165,7 @@ fn visit(record: Record) -> Result<()> {
             println!(
                 "full {id} {} {}",
                 object.class_name,
-                trimmed(&object.fields)
+                trimmed(&object.fields.to_json())
             );
         }
     }

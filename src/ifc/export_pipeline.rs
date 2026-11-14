@@ -613,6 +613,24 @@ pub fn run_export_with_limits_and_control(
     limits: WalkerLimits,
     control: &WalkerControl,
 ) -> Result<ExportRun> {
+    // A reader that stops at its work budget in any step is kept with the
+    // file, and the diagnostics report every stop it holds (#1833): a step
+    // that reads back what an earlier export memoised stops nowhere itself.
+    let stops = crate::budget::Notes::open();
+    let run = run_export_steps(rf, options, limits, control);
+    rf.keep_budget_stops(stops.close());
+    let mut run = run?;
+    super::record_work_budget_stops(&mut run.diagnostics, rf.budget_stops());
+    Ok(run)
+}
+
+/// [`run_export_with_limits_and_control`]'s steps.
+fn run_export_steps(
+    rf: &mut RevitFile,
+    options: &ExportOptions,
+    limits: WalkerLimits,
+    control: &WalkerControl,
+) -> Result<ExportRun> {
     if let Some(phase) = &options.phase {
         rf.set_export_phase(phase)?;
     }
@@ -787,13 +805,18 @@ pub fn run_export_with_limits_and_control(
 
     if options.revit_property_sets {
         match super::revit_property_sets::attach(rf, &mut model) {
-            Ok(report) => notes.push(ExportNote::RevitPropertySets {
-                elements: report.elements,
-                types: report.types,
-                untyped_elements: report.untyped_elements,
-                properties: report.properties,
-                left_out: report.left_out,
-            }),
+            Ok(report) => {
+                // The sets are entities of the model: the counts follow them,
+                // as after every other step that changes the model.
+                recount_exported(&mut diagnostics, &model);
+                notes.push(ExportNote::RevitPropertySets {
+                    elements: report.elements,
+                    types: report.types,
+                    untyped_elements: report.untyped_elements,
+                    properties: report.properties,
+                    left_out: report.left_out,
+                });
+            }
             Err(error) => {
                 control.check()?;
                 notes.push(ExportNote::RevitPropertySetsSkipped {

@@ -164,10 +164,16 @@ fn visit(record: Record, state: &mut State) -> Result<()> {
         return Ok(());
     };
     let id = record.identity.element_id;
+    let as_json: Vec<Value> = graph
+        .objects
+        .iter()
+        .map(|object| object.fields.to_json())
+        .collect();
     let objects: Vec<(&str, &Value)> = graph
         .objects
         .iter()
-        .map(|object| (object.class_name.as_str(), &object.fields))
+        .zip(&as_json)
+        .map(|(object, fields)| (object.class_name.as_str(), fields))
         .collect();
     state.seen.insert(id);
     if WALLS.contains(&class) {

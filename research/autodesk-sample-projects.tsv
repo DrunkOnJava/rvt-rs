@@ -74,3 +74,5 @@
 2019	rme_basic_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rme_basic_sample_project.rvt	7285e7527148c5cdef2b79533c0015f8cab1bcc70591edb686dec08ed990d241	28516352
 2019	rme_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rme_advanced_sample_project.rvt	976d3e356224fb9ea625a06f3c1c6739d3e9ff38d056bbdb3b9e2245c2485839	33984512
 2019	rst_advanced_sample_project.rvt	https://revit.downloads.autodesk.com/download/2019RVT_RTM/Docs/InProd/rst_advanced_sample_project.rvt	af89f67f83c005535a092e750c6011fddcde637b96ade50a4766851bb9218ccd	13492224
+# Public 2023 basic MEP source for RE-443; size and hash measured 2026-11-11.
+2023	rmebasicsampleproject.rvt	https://revit.downloads.autodesk.com/download/2023RVT_RTM/Docs/InProd/rmebasicsampleproject.rvt	5b2331579140cc621d23b5642d24b2b7bbb6727e26610156962909d725e44e6a	30797824

@@ -6,7 +6,7 @@
 //!
 //! Exit codes:
 //! - `0` — comparison produced (even when divergences exist)
-//! - `1` — I/O or parse failure
+//! - `1` — I/O failure
 //! - `2` — `--fail-on-diff` set and any structural divergence was found
 // Tracker: M5-05.
 

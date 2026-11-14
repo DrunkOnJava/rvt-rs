@@ -258,6 +258,29 @@ pub const COLUMN_RELEASE_FIELD: &str = "m_column_release";
 /// Classes whose type's hollow section is read (W6).
 pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
 
+/// The releases whose hollow-section columns get the four base quantities of
+/// RE-247 section 8 (`CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume` and
+/// `NetVolume`): Revit 2024, the BIM4LCA office, the only file they are
+/// measured on against Revit's export. None of Autodesk's 54 sample saves of
+/// 2015 to 2027 holds a hollow-section column (Snowdon Towers' structural
+/// sample of 2024 holds one, with no Revit export), so no later release has a
+/// file to hold them to. A release's reader is a decision, so a later one is
+/// not taken until a file of it is measured (#1945).
+pub const HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS: &[u32] = &[2024];
+
+/// Field marking a column whose release is one of
+/// [`HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS`], set beside
+/// [`COLUMN_UNJOINED_FIELD`].
+pub const COLUMN_HOLLOW_QUANTITIES_FIELD: &str = "m_column_hollow_quantities";
+
+/// The releases whose wall sweeps and ramps take their type from their own
+/// native record (RE-240): Revit 2024, where it is Revit's type for the
+/// BIM4LCA office's 9 sweeps and 5 ramps. The 8 sweeps of `rac_advanced` get
+/// no type from it on any release, and no file of a later release is measured
+/// to name one. A later release is not taken until a file of it is measured
+/// (#1945).
+pub const SWEEP_RAMP_NATIVE_TYPE_REVIT_VERSIONS: &[u32] = &[2024];
+
 /// Fields carrying the plan direction of an I-section structural column's
 /// X axis, from its transform (RE-104): its flanges run along it.
 pub const COLUMN_I_AXIS_FIELDS: [&str; 2] = ["m_i_section_axis_x", "m_i_section_axis_y"];
@@ -330,6 +353,13 @@ pub const FURNITURE_DEFAULT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 /// 2025 saves do.
 pub const CUT_LOOP_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
+/// Releases before 2024 whose doors and windows take the outline their
+/// symbol cuts as their opening (RE-450): the symbol's `m_pCutLoops` and the
+/// instance's `InstanceInfo.m_Trf` are read from the native records there,
+/// and on Autodesk's `rac_basic` and `rac_advanced` saves by 2015 and 2023
+/// the openings they give are the 2024 saves'.
+pub const CUT_LOOP_32BIT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
+
 /// How closely an instance's plan X axis must lie along a model axis for
 /// its record box to be along its own axes (#810).
 pub const INSTANCE_AXIS_TOLERANCE: f64 = 1e-6;
@@ -378,9 +408,11 @@ pub const CURTAIN_WALL_PART_CLASSES: &[&str] = &["CurtainWallPanel", "CurtainWal
 
 /// Classes that are parts of a stair when their reference list names one.
 ///
-/// Railings are not among them: Revit's export aggregates 65 of the 70
-/// Snowdon railings whose lists name a stair, and nothing read so far tells
-/// the other five apart, so railings stay standalone elements.
+/// Railings are not among them: a railing's reference list does not decide
+/// it (RE-39: Revit's export aggregates 65 of the 70 Snowdon railings whose
+/// lists name a stair). A railing joins the stair its own record names
+/// (`BaseRailing.m_stairsId`, RE-254) unless it sits on one of the stair's
+/// components (`m_stairsComponentId`, RE-390): `attach_railing_lengths`.
 pub const STAIR_PART_CLASSES: &[&str] = &["StairsRun", "StairsLanding", "StairsStringer"];
 
 /// Field holding an element's IFC `Name` where Revit's export does not name
@@ -575,7 +607,7 @@ pub const PROFILE_OPENING_FIELD: &str = "m_profile_opening";
 /// The field prefix of the pockets of a wall's edited elevation profile against
 /// its convex hull, the openings Revit's export writes (#1607, RE-380):
 /// `m_profile_pocket_<k>`, the pocket's outline as model-feet points in the
-/// wall's vertical plane, and `m_profile_pocket_<k>_tag`, the highest ElementId
+/// wall's vertical plane, and `m_profile_pocket_<k>_tag`, the ElementId of the first
 /// of the profile's lines it follows.
 // Tracker: B55.
 pub const PROFILE_POCKET_FIELD: &str = "m_profile_pocket";
@@ -716,6 +748,13 @@ pub const STAIR_TYPE_FIELD: &str = "m_stair_type";
 /// of the `FamInstCurveDriver` in its native record (W7, RE-276).
 pub const BEAM_ROTATION_FIELD: &str = "m_beam_cross_section_rotation";
 
+/// Field holding a framing instance's structural usage: the `m_structUsage` of
+/// its `FamilyInstance` in its native record (`InsertableInst`, a 4-byte
+/// integer, #1841). Which value is which usage is read from files, not from the
+/// API's enumeration: [`crate::ifc::category_map::HORIZONTAL_BRACING_USAGE`] is the one
+/// observed.
+pub const STRUCT_USAGE_FIELD: &str = "m_struct_usage";
+
 /// Fields holding the first end of a beam's location line, model feet
 /// (RE-49).
 pub const BEAM_AXIS_START_FIELDS: [&str; 3] = [
@@ -803,8 +842,10 @@ pub const PIPE_INNER_DIAMETER_FIELD: &str = "m_pipe_inner_diameter";
 /// Releases whose pipes take their type, centreline and outside radius from
 /// their own `RbsPipeCurve` record where nothing else gives them (RE-370):
 /// those the native record path reads, Revit 2015 to 2027. Measured on
-/// Autodesk's MEP samples of 2015, 2019 and 2024 to 2027 against the same
-/// projects saved by 2024.
+/// Autodesk's MEP samples of 2015, 2019, 2023 and 2025 to 2027 against the
+/// same projects saved by 2024, whose pipes are Revit's (RE-370, RE-461), and
+/// by counts on Revit 2018's Vitoria projects. 2016, 2017 and 2020 to 2022
+/// have no file with a pipe in any corpus.
 pub const NATIVE_PIPE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2027;
 
 /// Fields holding the direction across a duct's section its height lies
@@ -848,9 +889,10 @@ pub const NATIVE_NAMED_PARAMETER_REVIT_VERSIONS: &[u32] =
 
 /// Releases whose walls' native type Function is measured (RE-185, RE-193;
 /// 2015 to 2023 against the same projects saved by a later release and
-/// against BIMcollab's and modelo_bim's exports, RE-283).
+/// against BIMcollab's and modelo_bim's exports, RE-283; 2026 and 2027
+/// against the same projects' 2025 saves, element by element, #1860).
 pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[
-    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
 ];
 
 /// Prefix of a field carrying the Yes/No value of a project or shared
@@ -1050,6 +1092,23 @@ pub const CURTAIN_GRID_WALL_OFFSETS: [usize; 2] = [85, 478];
 /// still lie inside it (RE-62): 0.05 ft places every measured part, and
 /// 0.01 ft misses mullions whose profile reaches past the wall's box.
 pub(super) const CURTAIN_PART_BOX_TOLERANCE_FEET: f64 = 0.05;
+
+/// How far past an element's id its data is searched for the ids of curtain
+/// walls, bytes (#1865, RE-449): the data of Autodesk's `rac_advanced` names
+/// the wall at four places, the last 1,130 bytes past the id on Revit 2025
+/// and 1,114 on 2027 for the 74 mullions' grids, and 1,190 and 1,174 for the
+/// curtain door's.
+pub(super) const ELEMENT_DATA_WALL_WINDOW: usize = 1200;
+
+/// How many times a curtain wall's id must lie in that window for the data to
+/// name the wall: the grids measured name it four times, so a coincidence of
+/// eight bytes would have to repeat.
+pub(super) const ELEMENT_DATA_WALL_MIN_COPIES: usize = 2;
+
+/// Field naming the curtain walls a part's reference list names when it names
+/// two or more and no wall could be chosen for it (#1865), so that the part
+/// takes the `IsExternal` they agree on (`attach_curtain_member_is_external`).
+pub const CURTAIN_NAMED_WALLS_FIELD: &str = "m_curtain_walls_named";
 
 /// Field carrying a room's Floor Finish (RE-153).
 pub const ROOM_FLOOR_FINISH_FIELD: &str = "m_room_floor_finish";

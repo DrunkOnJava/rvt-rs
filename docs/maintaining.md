@@ -22,6 +22,15 @@ answer. New issues arrive from the issue forms with `needs-triage`.
 4. An issue is closed when its acceptance criteria are met, with the evidence
    linked, or when it is superseded, with the superseding issue linked. It is
    never closed for being old.
+5. A reporter whose file cannot leave their machine can still run a probe on
+   it without a Rust toolchain. `gh workflow run probe-binaries.yml -f
+   probe=<name>` (with `--ref <branch>` for a probe not yet on `main`)
+   builds the probe for Windows, macOS and Linux, and the run
+   keeps each binary with its SHA-256 as an artifact. Link the run: downloading
+   it needs a GitHub login. The binaries are unsigned, so on macOS the reporter
+   clears the download's quarantine first (`xattr -d com.apple.quarantine
+   <probe>`). Ask only for probes whose output names no element or person
+   (#1838).
 
 ### Labels
 
@@ -172,7 +181,7 @@ is never read as a count. A number that is none of these and is not a
 measurement of a model (a default limit, a count another check pins) carries a
 marker in its clause, with its reason:
 
-    the 12 JS-callable bindings<!-- w10: a count tools/ci/wasm-api.py holds to the source -->
+    the 13 JS-callable bindings<!-- w10: a count tools/ci/wasm-api.py holds to the source -->
 
 A marker without a reason fails, and so does one with nothing to excuse (its
 clause has no number, or every number in it is beside its model), so markers do
@@ -187,8 +196,8 @@ mullions`, `all 24`, `250 of the 251`), and a miss is a number nobody checked.
 Here a new form fails until it names a model, and the few numbers that are not
 measurements say so beside themselves, with a reason a reviewer can read. The
 markers on the pages today are for project release versions, the binding count
-`tools/ci/wasm-api.py` pins, the resource-limit defaults, an exit status and a
-value rvt-rs writes.
+`tools/ci/wasm-api.py` pins, the resource-limit defaults, an exit status, a
+value rvt-rs writes, wasm32's address space and a count buildingSMART publishes.
 
 **Keeping a new number to the rule.** Write the model where the number is, using a
 name from the index (`Core Interior`, `the BIM4LCA office`, `puzzbobb`), and
@@ -275,12 +284,16 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   any other value) and nothing else (`tools/ci/scrub-holdout-results.sh`).
   Nothing is cached: the step runs the server.
 - **The dump** (`mcp-dump.json` in the artifact of the openly licensed models
-  only: Core Interior, Einhoven, RE1, the BIM4LCA office and the Revit 2025
-  models; left out of the diff) is the same answers as one deterministic
+  only: Core Interior, Einhoven, RE1, the BIM4LCA housing and office, the Revit
+  2025 models; left out of the diff) is the same answers as one deterministic
   document: sorted, floats at six decimals, no handle, time or path.
   `python3 tools/re/mcp_client.py <rvt-rs-mcp> <model.rvt> [--all]` writes it
   alone, with `get_element` for the five lowest ElementIds of each entity or
   for every element; the semantic merge check (#1334) reads it.
+- The client starts the server with `--root` set to the model's folder when
+  the server has the flag (`tools/re/mcp_client.py` reads its `--help`), since
+  a server reads files only inside one folder (#1883); a side from before the
+  flag reads any file and is started without it.
 - The server is built (`cargo build -p rvt-rs-mcp`, in the side's Build job)
   only in a run that names no scorers or names this one. It is optional: a ref
   without the crate, or whose server does not build, leaves the step NOT
@@ -356,14 +369,24 @@ each it compared. A new sample or check has to be added in the scorers' `MINIMUM
 `check-bodies-across-saves.sh` and `same_project_verdict.py` (`PROJECTS`), which
 `tools/ci/check_same_project_projects.py` checks against each other in CI, or the
 verdict does not see it. Measure's script runs it beside each such sample, scoring
-up to as many at once as the runner has CPUs, and the job
-`same-project-gates` turns the run red on a difference, a missing file, an
-unknown project, fewer bodies than the sample holds, or a check that compared
-nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
-2024 to 2027 saves, and its 2021 save against its 2022 save (#1434),
-`tools/ci/check-areas-across-saves.sh`), each as a step that runs whatever the
-other did. It is a job of its own, so a failure of either does
-not remove Compare's report.
+up to as many at once as the runner has CPUs (for the comparison with the base
+side), and then again in the job `gates`, which runs no measured code (#1881):
+each head-side samples shard hard-links the exports the gates score into
+`gate-ifc` and uploads it, and `gates` runs the same two gates over them with
+the script and scorers of the workflow's own ref and the sample list of this
+run's inputs (`MEASURE_GATES_ONLY`). The job `same-project-gates` reads the
+`gate-results` artifact of `gates` and no result a shard wrote, and turns the run
+red on a difference, a missing file, an unknown project, fewer bodies than the
+sample holds, or a check that compared nothing. That job also holds #1428's
+Areas gate (rac_advanced's Areas across its 2024 to 2027 saves, and its 2021 save
+against its 2022 save (#1434), `tools/ci/check-areas-across-saves.sh`), each as a
+step that runs whatever the other did. It is a job of its own, so a failure of
+either does not remove Compare's report. After the download `gates` deletes everything in
+`gate-ifc` but each `sample-*/model.ifc`, so a file the measured job planted beside the
+exports (a result file the script writes none of, for an export that is missing) is not
+read. What this keeps out is a measured binary that writes `bodies_across_saves.txt`
+itself; a binary that writes IFCs the scorers
+accept is not caught, and the maintainers read a change to `src/` before it lands.
 
 - **A change to a reader of Revit 2024 to 2027 is measured with
   `samples=true`** (every year, or `sample_years="2024 2027"`). Without it no
@@ -400,11 +423,12 @@ not remove Compare's report.
   Shaft openings are cut on 2024 only, for the same reason: the only two measured on
   2025 cut nothing.
 - **Products that share a Tag** (a floor Revit writes as several, a stair once for each
-  storey) are paired by storey, then the volume and the centre of the body. All but
-  the first copy carry a GlobalId derived from the export, which differs between two
-  saves, so those are not compared; the two saves must share exactly one GlobalId
-  under such a Tag, and it must be on the two products paired by what they are, so an
-  identity swapped between two pieces fails (RE-346).
+  storey) are paired by storey, then the volume and the centre of the body (RE-346).
+  Each keeps its GlobalId between saves as a single product does: the first carries
+  the element's own, and since #1840 the others are derived from it rather than from
+  the document's GUID. So a further piece that takes a new GlobalId in a later save
+  fails, and so does an identity swapped between two pieces. Until #1840 the gate
+  compared none but the first, which was all that held.
 - **Pipes are held as cylinders** (Griffin, 2026-11-05, "Compare the cylinder itself").
   A pipe that is a circular extrusion in both saves is compared by the two ends of its
   axis (in either order), its radius and its length, each to 0.001 ft, and not by the
@@ -423,15 +447,15 @@ not remove Compare's report.
   extent; #1471 (RE-351) healed all 16 and the list is empty. No entry is ever
   added: `tools/ci/check_same_project_projects.py` (a CI step) holds `PINNED_MOST` at
   0 and fails on any tag beyond the 16 first pinned. A roof the 2025 save draws
-  otherwise, as its record box or its saved mesh, is counted, not scored, and exactly:
-  `ROOFS_NOT_THE_2025_BODY` names `rac_advanced`'s 201262 (its record box, as the 2025
-  save draws its slope) and `rac_basic`'s 243274 (its saved mesh against the 2025
-  save's roof extrusion), a mesh counting only where its box contains the 2025 body's,
-  and one more, one fewer or one of another kind fails (Griffin, 2026-11-05 for the
-  first and 2026-11-09 for the saved-mesh default of #1191). Three roofs of
-  `rac_advanced` that the list held until #1612 (165755, 167036 and 167158: gables the
-  2025 save drew as a level block) are drawn from their saved meshes on every save now.
-  That list only shrinks too: the same CI step holds it to those five or fewer. Any other body that differs from the 2025 save fails; a difference on a release
+  otherwise, as its record box or its saved mesh, was counted, not scored, and exactly
+  (Griffin, 2026-11-05 and 2026-11-09 for the saved-mesh default of #1191):
+  `ROOFS_NOT_THE_2025_BODY` is empty. `rac_advanced`'s 201262 left it when #1706 drew
+  its saved mesh as the 2025 save's body; three roofs of `rac_advanced` that it held
+  until #1612 (165755, 167036 and 167158: gables the 2025 save drew as a level block) are
+  drawn from their saved meshes on every save; and `rac_basic`'s 243274 (a saved mesh
+  against the 2025 save's roof extrusion) left it when RE-458 drew it from its sketch's
+  section on 2026 and 2027. A roof added back would be one more than the list holds and
+  fail. That list only shrinks too: the same CI step holds it to those five or fewer. Any other body that differs from the 2025 save fails; a difference on a release
   or sample not pinned is the maintainer's decision, not a new entry.
 - The output carries, for rac_advanced's ceiling 147534, floor 139803 and roof
   201262 and the other elements whose sketch holds an arc (`ARC_OWNERS`), the
@@ -459,8 +483,8 @@ It is not in the ruleset, so merging still waits on `full / CI passed`, but a
 with no `models` filter. Adding `-f scorers=mcp_answers_vs_ifc` keeps every model
 and leaves the other scorers out, which is the cheap form of the same check.
 Most output changes land on the BIM4LCA office (#1388, #1400, #1401 and #1405
-move nothing else), so a run without it, or with a `models` list, reads "pass"
-on a change it did not look at.
+move nothing else), so a run without it, or with a `models` list, has no check run
+to read as a pass on a change it did not look at.
 
 **Only a run of every open model writes the check.** That is a run dispatched
 in this repository with a base, no `models` filter, and the BIM4LCA files and
@@ -543,7 +567,7 @@ Measure's `ifc.sha256` is what says that an export is identical.
   before and after; the byte offsets inside `provenance` dropped; order ignored;
   values compared to the dump's precision, which is six decimals
   (`tools/re/mcp_client.py` rounds a float there before it writes the dump), so
-  0.35 and 0.3500001 are different values when a dump holds both and a change
+  0.35 and 0.350001 are different values when a dump holds both and a change
   below the sixth decimal is not in a dump; whether an importer would notice is
   Jev's question; an empty object or list the same as
   no field; identical changes collapsed by the whole (path, before, after), so a
@@ -708,8 +732,8 @@ before it.
   fails on a malformed row, on any tracked file other than the registry that
   holds one of its URLs or hashes, and on any tracked file that is not Markdown
   and names the registry or the private copies' repository, other than the
-  seal script and the check. Docs may name both; they may not hold the
-  registry's URLs. It sees only what is
+  seal script, the check and the check's own test. Docs may name both; they may
+  not hold the registry's URLs. It sees only what is
   committed: a path built at run time, a glob over `research/` or a Measure run
   dispatched from an unreviewed branch are for review to catch.
 - **The final check** is the only reader still to come, of the registry and of

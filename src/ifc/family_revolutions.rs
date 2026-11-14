@@ -104,7 +104,7 @@ fn visible(graph: &ObjectGraph) -> bool {
                 .and_then(crate::native_json::identifier_i64)
                 == Some(-1_006_205)
         })
-        .map(|p| p.get("m_value").and_then(serde_json::Value::as_i64))
+        .map(|p| p.get("m_value").and_then(crate::graph_value::Fv::as_i64))
         .collect();
     values == [Some(1)]
 }

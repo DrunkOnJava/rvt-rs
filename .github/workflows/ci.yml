@@ -788,6 +788,21 @@ jobs:
           rows=$(($(wc -l < "$out/elements.csv") - 1))
           echo "elements.csv: $rows rows"
           test "$rows" -gt 0 || { echo "::error::basics_export wrote an empty schedule for Einhoven"; exit 1; }
+      # #1938: the container is the layer every other reader stands on, and the tests read it
+      # with one reader, rvt-rs's own (the `cfb` crate). olefile is a second one, written
+      # separately in Python: it lists every Revit file of both corpora and the committed
+      # family fixture, and its stream names, stored sizes and stored bytes must be the ones
+      # rvt-dump reports and writes. A directory with no Revit file, a file olefile cannot
+      # open and a run that compared no stream all fail.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Compare the streams rvt-rs reads with olefile's
+        shell: bash
+        run: |
+          python -m pip install --require-hashes -r tools/ci/requirements-olefile.txt
+          cargo build --profile ci --bin rvt-dump
+          python tools/ci/olefile_streams.py target/ci/rvt-dump _corpus/examples/Autodesk _project_corpus/Revit tests/fixtures/families/empty.rfa
 
   ifcopenshell-validate:
     needs: scope
@@ -1916,6 +1931,18 @@ jobs:
       # file; these are its pure judgements, and what must never publish.
       - name: Release preflight's pure judgement (failure-first)
         run: python3 tools/ci/test_release_preflight.py
+      # What bump_version.py and changelog.py must not let through (#1886): a date
+      # that is not one, a citation the preflight reads and the bump cannot
+      # rewrite, a changelog whose released items are not read, and a hotfix
+      # whose workflows are copied from a ref main does not hold (run as the
+      # script, on a scratch repository).
+      - name: Release tooling's failure modes (failure-first)
+        run: python3 tools/release/test_release_tools.py
+      # What the wait for a commit's CI (viewer deploy, release preflight) does
+      # with a run a later push cancelled: ends at once, not at the timeout (the
+      # real script, against a stub gh).
+      - name: The wait for CI on a commit (failure-first)
+        run: python3 tools/ci/test_wait_for_check.py
       # The same reader the preflight runs on the tagged commit, on this tree:
       # every version file agrees (a half-finished bump fails the release pull
       # request, not the tag) and a change to a file's layout that the reader

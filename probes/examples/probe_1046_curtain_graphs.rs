@@ -24,16 +24,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
-use serde_json::Value;
 
 const FIELD_CHARS: usize = 400;
 const FULL_PER_CLASS: usize = 3;
 const COMPACT_PER_CLASS: usize = 60;
 
-fn link(value: &Value) -> Option<i64> {
-    value.pointer("/m_id/m_id64").and_then(Value::as_i64)
+fn link(value: &Fv) -> Option<i64> {
+    value.pointer("/m_id/m_id64").and_then(Fv::as_i64)
 }
 
 fn clip(text: String) -> String {
@@ -45,14 +45,14 @@ fn clip(text: String) -> String {
     }
 }
 
-fn find<'a>(graph: &'a ObjectGraph, name: &str) -> Option<&'a Value> {
+fn find<'a>(graph: &'a ObjectGraph, name: &str) -> Option<&'a Fv> {
     graph
         .objects
         .iter()
         .find_map(|object| object.fields.get(name))
 }
 
-fn show(value: Option<&Value>) -> String {
+fn show(value: Option<&Fv>) -> String {
     match value {
         None => "-".to_string(),
         Some(v) => match link(v) {
@@ -62,7 +62,7 @@ fn show(value: Option<&Value>) -> String {
     }
 }
 
-fn id_of(value: Option<&Value>) -> Option<u64> {
+fn id_of(value: Option<&Fv>) -> Option<u64> {
     value.and_then(link).and_then(|id| u64::try_from(id).ok())
 }
 

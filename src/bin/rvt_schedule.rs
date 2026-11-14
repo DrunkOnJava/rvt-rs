@@ -147,7 +147,7 @@ fn run(cli: Cli) -> Result<(), String> {
             .map_err(|e| format!("write stdout: {e}"))?;
         return Ok(());
     }
-    if output == cli.input {
+    if rvt::cli::same_file(&output, &cli.input) {
         return Err(format!(
             "refusing to overwrite the input {}; pass -o <path>",
             cli.input.display()

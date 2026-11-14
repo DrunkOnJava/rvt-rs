@@ -817,7 +817,19 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
     ),
     (
         "LevelBindSource",
+        "partition_room_parameter_block",
+        Gap {
+            reason: "a binding of a room to a Level, not a value of its body or placement: the Level is the one the room's own parameter block names (RE-29), where its record's reference list names none",
+        },
+    ),
+    (
+        "LevelBindSource",
         "partition_element_record_base_constraint",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_reference_level",
         Gap { reason: BINDING },
     ),
     (
@@ -921,12 +933,12 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
 
 /// The ElementId an `Identifier` field holds: `m_id.m_id64` from Revit 2024,
 /// `m_id.m_id` before.
-fn identifier_of(value: &serde_json::Value) -> Option<i64> {
+fn identifier_of(value: &rvt::research::graph_value::Fv) -> Option<i64> {
     let identifier = value.get("m_id")?;
     identifier
         .get("m_id64")
         .or_else(|| identifier.get("m_id"))
-        .and_then(serde_json::Value::as_i64)
+        .and_then(rvt::research::graph_value::Fv::as_i64)
 }
 
 /// The class `class` records' root ElementId field `field`, by record.
@@ -1348,14 +1360,14 @@ type TopologyParts = (Vec<u32>, bool);
 type PlanLines = (u64, Option<BTreeSet<u64>>);
 
 /// The class and fields of each object of a record's graph.
-type RecordObjects = Vec<(String, serde_json::Value)>;
+type RecordObjects = Vec<(String, rvt::research::graph_value::Fv)>;
 
 /// The ElementIds of the lines a circuit of a plan topology runs, the
 /// circuits it encloses included: the `m_linkInstOrHostId` of each side of
 /// the circuit `circuit` and of the outer circuit of each component the
 /// circuit encloses.
-fn circuit_lines(topology: &serde_json::Value, circuit: i64) -> Option<BTreeSet<u64>> {
-    let id_of = |value: &serde_json::Value| value.get("m_id")?.as_i64();
+fn circuit_lines(topology: &rvt::research::graph_value::Fv, circuit: i64) -> Option<BTreeSet<u64>> {
+    let id_of = |value: &rvt::research::graph_value::Fv| value.get("m_id")?.as_i64();
     let mut circuits = vec![circuit];
     for component in topology.get("m_components")?.as_array()? {
         if id_of(component.get("m_enclosingCircuit")?)? == circuit {
@@ -1479,7 +1491,8 @@ fn check_topology_areas(rf: &mut RevitFile, areas: &BTreeMap<u32, TopologyParts>
             .collect();
         let curves = listed.iter().all(|line| {
             object_of(*line, "CurveElem").is_some_and(|curve| {
-                curve.get("m_isAreaMeasurementScheme") == Some(&serde_json::Value::Bool(true))
+                curve.get("m_isAreaMeasurementScheme")
+                    == Some(&rvt::research::graph_value::Fv::Bool(true))
             })
         });
         let same = if *whole {

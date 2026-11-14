@@ -31,16 +31,23 @@ TypedSchemaSummary = dict[str, int]
 Keys: ``classes``, ``fields``, ``cpp_types`` — all ``int``.
 """
 
-TypedField = dict[str, Union[str, int, list[int]]]
+TypedField = dict[str, Union[str, int, float, list[int]]]
 """Return shape of an entry in `RevitFile.read_adocument()["fields"]`.
 
 All entries have ``name`` (str) and ``kind`` (str). Additional keys
-depend on the kind:
+depend on the kind, of which there are eleven:
 
 - ``kind == "pointer"``: ``slot_a`` (int), ``slot_b`` (int)
 - ``kind == "element_id"``: ``tag`` (int), ``id`` (int)
 - ``kind == "ref_container"``: ``count`` (int), ``col_a`` (list[int]), ``col_b`` (list[int])
+- ``kind == "integer"``: ``value`` (int), ``signed`` (bool), ``size`` (int)
+- ``kind == "float"``: ``value`` (float), ``size`` (int)
+- ``kind == "bool"``: ``value`` (bool)
+- ``kind == "guid"``: ``bytes`` (list[int])
+- ``kind == "string"``: ``value`` (str)
+- ``kind == "vector"``: ``len`` (int)
 - ``kind == "bytes"``: ``len`` (int)
+- ``kind == "unknown"``: no further key
 """
 
 TypedADocument = dict[str, Union[int, list[TypedField]]]
@@ -341,7 +348,10 @@ class RevitFile:
         Raises ``ValueError`` when a resource limit kept part of the
         file from being read (``unread_streams()`` lists it), unless
         ``allow_partial=True``; open the file with a larger
-        ``max_stream_bytes`` / ``max_inflate_bytes`` to read it.
+        ``max_stream_bytes`` / ``max_inflate_bytes`` to read a stream. A
+        reader that stopped at its work budget leaves out what it would
+        have read, and the IFC is still returned, with a
+        ``RuntimeWarning`` naming it. No option raises a work budget.
 
         Every element of a Revit 2023 to 2027 file that would be a bounding
         box is drawn from the mesh Revit saved for it where all of a mesh
@@ -350,7 +360,8 @@ class RevitFile:
         2027 files a wall that embeds a curtain wall is drawn from its saved
         mesh too where Revit raised its base, and ``saved_meshes=False`` keeps
         its record's body. A ``RuntimeWarning`` says when the saved graphics
-        could not be read.
+        could not be read, or an element's decoded only in part, and so keeps
+        its box.
 
         ``phase`` is a project phase's name (matched exactly first) or its
         ElementId, as ``rvt-ifc --phase`` takes it, and the export shows that

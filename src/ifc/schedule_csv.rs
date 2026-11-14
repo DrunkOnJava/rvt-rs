@@ -109,6 +109,94 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
     ]
 }
 
+/// The material name the elements CSV and the viewer's schedule give an
+/// element, one rule for both: the viewer's schedule read the single material
+/// alone, so a layered wall showed none there.
+pub(crate) struct MaterialNames<'a> {
+    model: &'a IfcModel,
+    // The first constituent set naming each entity, found once rather than
+    // by a search of every set for every entity.
+    constituent_set_of:
+        std::collections::HashMap<usize, &'a super::entities::MaterialConstituentSet>,
+}
+
+impl<'a> MaterialNames<'a> {
+    pub(crate) fn new(model: &'a IfcModel) -> Self {
+        let mut constituent_set_of = std::collections::HashMap::new();
+        for set in &model.material_constituent_sets {
+            for &element in &set.elements {
+                constituent_set_of.entry(element).or_insert(set);
+            }
+        }
+        Self {
+            model,
+            constituent_set_of,
+        }
+    }
+
+    /// The name of the element at `entity_index`, empty where it has none.
+    /// Same precedence as the STEP writer: profile set > layer set > single
+    /// material > constituent set, and the same elements: an `IfcSpace` has
+    /// no material (`step_writer::associates_material`, #1430), which
+    /// `rvt-ifc --revit-set-placement` gives it in the IFC and no schedule's
+    /// flag does.
+    pub(crate) fn of(
+        &self,
+        entity_index: usize,
+        ifc_type: &str,
+        material_index: Option<usize>,
+        material_layer_set_index: Option<usize>,
+        material_profile_set_index: Option<usize>,
+    ) -> String {
+        let model = self.model;
+        let holds_material = associates_material(ifc_type);
+        // A profile set names its section; its one material is the material.
+        material_profile_set_index
+            .filter(|_| holds_material)
+            .and_then(|i| model.material_profile_sets.get(i))
+            .map(|set| match set.profiles.as_slice() {
+                [profile] => model
+                    .materials
+                    .get(profile.material_index)
+                    .map_or_else(|| set.name.clone(), |m| m.name.clone()),
+                _ => set.name.clone(),
+            })
+            .or_else(|| {
+                material_layer_set_index
+                    .filter(|_| holds_material)
+                    .and_then(|i| model.material_layer_sets.get(i))
+                    .map(|m| m.name.clone())
+            })
+            .or_else(|| {
+                material_index
+                    .filter(|_| holds_material)
+                    .and_then(|i| model.materials.get(i))
+                    .map(|m| m.name.clone())
+            })
+            // Then a family instance's materials (RE-82), or a wall's layer
+            // materials where its body is not a layer set (RE-88), each
+            // once, in the order the STEP writer lists them.
+            .or_else(|| {
+                let set = self
+                    .constituent_set_of
+                    .get(&entity_index)
+                    .filter(|_| holds_material)?;
+                let mut names: Vec<&str> = Vec::new();
+                for name in set
+                    .material_indices
+                    .iter()
+                    .filter_map(|&i| model.materials.get(i).map(|m| m.name.as_str()))
+                {
+                    if !names.contains(&name) {
+                        names.push(name);
+                    }
+                }
+                (!names.is_empty()).then(|| names.join("; "))
+            })
+            .unwrap_or_default()
+    }
+}
+
 /// One row per building element the IFC export writes (rooms included, as
 /// `IFCSPACE`), on the storey the export puts it on.
 ///
@@ -146,17 +234,7 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
     // Where the export puts each element: whether it is written at all, and
     // its storey (`step_writer::placements`).
     let placements = placements(model);
-    // The first constituent set naming each entity, found once rather than
-    // by a search of every set for every entity.
-    let mut constituent_set_of: std::collections::HashMap<
-        usize,
-        &super::entities::MaterialConstituentSet,
-    > = std::collections::HashMap::new();
-    for set in &model.material_constituent_sets {
-        for &element in &set.elements {
-            constituent_set_of.entry(element).or_insert(set);
-        }
-    }
+    let material_names = MaterialNames::new(model);
     for (entity_index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
@@ -188,55 +266,13 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
         });
         let storey =
             storey_of(&placements, entity_index).and_then(|i| model.building_storeys.get(i));
-        // Same precedence as the STEP writer: profile set > layer set >
-        // single material > constituent set, and the same elements: an
-        // `IfcSpace` has no material (`step_writer::associates_material`,
-        // #1430), which `rvt-ifc --revit-set-placement` gives it in the IFC
-        // and no schedule's flag does.
-        let holds_material = associates_material(ifc_type);
-        // A profile set names its section; its one material is the material.
-        let material = material_profile_set_index
-            .filter(|_| holds_material)
-            .and_then(|i| model.material_profile_sets.get(i))
-            .map(|set| match set.profiles.as_slice() {
-                [profile] => model
-                    .materials
-                    .get(profile.material_index)
-                    .map_or_else(|| set.name.clone(), |m| m.name.clone()),
-                _ => set.name.clone(),
-            })
-            .or_else(|| {
-                material_layer_set_index
-                    .filter(|_| holds_material)
-                    .and_then(|i| model.material_layer_sets.get(i))
-                    .map(|m| m.name.clone())
-            })
-            .or_else(|| {
-                material_index
-                    .filter(|_| holds_material)
-                    .and_then(|i| model.materials.get(i))
-                    .map(|m| m.name.clone())
-            })
-            // Then a family instance's materials (RE-82), or a wall's layer
-            // materials where its body is not a layer set (RE-88), each
-            // once, in the order the STEP writer lists them.
-            .or_else(|| {
-                let set = constituent_set_of
-                    .get(&entity_index)
-                    .filter(|_| holds_material)?;
-                let mut names: Vec<&str> = Vec::new();
-                for name in set
-                    .material_indices
-                    .iter()
-                    .filter_map(|&i| model.materials.get(i).map(|m| m.name.as_str()))
-                {
-                    if !names.contains(&name) {
-                        names.push(name);
-                    }
-                }
-                (!names.is_empty()).then(|| names.join("; "))
-            })
-            .unwrap_or_default();
+        let material = material_names.of(
+            entity_index,
+            ifc_type,
+            *material_index,
+            *material_layer_set_index,
+            *material_profile_set_index,
+        );
         // Size columns describe the body the writer emits: only the
         // extrusion path, and width / depth only for a rectangle. An owner
         // with folded pieces has a body of several items, and its extrusion
@@ -529,11 +565,7 @@ fn natural_key(s: &str) -> String {
 
 /// A text cell: formula-neutralised, then RFC 4180-escaped.
 fn text(value: &str) -> String {
-    if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
-        escape(&format!("'{value}"))
-    } else {
-        escape(value)
-    }
+    crate::cli::csv_text(value)
 }
 
 fn escape(value: &str) -> String {

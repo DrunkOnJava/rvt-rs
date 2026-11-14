@@ -74,7 +74,7 @@ Every `vX.Y.Z` release:
   `.github/workflows/publish.yml`. crates.io and PyPI accept it by Trusted
   Publishing (OIDC), so no registry token is stored.
 - Updates `CHANGELOG.md` with human-readable entries grouped by
-  `Added` / `Changed` / `Fixed` / `Security` (Keep a Changelog format).
+  `Added` / `Changed` / `Fixed` / `Removed` / `Security` (Keep a Changelog format).
 - Updates `CITATION.cff` (`version:` + `date-released:`) so academic
   citations resolve to the right archival state.
 
@@ -125,15 +125,18 @@ project treats a silent skipped step the same as an untested change.
    green. `cargo deny check` and `cargo audit` are green.
 2. **Synthetic-project IFC integration test.** `cargo test --release
    --test integration -- ifc_synthetic_project::`. This is the end-to-end
-   regression gate — a synthesised document is written, re-read, and
-   round-tripped through the IFC4 STEP exporter.
+   regression gate — synthesised elements are bridged into an IFC4 model,
+   written as STEP, and the text checked against IFC4's requirements.
 3. **Corpus integration tests.** If the phi-ag/rvt corpus is available
    locally, `RVT_SAMPLES_DIR=... cargo test --release --test integration --
    samples:: ifc_roundtrip:: field_type_coverage::`. CI runs these on
    every push, but running once locally against the checked-out corpus
    before tagging catches anything a stale cache might mask.
 4. **Bump the version** in every file listed under
-   [Versioning](#versioning). The wheel takes its version from
+   [Versioning](#versioning): `python3 tools/release/bump_version.py X.Y.Z`
+   moves each one and dates `CITATION.cff` (`--date` for another day), then
+   reads them back with `release_preflight.py`'s own check, so the two lists
+   cannot drift. The wheel takes its version from
    `rvt-py/Cargo.toml` (`pyproject.toml` declares it dynamic), so
    `pyproject.toml` needs no edit.
 5. **Update `CHANGELOG.md`.** Run `python3 tools/release/changelog.py
@@ -143,13 +146,13 @@ project treats a silent skipped step the same as an untested change.
    `[X.Y.Z] — YYYY-MM-DD` section, leaving an empty `[Unreleased]` above
    it. Open the section with a short introduction and an **Upgrading from
    X.Y** list of what a user of the previous release has to change. Then
-   group by `Added` / `Changed` / `Fixed` / `Security` (and `Research`),
+   group by `Added` / `Changed` / `Fixed` / `Removed` / `Security` (and `Research`),
    one heading each: merges append headings of their own, so fold them,
    keeping every entry. Credit outside contributors by name. Write
    entries so a user reading just this section can decide whether to
    upgrade.
 6. **Update `CITATION.cff`.** Set `version:` to `X.Y.Z` and
-   `date-released:` to the ISO date. These two fields must agree with
+   `date-released:` to the ISO date (step 4's script does both). These two fields must agree with
    the git tag and the `Cargo.toml` version.
 7. **Open the release pull request,** `chore(release): prepare vX.Y.Z`,
    with steps 4 to 6 and the README's release lines (the latest release
@@ -210,8 +213,9 @@ project treats a silent skipped step the same as an untested change.
     Keep the landing queue disarmed from the release pull request's squash
     until the tag is pushed: a landing in between queues another CI run on
     `main` behind the squash commit's, and the preflight waits on the squash
-    commit's `CI passed` for up to 80 minutes, so a slow or superseded run
-    costs the whole wait.
+    commit's `CI passed` for up to 80 minutes, so a slow run costs the whole
+    wait. A squash commit whose CI run a later push cancelled fails the
+    preflight at once, since that check will never come.
 10. **Push the tag.** `git push origin vX.Y.Z` runs `publish.yml`. Its
     `preflight` job runs first, and every other job waits for it. It
     refuses, within seconds, a tag that is not named `vX.Y.Z` (or with a
@@ -294,11 +298,11 @@ project treats a silent skipped step the same as an untested change.
     with the real tag substituted
     (`gh release edit vX.Y.Z --notes-file <file>`).
 12. **Announce (optional).** If the release is worth calling out,
-    drafts live under `docs/launch/` — currently `hn-show-hn.md` and
-    `reddit-r-rust.md`, with further channels (buildingSMART forum,
-    OSArch) added as drafts land. Post from the drafts rather than
-    writing fresh copy; the drafts have been audit-reviewed for
-    overclaiming.
+    drafts live under `docs/launch/` — eight of them, listed in
+    [`docs/launch/README.md`](docs/launch/README.md). Post from the drafts
+    rather than writing fresh copy, but bring a draft up to what the
+    README and `ROADMAP.md` say before posting it: only the buildingSMART
+    forum draft is current, and the others still describe 0.1.2.
 
 ## Post-Publish Install Verification
 
@@ -343,14 +347,27 @@ where CI and Measure run, only when it is ready to release.
    hotfix/vX.Y.(Z+1) vX.Y.Z`. GitHub runs a push's workflows from the
    pushed branch, and a tag before v0.6.1 has a `ci.yml` without the
    `hotfix/**` trigger step 4 needs: commit that trigger to the branch
-   first, as `hotfix/v0.6.1` did.
+   first, as `hotfix/v0.6.1` did. A patch to an older line, for users who
+   cannot take the newer releases' changed output, branches from that line's
+   tag in the same way (`hotfix/v0.14.1` from `v0.14.0`, #1808). It never
+   becomes the latest release: `release-binaries.yml` gives the container
+   image's `latest` and the GitHub release's Latest mark only to the highest
+   `vX.Y.Z`, the README it ships pins its install commands to its version and
+   does not call it the latest, and step 7 brings `main` its `CHANGELOG.md`
+   section only.
 2. **Apply the minimal fix.** No refactoring, no adjacent cleanup, no
    new features. Smallest possible diff that closes the issue; when it
    landed on `main` first, `git cherry-pick -x` it. Where no existing
    real-file, CLI or contract check fails without the fix, add one that
    does (unit tests are banned, see `CONTRIBUTING.md`).
 3. **Prepare the release on the branch.** Steps 4 to 6 above (the
-   version files, `CHANGELOG.md` and `CITATION.cff`) and
+   version files, `CHANGELOG.md` and `CITATION.cff`: from a `main`
+   checkout, `python3 tools/release/bump_version.py X.Y.(Z+1) --root
+   <the hotfix worktree>` moves every version file, and with
+   `--release-workflows-from origin/main` copies the release workflows step 6
+   needs, with every local action they use; the ref must be a commit
+   `origin/main` holds, and the script refuses if the copied preflight reads
+   other version files than the bump moved) and
    the README's release lines, committed to the branch: no pull
    request into `main` can test a branch cut from a tag.
 4. **Check it.** Pushing the branch runs CI on it with the full matrix
@@ -391,9 +408,10 @@ where CI and Measure run, only when it is ready to release.
    the workflow files as they are at the tagged commit, so a hotfix cut from
    v0.15.0 or older has no preflight (and the old publish workflow, without
    its re-run and concurrency fixes) unless the branch carries `publish.yml`,
-   `release-binaries.yml`, `.github/actions/wait-for-check` and
-   `tools/ci/release_preflight.py` from `main`; copy them in the step 3
-   commit. Then close the review-only pull request unmerged and delete
+   `release-binaries.yml`, the local actions they use
+   (`.github/actions/wait-for-check`, `setup-rust`, `fetch-corpus` and
+   `wasm-tools` today) and `tools/ci/release_preflight.py` from `main`; copy
+   them in the step 3 commit. Then close the review-only pull request unmerged and delete
    `review/vX.Y.Z-base`.
 7. **Bring `main` up to it** through a pull request, as merging the
    branch back would: the fix if `main` lacks it, the new `CHANGELOG.md`

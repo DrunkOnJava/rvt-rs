@@ -44,13 +44,64 @@ fn mullion_box(element: &DecodedElement, kind: u64) -> Option<MullionBox> {
     Some(MullionBox { along, ..model })
 }
 
+/// The curtain walls a part's reference list `list` names (not the part
+/// itself), and the walls the grids it names belong to.
+fn part_walls(
+    own: Option<u32>,
+    list: &[u64],
+    curtain_walls: &BTreeSet<u32>,
+    grids: &BTreeMap<u32, u32>,
+) -> (BTreeSet<u32>, BTreeSet<u32>) {
+    let ids = || list.iter().filter_map(|&id| u32::try_from(id).ok());
+    let named = ids()
+        .filter(|id| curtain_walls.contains(id) && Some(*id) != own)
+        .collect();
+    let on_grid = ids().filter_map(|id| grids.get(&id).copied()).collect();
+    (named, on_grid)
+}
+
+/// How many distinct walls of `wall_ids`, curtain or not, a part's reference
+/// list `list` names (not the part itself).
+fn walls_named(own: Option<u32>, list: &[u64], wall_ids: &BTreeSet<u32>) -> usize {
+    list.iter()
+        .filter_map(|&id| u32::try_from(id).ok())
+        .filter(|id| wall_ids.contains(id) && Some(*id) != own)
+        .collect::<BTreeSet<u32>>()
+        .len()
+}
+
+/// The one wall of `named` that the element data of the ids in `list` also
+/// names, from `in_data` ([`scan_walls_in_element_data`]); none where no wall
+/// of `named` is in any of them or two are.
+fn data_confirmed_wall(
+    own: Option<u32>,
+    list: &[u64],
+    named: &BTreeSet<u32>,
+    in_data: &BTreeMap<u32, BTreeSet<u32>>,
+) -> Option<u32> {
+    let confirmed: BTreeSet<u32> = list
+        .iter()
+        .filter_map(|&id| u32::try_from(id).ok())
+        .filter(|id| Some(*id) != own)
+        .filter_map(|id| in_data.get(&id))
+        .flatten()
+        .copied()
+        .filter(|wall| named.contains(wall))
+        .collect();
+    let mut walls = confirmed.into_iter();
+    let wall = walls.next()?;
+    walls.next().is_none().then_some(wall)
+}
+
 /// Give each curtain mullion and panel of `products` that has no
 /// [`IS_EXTERNAL_FIELD`] yet its curtain wall's from `walls`, as revit-ifc's
 /// `IsElementExternal` gives a family instance with no parameter and no type
 /// Function its host's value (CLEANROOM.md source 5; RE-193, RE-269): the
 /// curtain wall's own parameter or type Function, not the value of the property
 /// set parameter that wall's `Pset_CurtainWallCommon` is written from. Nothing
-/// for a part with no curtain wall or a curtain wall with no value.
+/// for a part with no curtain wall or a curtain wall with no value; and a part
+/// that names two or more and has none of them as its wall (#1865) takes the
+/// value all of them have, where they have one and agree.
 // Tracker: B64.
 pub(super) fn attach_curtain_member_is_external(
     walls: &[DecodedElement],
@@ -80,11 +131,33 @@ pub(super) fn attach_curtain_member_is_external(
             InstanceField::ElementId { id, .. } if name == AGGREGATE_WHOLE_FIELD => Some(*id),
             _ => None,
         });
-        if let Some(&value) = whole.and_then(|id| external.get(&id)) {
+        let value = match whole {
+            Some(id) => external.get(&id).copied(),
+            None => agreed_value(&part.fields, &external),
+        };
+        if let Some(value) = value {
             part.fields
                 .push((IS_EXTERNAL_FIELD.into(), InstanceField::Bool(value)));
         }
     }
+}
+
+/// The `IsExternal` every curtain wall in [`CURTAIN_NAMED_WALLS_FIELD`] has, if
+/// each has one and they are all the same.
+fn agreed_value(
+    fields: &[(String, InstanceField)],
+    external: &BTreeMap<u32, bool>,
+) -> Option<bool> {
+    let named = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(items) if name == CURTAIN_NAMED_WALLS_FIELD => Some(items),
+        _ => None,
+    })?;
+    let mut values = named.iter().map(|item| match item {
+        InstanceField::ElementId { id, .. } => external.get(id).copied(),
+        _ => None,
+    });
+    let first = values.next()??;
+    values.all(|value| value == Some(first)).then_some(first)
 }
 
 /// Mark each curtain mullion that stands on a straight curtain wall with an
@@ -360,9 +433,21 @@ pub(super) fn attach_curtain_axes(
 /// A door or window set in a curtain wall's grid in place of a panel is one
 /// of its parts too, as Revit's export aggregates RE1 Architecture's door
 /// 445975 under curtain wall 445961. It takes the curtain wall of the
-/// one grid its record names. Naming a curtain wall directly is not enough:
-/// on Snowdon Towers three doors name curtain wall 1506500 and Revit leaves
-/// them standalone (RE-46). No record box decides a door either.
+/// one grid its record names, or, with no grid found, the curtain wall its list
+/// names when that is the one wall the list names (RE-453). Naming a curtain
+/// wall among others is not enough: on Snowdon Towers three doors name curtain
+/// wall 1506500 and their host, and Revit leaves them standalone (RE-46); such
+/// a door is a part only when the element data of an id of its list names the
+/// curtain wall too (RE-452). No record box decides a door either.
+///
+/// A part that names two or more curtain walls and finds no grid (the 79 corner
+/// mullions of Autodesk's `rac_advanced` saved by Revit 2027, which name both
+/// walls of their corner where the 2025 save names one: RE-449) takes the one
+/// of them that the element data of one of its other ids names too; its grid
+/// is such an id, and its data names the wall at several places whatever the
+/// release (`scan_walls_in_element_data`). A part for which that gives no one
+/// wall stands alone and keeps the walls it names
+/// ([`CURTAIN_NAMED_WALLS_FIELD`]) for [`attach_curtain_member_is_external`].
 // Tracker: B64.
 pub(super) fn attach_curtain_walls(
     rf: &mut RevitFile,
@@ -435,20 +520,32 @@ pub(super) fn attach_curtain_walls(
         .filter_map(|wall| Some((wall.id?, element_record_bbox(wall)?)))
         .filter(|(id, _)| curtain_walls.contains(id))
         .collect();
+    // RE-449: the ids of the lists of the parts that name two or more curtain
+    // walls and no grid, whose element data may name one of the walls.
+    let mut crowded: BTreeSet<u32> = BTreeSet::new();
+    for (product, list) in products.iter().zip(&references) {
+        let Some(list) = list else {
+            continue;
+        };
+        let (named, on_grid) = part_walls(product.id, list, &curtain_walls, &grids);
+        if on_grid.is_empty() && named.len() >= 2 {
+            crowded.extend(
+                list.iter()
+                    .filter_map(|&id| u32::try_from(id).ok())
+                    .filter(|id| Some(*id) != product.id && !wall_ids.contains(id)),
+            );
+        }
+    }
+    let in_data = if crowded.is_empty() {
+        BTreeMap::new()
+    } else {
+        scan_walls_in_element_data(rf, revit_version, &crowded, &curtain_walls)
+    };
     for (product, list) in products.iter_mut().zip(references) {
         let Some(list) = list else {
             continue;
         };
-        let named: BTreeSet<u32> = list
-            .iter()
-            .filter_map(|&id| u32::try_from(id).ok())
-            .filter(|id| curtain_walls.contains(id) && Some(*id) != product.id)
-            .collect();
-        let on_grid: BTreeSet<u32> = list
-            .iter()
-            .filter_map(|&id| u32::try_from(id).ok())
-            .filter_map(|id| grids.get(&id).copied())
-            .collect();
+        let (named, on_grid) = part_walls(product.id, &list, &curtain_walls, &grids);
         let whole = match (on_grid.len(), named.len()) {
             (1, _) => on_grid.iter().next().copied(),
             (0, 1) => named.iter().next().copied(),
@@ -460,6 +557,7 @@ pub(super) fn attach_curtain_walls(
                 let first = inside.next()?;
                 inside.next().is_none().then_some(first)
             }),
+            (0, _) => data_confirmed_wall(product.id, &list, &named, &in_data),
             _ => None,
         };
         if let Some(whole) = whole {
@@ -467,20 +565,70 @@ pub(super) fn attach_curtain_walls(
                 AGGREGATE_WHOLE_FIELD.into(),
                 InstanceField::ElementId { tag: 0, id: whole },
             ));
+        } else if named.len() >= 2 && on_grid.is_empty() {
+            product.fields.push((
+                CURTAIN_NAMED_WALLS_FIELD.into(),
+                InstanceField::Vector(
+                    named
+                        .iter()
+                        .map(|&id| InstanceField::ElementId { tag: 0, id })
+                        .collect(),
+                ),
+            ));
         }
     }
+    // RE-452: the ids of the lists of the openings that name exactly one curtain
+    // wall and no grid, and another wall besides, whose element data may name
+    // the curtain wall.
+    let mut opening_crowded: BTreeSet<u32> = BTreeSet::new();
+    for (elements, lists) in openings.iter().zip(&opening_references) {
+        for (element, list) in elements.iter().zip(lists) {
+            let Some(list) = list else {
+                continue;
+            };
+            let (named, on_grid) = part_walls(element.id, list, &curtain_walls, &grids);
+            if on_grid.is_empty()
+                && named.len() == 1
+                && walls_named(element.id, list, &wall_ids) > 1
+            {
+                opening_crowded.extend(
+                    list.iter()
+                        .filter_map(|&id| u32::try_from(id).ok())
+                        .filter(|id| Some(*id) != element.id && !wall_ids.contains(id)),
+                );
+            }
+        }
+    }
+    let opening_in_data = if opening_crowded.is_empty() {
+        BTreeMap::new()
+    } else {
+        scan_walls_in_element_data(rf, revit_version, &opening_crowded, &curtain_walls)
+    };
     for (elements, lists) in openings.into_iter().zip(opening_references) {
         for (element, list) in elements.iter_mut().zip(lists) {
             let Some(list) = list else {
                 continue;
             };
-            let ids: Vec<u32> = list
-                .iter()
-                .filter_map(|&id| u32::try_from(id).ok())
-                .collect();
-            let on_grid: BTreeSet<u32> =
-                ids.iter().filter_map(|id| grids.get(id).copied()).collect();
-            if let (1, Some(&whole)) = (on_grid.len(), on_grid.iter().next()) {
+            // RE-453: an opening with no grid whose list names one wall in all,
+            // and that a curtain wall, is a part of it: every door Revit's export
+            // aggregates into a curtain wall on the BIM4LCA offices and Snowdon
+            // Towers names that wall alone, and the three Snowdon doors Revit
+            // leaves standalone name a second wall, their host.
+            // RE-452: one that names a curtain wall and another wall is a part of
+            // it only when the element data of an id of its list names the
+            // curtain wall too, as a mullion's or a panel's grid does. On Revit
+            // 2027 the grid's offsets (RE-72) are not found, and the curtain
+            // door 216844 of `rac_advanced` stood alone.
+            let (named, on_grid) = part_walls(element.id, &list, &curtain_walls, &grids);
+            let whole = match (on_grid.len(), named.len()) {
+                (1, _) => on_grid.iter().next().copied(),
+                (0, 1) if walls_named(element.id, &list, &wall_ids) == 1 => {
+                    named.iter().next().copied()
+                }
+                (0, 1) => data_confirmed_wall(element.id, &list, &named, &opening_in_data),
+                _ => None,
+            };
+            if let Some(whole) = whole {
                 element.fields.push((
                     AGGREGATE_WHOLE_FIELD.into(),
                     InstanceField::ElementId { tag: 0, id: whole },
@@ -636,6 +784,79 @@ pub(super) fn scan_curtain_grid_walls(
     found
         .into_iter()
         .filter_map(|(id, wall)| wall.map(|wall| (id, wall)))
+        .collect()
+}
+
+/// The curtain walls of `walls` that the element data of each id in
+/// `candidates` names (RE-449): the walls whose ElementId, as a `u64`, lies at
+/// least [`ELEMENT_DATA_WALL_MIN_COPIES`] times within
+/// [`ELEMENT_DATA_WALL_WINDOW`] bytes past the id's eight, where the release's
+/// element-data header opens the data. A curtain grid's data names its wall
+/// several times, at offsets that differ between grid kinds and releases (84
+/// is common to the two measured, RE-72's 85 and 478 are another kind's), so
+/// no fixed offset is read. An id with several copies of its data that do not
+/// agree is left out, as in [`scan_curtain_grid_walls`].
+pub(super) fn scan_walls_in_element_data(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    candidates: &BTreeSet<u32>,
+    walls: &BTreeSet<u32>,
+) -> BTreeMap<u32, BTreeSet<u32>> {
+    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+        return BTreeMap::new();
+    };
+    let mut found: BTreeMap<u32, Option<BTreeSet<u32>>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        // The reader's memo of where the header lies, which the other readers of
+        // element data fill and share: no pass of this scan's own over the
+        // partition once one of them has made it.
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
+        for &hit in hits.iter() {
+            let id_at = hit + header.len();
+            let Some(id) = le_bytes::u64_at(buf, id_at)
+                .and_then(|id| u32::try_from(id).ok())
+                .filter(|id| candidates.contains(id))
+            else {
+                continue;
+            };
+            let mut copies: BTreeMap<u32, usize> = BTreeMap::new();
+            for offset in 0..ELEMENT_DATA_WALL_WINDOW {
+                let wall = le_bytes::u64_at(buf, id_at + 8 + offset)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .filter(|wall| walls.contains(wall));
+                if let Some(wall) = wall {
+                    *copies.entry(wall).or_default() += 1;
+                }
+            }
+            let named: BTreeSet<u32> = copies
+                .into_iter()
+                .filter(|(_, times)| *times >= ELEMENT_DATA_WALL_MIN_COPIES)
+                .map(|(wall, _)| wall)
+                .collect();
+            if named.is_empty() {
+                continue;
+            }
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(named));
+                }
+                Some(held) => {
+                    if held.as_ref() != Some(&named) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, named)| named.map(|named| (id, named)))
         .collect()
 }
 

@@ -8,7 +8,11 @@
 //! other body (a sketched profile, a steel section, a swept or revolved
 //! solid, a brep) has its own mesh. An element with no body gets a node
 //! with no mesh. Each element gets a material drawn from
-//! `PbrMaterial::from_material_info`.
+//! `PbrMaterial::from_material_info`, and each material says in its
+//! `extras` whether its colour, and its alpha, are the file's or rvt-rs's
+//! ([`MaterialExtras`]).
+//! A view's visibility and graphics overrides are not read: Revit's own IFC
+//! export does not apply them either.
 //!
 //! Element nodes are in the model's frame, feet with +Z up. glTF is
 //! metres with +Y up, so they hang under one root node whose matrix
@@ -141,6 +145,46 @@ pub struct Material {
     pub double_sided: bool,
     #[serde(default, rename = "alphaMode", skip_serializing_if = "Option::is_none")]
     pub alpha_mode: Option<String>,
+    /// Where the base colour and its alpha come from (#1812).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extras: Option<MaterialExtras>,
+}
+
+/// Where a material's colour and its alpha come from, each [`SOURCE_FILE`] or
+/// [`SOURCE_RVT_RS`]. glTF loaders surface it as the material's `userData`.
+/// A consumer that stores colour or opacity as the model's data keeps only
+/// what is marked `"file"`. Metallic and roughness are always rvt-rs's,
+/// guessed from the material's name.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MaterialExtras {
+    /// `"file"` where the base colour is the Revit material's own (RE-53), and
+    /// `"rvt-rs"` where rvt-rs chose it: the category colour
+    /// ([`category_colour`]) an element with no material of its own is drawn
+    /// in, or the grey of a material whose colour was not read.
+    #[serde(rename = "colourSource")]
+    pub colour_source: String,
+    /// `"file"` where the alpha is one minus the Revit material's own
+    /// transparency, and `"rvt-rs"` where rvt-rs chose it: a category's, or the
+    /// opaque 1 of a material whose transparency was not read, whether or not
+    /// its colour was.
+    #[serde(rename = "alphaSource")]
+    pub alpha_source: String,
+}
+
+/// A [`MaterialExtras`] value read from the file.
+pub const SOURCE_FILE: &str = "file";
+/// A [`MaterialExtras`] value rvt-rs chose.
+pub const SOURCE_RVT_RS: &str = "rvt-rs";
+
+fn sources(colour: &str, alpha: &str) -> Option<MaterialExtras> {
+    Some(MaterialExtras {
+        colour_source: colour.into(),
+        alpha_source: alpha.into(),
+    })
+}
+
+fn read_or_chosen(read: bool) -> &'static str {
+    if read { SOURCE_FILE } else { SOURCE_RVT_RS }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -342,6 +386,12 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
             } else {
                 None
             },
+            // A walker-decoded material reads its colour and its transparency
+            // from two fields, so either may be read without the other.
+            extras: sources(
+                read_or_chosen(m.color_packed.is_some()),
+                read_or_chosen(m.transparency.is_some()),
+            ),
         };
         doc.materials.push(mat);
     }
@@ -487,6 +537,7 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
                                         format!("Layer {rgb:06x}"),
                                         rgb,
                                         alpha,
+                                        SOURCE_FILE,
                                     ));
                                     doc.materials.len() - 1
                                 })
@@ -569,9 +620,17 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
             }),
             None => None,
         };
+        // The one place every element's transform reaches the file: a matrix
+        // that is not finite is drawn as no geometry, as `push_mesh` refuses
+        // positions that are not, whatever upstream made it (#1845).
+        let drawn = drawn.filter(|(_, matrix)| matrix.iter().all(|v| v.is_finite()));
         let (mesh, matrix) = match drawn {
             Some(((position, indices), matrix)) => {
+                // An index past the model's materials names none, as the STEP
+                // writer drops it: in glTF it would point past `materials[]`
+                // and make the whole file invalid.
                 let material = material_index
+                    .filter(|&index| index < model.materials.len())
                     .or_else(|| single_material.get(&entity_index).copied())
                     .or_else(|| {
                         Some(
@@ -637,7 +696,9 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
 /// red, green and amber ramps, in the hues of the plan's palette
 /// ([`super::sheet`]). Blue-6 is left to the viewer's selection highlight.
 /// Glass-like categories are translucent, and spaces faint enough not to
-/// hide the building they fill.
+/// hide the building they fill. None of it is read from the file: the GLB
+/// marks both the colour and the alpha of these materials `"rvt-rs"`
+/// ([`MaterialExtras`]).
 pub fn category_colour(ifc_type: &str) -> (u32, f32) {
     match ifc_type {
         "IFCWALL" | "IFCWALLSTANDARDCASE" | "IFCCURTAINWALL" => (0xCDCED0, 1.0),
@@ -658,12 +719,12 @@ pub fn category_colour(ifc_type: &str) -> (u32, f32) {
 /// The material a category's colour makes, named for the category.
 fn category_material(ifc_type: &str) -> Material {
     let (rgb, alpha) = category_colour(ifc_type);
-    colour_material(format!("Category {ifc_type}"), rgb, alpha)
+    colour_material(format!("Category {ifc_type}"), rgb, alpha, SOURCE_RVT_RS)
 }
 
-/// A material of one sRGB colour (`0xRRGGBB`) and alpha. glTF base colours
-/// are linear, so the colour is linearised.
-fn colour_material(name: String, rgb: u32, alpha: f32) -> Material {
+/// A material of one sRGB colour (`0xRRGGBB`) and alpha, both from `source`.
+/// glTF base colours are linear, so the colour is linearised.
+fn colour_material(name: String, rgb: u32, alpha: f32, source: &str) -> Material {
     let linear = |shift: u32| {
         let c = ((rgb >> shift) & 0xff) as f32 / 255.0;
         if c <= 0.04045 {
@@ -681,6 +742,7 @@ fn colour_material(name: String, rgb: u32, alpha: f32) -> Material {
         },
         double_sided: alpha < 1.0,
         alpha_mode: (alpha < 1.0).then(|| "BLEND".into()),
+        extras: sources(source, source),
     }
 }
 
@@ -798,6 +860,53 @@ pub fn write_glb(doc: &GltfDocument, bin: &[u8], out: &mut Vec<u8>) {
     out.extend_from_slice(&bin_padded);
 }
 
+/// [`write_glb`] to any writer: the header, the JSON chunk and the binary
+/// chunk go out in turn from where they are, so the binary buffer is neither
+/// copied to be padded nor copied again into a `Vec` beside itself. The bytes
+/// are the ones [`write_glb`] writes. A GLB whose length does not fit the
+/// format's 32-bit lengths is an error here and not a file with a wrapped
+/// length.
+///
+/// # Errors
+///
+/// The writer's error, or `InvalidInput` for a document that does not
+/// serialize or a GLB over 4 GiB.
+// Tracker: VW1-04.
+pub fn write_glb_to<W: std::io::Write>(
+    doc: &GltfDocument,
+    bin: &[u8],
+    out: &mut W,
+) -> std::io::Result<()> {
+    let json_text = serde_json::to_string(doc).map_err(std::io::Error::other)?;
+    // The JSON chunk is padded with ASCII spaces and the binary chunk with
+    // zeros, to 4-byte boundaries (per spec).
+    let json_pad = (4 - json_text.len() % 4) % 4;
+    let bin_pad = (4 - bin.len() % 4) % 4;
+    let json_len = json_text.len() + json_pad;
+    let bin_len = bin.len() + bin_pad;
+    let too_long = |_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "a GLB is limited to 4 GiB by the 32-bit lengths of its format",
+        )
+    };
+    let total_len = u32::try_from(12 + 8 + json_len + 8 + bin_len).map_err(too_long)?;
+    // Header: 12 bytes (magic + version + total length).
+    out.write_all(&0x4654_6C67_u32.to_le_bytes())?; // "glTF"
+    out.write_all(&2_u32.to_le_bytes())?; // version
+    out.write_all(&total_len.to_le_bytes())?;
+    // JSON chunk. Its length is below the total, which fits.
+    out.write_all(&(json_len as u32).to_le_bytes())?;
+    out.write_all(&0x4E4F_534A_u32.to_le_bytes())?; // "JSON"
+    out.write_all(json_text.as_bytes())?;
+    out.write_all(&b"   "[..json_pad])?;
+    // BIN chunk.
+    out.write_all(&(bin_len as u32).to_le_bytes())?;
+    out.write_all(&0x004E_4942_u32.to_le_bytes())?; // "BIN\0"
+    out.write_all(bin)?;
+    out.write_all(&[0_u8; 3][..bin_pad])
+}
+
 /// One-call convenience: `IfcModel` → GLB bytes.
 ///
 /// # Examples
@@ -839,5 +948,123 @@ fn bytemuck_cast_u16(src: &[u16]) -> Vec<u8> {
 fn pad_to_4(buf: &mut Vec<u8>) {
     while !buf.len().is_multiple_of(4) {
         buf.push(0);
+    }
+}
+
+// `write_glb_to` is a second writer of the format `write_glb` writes (#1883).
+// The ways it can fail: a chunk padded with the wrong byte or to the wrong
+// length, a length field that does not match the bytes, the two writers
+// drifting apart on one remainder of the lengths mod 4, and a writer's error
+// swallowed. Each is a case below; no file or other I/O is involved.
+#[cfg(test)]
+mod tests {
+    use super::{GltfDocument, write_glb, write_glb_to};
+    use std::io::{self, Write};
+
+    /// A document whose JSON text is `extra` bytes longer than the empty one.
+    fn document(extra: usize) -> GltfDocument {
+        let mut doc = GltfDocument::default();
+        doc.asset
+            .generator
+            .as_mut()
+            .expect("the default has a generator")
+            .push_str(&"x".repeat(extra));
+        doc
+    }
+
+    fn written(doc: &GltfDocument, bin: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        write_glb_to(doc, bin, &mut out).expect("a Vec takes any write");
+        out
+    }
+
+    fn le(bytes: &[u8]) -> usize {
+        u32::from_le_bytes(bytes.try_into().expect("four bytes")) as usize
+    }
+
+    #[test]
+    fn the_streaming_writer_writes_the_bytes_write_glb_writes_at_every_remainder() {
+        for extra in 0..4 {
+            for bin_len in 0..9 {
+                let doc = document(extra);
+                let bin: Vec<u8> = (1..=bin_len as u8).collect();
+                let mut whole = Vec::new();
+                write_glb(&doc, &bin, &mut whole);
+                assert_eq!(
+                    written(&doc, &bin),
+                    whole,
+                    "json +{extra} bytes, binary of {bin_len}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_lengths_and_the_padding_are_the_formats() {
+        for extra in 0..4 {
+            for bin_len in 0..9 {
+                let doc = document(extra);
+                let bin = vec![0xAB_u8; bin_len];
+                let out = written(&doc, &bin);
+                assert_eq!(&out[..4], b"glTF");
+                assert_eq!(le(&out[4..8]), 2);
+                assert_eq!(le(&out[8..12]), out.len(), "total length");
+                let json_len = le(&out[12..16]);
+                assert_eq!(json_len % 4, 0);
+                assert_eq!(&out[16..20], b"JSON");
+                let json = &out[20..20 + json_len];
+                let text = std::str::from_utf8(json).expect("JSON chunk is text");
+                serde_json::from_str::<serde_json::Value>(text).expect("JSON chunk parses");
+                let unpadded = text.trim_end_matches(' ').len();
+                assert_eq!(
+                    text.len() - unpadded,
+                    (4 - unpadded % 4) % 4,
+                    "the JSON is padded with spaces to a multiple of four, no more"
+                );
+                let bin_at = 20 + json_len;
+                let bin_len_field = le(&out[bin_at..bin_at + 4]);
+                assert_eq!(bin_len_field % 4, 0);
+                assert_eq!(&out[bin_at + 4..bin_at + 8], b"BIN\0");
+                let chunk = &out[bin_at + 8..];
+                assert_eq!(chunk.len(), bin_len_field);
+                assert_eq!(&chunk[..bin_len], &bin[..]);
+                assert!(
+                    chunk[bin_len..].iter().all(|&byte| byte == 0),
+                    "the binary chunk is padded with zeros"
+                );
+            }
+        }
+    }
+
+    /// A writer that takes `room` bytes and then fails.
+    struct Full {
+        room: usize,
+    }
+
+    impl Write for Full {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            if self.room == 0 {
+                return Err(io::Error::other("full"));
+            }
+            let taken = buf.len().min(self.room);
+            self.room -= taken;
+            Ok(taken)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_writer_that_fails_anywhere_fails_the_write() {
+        let doc = document(1);
+        let bin = [7_u8; 5];
+        let total = written(&doc, &bin).len();
+        for room in [0, 3, 11, 12, 19, 20, total - 9, total - 1] {
+            let outcome = write_glb_to(&doc, &bin, &mut Full { room });
+            assert!(outcome.is_err(), "a writer full after {room} of {total}");
+        }
+        assert!(write_glb_to(&doc, &bin, &mut Full { room: total }).is_ok());
     }
 }

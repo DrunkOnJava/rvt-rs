@@ -179,7 +179,7 @@ fn owners(graph: &ObjectGraph, index: usize) -> Vec<Owner> {
         .map(|edge| {
             let source = &graph.objects[edge.source_object_index];
             let mut path = Vec::new();
-            let found = path_to(&source.fields, edge.pointer_offset, &mut path);
+            let found = path_to(&source.fields.to_json(), edge.pointer_offset, &mut path);
             let field = if found {
                 path.join(".").replace(".[", "[")
             } else {
@@ -282,7 +282,7 @@ fn wall_line(id: u64, graph: &ObjectGraph) -> Value {
                 .into_iter()
                 .map(|(_, class, _, field)| format!("{class}.{}", without_indices(&field)))
                 .collect();
-            let ends = level_ends(&object.fields);
+            let ends = level_ends(&object.fields.to_json());
             json!({
                 "i": index,
                 "c": object.class_name,
@@ -344,7 +344,7 @@ fn pointer_line(graph: &ObjectGraph) -> Option<([f64; 2], [f64; 2])> {
     if curve.class_name != "GLine" {
         return None;
     }
-    level_ends(&curve.fields)
+    level_ends(&curve.fields.to_json())
 }
 
 /// What `native_walls` reads: exactly one `GLine` or `GArc`, a level `GLine`.
@@ -355,7 +355,7 @@ fn current_line(graph: &ObjectGraph) -> Option<([f64; 2], [f64; 2])> {
         .filter(|object| matches!(object.class_name.as_str(), "GLine" | "GArc"))
         .collect();
     match curves.as_slice() {
-        [curve] if curve.class_name == "GLine" => level_ends(&curve.fields),
+        [curve] if curve.class_name == "GLine" => level_ends(&curve.fields.to_json()),
         _ => None,
     }
 }
@@ -374,7 +374,7 @@ fn wall_detail(id: u64, openings: &[u32], graph: &ObjectGraph) -> Value {
         .enumerate()
         .filter(|(_, object)| matches!(object.class_name.as_str(), "GLine" | "GArc"))
         .map(|(index, object)| {
-            let ends = level_ends(&object.fields);
+            let ends = level_ends(&object.fields.to_json());
             let length = ends.map(|(s, e)| (e[0] - s[0]).hypot(e[1] - s[1]));
             let named: Vec<Value> = owners(graph, index)
                 .into_iter()
@@ -390,7 +390,7 @@ fn wall_detail(id: u64, openings: &[u32], graph: &ObjectGraph) -> Value {
                 "length": length,
                 "owners": named,
                 "chain": chain(graph, index),
-                "fields": clip(&object.fields),
+                "fields": clip(&object.fields.to_json()),
             })
         })
         .collect();
@@ -401,7 +401,7 @@ fn wall_detail(id: u64, openings: &[u32], graph: &ObjectGraph) -> Value {
             bump(&mut steps, object.class_name.clone());
         }
     }
-    let driver_fields: Vec<&String> = graph
+    let driver_fields: Vec<&str> = graph
         .objects
         .iter()
         .find(|object| object.class_name == "VWallDriver")
@@ -611,7 +611,7 @@ fn main() -> Result<()> {
             let previous_ends = graph
                 .objects
                 .get(previous)
-                .and_then(|object| level_ends(&object.fields));
+                .and_then(|object| level_ends(&object.fields.to_json()));
             if previous_ends
                 .zip(pointed)
                 .is_some_and(|(a, b)| line_gap(a, b) > 1e-6)

@@ -17,7 +17,7 @@ Run the normal source checks on the release commit:
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --all-targets -- -D warnings
+cargo clippy --all-targets --all-features -- -D warnings
 cargo build --all-targets
 tools/ci/verify-real-files.sh --profile ci   # real-file, CLI, contract checks; no unit tests
 RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features -p rvt
@@ -82,20 +82,21 @@ The tag publish workflow repeats the release-critical checks:
 - docs build with warnings denied;
 - viewer build + browser sample load;
 - crates.io publish;
-- PyPI/TestPyPI publish.
+- PyPI publish.
 
 ## Tag And Publish
 
-Confirm `Cargo.toml`, `rvt-py/Cargo.toml`, and Python metadata agree on
-the release version, then tag:
+Confirm every version file agrees on the release version (the list is
+`tools/ci/release_preflight.py`'s; `pyproject.toml` leaves the wheel's
+version to `rvt-py/Cargo.toml`), then tag:
 
 ```bash
 git status --short
-git tag "v${VERSION}"
+git tag -s "v${VERSION}" -m "rvt-rs ${VERSION}"
 git push origin "v${VERSION}"
 ```
 
-For TestPyPI dry runs, dispatch `Publish (crates.io + PyPI)` manually
+For TestPyPI dry runs, dispatch `publish.yml` manually
 with `test-pypi=true`. The crates.io publish job is skipped for manual
 TestPyPI runs.
 
@@ -171,7 +172,8 @@ Verify the hosted viewer:
 
 1. Open <https://drunkonjava.github.io/rvt-rs/>.
 2. Drop the same `$SAMPLE`.
-3. Confirm the status panel reaches `loaded`.
+3. Confirm the status line reads `Loaded · N categories` and the status
+   panel's File row reads `Opened`.
 4. Download diagnostics and confirm the confidence level matches the
    CLI/Python smoke output.
 
@@ -181,15 +183,14 @@ Paste a short evidence block into the release notes:
 
 ```text
 Release verification:
-- cargo install rvt --version VERSION --locked: PASS | NOT PUBLISHED
+- cargo install rvt --version VERSION --locked: PASS
 - Python wheel install/import: PASS on Linux/macOS/Windows
 - CLI sample smoke: PASS on SAMPLE_NAME
 - Viewer sample load: PASS
-- docs.rs page: PASS | N/A (crate not on crates.io)
+- docs.rs page: PASS
 - Publish workflow run: URL
 ```
 
-If any required line is not `PASS` (or an honest `NOT PUBLISHED` /
-`N/A` where crates.io was intentionally skipped), do not announce the
+If any required line is not `PASS` (no tag skips crates.io), do not announce the
 release. Open a hotfix issue, link the failing workflow/log, and decide
 whether to yank the artifact or publish a corrected patch release.

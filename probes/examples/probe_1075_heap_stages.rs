@@ -348,7 +348,7 @@ impl Totals {
 }
 
 /// A saved identifier as `native_metadata::identifier` reads it.
-fn identifier(value: &serde_json::Value) -> Option<i64> {
+fn identifier(value: &rvt::research::graph_value::Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }

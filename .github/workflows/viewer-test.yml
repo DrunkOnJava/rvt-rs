@@ -65,7 +65,7 @@ on:
       legs:
         description: JSON list of the legs to run, each with a `name` and either `files` (the spec files of the suite it runs, as Playwright path filters) or `measure` true (the saved-mesh measurement)
         type: string
-        default: '[{"name":"browser tests 1/3","files":"/parameters-row\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /folded-pieces\\.spec /journey\\.spec /memory-ceiling\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /load-progress\\.spec /memory-ceiling-capped\\.spec /no-network\\.spec /saved-meshes-measure\\.spec /viewer-regression\\.spec"}]'
+        default: '[{"name":"browser tests 1/3","files":"/parameters-row\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /folded-pieces\\.spec /journey\\.spec /memory-ceiling\\.spec /tree-rows\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /load-progress\\.spec /memory-ceiling-capped\\.spec /no-network\\.spec /saved-meshes-measure\\.spec /viewer-regression\\.spec"}]'
       release_wasm:
         description: Build the WASM as Deploy viewer publishes it (fat LTO, one codegen unit); false builds it in a third of the time, with no LTO and 16 codegen units
         type: boolean
@@ -81,7 +81,7 @@ on:
       legs:
         description: JSON list of the legs to run, each with a `name` and either `files` (the spec files of the suite it runs, as Playwright path filters) or `measure` true (the saved-mesh measurement)
         type: string
-        default: '[{"name":"browser tests 1/3","files":"/parameters-row\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /folded-pieces\\.spec /journey\\.spec /memory-ceiling\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /load-progress\\.spec /memory-ceiling-capped\\.spec /no-network\\.spec /saved-meshes-measure\\.spec /viewer-regression\\.spec"}]'
+        default: '[{"name":"browser tests 1/3","files":"/parameters-row\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /folded-pieces\\.spec /journey\\.spec /memory-ceiling\\.spec /tree-rows\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /load-progress\\.spec /memory-ceiling-capped\\.spec /no-network\\.spec /saved-meshes-measure\\.spec /viewer-regression\\.spec"}]'
       release_wasm:
         description: Build the WASM as Deploy viewer publishes it (fat LTO, one codegen unit); false builds it in a third of the time, with no LTO and 16 codegen units
         type: boolean

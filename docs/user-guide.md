@@ -52,7 +52,9 @@ the hosted or self-hosted static viewer; see
    `Revit_IFC5_Einhoven.rvt` (2023, 913 KB, opens in about half a second) and
    `2024_Core_Interior.rvt` (2024, 33.7 MB, about 3 seconds to decode —
    measured on the deployed site, about 7 seconds including the download).
-   Everything below them is a 20 KB synthetic that decodes to a scaffold only.
+   The four entries below them are 20 KB synthetics that decode to a scaffold
+   only; so do the two RAC Basic Sample Family files after them (about 1 MB
+   each), and the last two are reference IFC files to download, not open.
 3. Read the File status panel and export-quality label before exporting anything.
 4. Use Diagnostics details or Download diagnostics when the status panel reports
    warnings, partial decode, unsupported model layout, or scaffold-only export.
@@ -304,7 +306,7 @@ streams after write, and preserves unpatched streams. The real-file target
 `tests/cfb_roundtrip_delta.rs` checks identity, grow, shrink and multi-stream
 patches, and GUID and history preservation, on the Autodesk families and the
 project corpus (`RVT_SAMPLES_DIR` / `RVT_PROJECT_CORPUS_DIR`); CI's Writer patch
-corpus job runs it on every pull request.
+corpus job runs it on every pull request that changes more than prose.
 
 A patched stream is written as one complete gzip member, with the CRC32 and
 size trailer Revit's own streams carry, behind the 8-byte prefix for
@@ -317,7 +319,7 @@ patches both streams of every Autodesk family through the built `rvt-write`
 and checks that each either reads back the same or is refused.
 
 ```bash
-rvt-write model.rvt --patches patches.json -o patched.rvt
+rvt-write --src model.rvt --dst patched.rvt --patches patches.json
 ```
 
 ## Export IFC
@@ -384,7 +386,7 @@ one partition stream of 400 MiB to 1 GiB. When a limit stops a stream,
 
 ```text
 rvt-ifc: 1 stream(s) not read whole, so the export is missing what they hold:
-  stream Partitions/189 (422248448 bytes stored) is larger than the stream limit of 268435456 bytes, so what it holds is missing
+  stream "Partitions/189" (422248448 bytes stored) is larger than the stream limit of 268435456 bytes, so what it holds is missing
 ```
 
 Re-run with `--large-model` (streams up to 2 GiB, 8 GiB inflated), or set

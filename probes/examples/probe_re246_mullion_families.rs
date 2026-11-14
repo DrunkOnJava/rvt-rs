@@ -26,20 +26,20 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
-use serde_json::Value;
 
 const OBJECTS: usize = 40;
 
-fn scalar(value: &Value) -> Option<String> {
+fn scalar(value: &Fv) -> Option<String> {
     match value {
-        Value::Number(n) => Some(n.to_string()),
-        Value::Bool(b) => Some(b.to_string()),
-        Value::String(s) if s.len() <= 60 => Some(s.replace(' ', "_")),
-        Value::Object(_) => value
+        n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => Some(n.to_string()),
+        Fv::Bool(b) => Some(b.to_string()),
+        Fv::Str(s) if s.len() <= 60 => Some(s.replace(' ', "_")),
+        Fv::Object(_) => value
             .pointer("/m_id/m_id64")
-            .and_then(Value::as_i64)
+            .and_then(Fv::as_i64)
             .map(|id| format!("@{id}")),
         _ => None,
     }
@@ -88,14 +88,14 @@ fn main() -> anyhow::Result<()> {
                 .find(|object| object.class_name == "SysMullionFamSym")
                 .and_then(|object| object.fields.get("m_familyId"))
                 .and_then(|value| value.pointer("/m_id/m_id64"))
-                .and_then(Value::as_i64)
+                .and_then(Fv::as_i64)
                 .and_then(|id| u64::try_from(id).ok());
             let name = graph
                 .objects
                 .iter()
                 .find(|object| object.class_name == "SymbolInfo")
                 .and_then(|object| object.fields.get("m_name"))
-                .and_then(Value::as_str)
+                .and_then(Fv::as_str)
                 .unwrap_or("-")
                 .replace(' ', "_");
             let classes: BTreeSet<&str> = graph

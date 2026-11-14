@@ -13,7 +13,7 @@ pub struct ParametricMesh {
     pub triangles: Vec<[u32; 3]>,
 }
 
-fn uv_point(v: &serde_json::Value) -> Result<[f64; 2]> {
+fn uv_point(v: &crate::graph_value::Fv) -> Result<[f64; 2]> {
     let a = v.as_array().context("UV array")?;
     ensure!(a.len() == 2, "UV dimension");
     let p = [
@@ -271,6 +271,7 @@ fn trim_is_rectangle(
     min: [f64; 2],
     max: [f64; 2],
 ) -> Result<bool> {
+    use crate::native_parametric_surface::Curve;
     let mut sides: [Vec<[f64; 2]>; 4] = std::array::from_fn(|_| Vec::new());
     for seg in segments {
         for pair in seg.windows(2) {
@@ -296,13 +297,17 @@ fn trim_is_rectangle(
     for (side, intervals) in sides.iter_mut().enumerate() {
         let axis = if side % 2 == 0 { 0 } else { 1 };
         if intervals.is_empty() {
-            // A revolution's horizontal UV edge can collapse to a pole. The
-            // half-turn distance is exactly twice the profile's radial norm.
+            // A revolution's pole, or the explicitly saved point at one
+            // end of a ruled patch, collapses a horizontal UV side.
+            let v = if side == 0 { min[1] } else { max[1] };
+            let ruled_pole = matches!(&surface,
+                ParametricSurface::RuledSurf { profile1: Curve::Point(_), .. } if v == 0.)
+                || matches!(&surface,
+                    ParametricSurface::RuledSurf { profile2: Curve::Point(_), .. } if v == 1.);
             ensure!(
-                axis == 0 && matches!(surface, ParametricSurface::SurfRev { .. }),
+                axis == 0 && (matches!(surface, ParametricSurface::SurfRev { .. }) || ruled_pole),
                 "missing rectangular trim side"
             );
-            let v = if side == 0 { min[1] } else { max[1] };
             let a = surface.evaluate(min[0], v)?;
             let b = surface.evaluate((min[0] + max[0]) * 0.5, v)?;
             let c = surface.evaluate(max[0], v)?;
@@ -447,7 +452,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     ensure!(
         f.fields["m_faceRegions"]
             .as_array()
-            .is_some_and(Vec::is_empty),
+            .is_some_and(|items| items.is_empty()),
         "face regions need subdivision"
     );
     let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
@@ -482,6 +487,22 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         "degenerate parametric domain"
     );
     let rectangular = loops.len() == 1 && trim_is_rectangle(&surface, &loops[0], min, max)?;
+    // RE-443 measured only rectangular point/arc patches. The general trim
+    // reader (RE-430) must not widen that new surface's measured boundary.
+    let collapsed = matches!(
+        &surface,
+        ParametricSurface::RuledSurf {
+            profile1: Curve::Point(_),
+            ..
+        } | ParametricSurface::RuledSurf {
+            profile2: Curve::Point(_),
+            ..
+        }
+    );
+    ensure!(
+        !collapsed || rectangular,
+        "unqualified collapsed ruled trim"
+    );
     let polygons = if rectangular {
         Vec::new()
     } else {
@@ -497,6 +518,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     };
     let (du, dv) = match &surface {
         ParametricSurface::SurfRev { profile, .. } => match profile {
+            Curve::Point(_) => anyhow::bail!("point revolution profile is unqualified"),
             Curve::Line {
                 origin, direction, ..
             } => {
@@ -575,6 +597,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                             }
                         };
                         let steps = match c {
+                            Curve::Point(_) => 1.,
                             Curve::Line { .. } => length(chord).ceil(),
                             Curve::Arc { radius, .. } => {
                                 ((r[1] - r[0]).abs() / angular(*radius)).ceil()
@@ -606,6 +629,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 let range_steps = |c: &Curve| -> f64 {
                     let r = c.range();
                     match c {
+                        Curve::Point(_) => 1.,
                         Curve::Line { .. } => 1.,
                         Curve::Arc { radius, .. } => {
                             ((r[1] - r[0]).abs() / angular(*radius)).ceil()
@@ -660,6 +684,10 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             }
         }
     };
+    // RE-443: generators from a point to an arc are straight. Keep the reviewed
+    // u grid (the arc-only grid misses the tighter native-reference bounds),
+    // but remove redundant subdivisions along v. Trim knots are still added.
+    let dv = if collapsed { 1. } else { dv };
     // The chord's steps along axis `k`, with the coordinates `extra` added. A face cut
     // by its trim takes every trim point in `u` (each strip between two `u` knots must
     // be crossed whole by the trim segments that meet it) but in `v` only the steps
@@ -940,6 +968,15 @@ fn keep_triangle(p: [f64; 3], q: [f64; 3], r: [f64; 3]) -> Option<bool> {
 const KNOT_TOLERANCE: f64 = 1e-9;
 /// Work a hostile file can ask of `trimmed_cells`: strips times trim segments.
 const STRIP_BUDGET: usize = 20_000_000;
+/// The knots of `v` the trapezoids of `trimmed_cells` may scan in all: each trapezoid
+/// walks every one of them to find where to cut it, which `STRIP_BUDGET` does not count,
+/// so a hostile trim of many segments over many `v` knots could ask some 4e10 (#1815).
+/// It is counted as each trapezoid is cut, as the planar faces' work is
+/// (`native_saved_mesh::PLANAR_WORK_BUDGET`, the same 250,000,000, about two seconds of
+/// one face).
+const CUT_BUDGET: usize = 250_000_000;
+/// The text a trimmed face is refused with once its trapezoids' scans pass [`CUT_BUDGET`].
+const CUT_BUDGET_EXCEEDED: &str = "trim cut budget exceeded";
 /// The most triangles a trimmed face may come to.
 const TRIANGLE_BUDGET: usize = 4_000_000;
 
@@ -1142,6 +1179,7 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
         Ok(i)
     };
     let mut covered = 0.0;
+    let mut cut_work = 0usize;
     for w in u_knots.windows(2) {
         let (left, right) = (w[0], w[1]);
         // Every point is a knot, so a segment that meets the strip crosses all of it.
@@ -1179,7 +1217,9 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                 [right, high_right],
                 [left, high_left],
             ];
-            // Cut across at every knot of v inside the trapezoid.
+            // Cut across at every knot of v inside the trapezoid, each of which it scans.
+            cut_work = cut_work.saturating_add(v_knots.len());
+            ensure!(cut_work <= CUT_BUDGET, CUT_BUDGET_EXCEEDED);
             let low = low_left.min(low_right);
             let high = high_left.max(high_right);
             let mut cuts = vec![low];
@@ -1282,8 +1322,50 @@ fn tessellate_trimmed(
 
 #[cfg(test)]
 mod tests {
-    use super::{inside_polygon, keep_triangle, profile_reach, trim_steps, trimmed_cells};
+    use super::{
+        CUT_BUDGET, CUT_BUDGET_EXCEEDED, inside_polygon, keep_triangle, profile_reach, trim_steps,
+        trimmed_cells,
+    };
     use crate::native_parametric_surface::Curve;
+
+    // How a trimmed face's cutting can run away: many trapezoids each scanning every knot
+    // of v, though no knot lies inside any of them and no triangle is made; the count of
+    // that work wrapping round; or the count refusing a face it should keep (#1815).
+    #[test]
+    fn a_trim_whose_trapezoids_scan_too_many_v_knots_is_refused() {
+        // One strip, 200 bands of a serpentine loop, each a trapezoid of its own, and
+        // 1,500,001 knots of v above them all: 300,000,200 scans asked.
+        let mut ring = Vec::new();
+        for band in 0..400 {
+            let v = band as f64;
+            if band % 2 == 0 {
+                ring.extend([[0.0, v], [1.0, v]]);
+            } else {
+                ring.extend([[1.0, v], [0.0, v]]);
+            }
+        }
+        let v_knots: Vec<f64> = (0..1_500_001).map(|k| 10_000.0 + k as f64 * 1e-3).collect();
+        assert!(200 * v_knots.len() > CUT_BUDGET);
+        let error = trimmed_cells(&[ring], &[0.0, 1.0], &v_knots).unwrap_err();
+        assert_eq!(error.to_string(), CUT_BUDGET_EXCEEDED);
+    }
+
+    #[test]
+    fn a_trim_under_the_cut_budget_is_cut_as_before() {
+        // The same loop of four bands over a few knots of v, two of them inside its
+        // bands: it is cut whole, every triangle inside the loop and their area the
+        // loop's, 2.
+        let mut ring = Vec::new();
+        for band in 0..4 {
+            let v = band as f64;
+            if band % 2 == 0 {
+                ring.extend([[0.0, v], [1.0, v]]);
+            } else {
+                ring.extend([[1.0, v], [0.0, v]]);
+            }
+        }
+        check(&[ring], &[0.0, 1.0], &[0.0, 0.5, 2.5, 4.0], 2.0);
+    }
 
     // How a triangle of a face's cells can be wrong, and the one thing that looks
     // wrong and is not.

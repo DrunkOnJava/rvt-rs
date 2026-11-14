@@ -49,9 +49,10 @@ pub enum IfcEntity {
         #[serde(default)]
         predefined_type: Option<String>,
         /// Index into `IfcModel.building_storeys` — which storey
-        /// contains this element. `None` means the writer should
-        /// default it to the first storey (common when the element's
-        /// `level_id` wasn't resolved yet).
+        /// contains this element. `None`, or an index past the storeys,
+        /// leaves it in no storey: the writer places it and contains it in
+        /// the building (RE-27, #267), rather than in a storey it was never
+        /// bound to.
         #[serde(default)]
         storey_index: Option<usize>,
         /// Index into `IfcModel.materials` — which material this
@@ -314,8 +315,8 @@ pub enum IfcEntity {
     },
     /// A pocket of the edited elevation profile of the wall at `host` against
     /// the profile's convex hull: the opening Revit's export writes for it
-    /// (#1607, RE-380), tagged with the highest ElementId of the profile's
-    /// lines it follows. Placed as a [`IfcEntity::WallProfileOpening`] is. It
+    /// (#1607, RE-380), tagged with the ElementId of the first of the
+    /// profile's lines it follows, walking the outline counter-clockwise. Placed as a [`IfcEntity::WallProfileOpening`] is. It
     /// is not written as it stands: the pass that makes the profile's cut in the
     /// wall's body turns it into a [`IfcEntity::WallProfileOpening`] once it
     /// has, so that the openings a wall carries are Revit's.
@@ -1051,6 +1052,8 @@ pub enum ForgeUnit {
     Kilometers,
     Inches,
     Feet,
+    /// US survey feet: 1200/3937 m.
+    UsSurveyFeet,
     Yards,
     Miles,
 
@@ -1082,9 +1085,14 @@ pub enum ForgeUnit {
     // ---- Mass ----
     Kilograms,
     Grams,
+    /// Metric tonnes.
+    Tonnes,
     Pounds,
+    /// US (short) tons.
+    UsTons,
 
     // ---- Time ----
+    Milliseconds,
     Seconds,
     Minutes,
     Hours,
@@ -1193,10 +1201,15 @@ impl ForgeUnit {
             "millimeters" | "mm" => ForgeUnit::Millimeters,
             "centimeters" | "cm" => ForgeUnit::Centimeters,
             "decimeters" | "dm" => ForgeUnit::Decimeters,
-            "meters" | "m" => ForgeUnit::Meters,
+            // Revit's metres-and-centimetres format shows metres.
+            "meters" | "m" | "meterscentimeters" => ForgeUnit::Meters,
             "kilometers" | "km" => ForgeUnit::Kilometers,
-            "inches" | "in" => ForgeUnit::Inches,
-            "feet" | "ft" | "fractionalinches" | "feetandfractionalinches" => ForgeUnit::Feet,
+            // Fractional inches are inches; feet and fractional inches
+            // (`feetFractionalInches`, Revit's default imperial length)
+            // are feet.
+            "inches" | "in" | "fractionalinches" => ForgeUnit::Inches,
+            "feet" | "ft" | "feetfractionalinches" | "feetandfractionalinches" => ForgeUnit::Feet,
+            "ussurveyfeet" => ForgeUnit::UsSurveyFeet,
             "yards" | "yd" => ForgeUnit::Yards,
             "miles" | "mi" => ForgeUnit::Miles,
             "squaremillimeters" => ForgeUnit::SquareMillimeters,
@@ -1216,11 +1229,15 @@ impl ForgeUnit {
             "liters" | "litres" => ForgeUnit::Liters,
             "usgallons" | "gallons" => ForgeUnit::UsGallons,
             "radians" | "rad" => ForgeUnit::Radians,
-            "degrees" | "deg" => ForgeUnit::Degrees,
+            // Degrees, minutes and seconds are a format of degrees.
+            "degrees" | "deg" | "degreesminutes" => ForgeUnit::Degrees,
             "grads" | "gradians" => ForgeUnit::Grads,
             "kilograms" | "kg" => ForgeUnit::Kilograms,
             "grams" | "g" => ForgeUnit::Grams,
+            "tonnes" => ForgeUnit::Tonnes,
+            "ustonnesmass" => ForgeUnit::UsTons,
             "pounds" | "lb" | "lbs" | "poundsmass" => ForgeUnit::Pounds,
+            "milliseconds" | "ms" => ForgeUnit::Milliseconds,
             "seconds" | "s" => ForgeUnit::Seconds,
             "minutes" | "min" => ForgeUnit::Minutes,
             "hours" | "hr" | "h" => ForgeUnit::Hours,
@@ -1272,6 +1289,12 @@ impl ForgeUnit {
                 unit_type: Length,
                 derived_name: "FOOT",
                 factor_to_si: 0.3048,
+                si_base_name: "METRE",
+            }),
+            ForgeUnit::UsSurveyFeet => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Length,
+                derived_name: "US SURVEY FOOT",
+                factor_to_si: 1200.0 / 3937.0,
                 si_base_name: "METRE",
             }),
             ForgeUnit::Yards => Some(IfcUnitEmission::ConversionBased {
@@ -1397,23 +1420,41 @@ impl ForgeUnit {
                 si_base_name: "RADIAN",
             }),
             // Mass
+            // IFC's SI mass unit is the gram, with a prefix: a kilogram is
+            // KILO GRAM, as the IFC's own unit assignment writes it.
             ForgeUnit::Kilograms => Some(IfcUnitEmission::Si {
                 unit_type: Mass,
-                prefix: None,
+                prefix: Some("KILO"),
                 name: "GRAM",
             }),
             ForgeUnit::Grams => Some(IfcUnitEmission::Si {
                 unit_type: Mass,
-                prefix: Some("MILLI"),
+                prefix: None,
+                name: "GRAM",
+            }),
+            ForgeUnit::Tonnes => Some(IfcUnitEmission::Si {
+                unit_type: Mass,
+                prefix: Some("MEGA"),
                 name: "GRAM",
             }),
             ForgeUnit::Pounds => Some(IfcUnitEmission::ConversionBased {
                 unit_type: Mass,
                 derived_name: "POUND",
-                factor_to_si: 0.453_592_37,
+                factor_to_si: 453.592_37,
+                si_base_name: "GRAM",
+            }),
+            ForgeUnit::UsTons => Some(IfcUnitEmission::ConversionBased {
+                unit_type: Mass,
+                derived_name: "SHORT TON",
+                factor_to_si: 907_184.74,
                 si_base_name: "GRAM",
             }),
             // Time
+            ForgeUnit::Milliseconds => Some(IfcUnitEmission::Si {
+                unit_type: Time,
+                prefix: Some("MILLI"),
+                name: "SECOND",
+            }),
             ForgeUnit::Seconds => Some(IfcUnitEmission::Si {
                 unit_type: Time,
                 prefix: None,

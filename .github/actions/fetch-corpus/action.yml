@@ -2,7 +2,11 @@ name: Fetch LFS corpus (pinned, cached)
 description: >-
   Check out an external corpus repository with Git LFS at the commit this
   repository pins for it, restored from the Actions cache when that commit was
-  fetched before, and check that the tree is that commit.
+  fetched before, and check that the tree is that commit. The cache is saved
+  here, as soon as the tree is checked, and never by the job's post step: a
+  step that runs after this one (a measured binary run with the directory, a
+  scorer) can change the tree, and the post step would have saved the change
+  for every later run.
 # C8: the corpora used to be fetched at their upstream HEAD, so CI could change
 # colour with no commit here (six phi-ag commits were in the cache). Each is
 # pinned below; moving one is an edit of its commit in this file, and the pull
@@ -33,13 +37,15 @@ runs:
           *) echo "::error::no pinned commit for ${REPO} in .github/actions/fetch-corpus"; exit 1 ;;
         esac
         echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+    # `corpus-v2-`: the entries of `corpus-` were saved by the job's post step,
+    # after whatever the job had run with the directory (#1881).
     - name: Restore corpus from cache
       id: cache
       if: inputs.cache == 'true'
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ inputs.path }}
-        key: corpus-${{ inputs.repository }}-${{ steps.pin.outputs.sha }}
+        key: corpus-v2-${{ inputs.repository }}-${{ steps.pin.outputs.sha }}
     - name: Check out corpus (cache miss)
       if: steps.cache.outputs.cache-hit != 'true'
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,3 +67,9 @@ runs:
           exit 1
         fi
         echo "${DIR}: ${SHA}"
+    - name: Save the corpus in the cache
+      if: inputs.cache == 'true' && steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}

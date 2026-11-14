@@ -30,12 +30,12 @@
 //! ```
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document as nd;
 use rvt::research::partition_schema_mvp::{
     TYPE_NAME_FIELD, pipe_body_from_fields, recover_partition_schema_mvp,
 };
 use rvt::walker::{InstanceField, WalkerLimits};
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 fn main() {
@@ -98,8 +98,8 @@ fn print_native(rf: &mut RevitFile) {
         releases: nd::NATIVE_RELEASES,
         ..nd::Options::default()
     };
-    let numbers = |value: Option<&Value>| -> Option<Vec<f64>> {
-        value?.as_array()?.iter().map(Value::as_f64).collect()
+    let numbers = |value: Option<&Fv>| -> Option<Vec<f64>> {
+        value?.as_array()?.iter().map(Fv::as_f64).collect()
     };
     let mut lines = BTreeMap::new();
     nd::extract_graphs(rf, &options, |record| {
@@ -124,10 +124,7 @@ fn print_native(rf: &mut RevitFile) {
             numbers(line.fields.get("m_origin")),
             numbers(line.fields.get("m_dirVec")),
             numbers(line.fields.get("m_endParams")),
-            design
-                .fields
-                .get("m_dOuterDiameter")
-                .and_then(Value::as_f64),
+            design.fields.get("m_dOuterDiameter").and_then(Fv::as_f64),
         ) else {
             return Ok(());
         };

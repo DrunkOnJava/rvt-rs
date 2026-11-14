@@ -66,6 +66,10 @@
 # tools/re/native_levels_vs_ifc.py (RE-281:
 # counts, the same restricted alphabet), the totals and per property counts of
 # its property set census (standard Pset_ and Qto_ names only; RE-281),
+# the `history base:` count lines of tools/re/history_base_vs_ifc.py (RE-459: how
+# many of Revit's project, building, site and storey GlobalIds are the GUID in the
+# header of Global/History with an id XORed in, as numbers beside fixed words and an
+# IFC entity name, never a GlobalId or a name),
 # the `door axes:` count lines of tools/re/door_axes_vs_ifc.py (RE-347: how many
 # doors and windows have rvt-rs's local axes the same as Revit's, a half turn or
 # a quarter turn from them, and how many placed by the rule differ, as numbers
@@ -122,6 +126,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # tools/re/history_base_vs_ifc.py (RE-459, #878): how many project, building,
+      # site and storey GlobalIds are the header GUID of Global/History with an id
+      # XORed in, as counts beside fixed words and IFC entity names, never a
+      # GlobalId or a name; its `list` lines are dropped.
+      grep -E "^history base: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
       grep -E '^category census[A-Za-z ]*: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^re363 [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^door flips: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" | grep -v -E '^door flips: field ' || true
@@ -153,12 +162,19 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^census stages: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^previous lines: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # probe_1842_level_storeys (#1842): the release and Level counts, no names.
+      grep -E '^levels release=[0-9]+ recovered=[0-9]+ building_story_true=[0-9]+ false=[0-9]+ unread=[0-9]+ false_below_first_storey=[0-9]+ false_above=[0-9]+ false_at_a_storey_elevation=[0-9]+$' "$f" || true
       # probe_1335_projected_graphs (#1335): counts, verdict words, schema class
       # names (a class name is the schema's, never the model's) and the field
       # names of the readers' lists, as numbers beside fixed words. Its `file`
       # line names the model's file and its `native:` line may carry an error
       # with an ElementId; both are dropped, and `exit N` stays.
       grep -E '^(global-catalog [a-z-]+|compared records [0-9]+ decodes [0-9]+ full-ok [0-9]+ full-refused [0-9]+ mismatches [0-9]+ budget-stopped (true|false)|keep [A-Za-z0-9_,]* compared [0-9]+ mismatches [0-9]+|refused [A-Za-z0-9_]* [0-9]+|binding-context family-categories [0-9]+ symbol-families [0-9]+ same (true|false) ingest-refusals [0-9]+ same-refusals (true|false)|wall-facts compared [0-9]+ same (true|false)|plan-cache compared [0-9]+ mismatches [0-9]+|plan-cache limited compared [0-9]+ mismatches [0-9]+|plan-cache size peak-entries [0-9]+ peak-cost [0-9]+ clears [0-9]+|mismatch [a-z-]+ [A-Za-z0-9_]*)$' "$f" | sed 's/^/projected graphs: /' || true
+      # probe_1854_global_id_census (#1854): per class, counts of GlobalIds, and
+      # the number a file writes twice; never a GlobalId or a name.
+      grep -E '^file (left|right) entities=[0-9]+ duplicates=[0-9]+$' "$f" || true
+      grep -E '^class IFC[A-Z0-9]+ both=[0-9]+ left_only=[0-9]+ right_only=[0-9]+$' "$f" || true
+      grep -E '^projects shared=[0-9]+( IFC[A-Z0-9]+=[0-9]+)*$' "$f" || true
       grep -E '^exit [0-9]+$' "$f" | sed 's/^/probe: /' || true
       grep -E '^void rule: [A-Za-z0-9 ,]+$' "$f" || true
     done

@@ -19,12 +19,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_compound_structure as pcs;
 use rvt::walker::iter_elements;
-use serde_json::Value;
 
-fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
+fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
     let items = value?.as_array()?;
     Some([
         items.first()?.as_f64()?,
@@ -75,13 +75,13 @@ fn main() -> anyhow::Result<()> {
         let (Some(o), Some(d), Some(params)) = (
             triple(curve.fields.get("m_origin")),
             triple(curve.fields.get("m_dirVec")),
-            curve.fields.get("m_endParams").and_then(Value::as_array),
+            curve.fields.get("m_endParams").and_then(Fv::as_array),
         ) else {
             return Ok(());
         };
         let (Some(a), Some(b)) = (
-            params.first().and_then(Value::as_f64),
-            params.get(1).and_then(Value::as_f64),
+            params.first().and_then(Fv::as_f64),
+            params.get(1).and_then(Fv::as_f64),
         ) else {
             return Ok(());
         };
@@ -90,10 +90,8 @@ fn main() -> anyhow::Result<()> {
             (
                 [o[0] + d[0] * a, o[1] + d[1] * a],
                 [o[0] + d[0] * b, o[1] + d[1] * b],
-                root.fields.get("m_isFlipped").and_then(Value::as_bool),
-                root.fields
-                    .get("m_wallCrossSection")
-                    .and_then(Value::as_i64),
+                root.fields.get("m_isFlipped").and_then(Fv::as_bool),
+                root.fields.get("m_wallCrossSection").and_then(Fv::as_i64),
             ),
         );
         Ok(())

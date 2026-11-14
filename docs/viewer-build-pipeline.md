@@ -5,10 +5,13 @@ The Rust-side viewer data model is complete (see
 the WASM + JavaScript + deployment work so any contributor picking
 up the frontend work has a concrete recipe.
 
-VW1-01 through VW1-24 have shipped; the viewer is live at
-<https://drunkonjava.github.io/rvt-rs/> and the workflow below is
-`.github/workflows/deploy-viewer.yml` as built, not as proposed.
-Read the recipe as the reason each piece is shaped the way it is.
+VW1-01 through VW1-24 have shipped, except VW1-20's chunked scene
+graph (see VW1-20 below); the viewer is live at
+<https://drunkonjava.github.io/rvt-rs/> and the workflow below is an
+early sketch of `.github/workflows/deploy-viewer.yml` as built, not as
+proposed: the file runs four jobs today (`build`, `tests`, `measure`,
+`deploy`), builds on Node 24 and pins the v5 Pages actions. Read the
+recipe as the reason each piece is shaped the way it is.
 Four later changes are not reflected in the snippets. The bindings
 moved from `src/wasm.rs`, behind a `wasm` feature, to their own crate,
 [`rvt-wasm`](../rvt-wasm/src/lib.rs), built with
@@ -107,11 +110,9 @@ wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
 
 ### Makefile target
 
-```make
-.PHONY: wasm
-wasm:
-	wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
-```
+There is no `Makefile` in the repository, so `make wasm` has nothing to
+run; the shortcut is the command above, from the repo root as
+[`docs/install.md`](install.md) gives it.
 
 ### CI check (VW1-01)
 
@@ -208,10 +209,12 @@ Create a `viewer/` subdirectory with:
 ```
 viewer/
 ├── index.html
-├── main.ts
-├── demos/              # content from docs/viewer-demos.json
-│   ├── rac_basic_sample_family_2024.rfa
-│   └── ...
+├── src/
+│   └── main.ts
+├── public/
+│   └── demos/          # content from docs/viewer-demos.json
+│       ├── rac_basic_sample_family_2024.rfa
+│       └── ...
 ├── pkg/                # wasm-pack output (git-ignored, built in CI)
 └── vite.config.ts      # or any JS build tool
 ```
@@ -235,7 +238,6 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: cargo install wasm-pack
       - run: wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
-             --out-dir viewer/pkg
       - uses: pnpm/action-setup@v6
         with: { package_json_file: viewer/package.json }
       - uses: actions/setup-node@v4
@@ -323,7 +325,8 @@ Natively, `rvt-ifc --mode geometry` on Core Interior went from
 26.07 s / 2641.4 MiB peak RSS to **1.69 s / 490.1 MiB** (Apple
 Silicon, `/usr/bin/time -l`, best of three); in the browser the same
 33.7 MB file decodes in **about 3 s**, measured on the deployed
-site. Output is byte-identical. The viewer's loading-card estimate
+site. Output is byte-identical once the writer's two wall-clock stamps
+are normalised. The viewer's loading-card estimate
 opened with that measurement — `DECODE_BYTES_PER_SECOND` is 11 MB/s
 since #271 — and the bar swept, because the decoder reported no
 progress. Since #1195 it does: the card shows the decoder's own stages

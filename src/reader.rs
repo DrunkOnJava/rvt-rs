@@ -40,6 +40,26 @@ pub const DEFAULT_MAX_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// multi-GB allocation.
 pub const DEFAULT_MAX_STREAM_BYTES: u64 = 256 * 1024 * 1024;
 
+/// The most inflated bytes the handle's partition memo holds at once
+/// ([`RevitFile::inflated_partition`]). Each stream is capped, at 1 GiB by
+/// default, but not their sum, so a crafted file of many streams held every
+/// one (#1833). No real file comes near 16 GiB: the 1.13 GB client model
+/// peaks at 5.1 GB in all (docs/viewer-api.md). Past it the memo is let go
+/// whole before the next stream joins it; a reader keeps the `Arc` it was
+/// given, and a later ask inflates again, so no output changes (Griffin,
+/// 2026-11-12, "Bound it at 16 GiB").
+const INFLATED_MEMO_BUDGET_BYTES: u64 = 16 << 30;
+
+/// The most bytes the memo of [`RevitFile::header_hits`] holds at once. A hit
+/// is a `usize`, and a partition carrying the ten-byte element-data header
+/// every ten bytes is held again at 0.8 of its size, for each (stream,
+/// header), for the handle's life (#1833). RE-144 counts the header's places
+/// on the reference models at 50,951 (Core Interior, every partition), 40,149
+/// (RE1 Architecture) and 5,277 (Einhoven): 0.4 MiB at most, and this is 165
+/// times that. Past it the memo is dropped whole; a reader keeps the `Arc` it
+/// was given and a later ask searches again, so no output changes.
+const HEADER_HITS_BUDGET_BYTES: usize = 64 * 1024 * 1024;
+
 /// Limits applied when opening a Revit file. Protects against
 /// pathological or hostile input that would otherwise force
 /// unbounded memory allocation.
@@ -139,9 +159,12 @@ impl std::fmt::Display for UnreadStream {
                 "inflates past the limit on one stream's inflated total"
             }
         };
+        // The name is text from the file and is quoted, as the phase error's is: a
+        // name with a newline or a control character cannot forge a line in a
+        // log (#1884).
         write!(
             f,
-            "stream {} ({} bytes stored) {what} of {} bytes, so what it holds is missing",
+            "stream {:?} ({} bytes stored) {what} of {} bytes, so what it holds is missing",
             self.name, self.stored_bytes, self.limit
         )
     }
@@ -163,6 +186,13 @@ pub struct RevitFile {
     /// the handle — `RevitFile` never writes — so one inflate serves
     /// all of them.
     inflated: std::collections::HashMap<String, Arc<compression::InflatedStream>>,
+    /// The inflated bytes `inflated` holds, kept under
+    /// [`INFLATED_MEMO_BUDGET_BYTES`].
+    inflated_bytes: u64,
+    /// Every `Partitions/*` stream inflated so far, held or not: the
+    /// progress count, which a count of `inflated`'s keys would lower each
+    /// time the memo is let go.
+    partitions_inflated: BTreeSet<String>,
     /// Memoised `Partitions/NN` string-record extraction. The UTF-16
     /// decode over the whole partition is the single most expensive
     /// step after inflate, and unit recovery, storey names and the
@@ -219,6 +249,9 @@ pub struct RevitFile {
     /// and header: a dozen element-data readers each searched every partition
     /// for the release's header.
     header_hits: std::collections::HashMap<(String, Vec<u8>), Arc<Vec<usize>>>,
+    /// The bytes `header_hits` holds, one `usize` a hit, kept under
+    /// [`HEADER_HITS_BUDGET_BYTES`].
+    header_hits_bytes: usize,
     /// Memoised native extraction preamble: each native consumer read
     /// the schema, the element index and the increments again.
     // Tracker: B82.
@@ -234,9 +267,11 @@ pub struct RevitFile {
         crate::native_document::DefinitionKey,
         Arc<crate::native_document::DefinitionPass>,
     )>,
-    /// Memoised index of every native record's partitions (#1032): each
-    /// native pass walked every partition again to find its records.
-    native_record_index: Option<Arc<crate::native_document::RecordIndex>>,
+    /// Memoised index of every native record's partitions, one for each
+    /// channel a pass reads alone (#1032): each native pass walked every
+    /// partition again to find its records. 102 holds the elements' records,
+    /// 103 their saved graphics (#1694).
+    native_record_indexes: BTreeMap<u64, Arc<crate::native_document::RecordIndex>>,
     /// How many of its two end faces the Revit solid of each curtain mullion
     /// keeps, and how many of those ends have a partner, by ElementId, where the
     /// boxes of its curtain wall's mullions say (RE-268, RE-439), set when the
@@ -251,6 +286,10 @@ pub struct RevitFile {
     /// read and parsed the schema again for a few class tags.
     schema_classes_memo: Option<Arc<crate::formats::SchemaClasses>>,
     layout_release_memo: Option<u32>,
+    /// Memoised display units of the project's `UnitsElem` (RE-445): the
+    /// export's model and its diagnostics both ask for them.
+    project_units_memo:
+        Option<Arc<Result<Option<crate::native_project_units::ProjectUnits>, String>>>,
     /// Memoised material names (RE-58, RE-203), by release and the hash of
     /// the declared ids they were read for: half a dozen material steps of
     /// an export each asked for them.
@@ -265,6 +304,9 @@ pub struct RevitFile {
     category_style_materials: Option<Arc<BTreeMap<i64, BTreeSet<u32>>>>,
     /// Streams a resource limit kept from being read whole (#1075).
     unread_streams: Vec<UnreadStream>,
+    /// The readers that stopped at a work budget under this handle's walk
+    /// or exports, with how often (#1833, [`crate::budget`]).
+    budget_stops: crate::budget::Stops,
     /// Doors and windows written as such though their type's record was not
     /// read (#1247).
     unread_type_doors_windows: BTreeSet<u32>,
@@ -279,6 +321,10 @@ pub struct RevitFile {
     /// the same records.
     pub(crate) wall_cut_steps_memo: BTreeMap<u64, Vec<crate::native_wall_cuts::WallCutStep>>,
     pub(crate) wall_cut_steps_asked: BTreeSet<u64>,
+    /// Of the walls in `wall_cut_steps_asked`, those whose record was read as a
+    /// wall's and holds no base join (#1046): the same walk of the records
+    /// gives it (`research::native_wall_cuts::walls_with_no_base_join`).
+    pub(crate) wall_no_base_join_memo: BTreeSet<u64>,
     /// Family instances written as spaces that were left out because their
     /// family draws no model form (RE-312, #1262), by class.
     bodiless_family_spaces: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
@@ -495,6 +541,8 @@ impl RevitFile {
             cfb,
             limits,
             inflated: std::collections::HashMap::new(),
+            inflated_bytes: 0,
+            partitions_inflated: BTreeSet::new(),
             partition_strings: None,
             second_prologue_ids: None,
             element_names: None,
@@ -510,22 +558,26 @@ impl RevitFile {
             partition_progress: None,
             data_objects: std::collections::HashMap::new(),
             header_hits: std::collections::HashMap::new(),
+            header_hits_bytes: 0,
             native_preamble: None,
             native_preamble_deferred: 0,
             native_definitions: None,
-            native_record_index: None,
+            native_record_indexes: BTreeMap::new(),
             mullion_kept_ends: None,
             mullion_axes: None,
             schema_classes_memo: None,
             layout_release_memo: None,
+            project_units_memo: None,
             material_names: std::collections::HashMap::new(),
             material_appearances: std::collections::HashMap::new(),
             category_style_materials: None,
             unread_streams: Vec::new(),
+            budget_stops: crate::budget::Stops::new(),
             unread_type_doors_windows: BTreeSet::new(),
             disagreeing_type_texts: BTreeSet::new(),
             wall_cut_steps_memo: BTreeMap::new(),
             wall_cut_steps_asked: BTreeSet::new(),
+            wall_no_base_join_memo: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
             bodiless_family_space_error: None,
             invisible_type_instances: BTreeMap::new(),
@@ -540,6 +592,22 @@ impl RevitFile {
     /// anything produced from this handle is missing what they hold.
     pub fn unread_streams(&self) -> &[UnreadStream] {
         &self.unread_streams
+    }
+
+    /// The readers that stopped at a work budget since this handle was
+    /// opened, with how often (#1833): what was past each budget is missing
+    /// from anything produced from this handle, as an unread stream's
+    /// content is.
+    pub(crate) fn budget_stops(&self) -> &crate::budget::Stops {
+        &self.budget_stops
+    }
+
+    /// Keep the stops collected under work done for this handle
+    /// ([`crate::budget::Notes`]).
+    pub(crate) fn keep_budget_stops(&mut self, stops: crate::budget::Stops) {
+        for (what, times) in stops {
+            *self.budget_stops.entry(what).or_insert(0) += times;
+        }
     }
 
     /// The doors and windows this handle's export wrote as doors and
@@ -848,6 +916,17 @@ impl RevitFile {
         self.limits
     }
 
+    /// Drop every inflated partition the handle holds. A later
+    /// [`Self::inflated_partition`] inflates its stream again; a reader that
+    /// holds the `Arc` it was given keeps it. The saved-graphics pass calls this
+    /// once the readers that share the copies are done, so that its own walks
+    /// do not hold them at the peak (#1694), and `rvt-dump` after each stream
+    /// it writes (#1885).
+    pub fn release_inflated_partitions(&mut self) {
+        self.inflated.clear();
+        self.inflated_bytes = 0;
+    }
+
     /// Read and inflate every gzip member of `name`, memoised.
     ///
     /// Repeat calls return the same shared buffer instead of reading
@@ -886,14 +965,19 @@ impl RevitFile {
             });
         }
         let inflated = Arc::new(inflated);
+        let added = inflated.bytes().len() as u64;
+        if self.inflated_bytes.saturating_add(added) > INFLATED_MEMO_BUDGET_BYTES {
+            self.inflated.clear();
+            self.inflated_bytes = 0;
+        }
+        self.inflated_bytes = self.inflated_bytes.saturating_add(added);
         self.inflated
             .insert(name.to_string(), Arc::clone(&inflated));
+        if name.starts_with("Partitions/") {
+            self.partitions_inflated.insert(name.to_string());
+        }
         if let Some((control, total)) = &self.partition_progress {
-            let done = self
-                .inflated
-                .keys()
-                .filter(|key| key.starts_with("Partitions/"))
-                .count() as u64;
+            let done = self.partitions_inflated.len() as u64;
             control.report(
                 crate::control::Stage::PartitionScan,
                 done.min(*total),
@@ -967,6 +1051,12 @@ impl RevitFile {
         let inflated = self.inflated_partition(name)?;
         let hits =
             Arc::new(memchr::memmem::find_iter(inflated.bytes(), header).collect::<Vec<_>>());
+        let added = hits.len().saturating_mul(size_of::<usize>());
+        if self.header_hits_bytes.saturating_add(added) > HEADER_HITS_BUDGET_BYTES {
+            self.header_hits.clear();
+            self.header_hits_bytes = 0;
+        }
+        self.header_hits_bytes = self.header_hits_bytes.saturating_add(added);
         self.header_hits.insert(key, Arc::clone(&hits));
         Ok(hits)
     }
@@ -1010,8 +1100,19 @@ impl RevitFile {
     /// Drop the kept parameter-definition pass, whose registry an MEP model
     /// makes tens of MiB: the export does once it has made its last
     /// extraction, so a file read once keeps nothing.
+    #[track_caller]
     pub(crate) fn forget_native_definitions(&mut self) {
-        self.native_definitions = None;
+        if self.native_definitions.take().is_some() {
+            crate::native_document::note_event(
+                "definitions dropped",
+                std::panic::Location::caller(),
+            );
+        }
+    }
+
+    /// Whether a parameter-definition pass is held, under any key.
+    pub(crate) fn holds_native_definitions(&self) -> bool {
+        self.native_definitions.is_some()
     }
 
     /// Keep a parameter-definition pass for later extractions under `key`.
@@ -1023,10 +1124,20 @@ impl RevitFile {
         self.native_definitions = Some((key, pass));
     }
 
-    /// Where every native record is (`crate::native_document::RecordIndex`),
-    /// once a native pass has recorded it (#1032).
+    /// Where every native element record is
+    /// (`crate::native_document::RecordIndex`), once a native pass has
+    /// recorded it (#1032).
     pub(crate) fn native_record_index(&self) -> Option<Arc<crate::native_document::RecordIndex>> {
-        self.native_record_index.clone()
+        self.native_record_index_of(102)
+    }
+
+    /// Where every native record of `channel` is, once a native pass that
+    /// read that channel alone has recorded it (#1032, #1694).
+    pub(crate) fn native_record_index_of(
+        &self,
+        channel: u64,
+    ) -> Option<Arc<crate::native_document::RecordIndex>> {
+        self.native_record_indexes.get(&channel).cloned()
     }
 
     /// Keep the end faces each curtain mullion's solid keeps (RE-268, RE-404).
@@ -1057,12 +1168,13 @@ impl RevitFile {
         self.mullion_axes.clone()
     }
 
-    /// Keep the record index a native pass recorded (#1032).
+    /// Keep the record index of `channel` a native pass recorded (#1032).
     pub(crate) fn remember_native_record_index(
         &mut self,
+        channel: u64,
         index: crate::native_document::RecordIndex,
     ) {
-        self.native_record_index = Some(Arc::new(index));
+        self.native_record_indexes.insert(channel, Arc::new(index));
     }
 
     /// ElementIds `research::partition_element_records::assign_second_prologue_ids`
@@ -1192,6 +1304,34 @@ impl RevitFile {
             .as_ref()
             .filter(|(score, held, _)| *score == min_score && *held == limits)
             .map(|(_, _, elements)| Arc::clone(elements))
+    }
+
+    /// The last production walk's element-record categories, without another
+    /// scan. Absent or conflicting categories stay unknown (RE-443).
+    pub(crate) fn walked_builtin_categories(&self) -> BTreeMap<u32, Option<i64>> {
+        let mut categories = BTreeMap::new();
+        if let Some((_, _, elements)) = &self.walk {
+            for element in elements.iter() {
+                let Some(id) = element.id else { continue };
+                let category = element.fields.iter().find_map(|(name, value)| match value {
+                    crate::walker::InstanceField::Integer { value, .. }
+                        if name == "m_builtinCategory" =>
+                    {
+                        Some(*value)
+                    }
+                    _ => None,
+                });
+                categories
+                    .entry(id)
+                    .and_modify(|held| {
+                        if *held != category {
+                            *held = None;
+                        }
+                    })
+                    .or_insert(category);
+            }
+        }
+        categories
     }
 
     /// Keep a production walk's elements for later walks with the same
@@ -1449,6 +1589,19 @@ impl RevitFile {
             (number(a), a).cmp(&(number(b), b))
         });
         names
+    }
+
+    /// The project's display unit for every spec, from its `UnitsElem`,
+    /// memoised ([`crate::native_project_units::resolve`], RE-445).
+    pub(crate) fn project_units(
+        &mut self,
+    ) -> Arc<Result<Option<crate::native_project_units::ProjectUnits>, String>> {
+        if let Some(cached) = &self.project_units_memo {
+            return Arc::clone(cached);
+        }
+        let units = Arc::new(crate::native_project_units::resolve(self));
+        self.project_units_memo = Some(Arc::clone(&units));
+        units
     }
 
     /// String records extracted from the `Partitions/NN` stream, memoised.

@@ -361,6 +361,15 @@ header .export-hint[hidden] {
 .tree-node.tree-category {
   font-weight: var(--sx-fw-semibold);
 }
+/* The row at the end of a group that builds its next rows (#1887): an action, so its label reads as one. */
+.tree-node.tree-more {
+  font-weight: var(--sx-fw-regular);
+  color: var(--sx-color-dimmed);
+}
+.tree-node.tree-more .tree-label {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 /* Rows open and close from a chevron, drawn as the diagnostics disclosure's. */
 .tree-caret {
   display: inline-flex;

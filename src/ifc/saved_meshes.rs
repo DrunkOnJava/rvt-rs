@@ -26,12 +26,14 @@
 //! are 675 of 681, sanitary terminals 68 of 94, flow fittings 71 of 89, flow
 //! terminals 30 of 35 and walls 14 of 18. The cost is reading the saved
 //! graphics of every boxed element: against 0.17.0 the BIM4LCA office as built
-//! goes from 25.4 s and 914 MiB to 33.0 s and 1,432 MiB, with its IFC 87 MB
-//! against 68, Core Interior from 4.7 s and 305 MiB to 5.3 s and 437 MiB and
-//! Snowdon Towers Architectural from 17.6 s and 1,073 MiB to 28.0 s and 2,086
-//! MiB, with its IFC 189 MB against 37 (Measure run 42956917709, the median of
-//! three exports on one runner per file); #1690 stopped holding every owner's
-//! graph at once, and what is left is #1694.
+//! goes from 21.2 s and 913 MiB to 24.3 s and 944 MiB, with its IFC 114 MB
+//! against 68, Core Interior from 4.2 s and 305 MiB to 4.4 s and 327 MiB and
+//! Snowdon Towers Architectural from 28.3 s and 1,073 MiB to 39.2 s and 1,114
+//! MiB, with its IFC 258 MB against 37 (Measure run 43152271314, the median of
+//! three exports on one runner per file; the IFC sizes are 0.17.0's from
+//! 0.18.0's notes and run 43152139337's); #1690 and #1694 stopped holding every
+//! owner's graph at once and made a graph's fields a sixth of their size, and
+//! the inflated partitions the handle keeps are now what is left of the peak.
 //!
 //! A roof drawn as the level block of its sketch outline at its record box's
 //! full height is replaced too (#1612): the record box holds the roof's
@@ -68,13 +70,17 @@ use super::mesh_volume::{
     beam_quantities, box_plan_width, closed_mesh_volume, column_quantities, mullion_surface_area,
     partner_ends, partners_the_boxes_missed, prism_along,
 };
-use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
+use super::mesh_wall_quantities::{WallFrame, WallMeshQuantities, wall_mesh_quantities};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// `BodySource` of a body drawn from the element's saved graphics.
 pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
+
+/// RE-443: only duct fittings meet the measured native-reference body bound.
+const COLLAPSED_RULED_CATEGORY_REFUSAL: &str =
+    "collapsed ruled profile outside the measured duct fittings";
 
 /// How far above its base a wall's saved mesh must start, and below its top,
 /// for [`attach_scoped_with_control`] to draw a wall that embeds a curtain
@@ -85,6 +91,12 @@ pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
 /// it to within 0.001 ft.
 const EMBED_RAISE_MIN_FEET: f64 = 0.5;
 
+/// The releases whose walls' native records name what embeds in them, and so
+/// the releases a wall that embeds a curtain wall is drawn from its saved mesh
+/// on (RE-340): the walls' records of 2023 name no embed step, so the rule
+/// found none there and the scope's 2023 was never exercised (#1945).
+const EMBED_HOST_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2024..=2027;
+
 /// What [`attach`] did.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 #[non_exhaustive]
@@ -94,7 +106,7 @@ pub struct SavedMeshReport {
     /// Of those, elements now drawn from their saved mesh.
     pub replaced: usize,
     /// Of those, elements keeping their box because part of their saved
-    /// graphics did not decode (RE-224).
+    /// graphics did not decode (RE-224) or is outside the measured category (RE-443).
     pub partial: usize,
     /// Triangles written in all.
     pub triangles: usize,
@@ -105,7 +117,7 @@ pub struct SavedMeshReport {
     /// their base to the top of the curtain wall.
     pub embed_raised: usize,
     /// Of those, walls keeping their body because part of their saved
-    /// graphics did not decode (RE-224).
+    /// graphics did not decode (RE-224) or is outside the measured category (RE-443).
     pub embed_partial: usize,
     /// Why the walls' native records were not read, where they were not: no
     /// wall that embeds a curtain wall is then drawn from its mesh.
@@ -317,6 +329,10 @@ pub fn attach_scoped_with_control(
     control: &crate::control::WalkerControl,
 ) -> anyhow::Result<SavedMeshReport> {
     let mut report = SavedMeshReport::default();
+    // Read the source record's category, never the possibly overridden IFC class.
+    // An attach without a production walk cannot qualify a collapsed body.
+    let categories = rf.walked_builtin_categories();
+
     let mut by_id: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     // A stair or curtain wall is drawn by its parts; its own saved graphics
     // would draw it twice.
@@ -511,6 +527,14 @@ pub fn attach_scoped_with_control(
     let mut column_volumes: Vec<(usize, f64)> = Vec::new();
     // RE-388: what the mesh of each wall gives of its quantities.
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
+    // #1046: what a wall's mesh needs besides itself to be read as a vertical
+    // prism less the openings rvt-rs cuts in it, the wall's own axes and the
+    // boxes of those openings, and whether its base is joined to a roof, floor
+    // or footing, which takes the areas away.
+    let wall_openings = wall_frame_and_openings(model);
+    let wall_ids: BTreeSet<u64> = walls.keys().copied().collect();
+    let no_base_join =
+        crate::native_wall_cuts::walls_with_no_base_join(rf, &wall_ids).unwrap_or_default();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
     // #1645: the candidates the scene held graphics for.
@@ -527,8 +551,38 @@ pub fn attach_scoped_with_control(
             if by_id.contains_key(&element.identity.element_id) {
                 seen.insert(element.identity.element_id);
             }
+            let category = u32::try_from(element.identity.element_id)
+                .ok()
+                .and_then(|id| categories.get(&id).copied().flatten());
+            if element.meshes.has_collapsed_ruled_profile
+                && category != Some(crate::partition_element_records::OST_DUCT_FITTING)
+            {
+                // Preserve an existing decoder refusal for a body already partial.
+                // Complete bodies outside the measured category keep their boxes;
+                // their meshes must not supply quantities or raised wall bodies either.
+                let reason = partial_refusal(&element.meshes)
+                    .unwrap_or_else(|| COLLAPSED_RULED_CATEGORY_REFUSAL.into());
+                if let Some(indices) = by_id.get(&element.identity.element_id) {
+                    report.partial += indices.len();
+                    refusals.extend(indices.iter().map(|index| (*index, reason.clone())));
+                }
+                if let Some(&index) = hosts.get(&element.identity.element_id) {
+                    report.embed_partial += 1;
+                    refusals.push((index, reason));
+                }
+                return Ok(());
+            }
             if let Some([index]) = walls.get(&element.identity.element_id).map(Vec::as_slice) {
-                if let Some(found) = wall_mesh_quantities(&element.meshes.primitives) {
+                let held = wall_openings.get(index);
+                let frame = held.map_or(WallFrame { turn: 0.0 }, |held| held.frame);
+                let boxes: &[[f64; 6]] = held.map_or(&[], |held| held.boxes.as_slice());
+                let found = wall_mesh_quantities(
+                    &element.meshes.primitives,
+                    &frame,
+                    boxes,
+                    !no_base_join.contains(&element.identity.element_id),
+                );
+                if let Some(found) = found {
                     wall_quantities.push((*index, found));
                 }
             }
@@ -1296,12 +1350,120 @@ const WALL_BOX_MESH_TOLERANCE: f64 = 1e-3;
 /// BIM4LCA housing is 0.11 ft.
 const WALL_HEIGHT_AGREE_FEET: f64 = 5e-4;
 
+/// How far, radians, an element's turn may lie off its wall's own axes for its
+/// world box, which is axis aligned, to be that element's extent in the wall's
+/// frame (#1046).
+const OPENING_TURN_TOLERANCE: f64 = 1e-6;
+
+/// A wall's own axes and the world boxes, feet, of the openings rvt-rs cuts in
+/// it, `[min_x, min_y, min_z, max_x, max_y, max_z]` (#1046).
+struct WallOpenings {
+    frame: WallFrame,
+    boxes: Vec<[f64; 6]>,
+}
+
+/// #1046: each wall's frame, by its index in `model.entities`, and the boxes of
+/// the openings written in it: the rectangle of every element the wall hosts,
+/// with the axis across the wall cut to the wall's thickness, placed on that
+/// element's own placement and extruded up its height, as the writer emits it
+/// (#227, RE-84). A wall whose element is not read, and an opening whose turn is
+/// not one of its wall's, is left out, so the wall gets no areas of the mesh for
+/// them.
+fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
+    let mut out: BTreeMap<usize, WallOpenings> = BTreeMap::new();
+    for (index, entity) in model.entities.iter().enumerate() {
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            rotation_radians,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if matches!(ifc_type.as_str(), "IFCWALL" | "IFCWALLSTANDARDCASE") {
+            out.insert(
+                index,
+                WallOpenings {
+                    frame: WallFrame {
+                        turn: rotation_radians.unwrap_or(0.0),
+                    },
+                    boxes: Vec::new(),
+                },
+            );
+        }
+    }
+    for (index, entity) in model.entities.iter().enumerate() {
+        let IfcEntity::BuildingElement {
+            host_element_index: Some(host),
+            location_feet: Some(location),
+            rotation_radians,
+            extrusion: Some(body),
+            solid_shape: None,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        // Only a body of a plain rectangle is the opening the writer emits
+        // from it; a profile or a solid of another shape explains nothing.
+        if body.profile_override.is_some() {
+            continue;
+        }
+        let Some(hosted) = out.get_mut(host) else {
+            continue;
+        };
+        let turn = rotation_radians.unwrap_or(0.0) - hosted.frame.turn;
+        if (2.0 * turn).sin().abs() > OPENING_TURN_TOLERANCE {
+            continue;
+        }
+        let cut = model.opening_cuts.get(&index);
+        let [x_dim, y_dim] = cut.map_or([body.width_feet, body.depth_feet], |cut| {
+            [cut.x_dim_feet, cut.y_dim_feet]
+        });
+        let [cx, cy] = cut.map_or([0.0, 0.0], |cut| cut.centre_feet);
+        // `z_range_feet` is where the opening starts and how high it is (RE-93),
+        // as the writer extrudes it: its top is `start + height`, so the start
+        // is added once, below.
+        let [start, height] = cut
+            .and_then(|cut| cut.z_range_feet)
+            .unwrap_or([0.0, body.height_feet]);
+        let (sin, cos) = rotation_radians.unwrap_or(0.0).sin_cos();
+        let mut x = [f64::INFINITY, f64::NEG_INFINITY];
+        let mut y = [f64::INFINITY, f64::NEG_INFINITY];
+        for side_x in [-1.0, 1.0] {
+            for side_y in [-1.0, 1.0] {
+                let (px, py) = (cx + side_x * x_dim / 2.0, cy + side_y * y_dim / 2.0);
+                let corner = [
+                    location[0] + px * cos - py * sin,
+                    location[1] + px * sin + py * cos,
+                ];
+                x = [x[0].min(corner[0]), x[1].max(corner[0])];
+                y = [y[0].min(corner[1]), y[1].max(corner[1])];
+            }
+        }
+        let world = [
+            x[0],
+            y[0],
+            location[2] + start,
+            x[1],
+            y[1],
+            location[2] + start + height,
+        ];
+        if world.iter().all(|value| value.is_finite()) {
+            hosted.boxes.push(world);
+        }
+    }
+    out
+}
+
 /// Give each wall of `found` (an index into the entities and what the mesh
 /// Revit saved for it gives) the quantities Revit's export writes from its
 /// solid, in the base quantity set it holds, where that holds none of them
-/// (RE-388): `NetVolume`, and of a wall with no more than four vertical faces
-/// `NetSideArea` and, where its two sides agree on it, `GrossSideArea` and, the
-/// wall type's `Width` times it, `GrossVolume`
+/// (RE-388): `NetVolume`, and, of a wall with no more than four vertical faces
+/// or of one whose mesh is a vertical prism less the openings cut in it and
+/// whose base is not attached (#1046), `NetSideArea` and, where its two sides
+/// agree on it, `GrossSideArea` and, the wall type's `Width` times it,
+/// `GrossVolume`
 /// (revit-ifc's `PropertyUtil.CreateWallBaseQuantities`, CLEANROOM.md source 5,
 /// RE-270). A wall with no base quantity set, as a wall Revit's export writes
 /// none for may be, gets none.
@@ -1313,10 +1475,9 @@ const WALL_HEIGHT_AGREE_FEET: f64 = 5e-4;
 /// the wall): the quantities taken from the box are dropped, and the mesh gives
 /// those it can. The footprint stays where the mesh's vertical span is not the
 /// box's height, which says the wall is cut in height and not in plan. A
-/// `Height` is the box's, and is written for a wall of at most four vertical
-/// faces, as its areas are, where the mesh's vertical span confirms it and is
-/// dropped where the span does not (a wall whose lower part a door as wide as
-/// the wall cuts away).
+/// `Height` is the box's, and is written for a wall that gets its areas, where
+/// the mesh's vertical span confirms it and is dropped where the span does not
+/// (a wall whose lower part a door as wide as the wall cuts away).
 fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities)]) {
     if found.is_empty() {
         return;
@@ -1477,13 +1638,20 @@ fn plain_or_stepped(solid_shape: &Option<SolidShape>, property_set: &Option<Prop
 /// hosted in them but the opening their own curtain wall cuts (an
 /// `IfcEntity::WallCutOpening` whose Tag is the curtain wall's: Revit's export
 /// holds that void and the raised strip both). Nothing where the model has no
-/// curtain wall, so a file without one reads no wall record here. An `Err`
+/// curtain wall, so a file without one reads no wall record here, and nothing
+/// on a release outside [`EMBED_HOST_REVIT_VERSIONS`]. An `Err`
 /// names why the walls' native records were not read.
 fn embed_hosts(
     rf: &mut crate::RevitFile,
     model: &IfcModel,
     taken: &BTreeMap<u64, Vec<usize>>,
 ) -> Result<BTreeMap<u64, usize>, String> {
+    if !rf
+        .basic_file_info()
+        .is_ok_and(|info| EMBED_HOST_REVIT_VERSIONS.contains(&info.version))
+    {
+        return Ok(BTreeMap::new());
+    }
     let element_id = |entity: &IfcEntity, wanted: &str| match entity {
         IfcEntity::BuildingElement {
             ifc_type,

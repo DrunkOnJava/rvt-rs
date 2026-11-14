@@ -359,7 +359,9 @@ pub fn roof_extrusion_bottom(top: &[(f64, f64)], thickness: f64) -> Option<Vec<(
 /// is kept only where it reproduces the roof's record box across the plane
 /// to [`ROOF_EXTRUSION_BOX_TOLERANCE_FEET`]; the roof then runs along the
 /// axis over its box. Measured on `11_RoofByExtrusion` (R2025): every one of
-/// the 1,187 vertices of Revit's body within 0.001 ft of the section.
+/// the 1,187 vertices of Revit's body within 0.001 ft of the section. Read
+/// on Revit 2024, 2026 and 2027 as on 2025, held to the same project's 2025
+/// save (RE-458).
 pub(super) fn attach_extrusion_roofs(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -716,7 +718,9 @@ pub fn roof_slopes_from_fields(fields: &[(String, InstanceField)]) -> Vec<RoofSl
 /// of them defining the roof's slope, that edge, its angle and its type's
 /// thickness (RE-56, [`crate::partition_roof_slopes`]). A roof with no
 /// defining edge is flat and gets nothing; one with two or more (a hip or
-/// a gable) gets nothing either, as its surfaces are not built.
+/// a gable) gets every defining edge, and is drawn as its edges'
+/// straight-skeleton roof where that reproduces its record box's height
+/// (RE-199).
 ///
 /// A roof with no defining edge and several slope arrows (RE-307) gets, for
 /// each arrow, the boundary line its tail lies on and its slope, with

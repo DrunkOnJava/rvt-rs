@@ -24,16 +24,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 
 const WORDS: [&str; 6] = ["host", "grid", "wall", "curtain", "panel", "mullion"];
 
-fn element_id(value: &Value) -> Option<i64> {
+fn element_id(value: &Fv) -> Option<i64> {
     value.pointer("/m_id/m_id64")?.as_i64()
 }
 
-fn described(fields: &Value) -> String {
+fn described(fields: &Fv) -> String {
     fields
         .as_object()
         .into_iter()
@@ -43,9 +43,9 @@ fn described(fields: &Value) -> String {
             WORDS.iter().any(|w| lower.contains(w))
         })
         .filter_map(|(name, value)| match value {
-            Value::Number(_) | Value::Bool(_) => Some(format!("{name}={value}")),
-            Value::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
-            Value::Array(items) => Some(format!("{name}=[{}]", items.len())),
+            Fv::U64(_) | Fv::I64(_) | Fv::F64(_) | Fv::Bool(_) => Some(format!("{name}={value}")),
+            Fv::Str(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
+            Fv::Array(items) => Some(format!("{name}=[{}]", items.len())),
             _ => element_id(value).map(|id| format!("{name}=@{id}")),
         })
         .collect::<Vec<_>>()

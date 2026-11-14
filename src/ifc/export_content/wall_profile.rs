@@ -290,9 +290,24 @@ pub(super) fn extend_profile_stubs(
         return;
     }
     let mut openings: HashMap<usize, Vec<usize>> = HashMap::new();
+    // Each wall's pockets: a region one of them equals is that pocket, and is
+    // written as it (`cut_profiles_from_bodies`), so it is not carried on, which
+    // would stop it equalling the pocket and cut it into the body (#1947).
+    let mut pocket_outlines: HashMap<usize, Vec<Vec<(f64, f64)>>> = HashMap::new();
     for (index, entity) in entities.iter().enumerate() {
-        if let IfcEntity::WallProfileOpening { host, .. } = entity {
-            openings.entry(*host).or_default().push(index);
+        match entity {
+            IfcEntity::WallProfileOpening { host, .. } => {
+                openings.entry(*host).or_default().push(index);
+            }
+            IfcEntity::WallProfilePocket { host, .. } => {
+                if let Some(outline) = outline_of(entity) {
+                    pocket_outlines
+                        .entry(*host)
+                        .or_default()
+                        .push(outline.to_vec());
+                }
+            }
+            _ => {}
         }
     }
     for wall in pending {
@@ -306,6 +321,14 @@ pub(super) fn extend_profile_stubs(
         let mut kinds: Vec<Kind> = Vec::new();
         let mut refusal: Option<&'static str> = None;
         for &index in indices {
+            let equals_a_pocket = outline_of(&entities[index]).is_some_and(|outline| {
+                pocket_outlines.get(&wall.index).is_some_and(|pockets| {
+                    pockets.iter().any(|pocket| same_outline(outline, pocket))
+                })
+            });
+            if equals_a_pocket {
+                continue;
+            }
             let IfcEntity::WallProfileOpening {
                 outline_feet,
                 axis_turn_radians,
@@ -628,6 +651,17 @@ fn cut_prism(entity: &IfcEntity) -> Option<SolidShape> {
     })
 }
 
+/// Most regions of one wall's profile that are cut in its body (#1845). Each is
+/// one level of a chain of boolean results, down its first operand, and a
+/// chain's depth is the depth of every recursion over it: on a thread of 1 MiB
+/// the derived `Debug` of a `SolidShape` breaks at 3,072 levels and `Clone` at
+/// 4,096 (`probe_1845_boolean_chain_depth`, Measure 43422082815), and a profile
+/// of `SKETCH_MAX_CURVES` curves can make 4,096 regions, a circle each. 512 is
+/// 6 times under the first and 8 under the second. A wall with more keeps its
+/// regions as its openings, as one whose regions are not all solids does, so
+/// the openings Revit's export writes are written and only the body is not cut.
+const MAX_BODY_CUTS: usize = 512;
+
 /// Take the solids `prisms` out of the body of the wall `host` as a boolean
 /// difference and say so in the wall's record property set. `false`, with the
 /// wall as it was, where the entity is not a wall with a body of its own.
@@ -742,8 +776,9 @@ fn outline_of(entity: &IfcEntity) -> Option<&[(f64, f64)]> {
 /// write the openings Revit's export writes for it (see the module
 /// documentation). A region that a pocket equals is not cut in the body: the
 /// pocket's opening voids it, as the region did. A wall whose other regions are
-/// not all solids, or whose entity is not a wall with a body of its own, is left
-/// with its regions as its openings.
+/// not all solids, whose entity is not a wall with a body of its own, or that
+/// has more than [`MAX_BODY_CUTS`] regions to cut, is left with its regions as
+/// its openings.
 pub(super) fn cut_profiles_from_bodies(entities: &mut [IfcEntity]) {
     let mut regions: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     let mut pockets: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
@@ -770,6 +805,9 @@ pub(super) fn cut_profiles_from_bodies(entities: &mut [IfcEntity]) {
                 })
             });
         if !cut.is_empty() {
+            if cut.len() > MAX_BODY_CUTS {
+                continue;
+            }
             let Some(prisms) = cut
                 .iter()
                 .map(|index| cut_prism(&entities[*index]))
