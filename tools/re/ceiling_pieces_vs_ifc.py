@@ -125,7 +125,7 @@ def main(argv):
         gross = gross_area(c)
         if gross is None:
             continue
-        gross *= unit * unit
+        gross *= area_unit
         origin = ifcopenshell.util.placement.get_local_placement(c.ObjectPlacement)[:3, 3] * unit
         at = frame(np.array([origin]))[0][:2]
         areas = [area for area, _ in mine]
