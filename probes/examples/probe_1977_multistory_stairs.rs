@@ -15,7 +15,10 @@
 //! Output, one record per line (`<ids>` are ElementIds):
 //!   file <path> release <n>
 //!   multistory <id> objects <Class:n ...>
-//!   object <id> <Class> <scalar and id fields, or the pair set and the cell list as JSON>
+//!   object <id> <Class> <scalar and id fields>
+//!   pairs <id> <n> members <index:ElementId ...>
+//!   member-stair <id> <the scalar and id fields of its StairsElement>
+//!   set <id> <index / 14> <Class:n ...>
 //!   standard <id> stair <id> ref_level <id|-> excluded <ids|-> type <id|->
 //!   cell <id> up_to <id|-> next_index <n|-> level_pairs <ids|->
 //!   level <id> <Class> <fields>
@@ -152,6 +155,8 @@ fn probe(path: &str) -> Result<()> {
 
     // The multistory stairs, with every object of their records.
     let mut standard: BTreeSet<u64> = BTreeSet::new();
+    // Each record's pair set: (index, ElementId), in index order.
+    let mut sets: BTreeMap<u64, Vec<(i64, u64)>> = BTreeMap::new();
     let options = Options {
         selected_classes: ["MultistoryStairs".to_string()].into_iter().collect(),
         releases: NATIVE_RELEASES,
@@ -169,8 +174,28 @@ fn probe(path: &str) -> Result<()> {
             if class.starts_with("MultistoryStairs") {
                 println!("object {id} {class} {}", scalars(&object["fields"]));
             }
-            if class == "ElementIdIndexPairSet" || class == "CellList" {
-                println!("object {id} {class} {}", clip(&object["fields"], 1500));
+            if class == "ElementIdIndexPairSet" {
+                let mut pairs: Vec<(i64, u64)> = Vec::new();
+                for entry in object["fields"]["m_data"].as_array().into_iter().flatten() {
+                    let member = id_of(&entry["m_elementId"]).and_then(|n| u64::try_from(n).ok());
+                    if let (Some(index), Some(member)) = (entry["m_index"].as_i64(), member) {
+                        pairs.push((index, member));
+                    }
+                }
+                pairs.sort_unstable();
+                println!(
+                    "pairs {id} {} members {}",
+                    pairs.len(),
+                    list(
+                        pairs
+                            .iter()
+                            .map(|(index, member)| format!("{index}:{member}"))
+                    )
+                );
+                sets.insert(id, pairs);
+            }
+            if class == "CellList" {
+                println!("object {id} {class} {}", clip(&object["fields"], 300));
             }
         }
         let stair = field_id(&graph, "m_standardStairsId");
@@ -213,6 +238,51 @@ fn probe(path: &str) -> Result<()> {
         }
         Ok(())
     })?;
+
+    // Every member of every pair set: its class, and for a stair its Levels.
+    let members: BTreeSet<u64> = sets
+        .values()
+        .flat_map(|pairs| pairs.iter().map(|(_, member)| *member))
+        .collect();
+    if !members.is_empty() {
+        let options = Options {
+            selected_ids: members,
+            graph_classes: Some(["StairsElement".to_string()].into_iter().collect()),
+            releases: NATIVE_RELEASES,
+            ..Options::default()
+        };
+        let mut classes: BTreeMap<u64, String> = BTreeMap::new();
+        extract_graphs(&mut rf, &options, |record| {
+            let id = record.identity.element_id;
+            if let Some(class) = record.class_name.as_deref() {
+                classes.insert(id, class.to_string());
+            }
+            if let Some(graph) = &record.graph {
+                let graph = serde_json::to_value(graph)?;
+                for object in graph["objects"].as_array().into_iter().flatten() {
+                    if object["class_name"].as_str() == Some("StairsElement") {
+                        println!("member-stair {id} {}", scalars(&object["fields"]));
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        for (multistory, pairs) in &sets {
+            let mut by_set: BTreeMap<i64, BTreeMap<&str, usize>> = BTreeMap::new();
+            for (index, member) in pairs {
+                let class = classes.get(member).map_or("-", String::as_str);
+                *by_set
+                    .entry(index / 14)
+                    .or_default()
+                    .entry(class)
+                    .or_default() += 1;
+            }
+            for (set, counts) in by_set {
+                let text: Vec<String> = counts.iter().map(|(c, n)| format!("{c}:{n}")).collect();
+                println!("set {multistory} {set} {}", text.join(" "));
+            }
+        }
+    }
 
     // The stairs the multistory records name: what their graphs hold.
     if !standard.is_empty() {
