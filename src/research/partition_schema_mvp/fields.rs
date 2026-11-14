@@ -331,11 +331,35 @@ pub const CUT_SOLID_SIZE_FIELDS: [&str; 3] = [
     "m_cut_solid_height",
 ];
 
-/// Field holding the Revit release (its version, 2024) of the file a furniture
-/// or casework element was read from (RE-419): the `NOTDEFINED` its predefined
-/// type defaults to is written on the releases of
-/// [`FURNITURE_DEFAULT_REVIT_VERSIONS`] only.
+/// Field holding the Revit release (its version, 2024) of the file an element
+/// whose predefined type defaults to `NOTDEFINED` was read from (RE-419,
+/// #1713): the default is written on the releases its entity has in
+/// [`NOTDEFINED_DEFAULTS`] only. Carried by furniture and casework, and by the
+/// classes whose mapping is one of those entities.
 pub const FURNITURE_RELEASE_FIELD: &str = "m_furniture_release";
+
+/// The entities whose occurrence Revit's export writes with the
+/// `PredefinedType` `NOTDEFINED` where the element has no "IFC Predefined Type"
+/// of its own or its type's, with the releases each is measured on (RE-419,
+/// #1713, revit-ifc's `IFCExportInfoPair`, CLEANROOM.md source 5):
+/// - furniture: [`FURNITURE_DEFAULT_REVIT_VERSIONS`];
+/// - roofs: 2024 to 2026, written so by Revit's export on the BIM4LCA files,
+///   the R2025 models and the held-out pairs (#1713's table: 25 roofs);
+/// - stairs and stair flights: 2024 only, the BIM4LCA timber files (6 stairs,
+///   4 flights). On 2025 and 2026 Revit's export gives every stair and flight
+///   of the measured files a derived type rvt-rs already writes, so no file of
+///   those releases exercises the default, and it is not taken there (RE-353).
+///   The 2027 export leaves the value off roofs, stairs and flights (RE-427),
+///   and a 2022 file's export parameters are not read, as for furniture;
+/// - building element proxies: 2024 to 2027, `NOTDEFINED` on every proxy of
+///   every pair, 2027's included (RE-427).
+pub const NOTDEFINED_DEFAULTS: [(&str, &[u32]); 5] = [
+    ("IFCFURNITURE", FURNITURE_DEFAULT_REVIT_VERSIONS),
+    ("IFCROOF", &[2024, 2025, 2026]),
+    ("IFCSTAIR", &[2024]),
+    ("IFCSTAIRFLIGHT", &[2024]),
+    ("IFCBUILDINGELEMENTPROXY", &[2024, 2025, 2026, 2027]),
+];
 
 /// Releases whose furniture and casework take `NOTDEFINED` where they have no
 /// predefined type of their own or their type's (RE-419): 2024 (the BIM4LCA
@@ -376,6 +400,18 @@ pub const SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS: &[u32] = &[2025];
 
 /// Field marking a roof on one of [`SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS`].
 pub const ROOF_CUTS_WALL_TOPS_FIELD: &str = "m_roof_cuts_wall_tops";
+
+/// The caption of the text parameter a door's or window's `FireRating` is
+/// read from where its type's family type table gives none (#1507).
+pub const FIRE_RATING_CAPTION: &str = "Fire Rating";
+
+/// Releases whose doors and windows take their Fire Rating from a saved
+/// parameter captioned [`FIRE_RATING_CAPTION`] (#1507): Revit 2024 to 2027,
+/// the releases the saved parameters are read on with the type-table scan's
+/// 64-bit layout. Held to puzzbobb's Revit 2025 models (models 12 to 17, whose
+/// window types hold `0.5h` that way) and to the held-out 2024 to 2027 pairs,
+/// counts only.
+pub const SAVED_FIRE_RATING_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2024..=2027;
 
 /// Give each element the text parameters of its type ([`TYPE_ID_FIELD`],
 /// RE-38 and #322), as Revit shows a type's parameters on its instances.

@@ -228,6 +228,7 @@ pub fn recover_partition_schema_mvp(
                 &mut out.products,
                 [&mut out.doors, &mut out.windows],
                 Some(&references),
+                &mut wall_reads,
             );
             attach_curtain_axes(rf, revit_version, &mut out.products);
             attach_curtain_part_types_32(rf, revit_version, &references, &mut out.products);
@@ -477,6 +478,7 @@ pub fn recover_partition_schema_mvp(
         &mut out.products,
         [&mut out.doors, &mut out.windows],
         None,
+        &mut wall_reads,
     );
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
@@ -749,6 +751,8 @@ pub fn recover_partition_schema_mvp(
                 .push((ROOF_CUTS_WALL_TOPS_FIELD.into(), InstanceField::Bool(true)));
         }
     }
+    // --- A door's or window's Fire Rating from its saved parameters (#1507) ---
+    attach_saved_fire_ratings(rf, revit_version, [&mut out.doors, &mut out.windows]);
 
     // --- Level parameters from the per-element association record (RE-172),
     // stairs' Base and Top Level from the same record and the Level named in

@@ -1251,6 +1251,21 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-462 (2026-11-14)** makes a wall of a curtain wall type a curtain wall on
+Revit 2024 to 2027, as it already was on 2023, and leaves a curtain wall that is
+the host panel of another out on both (#1960). The 2024 reader needed a mullion
+or a grid to name a wall, so the two single-cell curtain walls of `rme_basic`
+and `rme_advanced` that hold no mullion (573660 and 573664) came out as
+`IfcWall` where the 2023 reader writes `IfcCurtainWall`. Revit's exporter
+decides by the curtain grid a wall has, with no test of mullions or cells, and
+folds a host panel into its owner; Snowdon Towers' 23 one-cell walls that
+Revit's export leaves out are exactly its 23 host panels, each named by a panel
+of another curtain wall and holding a `HostPanelInfo`. The rule is Revit's on
+all 9 curtain walls of `rac_basic` (Revit's 2018 export) and all 42 of Snowdon
+Towers that are not host panels. No Revit export holds a mullion-free curtain
+wall, so what Revit writes for 573660 and 573664 rests on the exporter's source
+(`reports/element-framing/RE-462-curtain-wall-type-and-host-panels.md`).
+
 **RE-461 (2026-11-13)** holds four of the eight rules whose release range was
 wider than the range their report measured (#1945, found by the batch 9 export
 audit) to the release each is measured on, and says for the other four what

@@ -220,6 +220,8 @@ rules the housing exercises, and whether they hold there, is
 [#1636](https://github.com/DrunkOnJava/rvt-rs/issues/1636)'s measurement, first
 recorded in
 [RE-402](../reports/element-framing/RE-402-second-project-first-measurement.md).
+Every rule whose evidence is one project, and the projects they rest on, is
+listed in [Rules that rest on one project](one-project-rules.md).
 
 ## Revit 2025 models made for one feature each, fetched for a run
 
