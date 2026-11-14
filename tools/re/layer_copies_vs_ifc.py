@@ -67,6 +67,8 @@ def holds(copy, revit, materials):
 
 
 def main(argv):
+    # Measure passes `--list` to every probe scorer; this one prints counts only, so a flag is ignored.
+    argv = [arg for arg in argv if not arg.startswith("--")]
     if len(argv) != 3:
         print(__doc__, file=sys.stderr)
         return 2
