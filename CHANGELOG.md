@@ -18,7 +18,7 @@ Not measured, and said in each entry:
 - A multistory stair is written once, where Revit's export writes it once per storey: Snowdon Towers' three lack 53 entities (#1977, RE-463).
 - No Revit export holds a curtain wall without a mullion, so what Revit writes for `rme_basic`'s two rests on the source of its exporter (#1960).
 
-Measured against 0.22.0 on every model Measure holds (run [43555120928](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43555120928), `main` at 21d310f0; the release adds only its notes, witness files, version strings and fixtures to them, and #1991, a probe, a scorer and a report, landed on `main` after it):
+Measured against 0.22.0 on every model Measure holds (run [43555120928](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43555120928), `main` at 21d310f0; the release adds only its notes, witness files, version strings, fixtures and the publish workflow's viewer smoke to them, and #1991, a probe, a scorer and a report, landed on `main` after it):
 
 - All 146 exports differ, and 120 of the 121 `diagnostics.json` files (the
   blank Revit 2025 model's is equal). 79 of the 146 have no Revit export:
@@ -35,8 +35,8 @@ Measured against 0.22.0 on every model Measure holds (run [43555120928](https://
     1 each before), and the storeys' on 11 files of 2017 to 2022 (69 storeys,
     from 6) (RE-459). On the spent Vitoria "Before", 1,297 of the 1,314
     elements Revit's export holds are Revit's (from none), its 73 rooms pair
-    with Revit's by GlobalId (from none) and 414 of 1,005 type objects agree
-    (from none).
+    with Revit's by GlobalId (from none) and 414 of 1,005 type objects have
+    Revit's GlobalId (from none).
   - `NOTDEFINED` (#1713): the roofs that agree with Revit's `PredefinedType` go
     from 8 to 39 of 39 on 30 models and the proxies from 34 to 456 of 464 on 22
     (the 8 left are the one proxy in each of the eight BIM4LCA files at permit
@@ -56,8 +56,8 @@ Measured against 0.22.0 on every model Measure holds (run [43555120928](https://
     openings of four held-out files (from none); on the spent Vitoria "Before"
     68 of 68 doors and 64 of 70 windows have Revit's `OverallWidth` and
     `OverallHeight` (from none; the other 6 windows get none) and the boxes of
-    54 doors and 3 windows are within 0.001 ft of Revit's (0.26 ft off for 5 and
-    up to 1 ft off for 52 before).
+    54 doors and 3 windows are within 0.001 ft of Revit's (within 0.26 ft for 5
+    and within 1 ft for 52 before).
   - The mullions' `Pset_MemberCommon.Span` and `Qto_MemberBaseQuantities.Length`
     are Revit's on 6 more mullions of each concrete office and 8 more of each
     timber office (#1193); the sloped floors' `Qto_SlabBaseQuantities.Depth`
@@ -82,7 +82,7 @@ Measured against 0.22.0 on every model Measure holds (run [43555120928](https://
     (RE-450) takes the door cuts the spent file leaves out because the door's
     box was not read from 9 to 2, 6 of the 7 now read are left out as a wall
     parallel to the door's and 1 is written. No Revit export of 2015 to 2023
-    holds such an opening, so the next release limits the rule to 2024 to 2027.
+    holds such an opening, so the rule is to be limited to 2024 to 2027 (RE-353).
 - What differs in `diagnostics.json` is counts: the wording of the storey
   warning (120 files), the skipped items (62), the parameter values (32), the
   exported entities (21), the bodies' sources (the saved mesh in 11 files, the
