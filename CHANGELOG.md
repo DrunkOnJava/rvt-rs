@@ -73,18 +73,33 @@ Measured against 0.22.0 on every model Measure holds (run [43555120928](https://
     counted apart (RE-242): 24 more on Core Interior (3,859 to 3,883), 107 more
     on each `rac_advanced` save of 2015 to 2020 (3,469 to 3,576), 37 more on one
     held-out file (127 to 164) and 389 more opening depths on another.
-  - One measured negative, not yet explained: the spent Vitoria "Before" gains
-    one opening that nothing fills and that Revit's export does not hold
-    (Revit's 5 unfilled openings in that file are other doors'), and a held-out
-    Vitoria and a held-out Gdynia each gain one opening that Revit's export
-    does not hold, with 2 more values that Revit does not write on each of the
-    three (#1165).
+  - One measured negative: the spent Vitoria "Before" gains one opening that
+    nothing fills and that Revit's export does not hold (Revit's 5 unfilled
+    openings in that file are other doors'), and a held-out Vitoria and a
+    held-out Gdynia each gain one opening that Revit's export does not hold,
+    with 2 more values that Revit does not write on each of the three (#1165).
+    It is a door's cut in a second wall: reading the door cuts of 2015 to 2023
+    (RE-450) takes the door cuts the spent file leaves out because the door's
+    box was not read from 9 to 2, 6 of the 7 now read are left out as a wall
+    parallel to the door's and 1 is written. No Revit export of 2015 to 2023
+    holds such an opening, so the next release limits the rule to 2024 to 2027.
 - What differs in `diagnostics.json` is counts: the wording of the storey
   warning (120 files), the skipped items (62), the parameter values (32), the
   exported entities (21), the bodies' sources (the saved mesh in 11 files, the
   partition record's box in 10), the walls and curtain walls exported (10), and
   the door openings a wall's cuts leave out because the door's box is not read
   (10).
+- Time and peak memory, base and head on one runner (timing run
+  [43558339212](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43558339212),
+  `main` at 92af055c against 0.22.0, three rounds each): the 16 reference
+  models and BIM4LCA files take a median 1.02 times the time (0.995 to 1.04) and
+  1.00 times the peak memory (0.99 to 1.00); the 29 samples of 2023 to 2027,
+  1.00 times the time (0.99 to 1.05) and 1.00 times the peak memory (0.99 to
+  1.06). Five files are more than 3% slower: the two BIM4LCA offices as built
+  (concrete 1.04, timber 1.04) and three samples (1.03 to 1.05). No peak is more
+  than 2% higher but two Snowdon files', HVAC (1.06) and Plumbing (1.05), whose
+  peak is one of two values from round to round and the higher one on every head
+  round.
 
 ### Upgrading from 0.22
 
