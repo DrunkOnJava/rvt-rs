@@ -10,7 +10,7 @@
 //! - the element is a slab, roof or footing drawn as a plain extrusion (or
 //!   several pieces at one height), so that its underside is level across
 //!   the wall. A roof drawn from its slopes is a solid and is left out here;
-//!   on Revit 2025 the walls under one are cut along it instead (below). A roof drawn as
+//!   on Revit 2025 to 2027 the walls under one are cut along it instead (below). A roof drawn as
 //!   a plain extrusion counts only where its record box is exactly its
 //!   type's layers and its plan outline is read: a roof by extrusion that the
 //!   release's readers do not read is its record box, deeper than its layers,
@@ -73,13 +73,15 @@
 //!
 //! A wall that no level underside cuts, whose top join names one roof and
 //! nothing else, and whose roof is drawn from its slopes as one solid of faces,
-//! is cut along that roof's underside on Revit 2025
+//! is cut along that roof's underside on Revit 2025 to 2027
 //! (`SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS`): each convex piece of its plan, cut
 //! by the plan of each face of the roof that looks down, rises to that face's
 //! plane, one item each, with `BodyHeightSource` `wall_top_cut_along_sloped_roof`.
 //! On puzzbobb's Revit 2025 models Revit's export cuts the walls under their
 //! roofs so (as polygonal face sets), and rvt-rs's roof has Revit's underside
-//! over each wall's plan (Measure run 43542785440). A wall whose plan the faces
+//! over each wall's plan (Measure run 43542785440). No Revit export of 2026 or
+//! 2027 has such a wall; there the cut is held to `rac_basic`'s 2025 save by
+//! the same-project gate. A wall whose plan the faces
 //! do not cover once, or under which the underside is at or below its base or
 //! above its top anywhere, keeps its body, and a base cut leaves such a wall as
 //! it is (`base_cut_left_under_a_sloped_top`).
