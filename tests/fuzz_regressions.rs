@@ -948,6 +948,69 @@ fn native_group_record_length_overflow_does_not_panic() {
     });
 }
 
+// ---- research::native_saved_mesh::cylinder_face, the trim ring's point budget (#1815) ----
+
+/// A cylinder face's trim ring holds at most 20,000 points
+/// (`CYLINDER_RING_POINT_BUDGET`), counted from each edge's stored points
+/// before any is parsed or refined. Without it a loop of E edges could each be
+/// refined to 100,000 points. No real face comes near it (Measure 43293778765),
+/// so this face is built by hand: one loop of one edge whose stored interior
+/// points alone pass the budget. It is refused as `cylinder trim budget
+/// exceeded`, the error the saved-mesh pass turns into drawing the element
+/// without its saved mesh. One point fewer passes the budget's check and is
+/// refused later for something else, so the refusal is the budget's own.
+#[test]
+fn cylinder_trim_ring_over_its_point_budget_is_refused() {
+    use rvt::research::native_parameters::ObjectGraph;
+    use rvt::research::native_saved_mesh::{CylinderTessellationProfile, cylinder_face};
+    use serde_json::json;
+
+    // Pointers resolve through each object's token, as the graph lists no edge.
+    let to = |token: u32| json!({ "pointer_token": token, "offset": 0 });
+    let face = |interior: usize| -> ObjectGraph {
+        let object = |class: &str, token: u32, fields: serde_json::Value| {
+            json!({ "class_tag": 1, "class_name": class, "token": token,
+                    "start": 0, "fields_end": 0, "fields": fields })
+        };
+        let point = |u: f64, v: f64| json!({ "uv": [[u, v], [0.0, 0.0]] });
+        let interior: Vec<_> = (0..interior)
+            .map(|i| point((i + 1) as f64 / (interior + 1) as f64, 0.5))
+            .collect();
+        serde_json::from_value(json!({
+            "consumed_bytes": 0,
+            "edges": [],
+            "objects": [
+                object("Face", 1, json!({
+                    "m_faceRegions": [], "m_pSurf": to(2), "m_pFirstLoop": to(3) })),
+                object("CylSurf", 2, json!({
+                    "m_center": [0.0, 0.0, 0.0], "m_radius": 1.0,
+                    "m_xVec": [1.0, 0.0, 0.0], "m_yVec": [0.0, 1.0, 0.0],
+                    "m_zVec": [0.0, 0.0, 1.0],
+                    "m_Envelope": { "m_corners": [[0.0, 0.0], [3.0, 1.0]] } })),
+                object("EdgeLoop", 3, json!({
+                    "m_open": false, "m_pFace": to(1), "m_next": to(4), "m_nextLoop": to(0) })),
+                object("Edge", 4, json!({
+                    "m_pFace": [to(1), to(0)],
+                    "m_next": [to(3), to(0)],
+                    "m_firstAndLastEdgePnts": [point(0.0, 0.5), point(1.0, 0.5)],
+                    "m_interiorEdgePnts": interior })),
+            ],
+        }))
+        .expect("a graph of four objects")
+    };
+    const BUDGET: usize = 20_000;
+    let error = |graph: &ObjectGraph| {
+        cylinder_face(graph, 0, CylinderTessellationProfile::default())
+            .expect_err("a loop of one edge never makes a trim")
+            .to_string()
+    };
+
+    // The edge's two ends and its interior points, less the first, which the
+    // ring shares with the edge before it: BUDGET + 1 once the interior holds BUDGET.
+    assert_eq!(error(&face(BUDGET)), "cylinder trim budget exceeded");
+    assert_ne!(error(&face(BUDGET - 2)), "cylinder trim budget exceeded");
+}
+
 /// An MS-CFB file holding `streams`, built in memory, with the storages their
 /// paths name created first.
 fn compound_file(streams: &[(&str, Vec<u8>)]) -> Vec<u8> {
