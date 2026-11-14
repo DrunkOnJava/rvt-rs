@@ -116,7 +116,7 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
     let detail: BTreeSet<u32> = std::env::var("RVT_PROBE_CEILINGS")
-        .unwrap_or_else(|_| "2094020".into())
+        .unwrap_or_else(|_| "2094020,2094444,2636549,3191264".into())
         .split(',')
         .filter_map(|id| id.trim().parse().ok())
         .collect();
@@ -150,7 +150,7 @@ fn main() -> anyhow::Result<()> {
         };
         let list = lists.get(&ceiling);
         let ids = &profile.segment_ids;
-        // The ceilings in RVT_PROBE_CEILINGS (default 2094020, the one the rules miss): each piece's
+        // The ceilings in RVT_PROBE_CEILINGS (default 2094020, the one the rules miss, and the three more whose pieces miss Revit's area on the timber permit file): each piece's
         // outer loop, and each line in its list's order with every piece whose edge holds it.
         if detail.contains(&ceiling) {
             for (i, ring) in outers.iter().enumerate() {
