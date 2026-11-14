@@ -115,6 +115,11 @@ fn main() -> anyhow::Result<()> {
             )
         })
         .collect();
+    let detail: BTreeSet<u32> = std::env::var("RVT_PROBE_CEILINGS")
+        .unwrap_or_else(|_| "2094020".into())
+        .split(',')
+        .filter_map(|id| id.trim().parse().ok())
+        .collect();
     let mut several = 0;
     for (ceiling, profile) in erpp::plan_profiles_from_sketch_line_records(&assigned) {
         if profile.pieces.is_empty() {
@@ -145,6 +150,45 @@ fn main() -> anyhow::Result<()> {
         };
         let list = lists.get(&ceiling);
         let ids = &profile.segment_ids;
+        // The ceilings in RVT_PROBE_CEILINGS (default 2094020, the one the rules miss): each piece's
+        // outer loop, and each line in its list's order with every piece whose edge holds it.
+        if detail.contains(&ceiling) {
+            for (i, ring) in outers.iter().enumerate() {
+                let points: Vec<String> =
+                    ring.iter().map(|(x, y)| format!("{x:.4},{y:.4}")).collect();
+                println!(
+                    "piece {ceiling} {i} area {:.4} loop {}",
+                    net[i],
+                    points.join(" ")
+                );
+            }
+            let order: Vec<u32> = match list {
+                Some(list) => list.clone(),
+                None => ids.clone(),
+            };
+            for (position, line) in order.iter().enumerate() {
+                let on: Vec<usize> = centre
+                    .get(line)
+                    .map(|point| {
+                        outers
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, ring)| on_ring(ring, *point))
+                            .map(|(i, _)| i)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let b = assigned
+                    .iter()
+                    .find(|r| r.element_id == *line)
+                    .map(|r| r.bbox_feet);
+                println!(
+                    "line {ceiling} position {position} id {line} pieces {on:?} box {}",
+                    b.map(|b| format!("{:.4},{:.4} {:.4},{:.4}", b[0], b[1], b[3], b[4]))
+                        .unwrap_or_else(|| "-".into())
+                );
+            }
+        }
         println!(
             "json {}",
             serde_json::json!({
