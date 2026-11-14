@@ -34,6 +34,8 @@ SQFT_TO_SQM = 0.09290304
 # Two areas are one where they differ by less than this, relative (Revit's GrossArea is written to a few digits).
 AREA_RELATIVE = 1e-3
 RULES = ("first_listed", "last_listed", "lowest_id", "highest_id")
+# The narrowed rule: the lowest-ElementId line's piece, only where the second-lowest lies on it too
+# (ceiling 2094020, one rectangle split in two, has them on different pieces).
 
 
 def gross_area(product):
@@ -89,6 +91,13 @@ def main(argv):
                 picked[f"{rule} none"] += 1
             elif row[rule] in revit_pieces:
                 picked[rule] += 1
+        narrowed = row.get("second_lowest_id")
+        if row["lowest_id"] is None or narrowed != row["lowest_id"]:
+            picked["narrowed left out"] += 1
+        elif row["lowest_id"] in revit_pieces:
+            picked["narrowed right"] += 1
+        else:
+            picked["narrowed wrong"] += 1
         missed = [rule for rule in RULES if row[rule] not in revit_pieces]
         if missed:
             misses.append(
@@ -107,6 +116,10 @@ def main(argv):
     print(
         "rule "
         + "; ".join(f"{rule}: {picked[rule]} of {scored} (no piece {picked[rule + ' none']})" for rule in RULES)
+    )
+    print(
+        f"narrowed rule (lowest and second-lowest line on one piece): written {picked['narrowed right'] + picked['narrowed wrong']}, "
+        f"Revit's {picked['narrowed right']}, not Revit's {picked['narrowed wrong']}, left out {picked['narrowed left out']}"
     )
     if misses:
         print("ceilings a rule misses:")

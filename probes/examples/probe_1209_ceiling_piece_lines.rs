@@ -242,6 +242,7 @@ fn main() -> anyhow::Result<()> {
                 "last_listed": piece_of(list.and_then(|l| l.last())),
                 "lowest_id": piece_of(ids.iter().min()),
                 "highest_id": piece_of(ids.iter().max()),
+                "second_lowest_id": piece_of(ids.iter().filter(|id| Some(*id) != ids.iter().min()).min()),
             })
         );
     }
