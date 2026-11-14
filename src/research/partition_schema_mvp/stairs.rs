@@ -533,7 +533,12 @@ pub(super) fn attach_stair_dimensions(
 /// 2598405, on a run of a stair of the Basement and itself on Level_01. Only a
 /// stair that one of its runs, landings or stringers already names is a whole
 /// here: a stair carried by its parts has no body of its own, and a railing
-/// alone must not take the stair's away.
+/// alone must not take the stair's away. A ramp is a whole too, on Revit 2024
+/// ([`crate::native_stairs::RAMP_RAILING_REVIT_VERSIONS`], #1988), for the
+/// railings that name it and have no level of their own
+/// (`BaseRailing.m_assocLevelId`): the two of the BIM4LCA housing's ramp are
+/// Revit's, and the office's eight, which Revit leaves plain, each have a
+/// level. A ramp keeps its own body, which its railings do not double.
 pub(super) fn attach_railing_lengths(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -561,6 +566,16 @@ pub(super) fn attach_railing_lengths(
         .filter(|element| STAIR_PART_CLASSES.contains(&element.class.as_str()))
         .filter_map(whole_of)
         .collect();
+    let ramps: BTreeSet<u32> =
+        if crate::native_stairs::RAMP_RAILING_REVIT_VERSIONS.contains(&revit_version) {
+            products
+                .iter()
+                .filter(|element| element.class == "Ramp")
+                .filter_map(|element| element.id)
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
     for element in products
         .iter_mut()
         .filter(|element| element.class == "Railing")
@@ -582,7 +597,10 @@ pub(super) fn attach_railing_lengths(
             .get(&id)
             .filter(|_| !records.on_components.contains(&id))
             .and_then(|stair| u32::try_from(*stair).ok())
-            .filter(|stair| carried_stairs.contains(stair));
+            .filter(|stair| {
+                carried_stairs.contains(stair)
+                    || (ramps.contains(stair) && !records.on_levels.contains(&id))
+            });
         if let Some(stair) = stair {
             element.fields.push((
                 AGGREGATE_WHOLE_FIELD.into(),

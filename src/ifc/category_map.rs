@@ -794,6 +794,12 @@ pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
 /// `TRAPDOOR` on 52 doors (3 on each of the four housing files, 10 on each of
 /// the four office files) and `DOOR` on every other door of every model
 /// measured, where rvt-rs wrote `DOOR` on all.
+/// `IfcBuildingElementProxy` is listed since #1713: in each of the twelve
+/// BIM4LCA files (six housing, six office) one proxy carries `USERDEFINED` as
+/// its own "IFC Predefined Type" under an "Export to IFC As" of
+/// `IfcBuildingElementProxy`, and Revit's export writes `USERDEFINED` on it,
+/// where rvt-rs left it unset because the value was not read for a proxy. A
+/// proxy with no value keeps the `NOTDEFINED` of `NOTDEFINED_DEFAULTS`.
 ///
 /// #1713 adds four more, each measured on the BIM4LCA office (Revit 2024)
 /// against Revit's export of it: `IfcWall`, whose 607 walls Revit writes
@@ -1019,6 +1025,18 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
     (
         "IFCDOOR",
         &["DOOR", "GATE", "TRAPDOOR", "USERDEFINED", "NOTDEFINED"],
+    ),
+    (
+        "IFCBUILDINGELEMENTPROXY",
+        &[
+            "COMPLEX",
+            "ELEMENT",
+            "PARTIAL",
+            "PROVISIONFORVOID",
+            "PROVISIONFORSPACE",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
     ),
 ];
 
