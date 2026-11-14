@@ -133,6 +133,17 @@ def main(argv):
             # (RE-91, RE-115), which need not be Revit's: count the copies that name every layer.
             if copies["current"] is not None:
                 unnamed = sum(1 for layer in copies["current"] if layer["material"] is None)
+                # Against Revit's material on that layer, the category material the export fills
+                # it with (the probe's `category_material`), where the widths match in order.
+                if same_widths(copies["current"], layers):
+                    for ours, theirs in zip(copies["current"], layers):
+                        if ours["material"] is None:
+                            filled = kind.get("category_material")
+                            tally[
+                                "unnamed: not read" if filled is None
+                                else "unnamed: Revit's" if filled == theirs[1]
+                                else "unnamed: not Revit's"
+                            ] += 1
                 tally["current layers with no material of their own"] += unnamed
                 tally["current copy names every layer"] += int(unnamed == 0)
     print(
@@ -151,6 +162,11 @@ def main(argv):
             f"widths and materials equal {both}; no copy holds Revit's widths {tally['none']}; "
             f"current copy names every layer {tally['current copy names every layer']}, "
             f"layers with no material of their own {tally['current layers with no material of their own']}"
+        )
+        same, other, unread = (tally[k] for k in ("unnamed: Revit's", "unnamed: not Revit's", "unnamed: not read"))
+        print(
+            f"layer copies: {kind} unnamed layers against Revit's: category material Revit's {same}, "
+            f"not Revit's {other}, not read {unread}"
         )
     return 0
 

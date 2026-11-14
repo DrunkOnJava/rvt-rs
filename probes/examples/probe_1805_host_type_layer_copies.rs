@@ -201,11 +201,29 @@ fn main() -> anyhow::Result<()> {
                 })
             })
             .collect();
+        // The material the export gives a layer that takes its category's (RE-91, RE-115, RE-206).
+        let category = match class.as_str() {
+            "Wall" => Some(rvt::research::partition_element_records::OST_WALLS),
+            "Floor" => Some(rvt::research::partition_element_records::OST_FLOORS),
+            "Roof" => Some(rvt::research::partition_element_records::OST_ROOFS),
+            "Ceiling" => Some(rvt::research::partition_element_records::OST_CEILINGS),
+            _ => None,
+        };
+        let category_material = category
+            .and_then(|category| {
+                rvt::research::partition_materials::scan_category_material(
+                    &mut rf, version, category,
+                )
+                .ok()
+                .flatten()
+            })
+            .and_then(|material| names.get(&material).cloned());
         println!(
             "json {}",
             serde_json::json!({
                 "type": id,
                 "class": class,
+                "category_material": category_material,
                 "elements": elements,
                 "current": now,
                 "copies": listed,
