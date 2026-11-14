@@ -192,9 +192,13 @@ fn main() -> anyhow::Result<()> {
             along.map_or("-".to_string(), |axis| axis.to_string()),
             // The recorded own axes, X;Y;Z, each as three components, to say
             // which model axis the own Z lies on (RE-226's fallback).
-            curtain_axes_from_fields(&element.fields).map_or("-".to_string(), |axes| axes
-                .map(|axis| axis.map(|v| format!("{v:.9}")).join(","))
-                .join(";")),
+            CURTAIN_AXES_FIELDS
+                .map(|name| float(&element.fields, name)
+                    .map_or("-".to_string(), |v| format!("{v:.9}")))
+                .chunks(3)
+                .map(|axis| axis.join(","))
+                .collect::<Vec<_>>()
+                .join(";"),
             bodies.get(&tag).map_or("-".to_string(), |extent| format!(
                 "{:.6},{:.6},{:.6}",
                 extent[0], extent[1], extent[2]
