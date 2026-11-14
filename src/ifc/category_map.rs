@@ -372,7 +372,11 @@ pub const MAPPINGS: &[Mapping] = &[
     // its six files; BIM-Speed's Vitoria export of 2018 writes its 2 the same
     // way in IFC2X3). An `IfcPipeSegment` value is acted on
     // ([`EXPORT_OVERRIDE_TARGETS`]): the office's 24 gutters carry it with
-    // `GUTTER`, and Revit writes them as that.
+    // `GUTTER`, and Revit writes them as that. `type_entity_for`
+    // (`step_writer.rs`) types every `IFCFLOWSEGMENT` as that gutter type,
+    // which holds only while this mapping is the one way to an
+    // `IfcFlowSegment` (no override value names it): a class written as one
+    // by another path needs its type keyed on its own class first.
     Mapping {
         revit_class: "Gutter",
         ifc_type: "IFCFLOWSEGMENT",
