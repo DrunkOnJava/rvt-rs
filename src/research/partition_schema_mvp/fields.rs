@@ -395,8 +395,12 @@ pub const TYPE_PARAMETER_FIELD_PREFIX: &str = "m_type_parameter:";
 /// Releases whose walls under a roof drawn from its slopes are cut along the
 /// roof's underside (#1478): Revit 2025, where Revit's exports of puzzbobb's
 /// models cut them so and rvt-rs's roofs have Revit's underside over the
-/// walls' plans (Measure run 43542785440).
-pub const SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS: &[u32] = &[2025];
+/// walls' plans (Measure run 43542785440), and 2026 and 2027, whose saves of
+/// Autodesk's `rac_basic` sample hold 13 walls under its sloped roof that
+/// the same-project gate holds to their 2025 save's cut bodies (Measure run
+/// 43547699441). 2024 is not taken: no Revit 2024 export with walls under a
+/// sloped roof is measured, and the gate does not hold 2025's walls to 2024's.
+pub const SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS: &[u32] = &[2025, 2026, 2027];
 
 /// Field marking a roof on one of [`SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS`].
 pub const ROOF_CUTS_WALL_TOPS_FIELD: &str = "m_roof_cuts_wall_tops";
