@@ -1266,6 +1266,14 @@ Towers that are not host panels. No Revit export holds a mullion-free curtain
 wall, so what Revit writes for 573660 and 573664 rests on the exporter's source
 (`reports/element-framing/RE-462-curtain-wall-type-and-host-panels.md`).
 
+**#1975 (2026-11-14)** also leaves out the panel those host panels were written
+as: each kept the panel category in its element record, so it was written as
+an `IfcPlate` Revit's export has no entity for (23 on Snowdon Towers
+Architectural, local only). On Revit 2024 a curtain panel whose wall record
+holds a `HostPanelInfo` is left out and counted as
+`element_record_curtain_host_panel`; the release is the one a file holding
+host panels is measured on.
+
 **RE-461 (2026-11-13)** holds four of the eight rules whose release range was
 wider than the range their report measured (#1945, found by the batch 9 export
 audit) to the release each is measured on, and says for the other four what
