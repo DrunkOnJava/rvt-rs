@@ -395,8 +395,11 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 seen["column extents along the beam that differ between Revit's export and the probe by over 0.05 ft"] += 1
             # The chord of the beam's own centre line through Revit's column, by the beam's direction.
             crossing = chord(meshes[column][2], caps[0], axis)
-            if crossing is not None:
-                kind = alignment(fields)
+            kind = alignment(fields)
+            if crossing is None:
+                # A beam whose line passes over the column's top (seated on it) crosses none of its faces.
+                chords[(kind, "ends whose line crosses no face of Revit's column")] += 1
+            else:
                 chords[(kind, "ends with a chord through Revit's column")] += 1
                 if abs((crossing[1] - crossing[0]) * factor - extent) > 0.05:
                     chords[(kind, "of those, the chord differs from the probe's extent by over 0.05 ft")] += 1
@@ -413,11 +416,12 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
         print(f"beam ends:   {n} {what}")
     for kind in ("in line with a plan axis", "oblique to the plan axes", "of unknown direction"):
         total = chords[(kind, "ends with a chord through Revit's column")]
-        if total:
+        none = chords[(kind, "ends whose line crosses no face of Revit's column")]
+        if total or none:
             differ = chords[(kind, "of those, the chord differs from the probe's extent by over 0.05 ft")]
             print(
                 f"beam ends:   beams {kind}: {total} ends with a chord of the beam's line through Revit's column, "
-                f"{differ} differing from the probe's extent by over 0.05 ft"
+                f"{differ} differing from the probe's extent by over 0.05 ft, and {none} whose line crosses no face of it"
             )
     order = {name: i for i, name in enumerate(FRACTION_BINS)}
     for stands in ("shorter", "same", "longer"):
