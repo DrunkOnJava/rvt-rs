@@ -386,6 +386,11 @@ pub(super) fn highest_level(named: &[u32], elevations: &BTreeMap<u32, f64>) -> O
     }
 }
 
+/// The releases on which a column that names three or more Levels, and a
+/// footing that names none, are given a Level by their base (#1842, RE-469):
+/// 2027, the release of the one model they were measured on (RE-353).
+const BASE_LEVEL_REVIT_VERSIONS: &[u32] = &[2027];
+
 /// RE-59: give each record-backed element whose record names two Levels
 /// its base constraint ([`crate::element_record_level_refs::base_constraint_level`])
 /// as its host Level, from the Levels' own elevations (RE-51). Nothing
@@ -397,6 +402,7 @@ pub(super) fn highest_level(named: &[u32], elevations: &BTreeMap<u32, f64>) -> O
 /// 47 beams that name two Levels are in the highest's storey and in the base
 /// constraint's in none (RE-454).
 pub(super) fn resolve_base_constraint_levels(
+    revit_version: u32,
     elevations: &BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],
 ) {
@@ -404,6 +410,7 @@ pub(super) fn resolve_base_constraint_levels(
     if elevations.is_empty() {
         return;
     }
+    let base_levels = BASE_LEVEL_REVIT_VERSIONS.contains(&revit_version);
     for element in elements.iter_mut().flat_map(|list| list.iter_mut()) {
         let mut named = Vec::new();
         let mut base = None;
@@ -421,6 +428,27 @@ pub(super) fn resolve_base_constraint_levels(
                 ("m_locationZ", InstanceField::Float { value, .. }) => base = Some(*value),
                 _ => {}
             }
+        }
+        // #1842, RE-469: on the release that is measured, a column that names
+        // three or more Levels takes the highest at or below its base, and a
+        // footing that names none the highest Level of the model at or below
+        // its base. Both rest on one model (docs/one-project-rules.md).
+        if matches!(element.class.as_str(), "StructuralColumn" | "Column") && named.len() > 2 {
+            let level = base
+                .filter(|_| base_levels)
+                .and_then(|z| refs::below_base_level(&named, elevations, z));
+            if let Some(level) = level {
+                bind_record_level(element, level, refs::COLUMN_BASE_LEVEL_SOURCE);
+            }
+            continue;
+        }
+        if base_levels && element.class == "StructuralFoundation" && record_level(element).is_none()
+        {
+            let level = base.and_then(|z| refs::level_at_or_below(elevations, z));
+            if let Some(level) = level {
+                bind_record_level(element, level, refs::FOOTING_BASE_LEVEL_SOURCE);
+            }
+            continue;
         }
         let (level, source) = if element.class == "StructuralFraming" {
             (
