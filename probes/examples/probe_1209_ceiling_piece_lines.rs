@@ -74,8 +74,49 @@ fn main() -> anyhow::Result<()> {
             .iter()
             .map(|record| record.element_id)
             .collect();
-    let lines =
+    let all_lines =
         per::scan_category_records_multi(&mut rf, version, &[per::OST_SKETCH_LINES], &declared)?;
+    // As the export reads them (`current_sketch_records`, RE-216): a line whose copies in
+    // several partitions disagree keeps its current partition's copy alone, so an edited
+    // sketch is drawn as it is now, not as first saved.
+    let partition = |record: &per::PartitionElementRecord| {
+        record
+            .stream
+            .strip_prefix("Partitions/")
+            .and_then(|n| n.parse::<u32>().ok())
+    };
+    let mut boxes: BTreeMap<u32, Vec<[f64; 6]>> = BTreeMap::new();
+    let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    for record in &all_lines {
+        boxes
+            .entry(record.element_id)
+            .or_default()
+            .push(record.bbox_feet);
+        if let Some(p) = partition(record) {
+            holders.entry(record.element_id).or_default().insert(p);
+        }
+    }
+    let disagreeing: BTreeMap<u32, BTreeSet<u32>> = boxes
+        .iter()
+        .filter(|(_, b)| b.iter().any(|bbox| *bbox != b[0]))
+        .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
+        .collect();
+    let current = rvt::research::native_document::current_partitions(&mut rf, &disagreeing);
+    let lines: Vec<per::PartitionElementRecord> = all_lines
+        .into_iter()
+        .filter(|record| match disagreeing.get(&record.element_id) {
+            None => true,
+            Some(_) => current
+                .get(&record.element_id)
+                .is_some_and(|&p| partition(record) == Some(p)),
+        })
+        .collect();
+    println!(
+        "copies lines {} disagreeing {} current_read {}",
+        boxes.len(),
+        disagreeing.len(),
+        current.len()
+    );
     let line_ids: BTreeSet<u32> = lines.iter().map(|record| record.element_id).collect();
     let lists: BTreeMap<u32, Vec<u32>> = erpp::scan_sketch_curve_lists(&mut rf, version, &line_ids)
         .into_iter()
