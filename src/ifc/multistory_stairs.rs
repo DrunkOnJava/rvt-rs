@@ -7,7 +7,8 @@
 //! again, with its own parts, 4.064 m higher. Revit's copy differs from its
 //! original in a few ways and in no other (RE-463, section 2): the stair and
 //! each part but a railing take the name of the original with `:2` appended,
-//! all keep the original's `Tag`, the copy has no type object, its flights'
+//! all keep the original's `Tag`, the copy of the stair, its flights and its
+//! landing has no type object (its stringers keep theirs), its flights'
 //! `PredefinedType` is `NOTDEFINED`, and every `GlobalId` is its own.
 //!
 //! The sets of a group come from [`crate::native_multistory_stairs`], the

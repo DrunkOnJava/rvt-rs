@@ -886,7 +886,9 @@ fn run_export_steps(
                 if report.copies > 0 {
                     recount_exported(&mut diagnostics, &model);
                 }
-                if report.groups > 0 {
+                // A file whose groups need no copy and leave nothing out has
+                // nothing to say, and its diagnostics stay as they were.
+                if report.copies > 0 || !report.left_out.is_empty() {
                     notes.push(ExportNote::MultistoryStairs {
                         groups: report.groups,
                         copies: report.copies,
