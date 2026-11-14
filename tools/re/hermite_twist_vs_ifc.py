@@ -14,8 +14,9 @@ several ways, and counts how many of the vertices of Revit's body (the elements 
 `instance` lines give for the surface's symbol, in the internal frame) that lie within 0.2 ft of the
 surface lie within 0.01 ft of it:
 
-    python3 tools/re/hermite_twist_vs_ifc.py <probe.txt> <revit.ifc>
+    python3 tools/re/hermite_twist_vs_ifc.py <probe.txt> <revit.ifc> [--list]
 
+Measure passes `--list` after the two files, as to every probe scorer; this one has no list to give.
 Needs IfcOpenShell and numpy.
 """
 
@@ -141,16 +142,17 @@ CONVENTIONS = collections.OrderedDict(
 
 
 def main():
-    if len(sys.argv) != 3:
+    arguments = [argument for argument in sys.argv[1:] if argument != "--list"]
+    if len(arguments) != 2:
         print(__doc__)
         return 2
-    surfaces, users = read_surfaces(sys.argv[1])
+    surfaces, users = read_surfaces(arguments[0])
     if not surfaces:
         print("hermite twist: no surface in the probe output")
         return 0
     # A surface is on its symbol's record; Revit's export has the elements that place the symbol.
     tags = {symbol: users.get(symbol) or [symbol] for symbol, _ in surfaces}
-    revit = mesh.meshes(sys.argv[2], tags={tag for named in tags.values() for tag in named})
+    revit = mesh.meshes(arguments[1], tags={tag for named in tags.values() for tag in named})
     for (symbol, k), surface in sorted(surfaces.items()):
         found = [tag for tag in tags[symbol] if tag in revit]
         if not found:
