@@ -9,7 +9,7 @@ and, where rvt-rs writes the copy too, how it sits against Revit's: the name, th
 it is aggregated under and the shift from the original, which does not depend on the frame the two files
 are placed in (a copy is a vertical translation of one storey). Counts only.
 
-    python3 tools/re/multistory_copies_vs_ifc.py <Revit's export>.ifc <rvt-rs's export>.ifc
+    python3 tools/re/multistory_copies_vs_ifc.py <rvt-rs's export>.ifc <Revit's export>.ifc
 
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
@@ -70,7 +70,7 @@ def multistory_family(model, multi=None):
     return multi, stairs, parts
 
 
-def main(revit_path, rvt_path):
+def main(rvt_path, revit_path):
     revit_model = ifcopenshell.open(revit_path)
     rvt_model = ifcopenshell.open(rvt_path)
     settings = ifcopenshell.geom.settings()
@@ -119,4 +119,5 @@ def main(revit_path, rvt_path):
     print(f"entities Revit writes beyond rvt-rs's on these stairs: {total_beyond}")
 
 
-main(sys.argv[1], sys.argv[2])
+if __name__ == "__main__":
+    main(sys.argv[1], sys.argv[2])
