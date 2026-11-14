@@ -272,9 +272,18 @@ pub(super) fn without_host_panels(
     if !HOST_PANEL_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
+    // A panel that holds a basic wall of a layered type (RE-64, RE-72) is
+    // written as the curtain wall Revit writes for it, host panel or not: on
+    // Snowdon Towers Architectural 18 such panels hold a `HostPanelInfo` and
+    // all 18 are `IfcCurtainWall` in Revit's export.
+    let is_panel_wall = |element: &DecodedElement| {
+        element.fields.iter().any(|(name, value)| {
+            name == CURTAIN_PANEL_WALL_FIELD && matches!(value, InstanceField::Bool(true))
+        })
+    };
     let panels: BTreeSet<u64> = products
         .iter()
-        .filter(|element| element.class == "CurtainWallPanel")
+        .filter(|element| element.class == "CurtainWallPanel" && !is_panel_wall(element))
         .filter_map(|element| element.id.map(u64::from))
         .collect();
     if panels.is_empty() {
@@ -294,6 +303,7 @@ pub(super) fn without_host_panels(
         BTreeMap::new();
     products.retain(|element| {
         let left_out = element.class == "CurtainWallPanel"
+            && !is_panel_wall(element)
             && element.id.is_some_and(|id| hosts.contains(&u64::from(id)));
         if left_out {
             let framed =
