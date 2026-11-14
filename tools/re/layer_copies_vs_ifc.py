@@ -108,9 +108,11 @@ def main(argv):
                 kinds["not found by Tag"] += 1
             else:
                 material = ifcopenshell.util.element.get_material(element, should_skip_usage=True)
-                kind = ifcopenshell.util.element.get_type(element)
+                element_type = ifcopenshell.util.element.get_type(element)
                 on_type = (
-                    ifcopenshell.util.element.get_material(kind, should_skip_usage=True) if kind is not None else None
+                    ifcopenshell.util.element.get_material(element_type, should_skip_usage=True)
+                    if element_type is not None
+                    else None
                 )
                 kinds[material.is_a() if material is not None else "no material"] += 1
                 kinds["on its type " + (on_type.is_a() if on_type is not None else "none")] += 1
