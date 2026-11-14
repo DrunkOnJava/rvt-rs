@@ -63,7 +63,8 @@ use super::export_content::{
     SAVED_MESH_NO_GRAPHICS, SAVED_MESH_NO_MESH, SAVED_MESH_NO_TRIANGLES,
     SAVED_MESH_NOT_CANDIDATE_PREFIX, SAVED_MESH_NOT_OFFERED_PREFIX, SAVED_MESH_PARTIAL_PREFIX,
     SAVED_MESH_REFUSAL_PROPERTY, SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH,
-    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{
     BeamQuantities, ColumnQuantities, MESH_LENGTH_REACH, Placed, Prism, all_faces_flat,
@@ -1494,13 +1495,30 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
         let Some(&position) = held.get(index) else {
             continue;
         };
-        // The height of the wall's body, where it is the extrusion of its box.
+        // The height of the wall's body, where it is the extrusion of its box,
+        // or where its top is cut along a sloped roof (#1478): that solid keeps
+        // the box's extrusion, whose height is the record's, and Revit's export
+        // writes that height as the wall's `Height` (25 of 25 on the R2025
+        // models, which matched it before the cut).
         let body_height = match model.entities.get(*index) {
             Some(IfcEntity::BuildingElement {
                 extrusion: Some(body),
                 solid_shape: None,
                 ..
             }) => Some(body.height_feet),
+            Some(IfcEntity::BuildingElement {
+                extrusion: Some(body),
+                solid_shape: Some(_),
+                property_set: Some(own),
+                ..
+            }) if has_text_property(
+                own,
+                "BodyHeightSource",
+                WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE,
+            ) =>
+            {
+                Some(body.height_feet)
+            }
             _ => None,
         };
         let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
