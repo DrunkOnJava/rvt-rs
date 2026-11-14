@@ -81,6 +81,13 @@ use std::collections::{BTreeMap, BTreeSet};
 /// `BodySource` of a body drawn from the element's saved graphics.
 pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
 
+/// The record-geometry property that says an element of the Roofs category is
+/// written as another entity than `IfcRoof` by its "Export to IFC As" value
+/// (#1713: the BIM4LCA timber office's 8 roofs written as `IfcSlab`). It is the
+/// element's category kept past the redirect, which the record's schema class
+/// (`ProfileRoof` for a footprint roof, RE-76) names for only some roofs.
+pub const REDIRECTED_ROOF_PROPERTY: &str = "RedirectedRoof";
+
 /// RE-443: only duct fittings meet the measured native-reference body bound.
 const COLLAPSED_RULED_CATEGORY_REFUSAL: &str =
     "collapsed ruled profile outside the measured duct fittings";
@@ -180,7 +187,8 @@ fn partial_refusal(meshes: &GraphicsMeshes) -> Option<String> {
 /// stand-in for the mesh; and a roof's level block, whose record box holds the
 /// reference surface and not the slope or thickness (#1612), whatever entity the
 /// roof is exported as: a roof whose "Export to IFC As" says `IfcSlab` is the
-/// same element with the same record box and the same mesh (#1713). A resolved
+/// same element with the same record box and the same mesh, and carries
+/// [`REDIRECTED_ROOF_PROPERTY`] (#1713). A resolved
 /// outline is the body of any other class (a floor's plan, a ceiling's).
 fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
     let source = properties
@@ -194,8 +202,8 @@ fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
     });
     let roof = ifc_type == "IFCROOF"
         || properties.iter().any(|property| {
-            property.name == "RevitClass"
-                && matches!(&property.value, PropertyValue::Text(class) if class == "Roof")
+            property.name == REDIRECTED_ROOF_PROPERTY
+                && matches!(property.value, PropertyValue::Boolean(true))
         });
     matches!(
         source,
