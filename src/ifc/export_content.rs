@@ -30,7 +30,7 @@ use crate::geometry::{
 };
 use crate::partition_area_boundaries::ArcMids;
 use crate::walker::{DecodedElement, InstanceField};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 mod column_quantities;
 mod wall_areas;
@@ -747,6 +747,9 @@ pub fn append_typed_production_elements(
     // rectangle, which an L-shaped roof does not fill. Keyed on the record's
     // class, whatever IFC entity it is exported as (#1480).
     let mut plate_roofs: wall_tops::Roofs = HashMap::new();
+    // #1478: the roofs drawn from their slopes on the releases whose walls under
+    // them are cut along their underside.
+    let mut sloped_roofs: HashSet<u32> = HashSet::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -1629,6 +1632,14 @@ pub fn append_typed_production_elements(
                             .is_some_and(|layers| layers.stacked);
                     plate_roofs.insert(id, plate);
                 }
+                if decoded.class == "Roof"
+                    && decoded.fields.iter().any(|(name, value)| {
+                        name == crate::partition_schema_mvp::ROOF_CUTS_WALL_TOPS_FIELD
+                            && matches!(value, InstanceField::Bool(true))
+                    })
+                {
+                    sloped_roofs.insert(id);
+                }
             }
         }
         // RE-291, RE-353: a column whose type is a plain rectangle or round, with the elements its pairs name.
@@ -1931,7 +1942,7 @@ pub fn append_typed_production_elements(
     }
 
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
-    wall_tops::cut_wall_tops(entities, &pending_tops, &plate_roofs);
+    wall_tops::cut_wall_tops(entities, &pending_tops, &plate_roofs, &sloped_roofs);
 
     // #1396: a wall with an edited elevation profile that stops short of the
     // wall beneath it is drawn to that wall's face, where its base is still cut.
@@ -5322,6 +5333,10 @@ pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_fl
 /// the rest: drawn as one prism of its plan to the underside and the pieces
 /// of the plan outside the element from there to the top (#1067, RE-320).
 pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
+
+/// `BodyHeightSource` of a wall whose top is cut along the underside of the
+/// sloped roof its top join names (#1478).
+pub const WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_along_sloped_roof";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] on a wall cut whole
 /// (`BodyHeightSource` [`WALL_TOP_COVER_BODY_HEIGHT_SOURCE`]) by a floor that

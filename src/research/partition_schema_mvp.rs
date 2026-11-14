@@ -756,6 +756,18 @@ pub fn recover_partition_schema_mvp(
             attach_type_text_parameters(&type_parameters, elements);
         }
     }
+    // --- Roofs whose underside the walls under them are cut along (#1478) ---
+    if SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS.contains(&revit_version) {
+        for roof in out
+            .slabs
+            .iter_mut()
+            .chain(out.products.iter_mut())
+            .filter(|element| element.class == "Roof")
+        {
+            roof.fields
+                .push((ROOF_CUTS_WALL_TOPS_FIELD.into(), InstanceField::Bool(true)));
+        }
+    }
     // --- A door's or window's Fire Rating from its saved parameters (#1507) ---
     attach_saved_fire_ratings(rf, revit_version, [&mut out.doors, &mut out.windows]);
 
