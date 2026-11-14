@@ -28,7 +28,9 @@ Usage:
 
 With `PSETS_MISSING=<set>.<property>[,...]` in the environment it also
 lists, for each such property, every object Revit writes it on and rvt-rs
-does not: its key, Revit's entity and value, and rvt-rs's entity and Name.
+does not: its key, Revit's entity and value, and rvt-rs's entity and Name;
+and every object Revit writes on which rvt-rs writes the property and Revit
+does not (`extra`, #1987): its key, rvt-rs's entity, value and Name.
 
 Where Revit's export writes no standard property set at all, as its export
 of Core Interior (RE-239 §5), rvt-rs's values are counted apart rather than
@@ -624,6 +626,17 @@ def main(argv):
                 print(
                     f"  missing {pset}.{prop} {key} Revit {their_entities.get(key, '-')} {value}"
                     f" rvt-rs {our_entities.get(key, '-')} {names.get(key, '-')!r}"
+                )
+        for (key, pset, prop), value in sorted(ours.items()) if theirs else ():
+            if (
+                f"{pset}.{prop}" in wanted
+                and key in their_objects
+                and (key, pset, prop) not in theirs
+                and key not in apart_objects
+            ):
+                print(
+                    f"  extra {pset}.{prop} {key} rvt-rs {our_entities.get(key, '-')} {value}"
+                    f" {names.get(key, '-')!r}"
                 )
     return 0
 
