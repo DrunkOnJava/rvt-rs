@@ -46,6 +46,14 @@
 //!       whose section is read, `section_held` those that hold each end, and `section_low`
 //!       and `section_high` the point where the centre line leaves the one that holds the
 //!       end, when it lies more than 1 mm inside the box (#1839, a follow-up to RE-455).
+//!     - `endcol_low` and `endcol_high` (#1839, the S5 probe): the column the beam names that lies
+//!       nearest that end, as `<ElementId>:<t>:<extent>:<source>` (`-` where it names none in line
+//!       with the beam). `extent` is the column's span along the beam's centre line in feet, by its
+//!       section where the export draws one (`s`), else by its record box (`b`); `t` is where the
+//!       record box ends in that span, from the face toward the beam's middle (0) to the face away
+//!       from it (1), below 0 where the box stops short of the column and above 1 where it runs
+//!       past it. The scorer sets Revit's end beside it as the same fraction of the column Revit
+//!       draws, which does not depend on the frame the two files are placed in.
 //!   file ... columns_exported=<n> sections=<n> unread=<n> section_centre_offset=<median>/<largest>:
 //!   the `IfcColumn`s the export holds, those whose section is read, and those drawn another way
 //!   (a mapped or solid body, another profile) or not placed, which the probe leaves out; and how
@@ -347,6 +355,66 @@ fn feet(value: Option<f64>) -> String {
     value.map_or_else(|| "-".to_string(), |v| format!("{v:.4}"))
 }
 
+/// The column `beam` names that lies nearest its low or high end on `axis`, as
+/// `<ElementId>:<t>:<extent>:<source>`, or `-` where it names none in line with the beam (#1839).
+///
+/// `extent` is the column's span along the beam's centre line, in feet: by its section where
+/// the export draws one (source `s`), else by its record box (`b`). `t` is where the beam's
+/// record box ends in that span, from the face toward the beam's middle (0) to the face away
+/// from it (1): below 0 the box stops short of the column, above 1 it runs past it. The
+/// scorer sets Revit's end beside it as the same fraction of the column Revit draws, which
+/// does not depend on the frame the two files are placed in.
+fn nearest_column(
+    beam: &per::PartitionElementRecord,
+    columns: &Records,
+    sections: &BTreeMap<u32, Footprint>,
+    axis: usize,
+    low_end: bool,
+) -> String {
+    let b = beam.bbox_feet;
+    let across = 1 - axis;
+    let middle = (b[across] + b[across + 3]) / 2.0;
+    let end = if low_end { b[axis] } else { b[axis + 3] };
+    let mut best: Option<(f64, u32, [f64; 2], char)> = None;
+    for member in columns.values() {
+        let c = member.bbox_feet;
+        if member.element_id == beam.element_id
+            || !beam.references.contains(&u64::from(member.element_id))
+            || !(c[2] < b[5] && b[2] < c[5])
+            || !(c[across] <= middle && middle <= c[across + 3])
+        {
+            continue;
+        }
+        let (along, source) = match sections
+            .get(&member.element_id)
+            .and_then(|footprint| span(footprint, axis, middle))
+        {
+            Some(along) => (along, 's'),
+            None => ([c[axis], c[axis + 3]], 'b'),
+        };
+        let distance = (along[0] - end).max(end - along[1]).max(0.0);
+        if best.is_none_or(|(nearest, ..)| distance < nearest) {
+            best = Some((distance, member.element_id, along, source));
+        }
+    }
+    let Some((_, id, along, source)) = best else {
+        return "-".to_string();
+    };
+    let extent = along[1] - along[0];
+    if extent <= 0.0 {
+        return "-".to_string();
+    }
+    let (near, far) = if low_end {
+        (along[1], along[0])
+    } else {
+        (along[0], along[1])
+    };
+    format!(
+        "{id}:{:.4}:{extent:.4}:{source}",
+        (end - near) / (far - near)
+    )
+}
+
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
         .skip(1)
@@ -448,6 +516,13 @@ fn main() -> anyhow::Result<()> {
             section_holders(beam, columns, &sections, axis, b[axis + 3]).len(),
             feet(section_face(beam, columns, &sections, axis, true)),
             feet(section_face(beam, columns, &sections, axis, false)),
+        )?;
+        // The named column nearest each end, and where the record box ends in it (#1839).
+        write!(
+            line,
+            " endcol_low={} endcol_high={}",
+            nearest_column(beam, columns, &sections, axis, true),
+            nearest_column(beam, columns, &sections, axis, false),
         )?;
         println!("{line}");
     }
