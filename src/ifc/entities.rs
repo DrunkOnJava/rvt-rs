@@ -297,8 +297,10 @@ pub enum IfcEntity {
     /// `OpeningUtil`). Its `Pset_OpeningElementCommon.Reference` is the type
     /// name of the entity at `reference_from`; `recess` says it does not pass
     /// through the wall; `quantities` says its `Qto_OpeningElementBaseQuantities`
-    /// holds `Width` too, `Height` and `Depth` being written on every one of
-    /// them.
+    /// holds `Width` too. `Height` and `Depth` are written on every one whose
+    /// wall has its `Qto_WallBaseQuantities.Width`, which is every wall when
+    /// base quantities are on; with them off neither the wall nor the opening
+    /// has a quantity set, as in Revit's export (#1947).
     WallCutOpening {
         host: usize,
         number: u32,
