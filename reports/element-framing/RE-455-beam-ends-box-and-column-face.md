@@ -97,12 +97,33 @@ Section 5 ends on the reporter's guess: a turned or long column's record box rea
 
 On the BIM4LCA models the section along the centre line gives the same bounds as the record box on every beam it cuts: 1 exact, 2 where Revit does not cut. The columns there are boxes, so this is the check that the new kind does no harm, not a test of it. The test is S4, the reporter's model (sections 5 and 6), where the boxes run past Revit's beams: of the 361 beams the column kind gave bounds to, the section is Revit's length within 1 mm on at least 90 of every 100 and cuts too far on fewer than 5 of every 100 (the column kind: 2 exact, 310 too far). If it is not, the column's section along the centre line is not what stops Revit's beam either, and the next question is the beam's own section against the column's, which this probe does not ask.
 
-## 8. Not changed
+**S4, on the reporter's model (2026-11-14): it does not hold.** Run by HWT-25 on the same save and Revit export, with the Windows build of the `probe-binaries.yml` run 43524046132 (`7150c5ec`), counts only: the probe read the section of 718 of the 718 columns the export draws, and every section is its box (the section's centre is 0.0000 ft from the box's, median and largest). So `section` gives what `column` gave: of the 538 beams Revit shortens it gives bounds on 364, 3 exact, 309 cut too far and 52 cut too little, and it cuts 75 beams that Revit leaves at the box's length. The reporter's first guess, columns read as L-shaped sections whose box runs past the face, was wrong; the columns here are boxes. The table that says something is the one of section 6: of the 1,076 ends of the beams Revit shortens, 667 lie on a column face (62%), 216 on a beam face, 7 on a slab and 186 on nothing, and of the 378 ends of the beams Revit leaves at the box's length 245 lie on a column face. So Revit often stops a concrete beam on a column face, and not at the face the near-face rule picks.
+
+## 8. Where the record box ends in the column, and where Revit's beam does (S5, 2026-11-14)
+
+Section 7 leaves two things the probe could not tell apart: where the record box ends in the column a beam frames into, and where Revit's own beam ends in the same column. If the box runs to the column's far face or its centre, a cut at the near face is a longer cut than Revit's, which is what the reporter's run shows (the rule cuts a median 559 mm where Revit takes 261 mm). The probe prints, for each end, the column the beam's list names that lies nearest (`endcol_low`, `endcol_high`) and the fraction `t` of that column's extent along the beam, from the face toward the beam's middle (0) to the face away from it (1), at which the record box ends; the scorer finds that column in Revit's export by `Tag`, takes the extent of its mesh along the beam's axis, and puts the end of Revit's beam that is nearest it at the same fraction, in bins (`short` of the column, `near` face, `0-.5`, `centre`, `.5-1`, `far` face, `beyond`), for the ends of the beams Revit makes shorter, leaves or makes longer, split by whether the beam is narrower than, as wide as (within 10%) or wider than the column across it. Both ends are measured against the same column in their own files, so no common frame is needed.
+
+Rows, registered on #1839 before the first run:
+
+- **S5.1.** The probe and the scorer exit 0 on the ten BIM4LCA models and print the new table.
+- **S5.2.** On those models, where the box ends in the column and where Revit's beam ends in it are the same bin on at least 90 of every 100 ends (section 2: the box already ends where Revit's body ends).
+- **S5.3.** On the reporter's model, for the ends of the beams Revit shortens that are narrower than or as wide as their column, one pair of bins (box end, Revit end) holds at least 80 of every 100 ends. If it does, that pair is the rule.
+- **S5.4.** On the reporter's model, where the beam is wider than the column, Revit's end is in the box's bin on at least 80 of every 100 ends.
+
+If S5.3 fails, no function of the column's position and the beam's width is the rule, and the stored join cutbacks (the pair `probe_re122_beam_supports.rs` reads) are what is scored next.
+
+**Results on the ten BIM4LCA models.** The first run (Measure [43545023417](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43545023417), `aec5cb7b`) printed the table and failed S5.2 for a defect of the probe: a beam whose list names one column that holds only one end had that column taken as the nearest to the other end too, several column widths away, so the scorer set the far end's cap beside a column it does not touch (68 of the 252 ends, 34 beams, 17 on each timber office file). The probe now names no column that lies more than its own extent from the end (`7e4cb26a`); the rerun is Measure [43545940691](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43545940691).
+
+- **S5.1 holds.** The probe and the scorer exit 0 on all ten models. The probe names a column for 218 of the 600 beam ends and the export draws the column of all 218; no column's extent along the beam differs between Revit's export and the probe by over 0.05 ft, so the fraction is measured against the same column in both files.
+- **S5.2 holds.** The box's end and Revit's end are in the same bin on 217 of the 218 ends (99.5%): `near -> near` 215 (the record box ends at the column's near face and so does Revit's beam: section 2, now measured on the column itself), `0-.5 -> 0-.5` 2; the one that differs is `0-.5 -> near`, the box ending inside the column and Revit's beam at its near face, the one beam section 3 found Revit shortens that names a column (3346643, exact at the face). Every beam is narrower than or as wide as its column.
+- **What it leaves open.** The ten models hold no end where the box runs past the column; the 382 ends with no column in line are the other ends of beams that frame into beams or walls. S5.3 and S5.4 are the reporter's model's to answer.
+
+## 9. Not changed
 
 - Nothing is exported differently. `beam_column_trims` stays a Revit 2023 rule.
 - The 13 beams are left as they are. A class is written as a rule only where the cut length is Revit's within 1 mm on every beam of it, the class has at least 10 beams and it cuts none that Revit leaves; none does.
 
-## 9. Reproduce
+## 10. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref research/1839-beam-column-ends -f ref=<sha of the probe> -f base=none -f nordic=true \
