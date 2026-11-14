@@ -601,12 +601,21 @@ pub fn attach_scoped_with_control(
                 let held = wall_openings.get(index);
                 let frame = held.map_or(WallFrame { turn: 0.0 }, |held| held.frame);
                 let boxes: &[[f64; 6]] = held.map_or(&[], |held| held.boxes.as_slice());
-                let found = wall_mesh_quantities(
-                    &element.meshes.primitives,
-                    &frame,
-                    boxes,
-                    !no_base_join.contains(&element.identity.element_id),
-                );
+                // A mesh that decoded only in part can still hold one closed
+                // solid (another of its solids is what failed), and its
+                // quantities would be that solid's alone: refused, as a
+                // beam's and a column's are (#1947).
+                let found = partial_refusal(&element.meshes)
+                    .is_none()
+                    .then(|| {
+                        wall_mesh_quantities(
+                            &element.meshes.primitives,
+                            &frame,
+                            boxes,
+                            !no_base_join.contains(&element.identity.element_id),
+                        )
+                    })
+                    .flatten();
                 if let Some(found) = found {
                     wall_quantities.push((*index, found));
                 }
