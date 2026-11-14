@@ -788,6 +788,21 @@ jobs:
           rows=$(($(wc -l < "$out/elements.csv") - 1))
           echo "elements.csv: $rows rows"
           test "$rows" -gt 0 || { echo "::error::basics_export wrote an empty schedule for Einhoven"; exit 1; }
+      # #1938: the container is the layer every other reader stands on, and the tests read it
+      # with one reader, rvt-rs's own (the `cfb` crate). olefile is a second one, written
+      # separately in Python: it lists every Revit file of both corpora and the committed
+      # family fixture, and its stream names, stored sizes and stored bytes must be the ones
+      # rvt-dump reports and writes. A directory with no Revit file, a file olefile cannot
+      # open and a run that compared no stream all fail.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Compare the streams rvt-rs reads with olefile's
+        shell: bash
+        run: |
+          python -m pip install --require-hashes -r tools/ci/requirements-olefile.txt
+          cargo build --profile ci --bin rvt-dump
+          python tools/ci/olefile_streams.py target/ci/rvt-dump _corpus/examples/Autodesk _project_corpus/Revit tests/fixtures/families/empty.rfa
 
   ifcopenshell-validate:
     needs: scope
