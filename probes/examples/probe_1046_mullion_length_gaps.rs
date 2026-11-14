@@ -16,7 +16,7 @@
 //! the record box's, so a mullion with no box has no axis either.
 //!
 //! Output, one line per curtain mullion the export gives no `Length`:
-//!   mullion <tag> set=<true|false> span=<true|false> box=<w,d,h ft|-> along=<axis|-> axes=<true|false> body=<dx,dy,dz ft|-> <reason>
+//!   mullion <tag> set=<true|false> span=<true|false> box=<w,d,h ft|-> along=<axis|-> axes=<true|false> own=<x;y;z axes|-> body=<dx,dy,dz ft|-> <reason>
 //! where `body` is the extent of the body the export wrote, in the element's
 //! own frame, and the reason is one of `no_record_box` (a box field is
 //! missing), `axes_recorded` (turned or tilted: the export writes both from the
@@ -185,11 +185,16 @@ fn main() -> anyhow::Result<()> {
         };
         *tally.entry(reason).or_default() += 1;
         println!(
-            "mullion {tag} set={set} span={span} box={} along={} axes={axes} body={} {reason}",
+            "mullion {tag} set={set} span={span} box={} along={} axes={axes} own={} body={} {reason}",
             box_size
                 .map(|size| size.map_or("-".to_string(), |value| format!("{value:.6}")))
                 .join(","),
             along.map_or("-".to_string(), |axis| axis.to_string()),
+            // The recorded own axes, X;Y;Z, each as three components, to say
+            // which model axis the own Z lies on (RE-226's fallback).
+            curtain_axes_from_fields(&element.fields).map_or("-".to_string(), |axes| axes
+                .map(|axis| axis.map(|v| format!("{v:.9}")).join(","))
+                .join(";")),
             bodies.get(&tag).map_or("-".to_string(), |extent| format!(
                 "{:.6},{:.6},{:.6}",
                 extent[0], extent[1], extent[2]
