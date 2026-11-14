@@ -10,9 +10,11 @@ edge, so it does.
 
 For each surface of the probe's output, this evaluates the patch of every cell, densely, with the nodes'
 points and tangents as stage 2 reads them (the tangent times the cell's width) and with `w` read in
-several ways, and counts how many of the vertices of Revit's body (the elements whose `Tag` the probe's
-`instance` lines give for the surface's symbol, in the internal frame) that lie within 0.2 ft of the
-surface lie within 0.01 ft of it:
+several ways, and counts how many of the vertices of Revit's body (the element whose `Tag` the probe's
+`instance` line gives for the surface's symbol, in the internal frame) that lie within 0.2 ft of the
+surface lie within 0.01 ft of it. The nodes are the symbol's own: the instance line's `rot` and `or`
+place them (the rows of `m_3x3` applied to the coordinates, then `m_or` added, RE-450), and a line
+without them places the symbol at the origin, as the railings of a Revit 2025 file are.
 
     python3 tools/re/hermite_twist_vs_ifc.py <probe.txt> <revit.ifc> [--list]
 
@@ -35,15 +37,19 @@ SPACING = 0.01  # feet: the density of the samples of the patch
 
 
 def read_surfaces(path):
-    """((symbol, k) -> {u, v, nodes[(iu, iv)] -> (p, tu, tv, w)}, symbol -> the Tags of the elements that draw it)."""
+    """((symbol, k) -> {u, v, nodes[(iu, iv)] -> (p, tu, tv, w)}, symbol -> [(Tag, rotation or None, origin or None)])."""
     out = {}
     users = collections.defaultdict(list)
     for line in open(path, encoding="utf-8", errors="replace"):
         parts = line.split()
         if not parts:
             continue
-        if parts[0] == "instance" and len(parts) == 4 and parts[2] == "symbol":
-            users[parts[3]].append(parts[1])
+        if parts[0] == "instance" and len(parts) >= 4 and parts[2] == "symbol":
+            rotation = origin = None
+            if len(parts) == 4 + 1 + 9 + 1 + 3 and parts[4] == "rot" and parts[14] == "or":
+                rotation = np.array([float(x) for x in parts[5:14]]).reshape(3, 3)
+                origin = np.array([float(x) for x in parts[15:18]])
+            users[parts[3]].append((parts[1], rotation, origin))
         elif parts[0] == "surface" and len(parts) > 3 and parts[3] == "nu":
             key = (parts[1], int(parts[2]))
             out[key] = {
@@ -60,6 +66,17 @@ def read_surfaces(path):
             p, tu, tv, w = (np.array(numbers[i : i + 3]) for i in (0, 3, 6, 9))
             out[key]["nodes"][(int(parts[3]), int(parts[4]))] = (p, tu, tv, w)
     return out, users
+
+
+def place(surface, rotation, origin):
+    """The surface with its nodes placed by an instance: points rotated and moved, tangents and twist rotated."""
+    if rotation is None:
+        return surface
+    nodes = {
+        key: (rotation @ p + origin, rotation @ tu, rotation @ tv, rotation @ w)
+        for key, (p, tu, tv, w) in surface["nodes"].items()
+    }
+    return {"u": surface["u"], "v": surface["v"], "nodes": nodes}
 
 
 def basis(t):
@@ -151,22 +168,23 @@ def main():
         print("hermite twist: no surface in the probe output")
         return 0
     # A surface is on its symbol's record; Revit's export has the elements that place the symbol.
-    tags = {symbol: users.get(symbol) or [symbol] for symbol, _ in surfaces}
-    revit = mesh.meshes(arguments[1], tags={tag for named in tags.values() for tag in named})
+    placed = {symbol: users.get(symbol) or [(symbol, None, None)] for symbol, _ in surfaces}
+    revit = mesh.meshes(arguments[1], tags={tag for named in placed.values() for tag, _, _ in named})
     for (symbol, k), surface in sorted(surfaces.items()):
-        found = [tag for tag in tags[symbol] if tag in revit]
-        if not found:
-            print(f"hermite twist: symbol {symbol} surface {k}: no element of Revit's export with Tag {', '.join(tags[symbol])}")
-            continue
-        vertices = np.unique(np.round(np.concatenate([revit[tag][2].reshape(-1, 3) for tag in found]), 6), axis=0)
-        cells = (len(surface["u"]) - 1) * (len(surface["v"]) - 1)
-        print(f"hermite twist: symbol {symbol} (elements {', '.join(found)}) surface {k}: {len(surface['u'])} by {len(surface['v'])} nodes, {cells} cells, Revit's bodies {len(vertices)} vertices")
-        for name, twist in CONVENTIONS.items():
-            cloud = patch_points(surface, twist)
-            distance = nearest_distance(cloud, vertices)
-            near = distance <= NEAR
-            held = int((distance <= BAR).sum())
-            print(f"hermite twist:   {name}: of the {int(near.sum())} vertices within {NEAR} ft of the surface, within {BAR} ft: {held}; median {float(np.median(distance[near])) if near.any() else float('nan'):.4f} ft")
+        for tag, rotation, origin in placed[symbol]:
+            if tag not in revit:
+                print(f"hermite twist: symbol {symbol} surface {k}: no element of Revit's export with Tag {tag}")
+                continue
+            vertices = np.unique(np.round(revit[tag][2].reshape(-1, 3), 6), axis=0)
+            surface_here = place(surface, rotation, origin)
+            cells = (len(surface["u"]) - 1) * (len(surface["v"]) - 1)
+            print(f"hermite twist: symbol {symbol} (element {tag}, {'placed by its transform' if rotation is not None else 'at the origin'}) surface {k}: {len(surface['u'])} by {len(surface['v'])} nodes, {cells} cells, Revit's body {len(vertices)} vertices")
+            for name, twist in CONVENTIONS.items():
+                cloud = patch_points(surface_here, twist)
+                distance = nearest_distance(cloud, vertices)
+                near = distance <= NEAR
+                held = int((distance <= BAR).sum())
+                print(f"hermite twist:   {name}: of the {int(near.sum())} vertices within {NEAR} ft of the surface, within {BAR} ft: {held}; median {float(np.median(distance[near])) if near.any() else float('nan'):.4f} ft")
     return 0
 
 

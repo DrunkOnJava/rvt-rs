@@ -733,7 +733,7 @@ const NODE_DUMP_LIMIT: usize = 12;
 /// derivatives, so what they scaled and how is untested by them. One line per object class of
 /// the element's graph, then per surface its grid and a line per node:
 ///
-///   `instance <tag> symbol <id>`
+///   `instance <tag> symbol <id> [rot <9 numbers, the rows of m_3x3> or <3 numbers>]`
 ///   `object <id> <class>=<n> ...`
 ///   `surface <id> <k> nu <n> nv <n> u <params> v <params>`
 ///   `node <id> <k> <iu> <iv> p <x y z> tu <x y z> tv <x y z> w <x y z>`
@@ -741,7 +741,10 @@ const NODE_DUMP_LIMIT: usize = 12;
 /// Feet and parameters, in the model's internal frame. A surface is on the record of a symbol, and
 /// Revit's export names the element that places it, whose `Tag` is that element's id (a railing
 /// 13680 draws the symbol 13681): the `instance` lines say which element uses which symbol, for
-/// the scorer to find Revit's body of the surface.
+/// the scorer to find Revit's body of the surface. An instance's `m_Trf` (RE-450) places the symbol:
+/// the rows of `m_3x3` applied to the symbol's coordinates, then `m_or` added. The nodes are the
+/// symbol's own, so a surface of an instance that is not placed at the origin is compared with
+/// Revit's body after that transform.
 fn node_stage(records: &BTreeMap<u64, Record>) {
     let holders: BTreeSet<u64> = records
         .iter()
@@ -768,7 +771,25 @@ fn node_stage(records: &BTreeMap<u64, Record>) {
                 .and_then(|symbol| u64::try_from(symbol).ok())
                 .filter(|symbol| holders.contains(symbol))
             {
-                println!("instance {id} symbol {symbol}");
+                let rows = object
+                    .fields
+                    .pointer("/m_Trf/m_3x3")
+                    .and_then(Fv::as_array)
+                    .filter(|rows| rows.len() == 3)
+                    .and_then(|rows| {
+                        Some([triple(&rows[0])?, triple(&rows[1])?, triple(&rows[2])?])
+                    });
+                let origin = object.fields.pointer("/m_Trf/m_or").and_then(triple);
+                match (rows, origin) {
+                    (Some(rows), Some(origin)) => println!(
+                        "instance {id} symbol {symbol} rot {} {} {} or {}",
+                        text(rows[0]),
+                        text(rows[1]),
+                        text(rows[2]),
+                        text(origin)
+                    ),
+                    _ => println!("instance {id} symbol {symbol}"),
+                }
             }
         }
     }
@@ -834,6 +855,19 @@ fn node_stage(records: &BTreeMap<u64, Record>) {
             k += 1;
         }
     }
+}
+
+/// `[x, y, z]` of an array value of three numbers.
+fn triple(value: &Fv) -> Option<[f64; 3]> {
+    let [x, y, z] = value.as_array()? else {
+        return None;
+    };
+    Some([x.as_f64()?, y.as_f64()?, z.as_f64()?])
+}
+
+/// Three numbers as the probe prints them.
+fn text(p: [f64; 3]) -> String {
+    format!("{:.9} {:.9} {:.9}", p[0], p[1], p[2])
 }
 
 /// The spacing of `f32` values at `x`: how far `x` is from the nearest other `f32`.
