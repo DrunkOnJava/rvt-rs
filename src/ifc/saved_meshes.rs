@@ -56,7 +56,9 @@
 //! one whose mesh starts at its base.
 
 use super::IfcModel;
-use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyValue, SolidShape};
+use super::entities::{
+    BrepTriangle, IfcEntity, ProfileDef, Property, PropertySet, PropertyValue, SolidShape,
+};
 use super::export_content::{
     BEAM_AXIS_BODY_SOURCE, BEAM_BOX_BODY_SOURCE, INSTANCE_ORIENTED_BODY_SOURCE,
     INSTANCE_TURNED_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SAVED_MESH_ELEMENT_ID_SHARED,
@@ -444,7 +446,7 @@ pub fn attach_scoped_with_control(
     // over the record's height (a resolved profile, which the pass leaves alone:
     // `is_replaceable_box`), whose base quantities their saved mesh gives all the
     // same. That body is Revit's own form for a plain section and stays so, as a
-    // beam's does.
+    // beam's does, unless the mesh shows another section (#1710).
     let mut column_rectangles: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     for (index, entity) in model.entities.iter().enumerate() {
         if wholes.contains(&index) {
@@ -598,6 +600,9 @@ pub fn attach_scoped_with_control(
                     beams.push((*index, found));
                 }
             }
+            // #1710: a column whose mesh is a vertical prism of another section
+            // than its type's rectangle is drawn from its mesh, as a box is.
+            let mut mesh_body: Option<[usize; 1]> = None;
             if let Some([index]) = column_rectangles
                 .get(&element.identity.element_id)
                 .map(Vec::as_slice)
@@ -607,19 +612,28 @@ pub fn attach_scoped_with_control(
                     .then(|| column_mesh_quantities(&element.meshes.primitives))
                     .flatten();
                 if let Some(found) = found {
-                    columns.push((*index, found));
+                    if section_not_rectangle(&model.entities[*index], found.cross_section_area) {
+                        report.candidates += 1;
+                        mesh_body = Some([*index]);
+                    } else {
+                        columns.push((*index, found));
+                    }
                 }
             }
             if let Some(&index) = hosts.get(&element.identity.element_id) {
                 raise_embed_host(model, index, &element.meshes, &mut report);
                 return Ok(());
             }
-            let Some(indices) = by_id.get(&element.identity.element_id) else {
-                return Ok(());
+            let indices: &[usize] = match &mesh_body {
+                Some(index) => index,
+                None => match by_id.get(&element.identity.element_id) {
+                    Some(indices) => indices,
+                    None => return Ok(()),
+                },
             };
             // A Tag carried by several entities (a slab's pieces) is ambiguous:
             // leave them as they are.
-            let [index] = indices.as_slice() else {
+            let [index] = indices else {
                 refusals.extend(
                     indices
                         .iter()
@@ -784,6 +798,40 @@ pub fn attach_scoped_with_control(
         note_refusal(model, index, reason);
     }
     Ok(report)
+}
+
+/// How far, relative to the rectangle's, the section of a column's mesh may
+/// differ from its type's rectangle and the rectangle still be the column's
+/// section (#1710): the mesh's single-precision corners move a section's area
+/// by far less, and the BIM4LCA housing's chamfered columns are 0.3% and 1.1%
+/// under their rectangles.
+const COLUMN_SECTION_TOLERANCE: f64 = 1e-3;
+
+/// Whether `entity`, a column drawn as its type's rectangle, has a mesh whose
+/// section, of area `mesh_area` (square feet), is not that rectangle (#1710):
+/// a chamfered or thin-walled section, which the mesh draws and the rectangle
+/// does not. False where the body is not a rectangle's extrusion.
+fn section_not_rectangle(entity: &IfcEntity, mesh_area: f64) -> bool {
+    let IfcEntity::BuildingElement {
+        extrusion: Some(extrusion),
+        ..
+    } = entity
+    else {
+        return false;
+    };
+    let (width, depth) = match &extrusion.profile_override {
+        None => (extrusion.width_feet, extrusion.depth_feet),
+        Some(ProfileDef::Rectangle {
+            width_feet,
+            depth_feet,
+        }) => (*width_feet, *depth_feet),
+        Some(_) => return false,
+    };
+    let area = width * depth;
+    area.is_finite()
+        && area > 0.0
+        && mesh_area.is_finite()
+        && (mesh_area - area).abs() > COLUMN_SECTION_TOLERANCE * area
 }
 
 /// How far a column's box volume may differ from the volume of the mesh Revit
