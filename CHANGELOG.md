@@ -85,8 +85,11 @@ Measured against 0.22.0 on every model Measure holds (run [43555120928](https://
     It is a door's cut in a second wall: reading the door cuts of 2015 to 2023
     (RE-450) takes the door cuts the spent file leaves out because the door's
     box was not read from 9 to 2, 6 of the 7 now read are left out as a wall
-    parallel to the door's and 1 is written. No Revit export of 2015 to 2023
-    holds such an opening, so the rule is to be limited to 2024 to 2027 (RE-353).
+    parallel to the door's and 1 is written. The three files whose Revit export
+    lacks the opening are all Revit's IFC2X3 Coordination View 2.0 exports, and
+    an IFC2X3 view does not remove a value. Every save of `rac_basic` from 2015
+    to 2027 writes the same door's opening in its second wall as its 2024 save
+    does, so the rule stays on every release (#1165).
 - What differs in `diagnostics.json` is counts: the wording of the storey
   warning (120 files), the skipped items (62), the parameter values (32), the
   exported entities (21), the bodies' sources (the saved mesh in 11 files, the
