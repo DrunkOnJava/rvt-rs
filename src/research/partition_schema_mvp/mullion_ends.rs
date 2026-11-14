@@ -657,4 +657,30 @@ mod tests {
         assert!(!kept_ends(&[lower, bar, beside.clone()]).contains_key(&4));
         assert_eq!(kept_ends(&[beside]).get(&4), Some(&2));
     }
+
+    #[test]
+    fn bars_on_a_vertical_overlapped_only_at_its_foot_are_still_read() {
+        // #1803: a vertical (1) whose foot lies inside the mullion below it (2), so
+        // that it is overlapped there alone, and two bars on its top, bent 5 degrees
+        // apart so neither end has a partner, meeting over its axis. Its top end,
+        // the one near the bars, has nothing lying over it.
+        let vertical = mullion(1, [0.0, 0.0, 0.0], 10.0, 0.0, 0.08);
+        let below = mullion(2, [0.0, 0.0, -5.0], 5.2, 0.0, 0.08);
+        let bar = |id: u32, dir: [f64; 3]| MullionBox {
+            id,
+            kind: 1,
+            centre: [0.165 * dir[0], 0.165 * dir[1], 10.08],
+            axes: [dir, [dir[1], -dir[0], 0.0], [0.0, 0.0, 1.0]],
+            half: [0.165, 0.08, 0.08],
+            along: Some(0),
+            odd: false,
+        };
+        let turn = 5.0_f64.to_radians();
+        let first = bar(3, [0.0, -1.0, 0.0]);
+        let second = bar(4, [turn.sin(), turn.cos(), 0.0]);
+        let kept = kept_ends(&[vertical, below, first, second]);
+        // Each bar keeps both ends: the joint is no partner's, and nothing across
+        // holds it. Counting the vertical by its overlapped foot left both out.
+        assert_eq!((kept.get(&3), kept.get(&4)), (Some(&2), Some(&2)));
+    }
 }
