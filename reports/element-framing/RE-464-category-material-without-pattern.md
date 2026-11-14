@@ -48,10 +48,10 @@ Measure [43563790221](https://github.com/DrunkOnJava/rvt-rs/actions/runs/4356379
 | model | export | elements with Revit's material set (`element_materials_vs_ifc`) | layer names Revit's, in order | whole layer sets within 0.001 ft |
 |---|---|---|---|---|
 | `racadv-2015` to `racadv-2020` (each) | IFC2X3, three.js repository | 5,252 to 5,256 of 5,293 to 5,297 written (4 more, all equal; its 4 `IfcWallStandardCase` with no material: 0) | 667 to 671 | 215 of 215 to 219 of 219 |
-| held-out Warmond (2021) | IFC4 | 423 to 462 of 423 to 462 written (39 more, all equal; its 38 `IfcWall` with no material: 0) | 1,062 to 1,101 | 235 of 236 to 274 of 275 |
+| held-out Warmond (2021) | IFC4, passed through BIMServer.center's preprocessor | 423 to 462 of 423 to 462 written (39 more, all equal; its 38 `IfcWall` with no material: 0) | 1,062 to 1,101 | 235 of 236 to 274 of 275 |
 | held-out Gdynia (2021) | IFC2X3 CV2.0 | 154 to 155 of 157 to 158 written (1 more, equal) | 217 to 218 | 107 of 108 to 108 of 109 |
 
-The other 14 exports that move are Autodesk samples of 2015 to 2023 with no Revit export: `rac_advanced` of every year, `rme_advanced` and `rme_basic` of 2015, 2019 and 2023. Their layers that take their category's material now carry it, as their `rac_basic` siblings' already did.
+The other 14 exports that move are Autodesk samples of 2015 to 2023 with no Revit export: `rac_advanced` of every year, `rme_advanced` and `rme_basic` of 2015 and 2019, and `rme_basic` of 2023. Their layers that take their category's material now carry it, as their `rac_basic` siblings' already did.
 
 The held-out Revit 2020 file of #1805 (Frigento) does not move. That file is read as counts only and never shapes a reader, so why its four floors still read no category material is left there (#1805).
 
