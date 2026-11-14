@@ -115,6 +115,8 @@ def main(argv):
     _, ours = pieces(argv[1])
     revit = ifcopenshell.open(argv[2])
     unit = ifcopenshell.util.unit.calculate_unit_scale(revit)
+    # GrossArea is in the file's area unit, which need not be the length unit squared (mm lengths, m2 areas).
+    area_unit = ifcopenshell.util.unit.calculate_unit_scale(revit, "AREAUNIT")
     frame = site_frame(revit)
     tally = collections.Counter()
     compared = 0
