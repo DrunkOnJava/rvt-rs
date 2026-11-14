@@ -73,79 +73,73 @@ fn id_of(value: &Fv) -> Option<u64> {
 /// The groups of every multistory stair in the file, with the sets that hold a
 /// stair. A file with no such record gives none; a set whose stair names no
 /// base or top Level is left out.
+///
+/// One read of the file's records, which keeps no record index on the handle
+/// ([`Options::index_records`]): the export calls it once, while the handle
+/// still holds the partitions' inflated copies, and a read made after the
+/// saved-graphics pass has let them go inflates the whole file again (+408 MiB
+/// of peak and +1 s on Snowdon Towers architectural, #1977).
 pub fn multistory_groups(rf: &mut RevitFile) -> anyhow::Result<Vec<MultistoryGroup>> {
+    let classes: BTreeSet<String> = ["MultistoryStairs", "StairsElement"]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
     let options = Options {
-        selected_classes: ["MultistoryStairs".to_string()].into_iter().collect(),
-        graph_classes: Some(["MultistoryStairs".to_string()].into_iter().collect()),
+        selected_classes: classes.clone(),
+        graph_classes: Some(classes),
         releases: crate::native_document::NATIVE_RELEASES,
+        index_records: false,
         ..Options::default()
     };
-    // Each record's pairs, (index, ElementId) in index order, and its standard stair.
+    // Each group's pairs, (index, ElementId) in index order, and its standard
+    // stair; each stair's base and top Level.
     let mut groups: BTreeMap<u64, RawGroup> = BTreeMap::new();
+    let mut levels: BTreeMap<u64, (u64, u64)> = BTreeMap::new();
     extract_graphs(rf, &options, |record| {
         let Some(graph) = &record.graph else {
             return Ok(());
         };
         let id = record.identity.element_id;
-        let mut standard = None;
-        let mut pairs: Vec<(i64, u64)> = Vec::new();
-        for object in &graph.objects {
-            if object.class_name == "MultistoryStairs" {
-                standard = object.fields.get("m_standardStairsId").and_then(id_of);
-            }
-            if object.class_name == "ElementIdIndexPairSet" {
-                for entry in object
-                    .fields
-                    .get("m_data")
-                    .and_then(Fv::as_array)
-                    .into_iter()
-                    .flatten()
-                {
-                    if let (Some(index), Some(member)) = (
-                        entry.get("m_index").and_then(Fv::as_i64),
-                        entry.get("m_elementId").and_then(id_of),
-                    ) {
-                        pairs.push((index, member));
+        match record.class_name.as_deref() {
+            Some("MultistoryStairs") => {
+                let mut standard = None;
+                let mut pairs: Vec<(i64, u64)> = Vec::new();
+                for object in &graph.objects {
+                    if object.class_name == "MultistoryStairs" {
+                        standard = object.fields.get("m_standardStairsId").and_then(id_of);
+                    }
+                    if object.class_name == "ElementIdIndexPairSet" {
+                        for entry in object
+                            .fields
+                            .get("m_data")
+                            .and_then(Fv::as_array)
+                            .into_iter()
+                            .flatten()
+                        {
+                            if let (Some(index), Some(member)) = (
+                                entry.get("m_index").and_then(Fv::as_i64),
+                                entry.get("m_elementId").and_then(id_of),
+                            ) {
+                                pairs.push((index, member));
+                            }
+                        }
                     }
                 }
+                pairs.sort_unstable();
+                groups.insert(id, (standard, pairs));
             }
-        }
-        pairs.sort_unstable();
-        groups.insert(id, (standard, pairs));
-        Ok(())
-    })?;
-    if groups.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    // The Levels of every member that is a stair.
-    let members: BTreeSet<u64> = groups
-        .values()
-        .flat_map(|(_, pairs)| pairs.iter().map(|(_, member)| *member))
-        .collect();
-    let options = Options {
-        selected_ids: members,
-        graph_classes: Some(["StairsElement".to_string()].into_iter().collect()),
-        releases: crate::native_document::NATIVE_RELEASES,
-        ..Options::default()
-    };
-    let mut levels: BTreeMap<u64, (u64, u64)> = BTreeMap::new();
-    extract_graphs(rf, &options, |record| {
-        if record.class_name.as_deref() != Some("StairsElement") {
-            return Ok(());
-        }
-        let Some(root) = record
-            .graph
-            .as_ref()
-            .and_then(|graph| graph.objects.first())
-        else {
-            return Ok(());
-        };
-        if let (Some(base), Some(top)) = (
-            root.fields.get("m_baseLevelId").and_then(id_of),
-            root.fields.get("m_topLevelId").and_then(id_of),
-        ) {
-            levels.insert(record.identity.element_id, (base, top));
+            Some("StairsElement") => {
+                let ends = graph.objects.first().map(|root| {
+                    (
+                        root.fields.get("m_baseLevelId").and_then(id_of),
+                        root.fields.get("m_topLevelId").and_then(id_of),
+                    )
+                });
+                if let Some((Some(base), Some(top))) = ends {
+                    levels.insert(id, (base, top));
+                }
+            }
+            _ => {}
         }
         Ok(())
     })?;

@@ -89,17 +89,15 @@ struct Floor {
     elevation_feet: f64,
 }
 
-/// Write the copies of the multistory stairs of `rf` into `model`. Does
-/// nothing, and reads nothing from the file, where the model holds no stair
-/// carried by parts or the release is not one the records are measured on.
-pub(crate) fn attach(rf: &mut RevitFile, model: &mut IfcModel) -> Result<MultistoryReport> {
-    let mut report = MultistoryReport::default();
-    let release = rf.layout_release()?;
-    if !MULTISTORY_REVIT_VERSIONS.contains(&release) {
-        return Ok(report);
-    }
-    // The stairs carried by parts, by ElementId, with their parts.
-    let parts_of: BTreeMap<usize, Vec<usize>> = model
+/// The parts of each aggregate of a model, by the index of its whole.
+type PartsOf = BTreeMap<usize, Vec<usize>>;
+
+/// The index of each stair of a model that parts carry, by ElementId.
+type StairIndexes = BTreeMap<u64, usize>;
+
+/// The aggregates of `model` and, among their wholes, the stairs.
+fn stairs_carried_by_parts(model: &IfcModel) -> (PartsOf, StairIndexes) {
+    let parts_of: PartsOf = model
         .entities
         .iter()
         .filter_map(|entity| match entity {
@@ -107,7 +105,7 @@ pub(crate) fn attach(rf: &mut RevitFile, model: &mut IfcModel) -> Result<Multist
             _ => None,
         })
         .collect();
-    let mut stairs: BTreeMap<u64, usize> = BTreeMap::new();
+    let mut stairs: StairIndexes = BTreeMap::new();
     for (index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
@@ -124,13 +122,38 @@ pub(crate) fn attach(rf: &mut RevitFile, model: &mut IfcModel) -> Result<Multist
             stairs.entry(id).or_insert(index);
         }
     }
-    if stairs.is_empty() {
-        return Ok(report);
+    (parts_of, stairs)
+}
+
+/// What the file says of its multistory stairs: the groups, and the Levels
+/// their sets span.
+#[derive(Debug)]
+pub(crate) struct MultistoryRead {
+    groups: Vec<MultistoryGroup>,
+    levels: BTreeMap<u64, (String, f64)>,
+}
+
+/// Read the multistory groups of `rf` for [`attach`]. `None`, and nothing read
+/// from the file, where the model holds no stair carried by parts or the
+/// release is not one the records are measured on; `None` too where the file
+/// holds no group.
+///
+/// The export makes this read before the saved-graphics pass, while the handle
+/// still holds the partitions' inflated copies: that pass lets them go, and a
+/// read after it inflates the whole file again for these records alone (+408
+/// MiB of peak and +1 s on Snowdon Towers architectural, Measure run
+/// 43566139741 of the first version of this pass, #1977).
+pub(crate) fn read(rf: &mut RevitFile, model: &IfcModel) -> Result<Option<MultistoryRead>> {
+    let release = rf.layout_release()?;
+    if !MULTISTORY_REVIT_VERSIONS.contains(&release) {
+        return Ok(None);
+    }
+    if stairs_carried_by_parts(model).1.is_empty() {
+        return Ok(None);
     }
     let groups = crate::native_multistory_stairs::multistory_groups(rf)?;
-    report.groups = groups.len();
     if groups.is_empty() {
-        return Ok(report);
+        return Ok(None);
     }
     let levels: BTreeMap<u64, (String, f64)> =
         crate::partition_level_records::recover_partition_levels(rf, release)?
@@ -142,9 +165,19 @@ pub(crate) fn attach(rf: &mut RevitFile, model: &mut IfcModel) -> Result<Multist
                 )
             })
             .collect();
+    Ok(Some(MultistoryRead { groups, levels }))
+}
 
-    for group in &groups {
-        for plan in plan_copies(group, &levels, &stairs, &mut report.left_out) {
+/// Write the copies of the multistory stairs `read` found into `model`, as it
+/// stands after the passes that give its stairs their bodies.
+pub(crate) fn attach(model: &mut IfcModel, read: &MultistoryRead) -> MultistoryReport {
+    let mut report = MultistoryReport {
+        groups: read.groups.len(),
+        ..MultistoryReport::default()
+    };
+    let (parts_of, stairs) = stairs_carried_by_parts(model);
+    for group in &read.groups {
+        for plan in plan_copies(group, &read.levels, &stairs, &mut report.left_out) {
             let Some(storey) = model.building_storeys.iter().position(|storey| {
                 storey.name == plan.level_name
                     && (storey.elevation_feet - plan.level_elevation_feet).abs()
@@ -174,7 +207,7 @@ pub(crate) fn attach(rf: &mut RevitFile, model: &mut IfcModel) -> Result<Multist
             }
         }
     }
-    Ok(report)
+    report
 }
 
 /// One copy to write: the stair to repeat, how far up, and where it starts.
