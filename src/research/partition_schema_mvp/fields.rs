@@ -361,8 +361,10 @@ pub const FURNITURE_RELEASE_FIELD: &str = "m_furniture_release";
 ///   neither release takes the default;
 /// - ramps: 2024 only, `NOTDEFINED` on the one ramp of each BIM4LCA housing file
 ///   (6 in all) that has no value of its own or its type's, where the office's
-///   ramps carry one. No other measured file and no held-out pair holds a ramp
-///   in both exports, so no other release takes the default (RE-353);
+///   ramps carry one. The 2 ramps of Autodesk's Snowdon Towers 2024 sample
+///   (local only, so no Measure line) take it too and agree with Revit's own
+///   export of that sample. No other measured file and no held-out pair holds a
+///   ramp in both exports, so no other release takes the default (RE-353);
 /// - geographic elements: 2024 only, `NOTDEFINED` on the 3 elements of each
 ///   BIM4LCA terrain file (6 in all) that have no value, where the other 20 of
 ///   each file carry `USERDEFINED`. No other measured file and no held-out pair
