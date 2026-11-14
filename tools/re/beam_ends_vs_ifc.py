@@ -60,6 +60,12 @@ Usage:
     python3 tools/re/beam_ends_vs_ifc.py <probe output> <revit-export.ifc> [--list]
 
 Needs IfcOpenShell.
+
+S5.1 sets the column's extent the probe reads beside two of Revit's: the span of the whole column along
+the beam's axis (the projection of every point of the mesh) and the chord the beam's centre line cuts
+through the column (#1839). The two differ for a column turned against the beam. The probe's `angle`
+splits the chord count into beams in line with a plan axis (within half a degree), oblique to them, and
+of unknown direction.
 """
 
 import collections
@@ -73,6 +79,7 @@ import ifcopenshell.geom
 import numpy
 
 TOLERANCE_FEET = 0.0033  # 1 mm
+ALIGNED_DEGREES = 0.5  # a beam within this of a plan axis is counted as in line with it (#1839, S5)
 METRES_FEET = 1 / 0.3048
 KINDS = ("column", "wall", "beam", "section")
 # The elements whose faces a beam's end may lie on, by the IFC class that first matches, and the
@@ -310,11 +317,42 @@ def assign_caps(caps, centres):
     return {}
 
 
+def chord(triangles, origin, axis):
+    """The extent along `axis` of the line `origin + t * axis` through a mesh: the first and last
+    parameter at which the line crosses a triangle, or None where it crosses none. This is the span
+    the beam's centre line has in the column, where the projection of every point of the column
+    onto the axis is the span of its whole outline, longer for a column turned against the beam."""
+    a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    edge1, edge2 = b - a, c - a
+    p = numpy.cross(axis, edge2)
+    det = (edge1 * p).sum(axis=1)
+    usable = numpy.abs(det) > 1e-12
+    inverse = numpy.zeros_like(det)
+    inverse[usable] = 1.0 / det[usable]
+    s = origin - a
+    u = (s * p).sum(axis=1) * inverse
+    q = numpy.cross(s, edge1)
+    v = (axis * q).sum(axis=1) * inverse
+    t = (edge2 * q).sum(axis=1) * inverse
+    hit = usable & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1 + 1e-9)
+    crossings = t[hit]
+    return (float(crossings.min()), float(crossings.max())) if crossings.size else None
+
+
+def alignment(fields):
+    """Whether the probe's `angle` puts the beam in line with a plan axis, oblique to them, or gives none."""
+    angle = fields.get("angle", "-")
+    if angle == "-":
+        return "of unknown direction"
+    return "in line with a plan axis" if abs(float(angle)) <= ALIGNED_DEGREES else "oblique to the plan axes"
+
+
 def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
     """Count the ends of the beams by where the record box and Revit's beam end in the named column
     nearest the end, as fractions of that column's extent along the beam."""
     joint = collections.defaultdict(collections.Counter)
     seen = collections.Counter()
+    chords = collections.Counter()
     for tag, fields in beams.items():
         stands = stands_by_tag.get(tag)
         beam = by_tag.get(tag)
@@ -355,6 +393,13 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 continue
             if abs((high - low) * factor - extent) > 0.05:
                 seen["column extents along the beam that differ between Revit's export and the probe by over 0.05 ft"] += 1
+            # The chord of the beam's own centre line through Revit's column, by the beam's direction.
+            crossing = chord(meshes[column][2], caps[0], axis)
+            if crossing is not None:
+                kind = alignment(fields)
+                chords[(kind, "ends with a chord through Revit's column")] += 1
+                if abs((crossing[1] - crossing[0]) * factor - extent) > 0.05:
+                    chords[(kind, "of those, the chord differs from the probe's extent by over 0.05 ft")] += 1
             t_revit = (float(caps[placed[end]] @ axis) - near) / (far - near)
             width = width_bin(beam_across, float(numpy.ptp(column_points @ sideways)))
             if width is None:
@@ -366,6 +411,14 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
     )
     for what, n in seen.items():
         print(f"beam ends:   {n} {what}")
+    for kind in ("in line with a plan axis", "oblique to the plan axes", "of unknown direction"):
+        total = chords[(kind, "ends with a chord through Revit's column")]
+        if total:
+            differ = chords[(kind, "of those, the chord differs from the probe's extent by over 0.05 ft")]
+            print(
+                f"beam ends:   beams {kind}: {total} ends with a chord of the beam's line through Revit's column, "
+                f"{differ} differing from the probe's extent by over 0.05 ft"
+            )
     order = {name: i for i, name in enumerate(FRACTION_BINS)}
     for stands in ("shorter", "same", "longer"):
         for width, label in WIDTHS:
