@@ -885,7 +885,20 @@ pub fn append_typed_production_elements(
             _ => None,
         });
         let mapping =
-            category_map::lookup_for_record(&decoded.class, record_class, structural_usage);
+            category_map::lookup_for_record(&decoded.class, record_class, structural_usage).map(
+                |mapping| {
+                    // #1841: a bracing measured as `BRACE` types as one.
+                    let brace = decoded.fields.iter().any(|(name, value)| {
+                        name == crate::partition_schema_mvp::BRACE_TYPE_FIELD
+                            && matches!(value, InstanceField::Bool(true))
+                    });
+                    if brace && std::ptr::eq(mapping, &category_map::HORIZONTAL_BRACING_MEMBER) {
+                        &category_map::HORIZONTAL_BRACING_BRACE
+                    } else {
+                        mapping
+                    }
+                },
+            );
         if mapping.is_none() && policy.require_mapped_ifc_type {
             continue;
         }

@@ -386,8 +386,14 @@ pub(super) fn attach_beam_axes(
 ///
 /// The same pass gives every framing element its structural usage in
 /// [`STRUCT_USAGE_FIELD`] (#1841), the `m_structUsage` of its record's root: a
-/// usage whose copies disagree, or whose record is not read, is not given.
-pub(super) fn attach_beam_rotations(rf: &mut RevitFile, products: &mut [DecodedElement]) {
+/// usage whose copies disagree, or whose record is not read, is not given. A
+/// horizontal bracing on [`BRACE_TYPE_REVIT_VERSIONS`] also carries
+/// [`BRACE_TYPE_FIELD`].
+pub(super) fn attach_beam_rotations(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
     let beams: BTreeSet<u64> = products
         .iter()
         .filter(|element| element.class == "StructuralFraming")
@@ -448,6 +454,13 @@ pub(super) fn attach_beam_rotations(rf: &mut RevitFile, products: &mut [DecodedE
                     size: 4,
                 },
             ));
+            if u64::try_from(value) == Ok(crate::ifc::category_map::HORIZONTAL_BRACING_USAGE)
+                && BRACE_TYPE_REVIT_VERSIONS.contains(&revit_version)
+            {
+                element
+                    .fields
+                    .push((BRACE_TYPE_FIELD.into(), InstanceField::Bool(true)));
+            }
         }
         if beam_column_cut(element) {
             continue;

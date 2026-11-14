@@ -755,6 +755,16 @@ pub const BEAM_ROTATION_FIELD: &str = "m_beam_cross_section_rotation";
 /// observed.
 pub const STRUCT_USAGE_FIELD: &str = "m_struct_usage";
 
+/// Releases on which a horizontal bracing's type object is written with the
+/// `PredefinedType` `BRACE` (#1841): Revit 2027, a reporter's structural model
+/// (counts only), whose `IfcMemberType` for the bracing carries `BRACE`. On
+/// these releases the member's occurrence carries no `PredefinedType`
+/// (`category_map::predefined_type_left_out`), so only the type takes it.
+pub const BRACE_TYPE_REVIT_VERSIONS: &[u32] = &[2027];
+
+/// Field marking a horizontal bracing on one of [`BRACE_TYPE_REVIT_VERSIONS`].
+pub const BRACE_TYPE_FIELD: &str = "m_brace_type";
+
 /// Fields holding the first end of a beam's location line, model feet
 /// (RE-49).
 pub const BEAM_AXIS_START_FIELDS: [&str; 3] = [

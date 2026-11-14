@@ -260,7 +260,7 @@ pub fn recover_partition_schema_mvp(
         // readers skip it, since the trim rewrote the record box they would test
         // a line against. ---
         if crate::partition_beam_axes::beam_axis_read_on(revit_version) {
-            attach_beam_rotations(rf, &mut out.products);
+            attach_beam_rotations(rf, revit_version, &mut out.products);
             attach_beam_axes(rf, revit_version, &mut out.products);
         }
         // --- A steel beam's I section from its type (RE-103, RE-365) ---
@@ -493,7 +493,7 @@ pub fn recover_partition_schema_mvp(
     // --- Beams' Cross-Section Rotation, from their native records (RE-276),
     // before the axes, which RE-328's level beams longer than their lines
     // need it for ---
-    attach_beam_rotations(rf, &mut out.products);
+    attach_beam_rotations(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49, RE-328) ---
     attach_beam_axes(rf, revit_version, &mut out.products);
     // --- Pipes as cylinders along their ends (RE-131) ---
