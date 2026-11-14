@@ -336,6 +336,11 @@ pub struct RevitFile {
     invisible_type_instances:
         BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
     invisible_type_error: Option<(usize, String)>,
+    /// Curtain panels left out because they are the host panel of another
+    /// curtain wall's grid (#1975), by class, and the error that stopped that
+    /// check.
+    host_panel_instances: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    host_panel_error: Option<(usize, String)>,
     /// The copy of an element's data each reader took a value from, by
     /// ElementId, noted where the reader chose it (#1360). `None` unless the
     /// export asked for the provenance table: the readers then note nothing.
@@ -582,6 +587,8 @@ impl RevitFile {
             bodiless_family_space_error: None,
             invisible_type_instances: BTreeMap::new(),
             invisible_type_error: None,
+            host_panel_instances: BTreeMap::new(),
+            host_panel_error: None,
             value_sources: None,
         })
     }
@@ -715,6 +722,27 @@ impl RevitFile {
         self.invisible_type_error = Some((checked, error));
     }
 
+    pub(crate) fn host_panel_instances(
+        &self,
+    ) -> &BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> {
+        &self.host_panel_instances
+    }
+
+    pub(crate) fn note_host_panel_instances(
+        &mut self,
+        classes: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    ) {
+        self.host_panel_instances = classes;
+    }
+
+    pub(crate) fn host_panel_error(&self) -> Option<&(usize, String)> {
+        self.host_panel_error.as_ref()
+    }
+
+    pub(crate) fn note_host_panel_error(&mut self, checked: usize, error: String) {
+        self.host_panel_error = Some((checked, error));
+    }
+
     /// Forget what an earlier production walk noted for its diagnostics: the
     /// Areas left unwritten, the family spaces left out for want of a body,
     /// the error that stopped that check, and the doors and windows written
@@ -729,6 +757,8 @@ impl RevitFile {
         self.bodiless_family_space_error = None;
         self.invisible_type_instances.clear();
         self.invisible_type_error = None;
+        self.host_panel_instances.clear();
+        self.host_panel_error = None;
         self.unread_type_doors_windows.clear();
         self.disagreeing_type_texts.clear();
         if let Some(noted) = self.value_sources.as_mut() {
