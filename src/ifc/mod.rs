@@ -4763,6 +4763,30 @@ pub(crate) fn build_export_diagnostics_and_decisions(
              type draws nothing visible (RE-363)."
         ));
     }
+    // #1975: a curtain panel that is the host panel of another curtain wall's
+    // grid is left out as Revit's own export leaves it out. A check that could
+    // not run keeps every panel.
+    let host_panels: Vec<crate::partition_element_records::LeftOutElement> = rf
+        .host_panel_instances()
+        .values()
+        .flatten()
+        .cloned()
+        .collect();
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "element_record_curtain_host_panel",
+        None,
+        host_panels,
+        ClassesBy::Class,
+    );
+    if let Some((checked, error)) = rf.host_panel_error() {
+        warnings.push(format!(
+            "{checked} curtain panel(s) could not be checked for being the host panel of another \
+             curtain wall ({error}); they are written, though Revit's export leaves a host panel \
+             out (#1975)."
+        ));
+    }
     if !empty_panels.types_with_material.is_empty() {
         warnings.push(format!(
             "{} empty curtain panel type(s) carry a material, which an empty panel should not: {:?}",
