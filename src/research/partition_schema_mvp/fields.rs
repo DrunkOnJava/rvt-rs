@@ -343,18 +343,21 @@ pub const FURNITURE_RELEASE_FIELD: &str = "m_furniture_release";
 /// of its own or its type's, with the releases each is measured on (RE-419,
 /// #1713, revit-ifc's `IFCExportInfoPair`, CLEANROOM.md source 5):
 /// - furniture: [`FURNITURE_DEFAULT_REVIT_VERSIONS`];
-/// - roofs, stairs and stair flights: 2024 to 2026, written so by Revit's
-///   export on the BIM4LCA files, the R2025 models and the held-out pairs
-///   (#1713's table: 25 roofs, 6 stairs, 4 flights). The 2027 export leaves
-///   the value off these classes (RE-427), and a 2022 file's export
-///   parameters are not read, as for furniture;
+/// - roofs: 2024 to 2026, written so by Revit's export on the BIM4LCA files,
+///   the R2025 models and the held-out pairs (#1713's table: 25 roofs);
+/// - stairs and stair flights: 2024 only, the BIM4LCA timber files (6 stairs,
+///   4 flights). On 2025 and 2026 Revit's export gives every stair and flight
+///   of the measured files a derived type rvt-rs already writes, so no file of
+///   those releases exercises the default, and it is not taken there (RE-353).
+///   The 2027 export leaves the value off roofs, stairs and flights (RE-427),
+///   and a 2022 file's export parameters are not read, as for furniture;
 /// - building element proxies: 2024 to 2027, `NOTDEFINED` on every proxy of
 ///   every pair, 2027's included (RE-427).
 pub const NOTDEFINED_DEFAULTS: [(&str, &[u32]); 5] = [
     ("IFCFURNITURE", FURNITURE_DEFAULT_REVIT_VERSIONS),
     ("IFCROOF", &[2024, 2025, 2026]),
-    ("IFCSTAIR", &[2024, 2025, 2026]),
-    ("IFCSTAIRFLIGHT", &[2024, 2025, 2026]),
+    ("IFCSTAIR", &[2024]),
+    ("IFCSTAIRFLIGHT", &[2024]),
     ("IFCBUILDINGELEMENTPROXY", &[2024, 2025, 2026, 2027]),
 ];
 
