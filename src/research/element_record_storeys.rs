@@ -89,6 +89,11 @@ pub fn elevation_storey_name(elevation_feet: f64) -> String {
 /// means every entry defaulted to 0.0 because the Level rows had no
 /// elevation to give).
 pub fn storeys_lack_elevation_evidence(storeys: &[Storey]) -> bool {
+    // Measurement variant for #1947 item 18: one storey is not "every entry
+    // at one elevation".
+    if storeys.len() == 1 {
+        return false;
+    }
     let mut iter = storeys.iter().map(|s| quantise(s.elevation_feet));
     let Some(first) = iter.next() else {
         return true;
