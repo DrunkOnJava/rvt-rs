@@ -368,6 +368,18 @@ pub const INSTANCE_AXIS_TOLERANCE: f64 = 1e-6;
 /// `m_type_parameter:Type Mark` and so on.
 pub const TYPE_PARAMETER_FIELD_PREFIX: &str = "m_type_parameter:";
 
+/// The caption of the text parameter a door's or window's `FireRating` is
+/// read from where its type's family type table gives none (#1507).
+pub const FIRE_RATING_CAPTION: &str = "Fire Rating";
+
+/// Releases whose doors and windows take their Fire Rating from a saved
+/// parameter captioned [`FIRE_RATING_CAPTION`] (#1507): Revit 2024 to 2027,
+/// the releases the saved parameters are read on with the type-table scan's
+/// 64-bit layout. Held to puzzbobb's Revit 2025 models (models 12 to 17, whose
+/// window types hold `0.5h` that way) and to the held-out 2024 to 2027 pairs,
+/// counts only.
+pub const SAVED_FIRE_RATING_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2024..=2027;
+
 /// Give each element the text parameters of its type ([`TYPE_ID_FIELD`],
 /// RE-38 and #322), as Revit shows a type's parameters on its instances.
 /// Field carrying, once per material, the name of a material an element's
