@@ -413,6 +413,51 @@ pub(super) fn attach_curtain_axes(
     }
 }
 
+/// The releases on which a wall of a curtain wall type is a curtain wall by its
+/// type, which 2023 reads on its own (RE-440): 2024 to 2027, measured on
+/// Autodesk's samples (RE-462).
+const CURTAIN_TYPE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2024..=2027;
+
+/// The walls of `wall_ids` whose type, by the wall's own native record, is a
+/// `NewCurtainWallType` and that are not the host panel of another curtain
+/// wall (RE-462). Nothing on a release not measured, or where a read fails:
+/// no wall is then made a curtain wall by its type.
+fn curtain_walls_by_type(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    wall_ids: &BTreeSet<u32>,
+    wall_reads: &mut crate::native_walls::WallReads,
+) -> BTreeSet<u32> {
+    if !CURTAIN_TYPE_REVIT_VERSIONS.contains(&revit_version) {
+        return BTreeSet::new();
+    }
+    let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
+    let Ok(wall_types) = wall_reads.type_ids(rf, &ids) else {
+        return BTreeSet::new();
+    };
+    let type_ids: BTreeSet<u64> = wall_types.values().copied().collect();
+    let Ok(curtain_types) = crate::native_walls::curtain_wall_types(
+        rf,
+        &type_ids,
+        crate::native_document::NATIVE_RELEASES,
+    ) else {
+        return BTreeSet::new();
+    };
+    if curtain_types.is_empty() {
+        return BTreeSet::new();
+    }
+    let Ok(host_panels) = wall_reads.host_panels(rf, &ids) else {
+        return BTreeSet::new();
+    };
+    wall_types
+        .into_iter()
+        .filter(|(wall, type_id)| {
+            curtain_types.contains_key(type_id) && !host_panels.contains(wall)
+        })
+        .filter_map(|(wall, _)| u32::try_from(wall).ok())
+        .collect()
+}
+
 /// Make every wall a curtain-wall mullion names a curtain wall, and give
 /// each panel and mullion that names exactly one of them that wall as its
 /// aggregate whole (RE-46).
@@ -423,6 +468,16 @@ pub(super) fn attach_curtain_axes(
 /// Architecture the one; no other wall is named by a mullion. Walls named
 /// only by a panel are basic walls used as a panel's infill, which Revit
 /// exports as `IfcWall`, so a panel alone does not make a curtain wall.
+///
+/// A wall whose type is a curtain wall type is one too, with no mullion or
+/// grid naming it, on 2024 to 2027 as on 2023 (RE-440, RE-462): Revit's
+/// exporter makes a wall a curtain wall by the curtain grid it has, which
+/// is its type's, and tests neither mullions nor cells
+/// (`CurtainSystemExporter.IsCurtainSystem`, revit-ifc, CLEANROOM.md source
+/// 5). The mullion-free single cell of `rme_basic`'s 573660 and 573664 was
+/// the case no mullion or grid found. A wall that is the host panel of
+/// another curtain wall's grid is not one: its record holds a
+/// `HostPanelInfo`, and Revit writes none of Snowdon Towers' 23 such walls.
 ///
 /// Some parts name no wall at all, only their sibling mullions: on Snowdon,
 /// the mullions of the "Solar Panels" curtain walls. Such a part takes the
@@ -456,6 +511,7 @@ pub(super) fn attach_curtain_walls(
     products: &mut [DecodedElement],
     openings: [&mut Vec<DecodedElement>; 2],
     narrow_references: Option<&BTreeMap<u32, Vec<u64>>>,
+    wall_reads: &mut crate::native_walls::WallReads,
 ) {
     let read_references = |rf: &mut RevitFile, element: &DecodedElement| match narrow_references {
         Some(lists) => element.id.and_then(|id| lists.get(&id)).cloned(),
@@ -505,6 +561,12 @@ pub(super) fn attach_curtain_walls(
         .collect();
     let grids = scan_curtain_grid_walls(rf, revit_version, &unrecorded, &wall_ids);
     curtain_walls.extend(grids.values().copied());
+    curtain_walls.extend(curtain_walls_by_type(
+        rf,
+        revit_version,
+        &wall_ids,
+        wall_reads,
+    ));
     if curtain_walls.is_empty() {
         return;
     }

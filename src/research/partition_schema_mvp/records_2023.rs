@@ -213,6 +213,9 @@ fn attach_curtain_walls_2023(
     // too, through the one shared read (#1335); the types' own records are one
     // pass more, over those types alone.
     let wall_types = wall_reads.type_ids(rf, &wall_ids).unwrap_or_default();
+    // RE-462: a wall that is the host panel of another curtain wall's grid is
+    // no curtain wall of its own: Revit's exporter folds it into its owner.
+    let host_panels = wall_reads.host_panels(rf, &wall_ids).unwrap_or_default();
     let type_ids: BTreeSet<u64> = wall_types.values().copied().collect();
     let curtain_types = crate::native_walls::curtain_wall_types(
         rf,
@@ -225,6 +228,9 @@ fn attach_curtain_walls_2023(
         let Some(id) = wall.id else {
             continue;
         };
+        if host_panels.contains(&u64::from(id)) {
+            continue;
+        }
         let Some((&type_id, name)) = wall_types
             .get(&u64::from(id))
             .and_then(|type_id| Some((type_id, curtain_types.get(type_id)?)))
