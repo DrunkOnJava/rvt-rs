@@ -112,7 +112,11 @@ Rows, registered on #1839 before the first run:
 
 If S5.3 fails, no function of the column's position and the beam's width is the rule, and the stored join cutbacks (the pair `probe_re122_beam_supports.rs` reads) are what is scored next.
 
-**Results:** to be filled from the runs (the BIM4LCA models first, then the reporter's).
+**Results on the ten BIM4LCA models.** The first run (Measure [43545023417](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43545023417), `aec5cb7b`) printed the table and failed S5.2 for a defect of the probe: a beam whose list names one column that holds only one end had that column taken as the nearest to the other end too, several column widths away, so the scorer set the far end's cap beside a column it does not touch (68 of the 252 ends, 34 beams, 17 on each timber office file). The probe now names no column that lies more than its own extent from the end (`7e4cb26a`); the rerun is Measure [43545940691](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43545940691).
+
+- **S5.1 holds.** The probe and the scorer exit 0 on all ten models. The probe names a column for 218 of the 600 beam ends and the export draws the column of all 218; no column's extent along the beam differs between Revit's export and the probe by over 0.05 ft, so the fraction is measured against the same column in both files.
+- **S5.2 holds.** The box's end and Revit's end are in the same bin on 217 of the 218 ends (99.5%): `near -> near` 215 (the record box ends at the column's near face and so does Revit's beam: section 2, now measured on the column itself), `0-.5 -> 0-.5` 2; the one that differs is `0-.5 -> near`, the box ending inside the column and Revit's beam at its near face, the one beam section 3 found Revit shortens that names a column (3346643, exact at the face). Every beam is narrower than or as wide as its column.
+- **What it leaves open.** The ten models hold no end where the box runs past the column; the 382 ends with no column in line are the other ends of beams that frame into beams or walls. S5.3 and S5.4 are the reporter's model's to answer.
 
 ## 9. Not changed
 
