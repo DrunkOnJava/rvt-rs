@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Which piece of a ceiling in pieces Revit's GrossArea is (#1209, RE-297 section 2).
 
-A ceiling whose sketch is several loops is written by rvt-rs as several
-IfcCovering pieces sharing one Tag (#331). Revit's export writes one
+A ceiling whose sketch is several loops is written by rvt-rs, as by Revit,
+as one IfcCovering with a body extrusion per piece (#331,
+`PIECES_IN_BODY_CLASSES`). Revit's export writes one
 IfcCovering with one `Qto_CoveringBaseQuantities.GrossArea`, the area of one
-piece, and RE-297 found nothing in the record that says which. For every Tag
-rvt-rs writes two or more coverings for, this prints each piece in the order
+piece, and RE-297 found nothing in the record that says which. For every
+covering rvt-rs writes with two or more body extrusions, this prints each piece in the order
 rvt-rs writes them (its sketch's order) with its plan area (its volume over its
 extrusion's depth, holes taken off), marks the piece whose area is Revit's
 GrossArea, and says which pieces hold the plan point of Revit's own placement:
@@ -38,45 +39,45 @@ from ifc_common import site_frame  # noqa: E402
 AREA_RELATIVE = 1e-3
 
 
-def depth_of(product, unit):
-    """The depth of the first extrusion of the product's body, metres, or None."""
+def body_items(product):
+    """The extrusions of the product's body, each a piece of its sketch (`PIECES_IN_BODY_CLASSES`, #331)."""
+    items = []
     for rep in (product.Representation.Representations if product.Representation else []):
-        for item in rep.Items:
-            if item.is_a("IfcExtrudedAreaSolid"):
-                return item.Depth * unit
-            if item.is_a("IfcMappedItem"):
-                for inner in item.MappingSource.MappedRepresentation.Items:
-                    if inner.is_a("IfcExtrudedAreaSolid"):
-                        return inner.Depth * unit
-    return None
+        if rep.RepresentationIdentifier != "Body":
+            continue
+        items.extend(item for item in rep.Items if item.is_a("IfcExtrudedAreaSolid"))
+    return items
 
 
 def pieces(path):
-    """Tag -> [(area m2, plan triangles in Revit feet)] for every IfcCovering, in file order."""
+    """Tag -> [(area m2, plan triangles in Revit feet)] for every IfcCovering, one per body extrusion, in file order."""
     f = ifcopenshell.open(path)
     frame = site_frame(f)
     unit = ifcopenshell.util.unit.calculate_unit_scale(f)
     settings = ifcopenshell.geom.settings()
-    settings.set("use-world-coords", True)
     out = collections.defaultdict(list)
     for c in f.by_type("IfcCovering"):
         if not c.Tag or not c.Representation:
             continue
-        depth = depth_of(c, unit)
-        try:
-            shape = ifcopenshell.geom.create_shape(settings, c)
-        except Exception:
-            out[c.Tag].append((None, None))
-            continue
-        verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
-        faces = np.array(shape.geometry.faces, dtype=int).reshape(-1, 3)
-        tri = verts[faces]
-        cross = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
-        volume = abs(np.einsum("ij,ij->i", tri[:, 0], cross).sum()) / 6.0
-        area = volume / depth if depth else None
-        up = tri[cross[:, 2] > 1e-12]
-        plan = frame(up.reshape(-1, 3)).reshape(-1, 3, 3)[:, :, :2] if len(up) else None
-        out[c.Tag].append((area, plan))
+        placement = ifcopenshell.util.placement.get_local_placement(c.ObjectPlacement).copy()
+        placement[:3, 3] *= unit
+        for item in body_items(c):
+            try:
+                shape = ifcopenshell.geom.create_shape(settings, item)
+            except Exception:
+                out[c.Tag].append((None, None))
+                continue
+            local = np.array(shape.verts if hasattr(shape, "verts") else shape.geometry.verts, dtype=float).reshape(-1, 3)
+            faces = np.array(shape.faces if hasattr(shape, "faces") else shape.geometry.faces, dtype=int).reshape(-1, 3)
+            verts = (np.c_[local, np.ones(len(local))] @ placement.T)[:, :3]
+            tri = verts[faces]
+            cross = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+            volume = abs(np.einsum("ij,ij->i", tri[:, 0], cross).sum()) / 6.0
+            depth = item.Depth * unit
+            area = volume / depth if depth else None
+            up = tri[cross[:, 2] > 1e-12]
+            plan = frame(up.reshape(-1, 3)).reshape(-1, 3, 3)[:, :, :2] if len(up) else None
+            out[c.Tag].append((area, plan))
     return f, out
 
 
