@@ -220,6 +220,13 @@ Area and an MEP space are written.
 - Element records of releases other than 2008 to 2027. Of those, 2008 to 2022, 2026 and 2027 are experimental: 2008 to 2014, outside the 1.0 range, with 2008 to 2010 checked only for consistency within each local file (RE-260) and 2011 to 2014 measured on one local 2013 sample against its 2015 copy (RE-259); 2026 is measured on one project, flowbim's `AA-SingleDwellingHouse` (local only), against Revit's export (RE-124), and on two held-out projects, counts only, and since 0.6.0 2027 against the 2026 copies of Autodesk's sample projects (RE-179), 2019 to 2022 against their 2023 copies (RE-180), and 2015 to 2018 against their 2019 copies (RE-181), none with a Revit export of its own release except one 2015 project, BIMcollab's structural example (RE-198), and one 2018 project, Vitoria's `ALD26 Before` (RE-315), apart from the held-out projects of 2020, 2021, 2022 and 2027, counts only. On 2023 (since 0.4.0): geometry beyond each element's box, wall joins and beam cuts, layered or angled joins and IFC export overrides. On 2016 to 2023, elements in a non-primary design option (measured on Autodesk's `rst_basic` samples only, a `Mass` Revit does not export, with no Revit export of them) and outside the export phase (measured on the held-out Vitoria Project's counts only) are left out since RE-315.
 - Semantic editing of a Revit file. `rvt-write` patches whole streams and
   preserves the rest byte for byte; it does not change model data.
+- Rebar, Structural Beam Systems and Revit assemblies (#1444). The files hold
+  rebar and beam systems as element frames with boxes (346 bars and 16 beam
+  systems on each `rst_basic` save of 2020 to 2027), but no Revit export in
+  reach shows what Revit writes for them: none holds a rebar frame, and the one
+  export of a project with a beam system omits it and its beams (RE-350 §3.3).
+  An assembly needs a reader of its own, its record and its members'
+  references, and none is written (RE-350 §3).
 - Door/Window typing from the opening-index rows (RE-19; the rows name
   system elements, not openings, RE-376) and Level ElementIds from the
   Formats schema (RE-20): both closed negative. Element records supply
