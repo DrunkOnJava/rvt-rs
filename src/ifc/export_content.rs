@@ -3106,7 +3106,10 @@ fn level_slab(
     property_set: Option<&PropertySet>,
 ) -> bool {
     const TOLERANCE_FEET: f64 = 1e-3;
-    if ifc_type != "IFCSLAB" {
+    // RE-238 is measured on floors, roofs and stair landings. A ceiling Revit
+    // exports as `IfcSlab` gets no `PitchAngle` from Revit's export: the
+    // BIM4LCA timber housing's 2337931 (`Compound Ceiling`) as built (#1987).
+    if ifc_type != "IFCSLAB" || decoded.class == "Ceiling" {
         return false;
     }
     let landing = property_set
