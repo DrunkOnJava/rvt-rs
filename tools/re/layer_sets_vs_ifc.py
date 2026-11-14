@@ -134,6 +134,16 @@ def main():
                 stats["layer count: rvt-rs fewer than Revit's" if fewer else "layer count: rvt-rs more than Revit's"] += 1
                 if set(our_names) <= set(revit_names):
                     stats["layer count: every name rvt-rs writes is one of Revit's"] += 1
+                # A membrane has no width, and rvt-rs leaves it out (RE-53).
+                revit_set = ifcopenshell.util.element.get_material(revit, should_skip_usage=True)
+                if revit_set is not None and revit_set.is_a("IfcMaterialLayerSet"):
+                    kept = [
+                        layer.Material.Name if layer.Material else None
+                        for layer in revit_set.MaterialLayers
+                        if layer.LayerThickness > 0
+                    ]
+                    if kept == our_names:
+                        stats["layer count: Revit's names in order once its 0 thick layers are left out"] += 1
             if VERBOSE:
                 print(f"    count {element.Tag}: {our_names} vs {revit_names}")
         # Place the layers.
