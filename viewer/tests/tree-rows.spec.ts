@@ -7,9 +7,11 @@ import { fileURLToPath } from 'node:url';
 // categories, a category's elements, an element's parts) builds its first block
 // when it is opened, or up front while the page has the rows to spend, and a
 // "Show more" row at its end builds the next. Einhoven is the model: a block of
-// 3 rows and nothing built up front (`?treeRowsShown=3&treeRowsEager=0`) puts
+// 1 row and nothing built up front (`?treeRowsShown=1&treeRowsEager=0`) puts
 // most of its groups behind a "Show more" row, which is what a file with a
-// million elements in one category would do at the real limits.
+// million elements in one category would do at the real limits. Its storey
+// holds 3 categories, its windows' category 2 and its curtain wall 24 panels
+// (RE-440): a block of 1 is what makes a group of 2 overflow.
 //
 // The oracle is the tree the page builds without the limits, whole and up front,
 // as it did before the blocks: opened every way a reader can, the blocks must
@@ -19,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const einhoven = path.resolve(__dirname, '../public/demos/Revit_IFC5_Einhoven.rvt');
 const einhovenTest = fs.existsSync(einhoven) ? test : test.skip;
-const BLOCKS = '?treeRowsShown=3&treeRowsEager=0';
+const BLOCKS = '?treeRowsShown=1&treeRowsEager=0';
 
 async function openEinhoven(page: Page, query: string): Promise<void> {
   await page.goto(`/${query}`);
@@ -94,16 +96,16 @@ einhovenTest('a "Show more" row builds the next block and keeps the keyboard whe
   await openEinhoven(page, BLOCKS);
   // The categories of every storey first (level 3), so the one chosen below is built.
   await showAllRows(page, 3);
-  // A category with more than 3 elements: opened, its group lists 3 and a row.
+  // A category with more than 1 element: opened, its group lists 1 and a row.
   const category = page
     .locator('.tree-node.tree-category')
-    .filter({ has: page.locator('.tree-count', { hasText: /^([4-9]|\d{2,})$/ }) })
+    .filter({ has: page.locator('.tree-count', { hasText: /^([2-9]|\d{2,})$/ }) })
     .first();
   await expect(category).toBeAttached();
   await category.evaluate((row) => (row as HTMLElement).click());
   const group = category.locator('xpath=following-sibling::*[contains(@class, "tree-children")]');
   const elements = group.locator(':scope > .tree-item > .tree-node.tree-element');
-  await expect(elements).toHaveCount(3);
+  await expect(elements).toHaveCount(1);
   const more = group.locator(':scope > .tree-item > .tree-node.tree-more');
   await expect(more).toHaveCount(1);
   const remaining = Number(/([\d,]+) not listed/.exec((await more.textContent()) ?? '')![1]!.replace(/,/g, ''));
@@ -111,10 +113,15 @@ einhovenTest('a "Show more" row builds the next block and keeps the keyboard whe
   // Enter on the row builds the next block; the focus stays on the row, which says what is left.
   await more.evaluate((row) => (row as HTMLElement).focus());
   await more.press('Enter');
-  await expect(elements).toHaveCount(Math.min(6, 3 + remaining));
-  if (remaining > 3) {
+  await expect(elements).toHaveCount(Math.min(2, 1 + remaining));
+  if (remaining > 1) {
     await expect(more).toBeFocused();
-    await expect(more).toContainText(`${remaining - 3} not listed`);
+    await expect(more).toContainText(`${remaining - 1} not listed`);
+  } else {
+    // With none left the row goes, and the keyboard moves to the first row it
+    // built (`showMoreTreeRows`): on Einhoven's 2 windows, the second.
+    await expect(more).toHaveCount(0);
+    await expect(elements.nth(1)).toBeFocused();
   }
 });
 
@@ -123,7 +130,7 @@ einhovenTest('the filter lists an element whose block was not built, and says wh
 }) => {
   test.setTimeout(240_000);
   await openEinhoven(page, '');
-  // An element of a category that is not among the first 3 of its group, with a name only it has.
+  // An element of a category that is not the first of its group, with a name only it has.
   const target = await page.evaluate(() => {
     const rows = [...document.querySelectorAll<HTMLElement>('.tree-node.tree-element[data-entity-index]')];
     const names = rows.map((row) => row.title.split(' · ')[0]!.toLowerCase());
@@ -132,13 +139,13 @@ einhovenTest('the filter lists an element whose block was not built, and says wh
       const group = wrap.parentElement!;
       const position = [...group.children].indexOf(wrap);
       const ownerIsCategory = group.previousElementSibling?.classList.contains('tree-category') ?? false;
-      if (position >= 3 && ownerIsCategory && names.filter((other) => other.includes(names[i]!)).length === 1) {
+      if (position >= 1 && ownerIsCategory && names.filter((other) => other.includes(names[i]!)).length === 1) {
         return { index: rows[i]!.dataset.entityIndex!, name: rows[i]!.title.split(' · ')[0]! };
       }
     }
     return null;
   });
-  expect(target, 'Einhoven has an element past the third of its category with a name of its own').not.toBeNull();
+  expect(target, 'Einhoven has an element past the first of its category with a name of its own').not.toBeNull();
 
   await openEinhoven(page, BLOCKS);
   expect(await page.locator(`.tree-node[data-entity-index="${target!.index}"]`).count()).toBe(0);
@@ -149,11 +156,11 @@ einhovenTest('the filter lists an element whose block was not built, and says wh
   // The rest of its category stays out of the way while the filter holds.
   await expect(page.locator('.tree-node.tree-element:visible')).toHaveCount(1);
 
-  // Every element's row says its IFC class, so "ifc" matches them all: 12 are
-  // listed (4 blocks of 3), and the status line says that there are more.
+  // Every element's row says its IFC class, so "ifc" matches them all: 4 are
+  // listed (4 blocks of 1), and the status line says that there are more.
   await filter.fill('ifc');
-  await expect(page.locator('#tree-filter-status')).toHaveText(/^\d+ elements match; the first 12 are listed$/);
-  expect(await page.locator('.tree-node.tree-element:visible').count()).toBeGreaterThanOrEqual(12);
+  await expect(page.locator('#tree-filter-status')).toHaveText(/^\d+ elements match; the first 4 are listed$/);
+  expect(await page.locator('.tree-node.tree-element:visible').count()).toBeGreaterThanOrEqual(4);
 
   // Clearing it gives the tree back, with the row the filter built kept.
   await filter.press('Escape');

@@ -1683,10 +1683,13 @@ fn export_rvt_doc_reporting(
             })
             .collect();
         for wall in &scan.walls {
-            if let Some(id) = wall.element_id() {
-                if existing_ids.contains(&id) {
-                    continue;
-                }
+            // Every match the scan keeps has an ElementId whose native record is
+            // a wall (RE-440): one with none is left out there.
+            let Some(id) = wall.element_id() else {
+                continue;
+            };
+            if existing_ids.contains(&id) {
+                continue;
             }
             let geometry = if policy.include_geometry {
                 arcwall_geometry_from_partition_wall(wall)
@@ -1697,14 +1700,11 @@ fn export_rvt_doc_reporting(
                 crate::partition_arc_walls::storey_index_for_elevation(&building_storeys, elev)
             });
             let property_set = arcwall_property_set(wall);
-            let name = match wall.element_id() {
-                Some(id) => format!("ArcWall-{id}"),
-                None => format!("ArcWall-{}-{}", wall.partition, wall.offset),
-            };
+            let name = format!("ArcWall-{id}");
             entities.push(entities::IfcEntity::BuildingElement {
                 ifc_type: "IFCWALL".to_string(),
                 name,
-                type_guid: wall.element_id().map(|id| id.to_string()),
+                type_guid: Some(id.to_string()),
                 predefined_type: category_map::lookup("ArcWall")
                     .and_then(|m| m.predefined_type)
                     .map(str::to_string),
@@ -2829,10 +2829,14 @@ fn revit_model_global_ids(
     // (B72). An instance that uses its own geometry has no original symbol;
     // its type, a door's too, is a sub-element of it (`InstanceAsType`).
     let mut doors_and_windows: std::collections::BTreeSet<u32> = Default::default();
+    // The doors and windows set in a host: RE-167 says only that a door with
+    // no host is not flipped.
+    let mut hosted: std::collections::BTreeSet<u32> = Default::default();
     for entity in entities {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             type_guid: Some(tag),
+            host_element_index,
             ..
         } = entity
         else {
@@ -2843,6 +2847,9 @@ fn revit_model_global_ids(
         }
         if let Ok(id) = tag.parse::<u32>() {
             doors_and_windows.insert(id);
+            if host_element_index.is_some() {
+                hosted.insert(id);
+            }
         }
     }
     for (element, original) in element_original_symbols {
@@ -2858,7 +2865,14 @@ fn revit_model_global_ids(
             continue;
         };
         if doors_and_windows.contains(element) {
-            let flipped = element_flips.get(element).copied().unwrap_or(false);
+            // A hosted door whose flip was not read (its host's frame or its
+            // facing) gets no Revit GlobalId for its type rather than one
+            // hashed with a guessed flip; the writer derives one (#1947).
+            let flipped = match element_flips.get(element) {
+                Some(&flipped) => flipped,
+                None if hosted.contains(element) => continue,
+                None => false,
+            };
             out.element_types.insert(
                 *element,
                 door_type_global_id(global_id, flipped, revit_version),
@@ -2983,7 +2997,10 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
     // Revit's export names each after its host and its place among the
     // host's openings, the cutting instance with the highest ElementId first:
     // `Basic Roof:YP-1:2991742:1` is hatch 2896992's, `:4` hatch 2053330's.
-    let mut cut_counts: std::collections::BTreeMap<usize, u32> = Default::default();
+    // The place is among every cut naming the host, counted before any is
+    // declined below: an opening that is not written still takes its number,
+    // so the ones after it keep Revit's names and GlobalIds (#1947).
+    let mut cut_counts: std::collections::BTreeMap<u64, u32> = Default::default();
     let mut cuts = cuts;
     cuts.sort_by_key(|cut| std::cmp::Reverse(cut.instance));
     // The one building element carrying each tag (`None` where several do),
@@ -3003,6 +3020,11 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
         }
     }
     for cut in cuts {
+        let number = {
+            let count = cut_counts.entry(cut.host).or_insert(0);
+            *count += 1;
+            *count
+        };
         let Some(transform) = u32::try_from(cut.instance)
             .ok()
             .and_then(|id| transforms.get(&id))
@@ -3044,13 +3066,11 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
                 (dx * cos - dy * sin, dx * sin + dy * cos)
             })
             .collect();
-        let count = cut_counts.entry(host).or_insert(0);
-        *count += 1;
         openings.push(entities::IfcEntity::HostedCutOpening {
             host,
-            number: *count,
+            number,
             tag,
-            name: format!("{name}:{count}"),
+            name: format!("{name}:{number}"),
             outline_feet,
             depth_feet: depth,
         });
@@ -3534,7 +3554,10 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
     // plan centre and base, so `location_feet` is that base exactly as for
     // the record box it replaces. It is listed so that these beams bind by
     // their base as they did before that body; leaving it out would change
-    // a written value (their storey binding), listing it changes none.
+    // a written value (their storey binding), listing it changes none. A
+    // column or beam drawn as its type's I or hollow section is the same: the
+    // section replaces the record box's footprint and must fit it, and the
+    // element stays at the box's plan centre and base (#1947).
     let from_record = property_set.as_ref().is_some_and(|set| {
         set.properties.iter().any(|property| {
             property.name == "BodySource"
@@ -3546,6 +3569,8 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
                             || text == crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED
                             || text == crate::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
                             || text == crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT
+                            || text == export_content::COLUMN_I_SECTION_BODY_SOURCE
+                            || text == export_content::COLUMN_HOLLOW_SECTION_BODY_SOURCE
                 )
         })
     });
@@ -3693,6 +3718,59 @@ fn apply_record_level_reference_storeys(
                     value: entities::PropertyValue::Text(STOREY_BIND_RECORD_LEVEL_REFERENCE.into()),
                 });
             }
+        }
+    }
+}
+
+/// How many exported elements, parts of an aggregate left out, reached
+/// their storey by each join, for the storey warning.
+#[derive(Debug, Default)]
+struct StoreyBindCounts {
+    /// Through the Level ElementId the record names (#219, RE-27).
+    level_reference: usize,
+    /// Through a measured base or top elevation (#213, #212).
+    elevation: usize,
+    /// In a storey with no `StoreyBindSource`.
+    other: usize,
+    /// In no storey: contained in the building.
+    unbound: usize,
+}
+
+impl StoreyBindCounts {
+    /// The warning's clause on the elements. It names every join that
+    /// placed at least one element and says "all" where one placed them
+    /// all, so a count of zero is never described.
+    fn sentence(&self) -> String {
+        const LEVEL_REFERENCE: &str = "reached their storey through the Level ElementId their \
+             own element record names (#219, RE-27; the base constraint where it names two, RE-59)";
+        let total = self.level_reference + self.elevation + self.other + self.unbound;
+        if self.level_reference == total {
+            return format!("all {total} element(s) {LEVEL_REFERENCE}.");
+        }
+        let mut clauses = vec![format!(
+            "{} of the {total} element(s) {LEVEL_REFERENCE}",
+            self.level_reference
+        )];
+        if self.elevation > 0 {
+            clauses.push(format!(
+                "{} through a measured elevation match (#213)",
+                self.elevation
+            ));
+        }
+        if self.other > 0 {
+            clauses.push(format!("{} through another rule", self.other));
+        }
+        if self.unbound > 0 {
+            clauses.push(format!(
+                "{} reached no storey and are contained in the building",
+                self.unbound
+            ));
+        }
+        let last = clauses.pop().unwrap_or_default();
+        match clauses.len() {
+            0 => format!("{last}."),
+            1 => format!("{} and {last}.", clauses[0]),
+            _ => format!("{}, and {last}.", clauses.join(", ")),
         }
     }
 }
@@ -4811,7 +4889,9 @@ pub(crate) fn build_export_diagnostics_and_decisions(
     }
     if model.building_storeys.is_empty() {
         warnings.push(
-            "No Revit levels were recovered; STEP output uses the fallback spatial storey.".into(),
+            "No Revit levels were recovered: the IFC has no storey, and its elements are \
+             contained in the building (RE-124)."
+                .into(),
         );
     } else {
         let elevation_fallback = model
@@ -4820,21 +4900,47 @@ pub(crate) fn build_export_diagnostics_and_decisions(
             .filter(|storey| storey.name.starts_with("Elevation "))
             .count();
         let named = model.building_storeys.len() - elevation_fallback;
-        // #219 / RE-27: how many elements reached their storey through
-        // the Level ElementId their record names, rather than through
-        // an inferred elevation match.
-        let level_reference_bound = model
+        // #219 / RE-27: how the elements reached their storey: through
+        // the Level ElementId their record names, through a measured
+        // elevation match, otherwise, or not at all. A part of an
+        // aggregate is placed through its whole and is not counted.
+        let parts: std::collections::HashSet<usize> = model
             .entities
             .iter()
-            .filter(|entity| storey_bind_source(entity) == Some(STOREY_BIND_RECORD_LEVEL_REFERENCE))
-            .count();
-        if named > 0 && level_reference_bound == 0 {
+            .filter_map(|entity| match entity {
+                entities::IfcEntity::Aggregate { parts, .. } => Some(parts.iter().copied()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        let mut storey_binds = StoreyBindCounts::default();
+        for (index, entity) in model.entities.iter().enumerate() {
+            let entities::IfcEntity::BuildingElement { storey_index, .. } = entity else {
+                continue;
+            };
+            if parts.contains(&index) {
+                continue;
+            }
+            match (storey_index, storey_bind_source(entity)) {
+                (None, _) => storey_binds.unbound += 1,
+                (Some(_), Some(STOREY_BIND_RECORD_LEVEL_REFERENCE)) => {
+                    storey_binds.level_reference += 1
+                }
+                (
+                    Some(_),
+                    Some(STOREY_BIND_RECORD_ELEVATION | STOREY_BIND_RECORD_TOP_ELEVATION),
+                ) => storey_binds.elevation += 1,
+                (Some(_), _) => storey_binds.other += 1,
+            }
+        }
+        if named > 0 && storey_binds.level_reference == 0 {
             warnings.push(format!(
                 "{named} building storey name(s) came from partition Level-like strings (RE-15/#86 via PR #117); ElementId↔Level binding is still pending."
             ));
         } else if named > 0 {
             warnings.push(format!(
-                "{named} building storey name(s) came from partition Level records; {level_reference_bound} building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
+                "{named} building storey name(s) came from partition Level records; {}",
+                storey_binds.sentence()
             ));
         }
         if elevation_fallback > 0 {
@@ -5240,14 +5346,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut building_elements = 0usize;
     let mut building_elements_with_geometry = 0usize;
     let mut storey_bound_elements = 0usize;
-    let wholes: std::collections::BTreeSet<usize> = model
-        .entities
-        .iter()
-        .filter_map(|entity| match entity {
-            entities::IfcEntity::Aggregate { whole, .. } => Some(*whole),
-            _ => None,
-        })
-        .collect();
+    let wholes = wholes_carried_by_parts(model);
     let mut building_elements_carried_by_parts = 0usize;
     let mut body_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut bounding_box_bodies = 0usize;
@@ -5544,6 +5643,38 @@ fn element_tag(type_guid: &Option<String>) -> Option<u32> {
     type_guid.as_deref().and_then(|tag| tag.parse().ok())
 }
 
+/// The building elements that are the whole of an `IfcRelAggregates` with at
+/// least one part that has a body: the parts carry the whole's body, as Revit's
+/// export draws a stair (RE-39) and a curtain wall (RE-46). A whole whose parts
+/// have no body is not carried, and still lacks its body (RE-440). The one rule
+/// the export summary's `building_elements_carried_by_parts` and the geometry
+/// gaps both read, so an element is never counted as both.
+fn wholes_carried_by_parts(model: &IfcModel) -> std::collections::BTreeSet<usize> {
+    let has_body = |index: usize| {
+        matches!(
+            model.entities.get(index),
+            Some(entities::IfcEntity::BuildingElement {
+                extrusion,
+                solid_shape,
+                representation_map_index,
+                ..
+            }) if extrusion.is_some() || solid_shape.is_some() || representation_map_index.is_some()
+        )
+    };
+    model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::Aggregate { whole, parts }
+                if parts.iter().any(|&part| has_body(part)) =>
+            {
+                Some(*whole)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// The geometry gaps of `model` as `skipped` items, and the decision behind
 /// each element counted in them (#1326). A piece the writer folds into another
 /// element's body is none of the elements counted (#1424).
@@ -5576,6 +5707,10 @@ fn geometry_gap_skipped_items(
     );
 
     let placements = step_writer::placements(model);
+    // A whole whose aggregated parts carry its body, as Revit's export draws a
+    // stair (RE-39) and a curtain wall (RE-46), lacks no body of its own: it is
+    // counted in `building_elements_carried_by_parts` (RE-440).
+    let wholes = wholes_carried_by_parts(model);
     for (index, entity) in model.entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -5620,10 +5755,11 @@ fn geometry_gap_skipped_items(
         if location_feet.is_none() {
             unsupported_curve.add(ifc_type, name, id);
         }
-        if !has_body_shape {
+        let carried_by_parts = !has_body_shape && wholes.contains(&index);
+        if !has_body_shape && !carried_by_parts {
             missing_dimensions.add(ifc_type, name, id);
         }
-        if location_feet.is_some() && !has_body_shape {
+        if location_feet.is_some() && !has_body_shape && !carried_by_parts {
             unsupported_profile.add(ifc_type, name, id);
         }
         if hosted_geometry_type(ifc_type) && host_element_index.is_none() {

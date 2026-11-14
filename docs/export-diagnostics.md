@@ -591,7 +591,10 @@ the `unsupported_geometry_*` prefix and currently include
 `unsupported_geometry_unresolved_host`, `unsupported_geometry_missing_level`,
 and `unsupported_geometry_missing_dimensions`. A single element can appear in
 more than one geometry bucket because these are condition counts, not a
-deduplicated element total.
+deduplicated element total. A whole whose aggregated parts carry its body, a
+stair or curtain wall as Revit's export draws them, is in neither
+`unsupported_geometry_profile` nor `unsupported_geometry_missing_dimensions`:
+it is counted in `exported.building_elements_carried_by_parts` (RE-440).
 
 `stream_not_read_resource_limit` lists the streams a resource limit kept from
 being read whole (#1075): `classes` maps each stream's name (`Partitions/189`)
@@ -914,6 +917,13 @@ The property's *absence* is the honest unbound state. An unbound element is
 contained in the `IfcBuilding`, which says "in this building, storey unknown";
 it is never written into the first storey, because that would state a
 containment nothing measured.
+
+Where the storeys' names come from Level records, a line of `warnings` counts
+the exported elements by how they reached their storey: through the Level
+ElementId, through a measured elevation match (either face), in a storey with
+no `StoreyBindSource`, and in no storey. A part of an aggregate, such as a
+curtain wall's panel, is placed through its whole and is not counted. Where the Level ElementId placed every element, the line says "all
+N element(s)"; a join that placed none is not named.
 
 `LevelBindResolved` still stays `false` for every element whose storey came
 from an elevation match, and for the typed `Floor` / `Room` `m_level_id` join,

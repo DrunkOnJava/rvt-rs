@@ -277,7 +277,9 @@ realProjectDemoTest(
     await expect(page.locator('.tree-node.tree-storey').first()).toBeVisible();
 
     await page.locator('#diagnostics-details summary').click();
-    await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 4');
+    // Einhoven's one Level is its storey (RE-440): the four storeys before were
+    // the base elevations of the ArcWall matches, its curtain wall's parts.
+    await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 1');
     // Geometry decoded, so the scaffold explainer must stay out of the way.
     await expect(page.locator('#scaffold-note')).toBeHidden();
     expect(await viewportScreenshotHasVisibleContent(page)).toBe(true);
@@ -494,8 +496,9 @@ projectSampleTest(
     await expect(page.locator('#download-diagnostics')).toBeEnabled();
     await expect(page.locator('#export-quality')).toContainText(/Geometry|Typed|Scaffold/);
 
-    // Elevation-derived ArcWall storeys remove the missing-level gap for
-    // walls, and a 2023 file has no Floor/Room element records to leave one.
+    // Every element reaches Einhoven's one Level through its own record
+    // (RE-440), and a 2023 file has no Floor/Room element records to leave a
+    // missing-level gap.
     await expect(page.locator('#status-panel')).toContainText('Partial decode');
     await expect(page.locator('#status-panel')).toContainText(/unit|thickness|storey/i);
     // Document identity from the BasicFileInfo text block + Atom entry.
@@ -525,18 +528,18 @@ projectSampleTest(
     );
     await page.locator('#diagnostics-details summary').click();
     await expect(page.locator('#diagnostics-json')).toContainText('"schema_version": 1');
-    await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 4');
+    await expect(page.locator('#diagnostics-json')).toContainText('"storey_count": 1');
     await expect(page.locator('#diagnostics-json')).toContainText('"storey_names"');
     // Einhoven's material list is its 36 material objects since RE-116 (42
     // partition display strings before). Keep in sync with
     // tests/fixtures/project-counts/revit-ifc5-einhoven.json.
     await expect(page.locator('#diagnostics-json')).toContainText('"material_count": 36');
-    await expect(page.locator('#diagnostics-json')).toContainText('lack recovered thickness');
-    // ArcWalls are storey-assigned. The 13 elements from 2023 element records
-    // (RE-81) carry no storey, because 2023 storeys are not decoded, and the
-    // diagnostics say so instead of guessing one.
-    await expect(page.locator('#diagnostics-json')).toContainText(
-      'unsupported_geometry_missing_level=13',
+    // RE-440: no element is left without its thickness or its storey now. The
+    // walls that lacked a thickness were the ArcWall matches, and all 28
+    // elements reach the one Level through their own record.
+    await expect(page.locator('#diagnostics-json')).not.toContainText('lack recovered thickness');
+    await expect(page.locator('#diagnostics-json')).not.toContainText(
+      'unsupported_geometry_missing_level',
     );
     await expect(page.locator('#diagnostics-json')).toContainText(
       'Revit 2023: elements come from their records',
@@ -568,8 +571,9 @@ projectSampleTest(
     // clears it.
     const filter = page.locator('#tree-filter');
     await expect(filter).toBeEnabled();
-    await filter.fill('ArcWall');
-    await expect(page.locator('#tree-filter-status')).toHaveText(/^\d+ elements? match$/);
+    await filter.fill('Basic Wall');
+    // Einhoven's one wall (RE-440): the line is singular.
+    await expect(page.locator('#tree-filter-status')).toHaveText(/^(1 element matches|\d+ elements match)$/);
     await expect(page.locator('.tree-node.tree-element[data-ifc-type="IFCWALL"]').first()).toBeVisible();
     await filter.fill('no element is named this');
     await expect(page.locator('#tree-filter-status')).toHaveText('No element matches');
@@ -582,9 +586,21 @@ projectSampleTest(
 
     // The property set is a titled group with one row per property,
     // values carrying their unit and booleans reading as words.
-    const properties = info.locator('[data-group="properties"]');
+    // An element from its 2023 record carries its record's geometry set beside
+    // its other sets (Constraints, Phasing, Pset_WallCommon and more, RE-440):
+    // the checks below read that one group.
+    const properties = info
+      .locator('[data-group="properties"]')
+      .filter({ hasText: 'RvtElementRecordGeometry' });
+    await expect(properties).toHaveCount(1);
     await expect(properties).toBeVisible();
-    await expect(properties).toContainText('RvtArcWall');
+    // It holds 15 properties, more than PROPERTY_COLLAPSE_THRESHOLD (8), so it
+    // is folded behind its summary: open it as a reader would.
+    const fold = properties.locator('details');
+    if ((await fold.count()) > 0) {
+      await fold.first().locator('summary').click();
+      await expect(fold.first()).toHaveAttribute('open', '');
+    }
     const propertyRows = properties.locator('.info-row');
     expect(await propertyRows.count()).toBeGreaterThan(3);
     // Booleans read as words rather than `true` / `false`.
@@ -595,7 +611,7 @@ projectSampleTest(
     // Lengths carry their unit, and the row is tagged with the value
     // kind the Rust panel assigned it.
     await expect(
-      properties.locator('.info-row', { hasText: 'UnconnectedHeight' }).locator('.v'),
+      properties.locator('.info-row', { hasText: 'BoundingBoxHeight' }).locator('.v'),
     ).toHaveText(/^-?\d+\.\d{3} ft$/);
     await expect(
       properties.locator('.info-row[data-property-kind="length"]').first(),
@@ -640,7 +656,8 @@ projectSampleTest(
     // the diagnostics do not call material a decode gap, the panel
     // must not claim it was "not recovered" either.
     await wallNode.click();
-    await expect(info.locator('[data-group="properties"]')).toBeVisible();
+    // The wall has several property groups (RE-440); the first is enough here.
+    await expect(info.locator('[data-group="properties"]').first()).toBeVisible();
     await expect(info.locator('[data-group="material"]')).toHaveCount(0);
     await expect(info).not.toContainText(/Not recovered:[^\n]*material/);
 
@@ -662,8 +679,8 @@ projectSampleTest(
       /\d+ scheduled elements · \d+ types?/,
     );
 
-    // Einhoven (2023) exports its ArcWalls and nothing else: rooms and
-    // floors come from element records only, and 2023 has none that decode.
+    // Einhoven (2023) exports one wall, one curtain wall of 24 panels and two
+    // windows (RE-440): it has no rooms or floors.
     const groups = schedule.locator('.schedule-row');
     expect(await groups.count()).toBeGreaterThanOrEqual(1);
     await expect(schedule.locator('[data-ifc-type="IFCWALL"]')).toBeVisible();
@@ -725,10 +742,11 @@ projectSampleTest(
     await expect(zoom).toBeVisible();
     await page.locator('#viewport').focus();
     await page.keyboard.press('f');
-    await expect(page.locator('#status')).toHaveText(/^Zoomed to ArcWall/);
+    // Einhoven's one wall, Basic Wall:Wall 1:2808 (RE-440).
+    await expect(page.locator('#status')).toHaveText(/^Zoomed to Basic Wall/);
     await page.locator('#status').evaluate((el) => (el.textContent = ''));
     await zoom.click();
-    await expect(page.locator('#status')).toHaveText(/^Zoomed to ArcWall/);
+    await expect(page.locator('#status')).toHaveText(/^Zoomed to Basic Wall/);
 
     // Escape clears the selection, so F frames the whole model again.
     await page.keyboard.press('Escape');
@@ -743,18 +761,21 @@ projectSampleTest('dragging to orbit does not change the selection', async ({ pa
   await page.locator('#file-input').setInputFiles(projectSamplePath!);
   await expect(page.locator('#status')).toHaveText(/Loaded/);
 
-  // Frame the first wall so it sits under the middle of the view.
-  const wallCategory = page.locator('.tree-node.tree-category[data-ifc-type="IFCWALL"]').first();
-  await wallCategory.click();
-  const walls = page.locator(
+  // Frame the first window so it sits under the middle of the view. Einhoven
+  // has one wall and two windows (RE-440), so the two elements are windows.
+  const windowCategory = page
+    .locator('.tree-node.tree-category[data-ifc-type="IFCWINDOW"]')
+    .first();
+  await windowCategory.click();
+  const windows = page.locator(
     '.tree-node.tree-category[aria-expanded="true"] + .tree-children .tree-node.tree-element',
   );
-  await walls.nth(0).click();
+  await windows.nth(0).click();
   await expect(page.locator('#zoom-to-element')).toBeVisible();
   await page.locator('#zoom-to-element').click();
   await expect(page.locator('#status')).toHaveText(/^Zoomed to /);
-  // Select another wall, then drag starting over the framed one.
-  await walls.nth(1).click();
+  // Select the other window, then drag starting over the framed one.
+  await windows.nth(1).click();
   const selected = await page.locator('.tree-node.selected').textContent();
   const box = (await page.locator('#viewport canvas').boundingBox())!;
   const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];

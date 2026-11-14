@@ -99,8 +99,6 @@ const CASES: [Case; 5] = [
             "body_is_record_box",
             "low_confidence_schema_scan_candidate",
             "saved_mesh_not_used",
-            "unsupported_geometry_missing_dimensions",
-            "unsupported_geometry_profile",
             "unsupported_geometry_unresolved_host",
         ],
         frames: false,
@@ -113,13 +111,12 @@ const CASES: [Case; 5] = [
     },
     // Einhoven keeps no box: every boxed element of a Revit 2023 file is drawn
     // from its saved mesh by default (#1191), so `body_is_record_box` is not one.
+    // Its elements are all on its one Level, and its curtain wall's body is its
+    // panels' (RE-440), so no geometry gap is one either.
     Case {
         model: "Revit_IFC5_Einhoven",
         phase: None,
-        reasons: &[
-            "low_confidence_schema_scan_candidate",
-            "unsupported_geometry_missing_level",
-        ],
+        reasons: &["low_confidence_schema_scan_candidate"],
         frames: false,
     },
     // The office has no family-instance space left as a box for the same

@@ -275,19 +275,35 @@ pub fn curtain_wall_type_names(
     rf: &mut RevitFile,
     types: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, String>> {
+    Ok(curtain_wall_types(rf, types, Options::default().releases)?
+        .into_iter()
+        .filter_map(|(id, name)| Some((id, name?)))
+        .collect())
+}
+
+/// Each type in `types` whose native record is a `NewCurtainWallType`, with
+/// its `SymbolInfo.m_name` where the record holds one, read on `releases`. The
+/// class alone says the type is a curtain wall's; the name is only its label
+/// (RE-440).
+pub fn curtain_wall_types(
+    rf: &mut RevitFile,
+    types: &BTreeSet<u64>,
+    releases: std::ops::RangeInclusive<u32>,
+) -> anyhow::Result<BTreeMap<u64, Option<String>>> {
     let mut out = BTreeMap::new();
     if types.is_empty() {
         return Ok(out);
     }
     let options = Options {
         selected_ids: types.clone(),
+        releases,
         ..Options::default()
     };
     extract_graphs(rf, &options, |record| {
         if record.class_name.as_deref() != Some("NewCurtainWallType") {
             return Ok(());
         }
-        if let Some(name) = record.graph.as_ref().and_then(|graph| {
+        let name = record.graph.as_ref().and_then(|graph| {
             graph
                 .objects
                 .iter()
@@ -295,9 +311,9 @@ pub fn curtain_wall_type_names(
                 .fields
                 .get("m_name")?
                 .as_str()
-        }) {
-            out.insert(record.identity.element_id, name.to_string());
-        }
+                .map(str::to_string)
+        });
+        out.insert(record.identity.element_id, name);
         Ok(())
     })?;
     Ok(out)
@@ -747,6 +763,21 @@ impl WallReads {
         Ok(walls
             .iter()
             .filter_map(|id| Some((*id, *self.bearing.get(id)?)))
+            .collect())
+    }
+
+    /// The type (`m_WallAttributesId`) of each of `walls` whose record names
+    /// one, reading only the walls not read already: the same read
+    /// [`Self::type_functions`] and `read_wall_records` share (#1335, RE-440).
+    pub fn type_ids(
+        &mut self,
+        rf: &mut RevitFile,
+        walls: &BTreeSet<u64>,
+    ) -> anyhow::Result<BTreeMap<u64, u64>> {
+        self.read(rf, walls, &BTreeSet::new())?;
+        Ok(walls
+            .iter()
+            .filter_map(|id| Some((*id, *self.type_ids.get(id)?)))
             .collect())
     }
 

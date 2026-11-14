@@ -29,6 +29,7 @@
       "IFCMATERIAL": 87,
       "IFCMATERIALCONSTITUENT": 6,
       "IFCMATERIALCONSTITUENTSET": 4,
+      "IFCMATERIALDEFINITIONREPRESENTATION": 86,
       "IFCMATERIALLAYER": 9,
       "IFCMATERIALLAYERSET": 8,
       "IFCMATERIALLAYERSETUSAGE": 407,
@@ -43,9 +44,9 @@
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 6598,
       "IFCPROPERTYSINGLEVALUE": 28589,
-      "IFCQUANTITYAREA": 1241,
-      "IFCQUANTITYLENGTH": 1440,
-      "IFCQUANTITYVOLUME": 1178,
+      "IFCQUANTITYAREA": 1253,
+      "IFCQUANTITYLENGTH": 1446,
+      "IFCQUANTITYVOLUME": 1184,
       "IFCRECTANGLEPROFILEDEF": 754,
       "IFCRELAGGREGATES": 13,
       "IFCRELASSOCIATESMATERIAL": 412,
@@ -64,6 +65,7 @@
       "IFCSPACE": 116,
       "IFCSPACETYPE": 116,
       "IFCSTYLEDITEM": 86,
+      "IFCSTYLEDREPRESENTATION": 86,
       "IFCSURFACESTYLE": 86,
       "IFCSURFACESTYLERENDERING": 86,
       "IFCTRIANGULATEDFACESET": 138,
@@ -705,7 +707,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "7063cb8434c707f960b5ac1d22f916d05f264ea1717c1041ec63f4f0e6db1f11",
+  "observation_hash_sha256": "25f3862ae0bc4578015ce67a354de4c7073aa54bdedefc94bd3569dc684e95e0",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
@@ -718,7 +720,7 @@
     "partial_revit_element_parameters"
   ],
   "warnings": [
-    "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
+    "15 building storey name(s) came from partition Level records; all 970 element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59)."
   ],
   "witness_id": "rvt-rs",
   "witness_version": "0.22.0"

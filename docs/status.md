@@ -264,7 +264,8 @@ parts of the model that are actually decoded.
 not a production RVT-to-IFC converter for arbitrary architectural projects.
 Production `walker::iter_elements` prefers typed MVP decoders on
 `Global/Latest` (fail closed), merges version-gated 2023 ArcWall partition
-recovers, and additionally merges fail-closed partition MVP recovers for
+recovers whose native record is a wall (none on any local file: Einhoven's
+pattern matches are its curtain wall's parts, RE-440), and additionally merges fail-closed partition MVP recovers for
 `Level` (elevation + name), `Material` (display-name candidates), and — on
 Revit 2024 — `Wall`, `Door`, `Window`, `Column`, `Floor` and `BuildingPad`
 instances from partition element records. The 2024 rows RE-15 read as an
@@ -1178,7 +1179,8 @@ counts the Revit parameter values written into the export's property sets
 storey's elements by category, type name first, with curtain-wall and
 stair parts under their whole. Elements reach their storey from the
 Level their record names (RE-59, RE-60): all 970 of Core Interior's
-building elements sit on Revit's storey, and ArcWalls bind by elevation.
+building elements sit on Revit's storey, and all 28 of Einhoven's on its one
+Level (RE-440).
 The tree, the Schedule panel and the info panel then put each element on the
 storey the IFC export writes it on (a part on its whole's, an element in a
 room on the room's, an opening on its host's) and list only the elements the
@@ -1248,6 +1250,26 @@ entity (Measure runs 41784415396 and 41784419457). Revit 2014
 and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
+
+**RE-461 (2026-11-13)** holds four of the eight rules whose release range was
+wider than the range their report measured (#1945, found by the batch 9 export
+audit) to the release each is measured on, and says for the other four what
+holds them. A hollow-section column's `CrossSectionArea`, `OuterSurfaceArea`,
+`GrossVolume` and `NetVolume` (RE-247) and a wall sweep's and a ramp's type from
+its own record (RE-240) are written on Revit 2024 only; the wall that embeds a
+curtain wall is drawn from its saved mesh on 2024 to 2027, since the records of
+2023 name no embed step (RE-340); and a shaft's cut takes only the outlines
+drawn from sketch lines, as RE-99 measured. A beam's storey at its record box's
+top (RE-119), a pipe from its own record (RE-370), a door's origin from its
+stored transform (RE-361) and a railing's type from its payload (RE-66) keep
+their range, each held to the project's 2024 save on the releases the corpora
+have a file of; RE-119 and RE-370 still run on releases no file measures, the
+experimental band, and a file of one of them is how they are measured. In an
+unfiltered Measure of 146 exports (run 43525326226, the held-out and spent
+models included) none of the exports and none of the 121 diagnostics moves: no
+file of the corpora holds a case of the four rules that stop. The tool is
+`tools/re/release_rules_across_saves.py`
+(`reports/element-framing/RE-461-release-gates.md`).
 
 **RE-459 (2026-11-13)** gives the project, building and site of a Revit 2017 to
 2027 file that stores none the GlobalIds Revit's export gives them, and the
@@ -1560,6 +1582,18 @@ or Combined, and walls, floors and stairs before Revit 2024 are left without
 Vitoria's 247 walls are the ones the census counts apart)
 (`reports/element-framing/RE-429-structural-load-bearing.md`).
 
+**RE-450 (2026-11-13)** cuts each door's and window's opening on a Revit
+2015 to 2023 save to the outline its symbol cuts (`m_pCutLoops`), placed by
+the instance's own transform (`InstanceInfo.m_Trf`), as #227 does on 2024
+to 2027, and writes the outline's extents as its `OverallWidth` and
+`OverallHeight` (RE-215); before, the opening was the element's record box,
+frame and trim included. On every save of Autodesk's `rac_basic` and
+`rac_advanced` from 2015 to 2023 the 26 and 107 openings are the 2024 save's
+within 0.001 m, but for 24 `rac_advanced` windows that are its size and
+0.0075 m off it on the 2015 to 2020 saves, as before; 34 of 60 local files
+are unchanged, every 2024 and 2025 file among them
+(`reports/element-framing/RE-450-opening-cut-loop-pre2024.md`).
+
 **RE-448 (2026-11-12)** sets each door and window of a Revit 2015 to 2023
 save in the wall its own native record names (`m_hostId`), where the
 reference list's nearest wall is another plain wall: RE-245's rule, which
@@ -1585,6 +1619,21 @@ same project's 2024 save in placement, outline and depth, and BIMcollab's
 Revit 2015 structural example gains 18, the 15 that Revit's own export of
 it holds each equal to that export's in placement, outline and depth
 (`reports/element-framing/RE-456-wall-cut-openings-pre2024.md`).
+
+**RE-440 (2026-11-12)** finds that the 24 records the Revit 2023 ArcWall
+pattern matches on `Revit_IFC5_Einhoven` are none of them walls: their
+ElementIds' native records are 15 curtain panels and 7 curtain grid lines, and
+2 have no ElementId. A match is now kept only where its native record is an
+`ArcWall` or `SWall`, which leaves none on any local file. Einhoven's one
+`Level` is its storey (a lone 2015 to 2023 Level is kept where the file's
+native `Level` records are that one alone), and a 2023 wall whose type is a
+`NewCurtainWallType` is an `IfcCurtainWall` named by that type, aggregating
+the panels that name it. Einhoven exports 1 wall, 1 curtain wall of 24 panels
+and 2 windows on `Level 1`, where it exported 26 walls, 9 panels and 4
+storeys; 2023 `rac_basic`'s 9 curtain walls take the type name its 2024 and
+2025 saves give them; a curtain wall whose panels carry its body is no longer
+reported as missing one. No other 2015 to 2023 export changes
+(`reports/element-framing/RE-440-einhoven-curtain-wall.md`).
 
 **RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
 the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained

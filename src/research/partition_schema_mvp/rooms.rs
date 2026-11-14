@@ -351,6 +351,15 @@ pub fn room_instances_from_records(
                         {
                             slot.1 = InstanceField::Bool(true);
                         }
+                        // The block, not the reference list, named the Level:
+                        // say so, as every other bind names its source (#1947).
+                        decoded.fields.push((
+                            crate::element_record_level_refs::LEVEL_BIND_SOURCE_FIELD.into(),
+                            InstanceField::String(
+                                crate::element_record_level_refs::ROOM_PARAMETER_BLOCK_SOURCE
+                                    .into(),
+                            ),
+                        ));
                     }
                 }
             }

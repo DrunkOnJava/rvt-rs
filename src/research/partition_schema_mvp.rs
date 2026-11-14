@@ -176,7 +176,7 @@ pub fn recover_partition_schema_mvp(
     // identity, category, box and the readers called here; nothing else 2024
     // decodes on top of records is read. ---
     if crate::partition_element_records_2023::is_32bit_release(revit_version) {
-        let references = recover_2023_records(rf, revit_version, &mut out);
+        let references = recover_2023_records(rf, revit_version, &mut out, &mut wall_reads);
         attach_room_outlines(rf, revit_version, &mut out.rooms);
         // --- Pipes' types and centrelines, from their own native record
         // (RE-370) ---
@@ -237,6 +237,9 @@ pub fn recover_partition_schema_mvp(
         // --- Each door and window in the wall its own native record names
         // (RE-448), as RE-245 does on 2024 to 2027 ---
         rebind_opening_hosts_to_native(rf, &out.walls, [&mut out.doors, &mut out.windows]);
+        // --- Each door's and window's opening from the outline its symbol
+        // cuts (RE-450), as on 2024 to 2027 where no type opening is read ---
+        attach_cut_loop_openings_32(rf, revit_version, [&mut out.doors, &mut out.windows]);
         // --- The Level parameters each element's own native record names
         // (RE-369) ---
         attach_levels_32(
@@ -648,7 +651,7 @@ pub fn recover_partition_schema_mvp(
     // --- Wall sweeps (RE-69) ---
     attach_wall_sweep_types(rf, revit_version, &mut out.products);
     // --- Pipes, wall sweeps and ramps typed in their own record (RE-240) ---
-    attach_native_type_names(rf, &mut out.products);
+    attach_native_type_names(rf, revit_version, &mut out.products);
     // --- Curtain mullions drawn as an extrusion of their section (RE-243) ---
     attach_mullion_plain_hosts(rf, &mut out.products);
     // --- Walls' layers and exterior side (RE-53) ---
@@ -848,6 +851,14 @@ pub fn recover_partition_schema_mvp(
                 element
                     .fields
                     .push((COLUMN_UNJOINED_FIELD.into(), InstanceField::Bool(true)));
+                // The hollow section's four quantities are written on the
+                // releases they are measured on only (#1945).
+                if HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS.contains(&revit_version) {
+                    element.fields.push((
+                        COLUMN_HOLLOW_QUANTITIES_FIELD.into(),
+                        InstanceField::Bool(true),
+                    ));
+                }
             }
         }
         // --- The elements each column's pair steps name (RE-291) ---
