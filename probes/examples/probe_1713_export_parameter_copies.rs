@@ -182,7 +182,7 @@ fn main() -> rvt::Result<()> {
     // owner's data object appears.
     let disagreeing: Vec<(u32, i64)> = copies
         .iter()
-        .filter(|(_, held)| disagree(*held))
+        .filter(|(_, held)| disagree(held))
         .map(|(pair, _)| *pair)
         .collect();
     let owners: BTreeSet<u32> = disagreeing.iter().map(|&(owner, _)| owner).collect();
@@ -206,7 +206,7 @@ fn main() -> rvt::Result<()> {
         let one = mine.iter().filter(|(_, held)| held.len() == 1).count();
         let agree = mine
             .iter()
-            .filter(|(_, held)| held.len() > 1 && !disagree(*held))
+            .filter(|(_, held)| held.len() > 1 && !disagree(held))
             .count();
         let pairs: Vec<u32> = disagreeing
             .iter()
@@ -251,7 +251,7 @@ fn main() -> rvt::Result<()> {
             let key_differs_here = answer(by_key.get(owner)) != object_answer;
             let latest = held.keys().next_back();
             let latest_differs_here = answer(latest) != object_answer;
-            if by_object.get(owner).is_some() && by_object.get(owner) != latest {
+            if by_object.contains_key(owner) && by_object.get(owner) != latest {
                 not_latest += 1;
             }
             key_differs += usize::from(key_differs_here);
