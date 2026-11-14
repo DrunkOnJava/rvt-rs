@@ -127,6 +127,12 @@ def main(argv):
                     tally[f"both {role}"] += 1
             if not any(holds(copy["layers"], layers, False) for copy in kind["copies"]):
                 tally["none"] += 1
+            # A layer the copy gives no material of its own takes its category's in the export
+            # (RE-91, RE-115), which need not be Revit's: count the copies that name every layer.
+            if copies["current"] is not None:
+                unnamed = sum(1 for layer in copies["current"] if layer["material"] is None)
+                tally["current layers with no material of their own"] += unnamed
+                tally["current copy names every layer"] += int(unnamed == 0)
     print(
         f"layer copies: release {release}; types whose copies disagree {len(types)}; "
         f"with a current copy {sum(1 for t in types if t['current'] is not None)}; "
@@ -140,7 +146,9 @@ def main(argv):
         both = " ".join(f"{role} {tally[f'both {role}']}" for role in ROLES)
         print(
             f"layer copies: {kind} elements with Revit's layer set {tally['set']}; widths equal {widths}; "
-            f"widths and materials equal {both}; no copy holds Revit's widths {tally['none']}"
+            f"widths and materials equal {both}; no copy holds Revit's widths {tally['none']}; "
+            f"current copy names every layer {tally['current copy names every layer']}, "
+            f"layers with no material of their own {tally['current layers with no material of their own']}"
         )
     return 0
 
