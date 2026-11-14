@@ -259,9 +259,13 @@ Measured against 0.22.0 on every model Measure holds (run [43555120928](https://
     box was not read from 9 to 2, 6 of the 7 now read are left out as a wall
     parallel to the door's and 1 is written. The three files whose Revit export
     lacks the opening are all Revit's IFC2X3 Coordination View 2.0 exports, and
-    an IFC2X3 view does not remove a value. Every save of `rac_basic` from 2015
-    to 2027 writes the same door's opening in its second wall as its 2024 save
-    does, so the rule stays on every release (#1165).
+    an IFC2X3 view does not remove a value. The rule stays on every release,
+    held to the same project's 2024 save (RE-353, RE-461): rvt-rs's export of every save
+    of `rac_basic` from 2015 to 2027 holds the same door's opening in its second
+    wall as its 2024 save. `rac_basic` has no Revit export, so that shows the cut
+    is read alike on every release, not that Revit writes it there; Revit's own
+    export holds this kind of opening on the BIM4LCA office pair, Revit 2024,
+    alone (RE-338) (#1165).
 - What differs in `diagnostics.json` is counts: the wording of the storey
   warning (120 files), the skipped items (62), the parameter values (32), the
   exported entities (21), the bodies' sources (the saved mesh in 11 files, the
