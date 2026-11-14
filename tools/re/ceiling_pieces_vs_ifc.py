@@ -38,9 +38,8 @@ from ifc_common import site_frame  # noqa: E402
 AREA_RELATIVE = 1e-3
 
 
-def depth_of(product):
+def depth_of(product, unit):
     """The depth of the first extrusion of the product's body, metres, or None."""
-    unit = ifcopenshell.util.unit.calculate_unit_scale(product.wrapped_data.file)
     for rep in (product.Representation.Representations if product.Representation else []):
         for item in rep.Items:
             if item.is_a("IfcExtrudedAreaSolid"):
@@ -56,13 +55,14 @@ def pieces(path):
     """Tag -> [(area m2, plan triangles in Revit feet)] for every IfcCovering, in file order."""
     f = ifcopenshell.open(path)
     frame = site_frame(f)
+    unit = ifcopenshell.util.unit.calculate_unit_scale(f)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     out = collections.defaultdict(list)
     for c in f.by_type("IfcCovering"):
         if not c.Tag or not c.Representation:
             continue
-        depth = depth_of(c)
+        depth = depth_of(c, unit)
         try:
             shape = ifcopenshell.geom.create_shape(settings, c)
         except Exception:
