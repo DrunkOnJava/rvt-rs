@@ -982,15 +982,18 @@ const COLUMN_LENGTH_TOLERANCE_FEET: f64 = 0.001;
 /// the mesh its body was drawn from) its mesh's height as its `Length` where
 /// the `Length` it holds is its record box's height and the mesh is shorter
 /// (#1801). revit-ifc takes a column's `Length` from the extrusion its exporter
-/// finds, which is the column's solid: on every measured export a column drawn
-/// from its mesh holds a `Length` that is the mesh's height or longer, and on
-/// the Revit 2024 saves of Autodesk's rme samples the record box is the mesh's
-/// height. Their 2025 to 2027 saves record boxes up to 7.3 m taller than the
-/// meshes, which are the same as in 2024, so the box's height gave 131 columns
-/// of each file a `Length` its 2024 save does not have. A round column's mesh
-/// has curved faces, which the quantities read from a mesh of flat faces
-/// (RE-424) leave out, so this takes the height alone. A `Length` from
-/// anything but the box (a clean pair's, RE-291 and #1203) is left as it is.
+/// finds, which is the column's solid. Over the exports Measure kept (RE-444,
+/// Measure 43115049478), no written `Length` is shorter than its column's mesh
+/// by 2 mm, and one is longer only on 786 columns of the Revit 2025 to 2027
+/// saves of Autodesk's rme samples (and 5 BIM4LCA elements RE-444 itself
+/// fixed). Those saves record boxes up to 7.3 m taller than the meshes, which
+/// are the same as in each project's 2024 save, whose box is the mesh's height.
+/// It applies to any column drawn from its mesh, on the releases whose meshes
+/// are drawn (Revit 2023 to 2027), with flat faces or curved: a round column's
+/// mesh is left out of the quantities read from a mesh of flat faces (RE-424),
+/// and a flat-faced one's `Length` from that reading is never written over a
+/// held value, so either kept the box's height. A `Length` from anything but
+/// the box (a clean pair's, RE-291 and #1203) is left as it is.
 fn shorten_column_box_lengths(model: &mut IfcModel, found: &[(usize, f64)]) {
     if found.is_empty() {
         return;
