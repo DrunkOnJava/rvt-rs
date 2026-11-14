@@ -4,6 +4,7 @@
 **Issues:** #1945 (found by the batch 9 export audit: eight rules whose release range is wider than the range their report measured)
 **Artefacts:** Autodesk's sample projects of 2015 to 2027 (54 saves of `rac_basic`, `rac_advanced`, `rme_basic`, `rme_advanced`, `rst_basic` and `rst_advanced`; the pins are in `research/autodesk-sample-projects.tsv`) and the five Snowdon Towers 2024 files, exported by `main` at `f8e20536` and kept (Measure run [43456034222](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43456034222), artifact `measure-base-all`); the BIM4LCA models as the reports measured them.
 **Tool:** `tools/re/release_rules_across_saves.py`
+**Runs:** an unfiltered Measure of 146 exports (`-f samples=true -f nordic=true -f r2025=true -f racadv=true -f holdout=true -f bimcollab=true -f families=true`, run 43525326226, head 334c3a1b against base 6ad5efa9): every export and all 121 diagnostics equal, and the same-project gates pass.
 **Status:** Positive for four rules (3, 4, 5 and 7), whose measurements are named below; four narrowed (1, 2, 6 and 8), none of which moves an export of any file in those corpora.
 
 ## 1. The rule, and what the experimental band changes

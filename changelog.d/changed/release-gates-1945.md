@@ -11,4 +11,6 @@
   origin from its stored transform (RE-361) and a railing's type from its
   payload (RE-66) keep their range: each is held to the project's 2024 save on
   the releases the corpora have a file of, and the doc comments and the report
-  say which.
+  say which. In an unfiltered Measure of 146
+  exports (run 43525326226) none of the exports and none of the 121
+  diagnostics moves.
