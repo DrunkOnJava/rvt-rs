@@ -454,7 +454,8 @@ fn collect_export_parameters(
 /// the partition sets the key to two different values.
 type KeyCopies = BTreeMap<u32, Option<String>>;
 
-/// The partitions that hold a copy of a key, by the element it belongs to.
+/// The partitions that hold an element's data at all, whatever keys they
+/// carry, by the element.
 type Holders = BTreeMap<u32, BTreeSet<u32>>;
 
 /// [`find_export_parameters`] over every `Partitions/*` stream, or on Revit
@@ -462,15 +463,18 @@ type Holders = BTreeMap<u32, BTreeSet<u32>>;
 /// partitions agree about a key has its value.
 ///
 /// On Revit 2024 and later an element that several partitions give different
-/// values for a key takes the value of its current copy, the one
-/// [`crate::native_document::current_partitions`] finds (RE-145, RE-216): the
-/// BIM4LCA permit files edit a wall's or a wall type's value in a later
-/// increment, and 40 walls, 42 spaces and 8 roofs of three of them read no
-/// value or the wrong class while Revit's export writes the current one
-/// (#1713). An element it has no current copy for, and one whose current copy
-/// disagrees with itself, leave the key out. Before Revit 2024 an element
-/// whose streams disagree about a key loses it. Empty for a release with no
-/// measured element-data header.
+/// values for a key takes the value of its current copy, found among the
+/// partitions that hold the element's data at all
+/// ([`crate::native_document::current_partitions`], RE-145, RE-216), as
+/// [`crate::partition_compound_structure::scan_type_layers`] reads a type's
+/// layers (RE-446): the BIM4LCA permit files edit a wall's or a wall type's
+/// value in a later increment, and 40 walls, 42 spaces and 8 roofs of three of
+/// them read no value or the wrong class while Revit's export writes the
+/// current one (#1713). An element it has no current copy for, one whose
+/// current partition carries no entry for the key, and one whose current copy
+/// disagrees with itself, leave the key out. A key only one partition holds
+/// keeps that value. Before Revit 2024 an element whose streams disagree about
+/// a key loses it. Empty for a release with no measured element-data header.
 pub fn scan_export_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -524,7 +528,7 @@ pub fn scan_export_parameters(
     // The value each pair takes. Partitions that agree give it; pairs they
     // disagree about are routed below on 2024 and later and left out before.
     let mut chosen: BTreeMap<(u32, i64), String> = BTreeMap::new();
-    let mut disagreeing: BTreeMap<i64, Holders> = BTreeMap::new();
+    let mut disagreeing: BTreeSet<(u32, i64)> = BTreeSet::new();
     for (&(owner, key), held) in &copies {
         let mut values = held.values();
         let Some(first) = values.next() else {
@@ -535,22 +539,44 @@ pub fn scan_export_parameters(
                 chosen.insert((owner, key), value.clone());
             }
         } else if by_current_copy {
-            disagreeing
-                .entry(key)
-                .or_default()
-                .insert(owner, held.keys().copied().collect());
+            disagreeing.insert((owner, key));
         }
     }
-    for (key, holders) in disagreeing {
+    if !disagreeing.is_empty() {
+        // A parameter cleared in the current partition is no entry there, so
+        // the partitions to choose among are those where the element's data
+        // object appears at all, not only those that hold the key: a current
+        // partition without the key leaves it out and does not give way to an
+        // older partition's value.
+        let owners: BTreeSet<u32> = disagreeing.iter().map(|&(owner, _)| owner).collect();
+        let mut holders = Holders::new();
+        for stream in rf.partition_stream_names() {
+            let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
+                continue;
+            };
+            let partition = crate::partition_room_parameters::partition_number(&stream);
+            for (_, object) in objects.iter() {
+                if owners.contains(&object.element_id) {
+                    holders
+                        .entry(object.element_id)
+                        .or_default()
+                        .insert(partition);
+                }
+            }
+        }
         // The pairs it leaves out are the ones whose current copy cannot be
         // told: an element the index does not route, or one whose current copy
         // sits in a stream too large to read. The native record read leaves
         // those elements out too, and a latest-copy guess here would read a
         // stale value.
-        for (owner, partition) in crate::native_document::current_partitions(rf, &holders) {
+        let current = crate::native_document::current_partitions(rf, &holders);
+        for (owner, key) in disagreeing {
+            let Some(partition) = current.get(&owner) else {
+                continue;
+            };
             if let Some(Some(value)) = copies
                 .get(&(owner, key))
-                .and_then(|held| held.get(&partition))
+                .and_then(|held| held.get(partition))
             {
                 chosen.insert((owner, key), value.clone());
             }
