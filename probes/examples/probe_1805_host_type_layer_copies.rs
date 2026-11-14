@@ -39,6 +39,73 @@ use std::collections::{BTreeMap, BTreeSet};
 /// The element classes whose types hold a compound structure.
 const HOST_CLASSES: [&str; 4] = ["Wall", "Floor", "Roof", "Ceiling"];
 
+/// Where RE-115's object-styles entry is lost on a 32-bit release: of the
+/// places the category's `i32` is followed by `ff ff ff ff`, how many pass
+/// each of `scan_category_material_2023`'s checks in turn, where
+/// `CATEGORY_MATERIAL_MARK_2023` sits past the category when the frame does
+/// not hold the release's `PatternHelper` tag, and how many materials the
+/// entries that pass hold, set and unset. Counts and offsets only.
+fn category_entry_trace(rf: &mut RevitFile, version: u32, category: i64) -> serde_json::Value {
+    use rvt::research::partition_materials::CATEGORY_MATERIAL_MARK_2023 as MARK;
+    let Some(tags) = rvt::research::partition_element_records_2023::schema_tags(version) else {
+        return serde_json::json!({"layout": "64-bit"});
+    };
+    let Ok(category) = i32::try_from(category) else {
+        return serde_json::json!({"layout": "category out of range"});
+    };
+    let mut pattern = category.to_le_bytes().to_vec();
+    pattern.extend_from_slice(&[0xff; 4]);
+    let mut frame = [0xff, 0xff, 0xff, 0xff, 0, 0];
+    frame[4..].copy_from_slice(&tags.pattern_helper.to_le_bytes());
+    let (mut hits, mut word, mut one, mut framed, mut other_tag, mut marked) = (0, 0, 0, 0, 0, 0);
+    let mut mark_offsets: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut values: BTreeSet<u32> = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for at in memchr::memmem::find_iter(buf, &pattern) {
+            hits += 1;
+            let get = |offset: usize, len: usize| buf.get(at + offset..at + offset + len);
+            if let Some(window) = get(4, 60) {
+                for hit in memchr::memmem::find_iter(window, &MARK) {
+                    *mark_offsets.entry(hit + 4).or_default() += 1;
+                }
+            }
+            if !matches!(get(8, 4), Some([1 | 2, 0, 0, 0])) {
+                continue;
+            }
+            word += 1;
+            if get(12, 4) != Some(&[1, 0, 0, 0][..]) {
+                continue;
+            }
+            one += 1;
+            if get(16, 4) == Some(&[0xff; 4][..]) && get(16, 6) != Some(&frame[..]) {
+                other_tag += 1;
+            }
+            if get(16, 6) != Some(&frame[..]) {
+                continue;
+            }
+            framed += 1;
+            if get(30, 4) != Some(&MARK[..]) {
+                continue;
+            }
+            marked += 1;
+            if let Some(bytes) = get(34, 4) {
+                values.insert(u32::from_le_bytes(bytes.try_into().expect("four bytes")));
+            }
+        }
+    }
+    let set = values.iter().filter(|&&v| v != 0 && v != u32::MAX).count();
+    serde_json::json!({
+        "layout": "32-bit",
+        "hits": hits, "word": word, "one": one, "frame": framed, "other_tag": other_tag,
+        "mark": marked, "values_set": set, "values_unset": values.len() - set,
+        "mark_offsets": mark_offsets.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>(),
+    })
+}
+
 fn partition_of(stream: &str) -> u32 {
     stream
         .rsplit('/')
@@ -209,21 +276,33 @@ fn main() -> anyhow::Result<()> {
             "Ceiling" => Some(rvt::research::partition_element_records::OST_CEILINGS),
             _ => None,
         };
-        let category_material = category
-            .and_then(|category| {
-                rvt::research::partition_materials::scan_category_material(
-                    &mut rf, version, category,
-                )
+        let category_id = category.and_then(|category| {
+            rvt::research::partition_materials::scan_category_material(&mut rf, version, category)
                 .ok()
                 .flatten()
-            })
-            .and_then(|material| names.get(&material).cloned());
+        });
+        let category_material = category_id.and_then(|material| names.get(&material).cloned());
+        let category_trace = category.map(|category| {
+            let mut trace = category_entry_trace(&mut rf, version, category);
+            let styles = match rvt::research::partition_materials::native_category_material(
+                &mut rf, category,
+            ) {
+                Ok(Some(_)) => "one",
+                Ok(None) => "none",
+                Err(_) => "error",
+            };
+            trace["styles"] = serde_json::json!(styles);
+            trace["read"] = serde_json::json!(category_id.is_some());
+            trace["named"] = serde_json::json!(category_material.is_some());
+            trace
+        });
         println!(
             "json {}",
             serde_json::json!({
                 "type": id,
                 "class": class,
                 "category_material": category_material,
+                "category_trace": category_trace,
                 "elements": elements,
                 "current": now,
                 "copies": listed,

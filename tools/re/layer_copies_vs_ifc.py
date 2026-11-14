@@ -168,6 +168,24 @@ def main(argv):
             f"layer copies: {kind} unnamed layers against Revit's: category material Revit's {same}, "
             f"not Revit's {other}, not read {unread}"
         )
+    # Where the category material is lost: one trace per class (the file and category are the same
+    # for every type of a class), counts and byte offsets only.
+    traced = {}
+    for kind in types:
+        if kind.get("category_trace") and kind["class"] not in traced:
+            traced[kind["class"]] = kind["category_trace"]
+    for kind, trace in sorted(traced.items()):
+        if trace.get("layout") != "32-bit":
+            print(f"layer copies: {kind} category entry layout {trace.get('layout', 'unknown')}".replace("-", " "))
+            continue
+        offsets = "; ".join(trace.get("mark_offsets", [])) or "none"
+        print(
+            f"layer copies: {kind} category entry: hits {trace['hits']}, word {trace['word']}, "
+            f"one {trace['one']}, frame {trace['frame']}, other tag {trace['other_tag']}, "
+            f"mark {trace['mark']}, values set {trace['values_set']} unset {trace['values_unset']}; "
+            f"mark past the category at {offsets}; styles {trace['styles']}; "
+            f"read {'yes' if trace['read'] else 'no'}; named {'yes' if trace['named'] else 'no'}"
+        )
     return 0
 
 
