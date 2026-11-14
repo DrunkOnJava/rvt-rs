@@ -497,6 +497,18 @@ pub static HORIZONTAL_BRACING_MEMBER: Mapping = Mapping {
     predefined_type: None,
 };
 
+/// [`HORIZONTAL_BRACING_MEMBER`] on the releases whose bracing type is
+/// measured as `BRACE` (`partition_schema_mvp::BRACE_TYPE_REVIT_VERSIONS`,
+/// #1841): a reporter's Revit 2027 model, whose `IfcMemberType` for the
+/// bracing carries it. The occurrence of a member writes no `PredefinedType`
+/// on those releases ([`predefined_type_left_out`]), so only the type object
+/// takes the value.
+pub static HORIZONTAL_BRACING_BRACE: Mapping = Mapping {
+    revit_class: "StructuralFraming",
+    ifc_type: "IFCMEMBER",
+    predefined_type: Some("BRACE"),
+};
+
 /// [`lookup`] for an element whose record names its own class
 /// (`record_class`, RE-76) and, for a framing instance, its structural usage:
 /// a floor of the Structural Foundations category is a slab

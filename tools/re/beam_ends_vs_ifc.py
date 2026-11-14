@@ -39,6 +39,19 @@ near a face, not that the two touch. The ends of the beams Revit makes shorter, 
 at the record length and of those it makes longer are counted by the kind of element they lie on
 (column first, then beam, wall, slab), or on nothing.
 
+Where Revit's end lies against the column the beam frames into is asked the same way, from Revit's
+export alone and in its own frame (#1839, S5). For each beam end the probe names the column its list
+names that lies nearest that end (`endcol_low`, `endcol_high`) and says where the record box ends in
+it, as a fraction `t` of the column's extent along the beam: 0 at the face toward the beam's middle
+(`near`), 1 at the face away from it (`far`), below 0 short of the column and above 1 past it. The
+scorer finds that column in Revit's export by `Tag`, takes the extent of its mesh along the beam's axis,
+and puts the cap of Revit's beam that is nearest it at the same fraction: `short` below -0.02, `near`
+within 0.02 of 0, `0-.5`, `centre` within 0.02 of 0.5, `.5-1`, `far` within 0.02 of 1 and `beyond`. The
+ends are counted by where the record box ends and where Revit's beam ends in the same column, by whether
+Revit makes the beam shorter than the record box, leaves it or makes it longer, and by whether the beam
+is narrower than, about as wide as (within 10%) or wider than the column across the beam, which is what
+decides, where a column cuts a beam, how much of the beam's end it cuts.
+
 Every summary line starts `beam ends:` and holds counts beside fixed words; `--list` adds one line
 per beam, which names an ElementId.
 
@@ -235,7 +248,138 @@ def lies_on(point, corners, normals):
     return bool(((u >= -0.001) & (v >= -0.001) & (w >= -0.001)).any())
 
 
-def print_ends(model, stands_by_tag, factor):
+FRACTION_BINS = ("short", "near", "0-.5", "centre", ".5-1", "far", "beyond")
+WIDTHS = (("narrower", "narrower than"), ("equal", "as wide as"), ("wider", "wider than"))
+
+
+def fraction_bin(t):
+    """Where an end lies along a column, from the face toward the beam's middle (0) to the face away
+    from it (1): within 2% of the column's extent counts as on a face or at the centre."""
+    if t < -0.02:
+        return "short"
+    if t <= 0.02:
+        return "near"
+    if t < 0.48:
+        return "0-.5"
+    if t <= 0.52:
+        return "centre"
+    if t < 0.98:
+        return ".5-1"
+    if t <= 1.02:
+        return "far"
+    return "beyond"
+
+
+def width_bin(beam_across, column_across):
+    """Whether the beam is narrower than, about as wide as (within 10%) or wider than the column."""
+    if column_across <= 0:
+        return None
+    ratio = beam_across / column_across
+    return "narrower" if ratio < 0.9 else "wider" if ratio > 1.1 else "equal"
+
+
+def end_columns(fields):
+    """The probe's `endcol_low` and `endcol_high` of a beam: end -> (column Tag, t, extent in feet)."""
+    out = {}
+    for end in ("low", "high"):
+        value = fields.get(f"endcol_{end}", "-")
+        if value == "-":
+            continue
+        tag, t, extent, _source = value.split(":")
+        out[end] = (tag, float(t), float(extent))
+    return out
+
+
+def assign_caps(caps, centres):
+    """Which cap of Revit's beam each end of the probe is: the pairing with the least total distance
+    from a cap to the centre of the column that end names (the probe's low and high are in rvt-rs's
+    frame and say nothing of which cap is which in Revit's)."""
+    ends = list(centres)
+
+    def distance(cap, end):
+        return float(numpy.linalg.norm(caps[cap] - centres[end]))
+
+    if len(ends) == 2:
+        first, second = ends
+        straight = distance(0, first) + distance(1, second)
+        crossed = distance(1, first) + distance(0, second)
+        return {first: 0, second: 1} if straight <= crossed else {first: 1, second: 0}
+    if len(ends) == 1:
+        (end,) = ends
+        return {end: int(distance(1, end) < distance(0, end))}
+    return {}
+
+
+def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
+    """Count the ends of the beams by where the record box and Revit's beam end in the named column
+    nearest the end, as fractions of that column's extent along the beam."""
+    joint = collections.defaultdict(collections.Counter)
+    seen = collections.Counter()
+    for tag, fields in beams.items():
+        stands = stands_by_tag.get(tag)
+        beam = by_tag.get(tag)
+        if stands is None or beam is None or fields.get("axis") == "-":
+            continue
+        caps = cap_centres(meshes[beam][2])
+        if caps is None:
+            continue
+        direction = caps[1] - caps[0]
+        length = numpy.linalg.norm(direction)
+        sideways = numpy.array([-direction[1], direction[0], 0.0])
+        if length == 0 or numpy.linalg.norm(sideways) < 1e-9:
+            continue
+        axis = direction / length
+        sideways /= numpy.linalg.norm(sideways)
+        points = meshes[beam][2].reshape(-1, 3)
+        middle = float(points.mean(axis=0) @ axis)
+        beam_across = float(numpy.ptp(points @ sideways))
+        named = end_columns(fields)
+        found = {}
+        for end, (column_tag, t, extent) in named.items():
+            column = by_tag.get(column_tag)
+            if column is not None:
+                found[end] = (column, t, extent)
+        seen["beam ends the probe names a column for"] += len(named)
+        seen["of those the export draws the column of"] += len(found)
+        seen["beam ends the probe finds no column in line for"] += 2 - len(named)
+        centres = {
+            end: (meshes[column][4][0] + meshes[column][4][1]) / 2 for end, (column, _, _) in found.items()
+        }
+        placed = assign_caps(caps, centres)
+        for end, (column, t_box, extent) in found.items():
+            column_points = meshes[column][2].reshape(-1, 3)
+            along = column_points @ axis
+            low, high = float(along.min()), float(along.max())
+            near, far = (low, high) if abs(low - middle) < abs(high - middle) else (high, low)
+            if far == near:
+                continue
+            if abs((high - low) * factor - extent) > 0.05:
+                seen["column extents along the beam that differ between Revit's export and the probe by over 0.05 ft"] += 1
+            t_revit = (float(caps[placed[end]] @ axis) - near) / (far - near)
+            width = width_bin(beam_across, float(numpy.ptp(column_points @ sideways)))
+            if width is None:
+                continue
+            joint[(stands, width)][(fraction_bin(t_box), fraction_bin(t_revit))] += 1
+    print(
+        "beam ends: where each end lies in the named column nearest to it, as a fraction of the column along the beam "
+        "from the face toward the beam's middle (near, 0) to the face away from it (far, 1): the record box's end -> Revit's end:"
+    )
+    for what, n in seen.items():
+        print(f"beam ends:   {n} {what}")
+    order = {name: i for i, name in enumerate(FRACTION_BINS)}
+    for stands in ("shorter", "same", "longer"):
+        for width, label in WIDTHS:
+            cells = joint.get((stands, width))
+            if not cells:
+                continue
+            text = "; ".join(
+                f"{box} -> {revit} {n}"
+                for (box, revit), n in sorted(cells.items(), key=lambda item: (order[item[0][0]], order[item[0][1]]))
+            )
+            print(f"beam ends:   Revit {stands:<8} beam {label} the column, {sum(cells.values())} ends: {text}")
+
+
+def print_ends(model, stands_by_tag, factor, beams):
     """Count the ends of the beams, by how Revit's length stands to the record box's and by the kind
     of element each end lies on."""
     TOLERANCE_UNITS[0] = TOLERANCE_FEET / factor
@@ -268,6 +412,7 @@ def print_ends(model, stands_by_tag, factor):
             continue
         cells = ", ".join(f"{kind} {ends[(stands, kind)]}" for kind in (*FACE_KINDS, "nothing"))
         print(f"beam ends:   Revit {stands:<8} {total} ends: {cells}")
+    print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor)
 
 
 def feet_per_unit(raw, records):
@@ -375,7 +520,7 @@ def main():
             f"beam ends: Revit's beam is shorter than the record box by a median {statistics.median(mm):.0f} mm"
             f" (quartiles {mm[len(mm) // 4]:.0f} and {mm[(3 * len(mm)) // 4]:.0f}, longest {mm[-1]:.0f}) on {len(mm)} beams"
         )
-    print_ends(model, stands_by_tag, factor)
+    print_ends(model, stands_by_tag, factor, beams)
     if "--list" in sys.argv:
         for tag, f, record, theirs, trimmed, stands in sorted(rows, key=lambda row: (len(row[0]), row[0])):
             shown = "-" if trimmed is None else f"{trimmed:.3f}"
