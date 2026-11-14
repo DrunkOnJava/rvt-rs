@@ -3,7 +3,7 @@
 **Date:** 2026-11-14
 **Issues:** #1989; follows RE-319 (conduits, conduit fittings and gutters) and RE-402 sections 6.1 and 7 (the BIM4LCA housing, where "ducts" were found missing)
 **Artefacts:** the BIM4LCA housing (the six files; Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, as Measure fetches them) and office; BIM-Speed's Vitoria `ALD26 Before` (Revit 2018, IFC2X3 export, held out, CC BY 4.0)
-**Runs:** probe [43583970009](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43583970009) (`probe_re45_ifc_export_parameters` on the housing and office); Measure [43579535220](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43579535220) (`duct_bodies_vs_ifc` and `class_sets_vs_ifc` on `main`); RUN_FINAL (the rule)
+**Runs:** probe [43583970009](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43583970009) (`probe_re45_ifc_export_parameters` on the housing and office); Measure [43579535220](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43579535220) (`duct_bodies_vs_ifc` and `class_sets_vs_ifc` on `main`); [43587477298](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43587477298) (the rule) (the rule)
 **Status:** Positive. The "ducts" #1989 asks about are three gutters; rvt-rs wrote all three, in the wrong class.
 
 ## 1. What #1989 found, and what it is
@@ -24,7 +24,19 @@ A gutter is an `IfcFlowSegment` (no `PredefinedType`), typed by an `IfcPipeSegme
 
 ## 5. Measured
 
-RESULTS_SLOT
+Measure [43587477298](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43587477298) (`ceaaf72d`, `main` merged in, against `main` at `32ed4e6a`, unfiltered, 126 models): 6 exports differ, the four large BIM4LCA housing files and the Vitoria 2018 pair (5 of 102 `diagnostics.json` files differ, the held-out half of the pair having none). The two terrain housing files, the office files (their 24 gutters carry `IfcPipeSegment` and keep it), the R2025 models and every other export are identical.
+
+| Housing file | `IfcFlowSegment` same, of 3 | ducts written, box within 0.01 ft | values Revit does not write |
+|---|---|---|---|
+| concrete, as built | 0 to 3 | 1 to 3 of 3 (worst 0.00000 ft) | 26 to 24 |
+| concrete, permit | 0 to 3 | 1 to 3 of 3 (worst 0.00000 ft) | 27 to 25 |
+| timber, as built | 0 to 3 | 1 to 3 of 3 (worst 0.00000 ft) | 31 to 29 |
+| timber, permit | 0 to 3 | 1 to 3 of 3 (worst 0.00000 ft) | 27 to 25 |
+
+- **Class.** The 3 gutters of each file read `IfcFlowSegment` where 2 read `IfcCovering` and 1 `IfcPipeSegment`, so `duct_bodies_vs_ifc`, which counts flow segments, finds all 3 of Revit's (1 of 3 before).
+- **Properties.** The 2 `Pset_CoveringCommon.IsExternal` values the two gutters that had been coverings carried go (values Revit does not write, minus 2); the equal and different values do not move on any file. The gutters' saved meshes count under `IfcFlowSegment` (3 of 3) and the coverings fall by 2 (26 to 24 on the concrete file as built). No count that equals Revit's falls.
+- **Held-out (counts only).** The Vitoria 2018 pair, whose IFC2X3 export writes its 2 gutters as `IfcFlowSegment`, reads them so now: `IfcFlowSegment` same 0 to 2 of 244, `Pset_PipeSegmentTypeCommon.Reference` missing 2 to 0.
+- **Names.** The gutters' names and `ObjectType` still differ from Revit's (`Gutter:HLV-1.125:<ElementId>`) and rvt-rs writes no `ObjectType` on them, as before (section 6).
 
 ## 6. Not shown
 
