@@ -739,6 +739,8 @@ pub fn recover_partition_schema_mvp(
             attach_type_text_parameters(&type_parameters, elements);
         }
     }
+    // --- A door's or window's Fire Rating from its saved parameters (#1507) ---
+    attach_saved_fire_ratings(rf, revit_version, [&mut out.doors, &mut out.windows]);
 
     // --- Level parameters from the per-element association record (RE-172),
     // stairs' Base and Top Level from the same record and the Level named in

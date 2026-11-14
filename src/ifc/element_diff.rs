@@ -18,6 +18,13 @@
 //! A change rvt-rs does not read is not seen: a parameter it leaves out, or a
 //! body it draws as its record's box. A change in how rvt-rs reads a file
 //! shows as a change in the file, so compare two saves with one build.
+//!
+//! Some properties of rvt-rs's own sets say how a value was read, not what it
+//! is ([`LABEL_PROPERTIES`], and `BodySource` where the body is equal). A
+//! difference in one of them alone leaves the element unchanged, and the
+//! element is listed in [`ElementDiff::relabelled`], so the drift stays
+//! visible without counting as a change in the model (#1864): two saves of
+//! `rst_basic` bind the same Level to 12 beams by two rules.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -75,6 +82,16 @@ pub const FILE_LOCATION_PROPERTIES: [&str; 5] = [
     "ByteEnd",
 ];
 
+/// The properties that say which rule read a value and not the value itself:
+/// the value they label is compared on its own (`LevelElementId` and
+/// `LevelBindResolved` for a Level bind), so a difference in them alone is a
+/// label change ([`ElementChange::labels`]), not a change (#1864).
+pub const LABEL_PROPERTIES: [&str; 1] = ["LevelBindSource"];
+
+/// The property naming where a body came from. A label change where the two
+/// bodies are equal, a change where they differ (#1864).
+const BODY_SOURCE_PROPERTY: &str = "BodySource";
+
 /// One field of an element that differs between the two exports.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[non_exhaustive]
@@ -100,8 +117,11 @@ pub struct ElementChange {
     /// Its name in the second export.
     pub name: String,
     /// The fields that differ, in [`ElementState`]'s order and then the
-    /// properties by key.
+    /// properties by key. Empty for an element in [`ElementDiff::relabelled`].
     pub changes: Vec<FieldChange>,
+    /// The label properties that differ ([`LABEL_PROPERTIES`], and
+    /// `BodySource` where the body is equal), which are not changes.
+    pub labels: Vec<FieldChange>,
 }
 
 /// The GlobalIds each export writes for more than one element, sorted. A
@@ -144,8 +164,11 @@ pub struct ElementDiff {
     pub removed: Vec<ElementState>,
     /// In both, with a field that differs, by GlobalId.
     pub changed: Vec<ElementChange>,
-    /// In both, with every field equal.
+    /// In both, with every field equal but labels.
     pub unchanged: usize,
+    /// Of the unchanged, those whose label properties differ, by GlobalId: the
+    /// rule that read a value changed and the value did not.
+    pub relabelled: Vec<ElementChange>,
     /// The GlobalIds an export writes twice. Their elements are in none of
     /// the four lists above.
     pub duplicate_global_ids: DuplicateGlobalIds,
@@ -297,17 +320,22 @@ pub fn diff_elements(left: &[ElementState], right: &[ElementState]) -> ElementDi
         match right_by.get(id) {
             None => diff.removed.push(before.clone()),
             Some(after) => {
-                let changes = field_changes(before, after);
-                if changes.is_empty() {
-                    diff.unchanged += 1;
+                let (changes, labels) = field_changes(before, after);
+                let change = ElementChange {
+                    global_id: id.clone(),
+                    tag: after.tag.clone(),
+                    ifc_type: after.ifc_type.clone(),
+                    name: after.name.clone(),
+                    changes,
+                    labels,
+                };
+                if !change.changes.is_empty() {
+                    diff.changed.push(change);
                 } else {
-                    diff.changed.push(ElementChange {
-                        global_id: id.clone(),
-                        tag: after.tag.clone(),
-                        ifc_type: after.ifc_type.clone(),
-                        name: after.name.clone(),
-                        changes,
-                    });
+                    diff.unchanged += 1;
+                    if !change.labels.is_empty() {
+                        diff.relabelled.push(change);
+                    }
                 }
             }
         }
@@ -320,7 +348,12 @@ pub fn diff_elements(left: &[ElementState], right: &[ElementState]) -> ElementDi
     diff
 }
 
-fn field_changes(left: &ElementState, right: &ElementState) -> Vec<FieldChange> {
+/// The fields of `left` and `right` that differ, and apart from them the label
+/// properties that differ.
+fn field_changes(
+    left: &ElementState,
+    right: &ElementState,
+) -> (Vec<FieldChange>, Vec<FieldChange>) {
     let mut out = Vec::new();
     let mut compare = |field: &str, a: Value, b: Value| {
         if a != b {
@@ -370,14 +403,29 @@ fn field_changes(left: &ElementState, right: &ElementState) -> Vec<FieldChange> 
         .keys()
         .chain(right.properties.keys())
         .collect();
+    let same_body = left.body == right.body;
+    let is_label = |key: &str| {
+        let property = key.rsplit_once('.').map_or(key, |(_, name)| name);
+        LABEL_PROPERTIES.contains(&property) || (same_body && property == BODY_SOURCE_PROPERTY)
+    };
+    let mut labels = Vec::new();
     for key in keys {
-        compare(
-            &format!("property:{key}"),
-            left.properties.get(key).cloned().unwrap_or(Value::Null),
-            right.properties.get(key).cloned().unwrap_or(Value::Null),
-        );
+        let field = format!("property:{key}");
+        let a = left.properties.get(key).cloned().unwrap_or(Value::Null);
+        let b = right.properties.get(key).cloned().unwrap_or(Value::Null);
+        if is_label(key) {
+            if a != b {
+                labels.push(FieldChange {
+                    field,
+                    left: a,
+                    right: b,
+                });
+            }
+        } else {
+            compare(&field, a, b);
+        }
     }
-    out
+    (out, labels)
 }
 
 /// `value` as JSON; `null` where it cannot be, which no field here is.
@@ -483,6 +531,52 @@ mod tests {
         assert_eq!(diff.added.len(), 1);
         assert_eq!(diff.unchanged, 0);
         balances(&diff);
+    }
+
+    fn with(state: &ElementState, key: &str, value: &str, body: &str) -> ElementState {
+        let mut state = state.clone();
+        state.properties.insert(key.to_string(), Value::from(value));
+        state.body = Some(body.to_string());
+        state
+    }
+
+    #[test]
+    fn a_level_bind_rule_alone_is_a_label_not_a_change() {
+        // #1864: the same Level, bound by two rules on two saves.
+        let key = "RvtElementRecord.LevelBindSource";
+        let left = [with(&element("A", "a"), key, "reference_list", "b1")];
+        let right = [with(&element("A", "a"), key, "reference_level", "b1")];
+        let diff = diff_elements(&left, &right);
+        assert!(diff.changed.is_empty());
+        assert_eq!(diff.unchanged, 1);
+        assert_eq!(diff.relabelled.len(), 1);
+        assert_eq!(
+            diff.relabelled[0].labels[0].field,
+            format!("property:{key}")
+        );
+        balances(&diff);
+    }
+
+    #[test]
+    fn a_body_source_is_a_change_where_the_body_differs() {
+        // A label where the body is equal; with another body it says which
+        // reader drew the new one, and the element has changed.
+        let key = "RvtElementRecord.BodySource";
+        let left = [with(&element("A", "a"), key, "sketch", "b1")];
+        let same = [with(&element("A", "a"), key, "saved_mesh", "b1")];
+        let moved = [with(&element("A", "a"), key, "saved_mesh", "b2")];
+        let relabelled = diff_elements(&left, &same);
+        assert!(relabelled.changed.is_empty() && relabelled.relabelled.len() == 1);
+        let changed = diff_elements(&left, &moved);
+        assert_eq!(changed.changed.len(), 1);
+        let fields: Vec<&str> = changed.changed[0]
+            .changes
+            .iter()
+            .map(|change| change.field.as_str())
+            .collect();
+        assert_eq!(fields, ["body", "property:RvtElementRecord.BodySource"]);
+        assert!(changed.relabelled.is_empty());
+        balances(&changed);
     }
 
     #[test]

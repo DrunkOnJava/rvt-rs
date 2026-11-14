@@ -311,9 +311,9 @@ fn redact_diff(diff: &mut ElementDiff) {
     }
     diff.added.iter_mut().for_each(state);
     diff.removed.iter_mut().for_each(state);
-    for change in &mut diff.changed {
+    for change in diff.changed.iter_mut().chain(diff.relabelled.iter_mut()) {
         text(&mut change.name);
-        for field in &mut change.changes {
+        for field in change.changes.iter_mut().chain(change.labels.iter_mut()) {
             text(&mut field.field);
             json(&mut field.left);
             json(&mut field.right);
@@ -418,6 +418,46 @@ fn print_summary(diff: &ElementDiff, left: &str, right: &str, limit: usize) {
         }
         if diff.changed.len() > limit {
             println!("  ... {} more", diff.changed.len() - limit);
+        }
+    }
+    // #1864: the rule that read a value changed and the value did not.
+    if !diff.relabelled.is_empty() {
+        let mut fields: BTreeMap<&str, usize> = BTreeMap::new();
+        for change in &diff.relabelled {
+            for field in &change.labels {
+                let name = field
+                    .field
+                    .rsplit_once('.')
+                    .map_or(field.field.as_str(), |(_, name)| name);
+                *fields.entry(name).or_default() += 1;
+            }
+        }
+        let fields = fields
+            .iter()
+            .map(|(field, count)| format!("{field} {count}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!(
+            "\nlabel changes (unchanged elements read by another rule): {} elements: {fields}",
+            diff.relabelled.len()
+        );
+        for change in diff.relabelled.iter().take(limit) {
+            let names = change
+                .labels
+                .iter()
+                .map(|field| field.field.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!(
+                "  {} {:<16} {} {}: {names}",
+                change.global_id,
+                change.ifc_type,
+                change.tag.as_deref().unwrap_or("-"),
+                change.name
+            );
+        }
+        if diff.relabelled.len() > limit {
+            println!("  ... {} more", diff.relabelled.len() - limit);
         }
     }
 }
