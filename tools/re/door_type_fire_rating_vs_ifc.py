@@ -75,10 +75,12 @@ def main(argv):
             continue
         if theirs_value is not None:
             both_written += 1
-            continue
-        extra += 1
+            label = "both write it"
+        else:
+            extra += 1
+            label = "Revit's type has none"
         print(
-            f"type {tag} {their_type.is_a()} {their_type.Name!r}: rvt-rs {common}.FireRating {ours_value!r}; "
+            f"type {tag} {their_type.is_a()} {their_type.Name!r} ({label}): rvt-rs fire properties {fire(our_psets)}; "
             f"Revit writes {common} {common in their_psets}, its fire properties {fire(their_psets)}"
         )
         for occurrence in occurrences(their_type):
