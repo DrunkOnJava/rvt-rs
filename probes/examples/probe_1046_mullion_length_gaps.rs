@@ -16,15 +16,16 @@
 //! the record box's, so a mullion with no box has no axis either.
 //!
 //! Output, one line per curtain mullion the export gives no `Length`:
-//!   mullion <tag> span=<true|false> box=<w,d,h ft|-> along=<axis|-> axes=<true|false> body=<dx,dy,dz ft|-> <reason>
+//!   mullion <tag> set=<true|false> span=<true|false> box=<w,d,h ft|-> along=<axis|-> axes=<true|false> body=<dx,dy,dz ft|-> <reason>
 //! where `body` is the extent of the body the export wrote, in the element's
 //! own frame, and the reason is one of `no_record_box` (a box field is
 //! missing), `axes_recorded` (turned or tilted: the export writes both from the
 //! oriented box), `box_flat_on_its_axis` (the box's extent along the axis it
 //! runs along is not positive), `no_axis` (the transform gave no axis) and
-//! `box_has_its_extent` (the export should have written one). Members the
-//! export holds no base quantity set for are counted apart, as Revit's export
-//! writes none on 670 of the office's 10,673 `IfcMember`s either. The tally by
+//! `box_has_its_extent` (the export should have written one). A mullion the
+//! export holds no base quantity set for prints `set=false` and is also
+//! counted under `no base quantity set` (Revit's export writes none on 670 of
+//! the office's 10,673 `IfcMember`s, but writes one on these 18). The tally by
 //! reason over every curtain mullion goes to stderr.
 //!
 //! Usage:
@@ -156,9 +157,11 @@ fn main() -> anyhow::Result<()> {
             *tally.entry("length written").or_default() += 1;
             continue;
         }
-        if !entry.is_some_and(|written| written.set) {
+        // A mullion with no base quantity set at all is classified too: on
+        // `main` after #1741 the 18 hold none, not a `NetVolume` alone.
+        let set = entry.is_some_and(|written| written.set);
+        if !set {
             *tally.entry("no base quantity set").or_default() += 1;
-            continue;
         }
         let span = entry.is_some_and(|written| written.span);
         let box_size = BOX_FIELDS.map(|name| float(&element.fields, name));
@@ -182,7 +185,7 @@ fn main() -> anyhow::Result<()> {
         };
         *tally.entry(reason).or_default() += 1;
         println!(
-            "mullion {tag} span={span} box={} along={} axes={axes} body={} {reason}",
+            "mullion {tag} set={set} span={span} box={} along={} axes={axes} body={} {reason}",
             box_size
                 .map(|size| size.map_or("-".to_string(), |value| format!("{value:.6}")))
                 .join(","),
