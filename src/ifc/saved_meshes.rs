@@ -81,6 +81,13 @@ use std::collections::{BTreeMap, BTreeSet};
 /// `BodySource` of a body drawn from the element's saved graphics.
 pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
 
+/// The record-geometry property that says an element of the Roofs category is
+/// written as another entity than `IfcRoof` by its "Export to IFC As" value
+/// (#1713: the BIM4LCA timber office's 8 roofs written as `IfcSlab`). It is the
+/// element's category kept past the redirect, which the record's schema class
+/// (`ProfileRoof` for a footprint roof, RE-76) names for only some roofs.
+pub const REDIRECTED_ROOF_PROPERTY: &str = "RedirectedRoof";
+
 /// RE-443: only duct fittings meet the measured native-reference body bound.
 const COLLAPSED_RULED_CATEGORY_REFUSAL: &str =
     "collapsed ruled profile outside the measured duct fittings";
@@ -178,8 +185,11 @@ fn partial_refusal(meshes: &GraphicsMeshes) -> Option<String> {
 /// mullion's box along its own axes (RE-106, RE-421: 327 mullions of the BIM4LCA
 /// timber office at permit, whose Revit solids have mitred ends), each a
 /// stand-in for the mesh; and a roof's level block, whose record box holds the
-/// reference surface and not the slope or thickness (#1612). A resolved outline
-/// is the body of any other class (a floor's plan, a ceiling's).
+/// reference surface and not the slope or thickness (#1612), whatever entity the
+/// roof is exported as: a roof whose "Export to IFC As" says `IfcSlab` is the
+/// same element with the same record box and the same mesh, and carries
+/// [`REDIRECTED_ROOF_PROPERTY`] (#1713). A resolved
+/// outline is the body of any other class (a floor's plan, a ceiling's).
 fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
     let source = properties
         .iter()
@@ -190,6 +200,11 @@ fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
     let profile_resolved = properties.iter().any(|property| {
         property.name == "ProfileResolved" && matches!(property.value, PropertyValue::Boolean(true))
     });
+    let roof = ifc_type == "IFCROOF"
+        || properties.iter().any(|property| {
+            property.name == REDIRECTED_ROOF_PROPERTY
+                && matches!(property.value, PropertyValue::Boolean(true))
+        });
     matches!(
         source,
         Some(
@@ -198,7 +213,7 @@ fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
                 | INSTANCE_TURNED_BODY_SOURCE
                 | INSTANCE_ORIENTED_BODY_SOURCE
         )
-    ) && !(profile_resolved && ifc_type != "IFCROOF")
+    ) && !(profile_resolved && !roof)
 }
 
 /// Say on each box body that no pass offered a saved mesh why none did

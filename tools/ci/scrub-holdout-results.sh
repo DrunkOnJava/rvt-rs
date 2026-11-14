@@ -149,6 +149,9 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       [ -f "$f" ] || continue
       grep -E "^(elements Revit gives materials: [0-9]+|of those, rvt-rs gives materials: [0-9]+, the same set: [0-9]+)$" "$f" | sed 's/^/materials: /' || true
       grep -E "^(different sets by|no materials from rvt-rs, by) Revit entity: \{((')?Ifc[A-Za-z0-9]+(')?: [0-9]+(, )?)*\}$" "$f" | sed 's/^/materials: /' || true
+      # #1805: how a set differs, and the elements a shared Tag hides, as counts.
+      grep -E "^different sets, how: (none|([a-zA-Z' -]+ [0-9]+(, )?)+)$" "$f" | sed 's/^/materials: /' || true
+      grep -E "^elements sharing an earlier element's Tag, not compared, (rvt-rs|Revit) by entity: \{((')?Ifc[A-Za-z0-9]+(')?: [0-9]+(, )?)*\}$" "$f" | sed 's/^/materials: /' || true
     done
     # tools/re/unfilled_openings_vs_ifc.py (#1165): how many openings nothing
     # fills each side writes, by the class of the cutter and the host, and the
@@ -225,7 +228,10 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     done
     for f in "$dir"layer_sets_vs_ifc.txt; do
       [ -f "$f" ] || continue
-      grep -E "^( +[0-9]+  [a-z][a-z ]*(: [A-Za-z',: ]+| = Revit's Family:Type)?|  [a-z ]+ within [0-9.]+ ft of Revit's: [0-9]+ of [0-9]+)$" "$f" | sed 's/^/layer sets: /' || true
+      # Counts beside fixed words. The layer-count lines are named one by one:
+      # the general form allows no capital before a colon, and dropped
+      # "layer sets whose count differs from Revit's" until #1805.
+      grep -E "^( +[0-9]+  [a-z][a-z ]*(: [A-Za-z',: ]+| = Revit's Family:Type)?| +[0-9]+  (layer sets whose count differs from Revit's|layer count: (Revit's export names no layers|rvt-rs fewer than Revit's|rvt-rs more than Revit's|every name rvt-rs writes is one of Revit's|Revit's names in order once its 0 thick layers are left out))|  [a-z ]+ within [0-9.]+ ft of Revit's: [0-9]+ of [0-9]+)$" "$f" | sed 's/^/layer sets: /' || true
     done
     for f in "$dir"class_sets_vs_ifc.txt; do
       [ -f "$f" ] || continue
