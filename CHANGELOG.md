@@ -18,6 +18,73 @@ Not measured, and said in each entry:
 - A multistory stair is written once, where Revit's export writes it once per storey: Snowdon Towers' three lack 53 entities (#1977, RE-463).
 - No Revit export holds a curtain wall without a mullion, so what Revit writes for `rme_basic`'s two rests on the source of its exporter (#1960).
 
+Measured against 0.22.0 on every model Measure holds (run [43555120928](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43555120928), `main` at 21d310f0; the release adds only its notes, witness files, version strings and fixtures to them, and #1991, a probe, a scorer and a report, landed on `main` after it):
+
+- All 146 exports differ, and 120 of the 121 `diagnostics.json` files (the
+  blank Revit 2025 model's is equal). 79 of the 146 have no Revit export:
+  Autodesk's 59 sample projects (34 of 2015 to 2023, 25 of 2024 to 2027), 19
+  families and Einhoven, so no scorer says which of what moved is Revit's: each
+  entry above was measured in its own pull request. The other 67 are scored
+  against Revit's own exports: Core Interior, the four RE1 models, BIMcollab's
+  example, the 12 BIM4LCA models, the 24 Revit 2025 models, the six
+  `rac_advanced` saves of 2015 to 2020, 18 held-out files and the spent Vitoria
+  "Before". On them no count of values or quantities that equals Revit's falls
+  and none that differs rises, BIMcollab's example moves in no scorer line, and
+  every other line that moves is one of these:
+  - The project's, building's and site's GlobalId is Revit's on 50 models (0 of
+    1 each before), and the storeys' on 11 files of 2017 to 2022 (69 storeys,
+    from 6) (RE-459). On the spent Vitoria "Before", 1,297 of the 1,314
+    elements Revit's export holds are Revit's (from none), its 73 rooms pair
+    with Revit's by GlobalId (from none) and 414 of 1,005 type objects agree
+    (from none).
+  - `NOTDEFINED` (#1713): the roofs that agree with Revit's `PredefinedType` go
+    from 8 to 39 of 39 on 30 models and the proxies from 34 to 456 of 464 on 22
+    (the 8 left are the one proxy in each of the eight BIM4LCA files at permit
+    and as built that Revit writes `USERDEFINED` on). The stairs of the two
+    timber housing files go from 70 to 76 of 76 and the flights of the two
+    timber offices from 58 to 62 of 62.
+  - A door's or window's `FireRating` (#1507) is Revit's on 120 values (from
+    none) on 14 models: the eight held-out files of 2024 to 2027 and six of the
+    Revit 2025 models.
+  - A wall's quantities with each opening at its real height:
+    `Qto_WallBaseQuantities` equal to Revit's on all 10 walls of each of four
+    held-out files of 2024 to 2027 (2 before) and all 9 of each of four
+    held-out offices (3 before), on 4 of 5 walls of six Revit 2025 models (2
+    before), and on 1 or 2 more walls of four BIM4LCA files.
+  - The openings of Revit 2015 to 2023 doors and windows (RE-450): the
+    opening's `Qto_OpeningElementBaseQuantities.Depth` is Revit's on 224 of 224
+    openings of four held-out files (from none); on the spent Vitoria "Before"
+    68 of 68 doors and 64 of 70 windows have Revit's `OverallWidth` and
+    `OverallHeight` (from none; the other 6 windows get none) and the boxes of
+    54 doors and 3 windows are within 0.001 ft of Revit's (0.26 ft off for 5 and
+    up to 1 ft off for 52 before).
+  - The mullions' `Pset_MemberCommon.Span` and `Qto_MemberBaseQuantities.Length`
+    are Revit's on 6 more mullions of each concrete office and 8 more of each
+    timber office (#1193); the sloped floors' `Qto_SlabBaseQuantities.Depth`
+    and `GrossVolume` on 8 more floors of each office (#1208); and 4 more of
+    the timber housing's columns are drawn from the mesh Revit saved, which
+    matches Revit's on all 8 scored (#1710).
+  - A wall profile region that a pocket equals is no longer cut into the wall's
+    body: `wall_profile_cut_in_body` goes from 9 to 8 as built and from 10 to 8
+    at permit on the timber offices (#1947), and one more wall of the timber
+    office as built is drawn in layers (593, of which 592 are within 0.001 ft
+    of Revit's, where 591 of 592 were).
+  - Where Revit's setup wrote no base quantities, rvt-rs writes more of them,
+    counted apart (RE-242): 24 more on Core Interior (3,859 to 3,883), 107 more
+    on each `rac_advanced` save of 2015 to 2020 (3,469 to 3,576), 37 more on one
+    held-out file (127 to 164) and 389 more opening depths on another.
+  - One measured negative, not yet explained: the spent Vitoria "Before" gains
+    one opening that nothing fills and that Revit's export does not hold
+    (Revit's 5 unfilled openings in that file are other doors'), and a held-out
+    Vitoria and a held-out Gdynia each gain one opening that Revit's export
+    does not hold, with 2 more values that Revit does not write on each of the
+    three (#1165).
+- What differs in `diagnostics.json` is counts: the wording of the storey
+  warning (120 files), the skipped items (62), the parameter values (32), the
+  exported entities (21), the bodies' sources (the saved mesh in 11 files, the
+  partition record's box in 10), the walls and curtain walls exported (10), and
+  the door openings a wall's cuts leave out because the door's box is not read
+  (10).
 
 ### Upgrading from 0.22
 
