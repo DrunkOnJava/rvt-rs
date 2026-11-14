@@ -5628,12 +5628,14 @@ pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_
 pub const INSTANCE_ORIENTED_BODY_SOURCE: &str = "partition_family_instance_oriented_box";
 
 /// Below this, `|det|` of the axes' absolute components leaves the box along
-/// them undetermined by the record box (RE-106). The 12 short mullions of the
-/// BIM4LCA office (RE-226's shape, shorter than their own section, their own Z
-/// horizontal and some 47 degrees off the model's axes) have 0.082, and their
-/// box solved there is Revit's `Length` to 0.0003 ft (0.3306 against 0.3309
-/// ft for 3024608, #1193). A mullion turned within a few degrees of 45 has
-/// under 0.05 and keeps RE-226's extent along the model axis its own Z lies on.
+/// them undetermined by the record box (RE-106). Of the 18 mullions of the
+/// BIM4LCA concrete office as built that RE-226's shape leaves without a set
+/// (their own Z horizontal, turned some 45 degrees), |det| runs from 0.0056 to
+/// 0.096 (#1760's probe); the 9 at 0.05 or more are solved here, 3024608
+/// (0.0824) to Revit's `Length` within 0.0003 ft (0.3306 against 0.3309, #1193).
+/// The 9 below solve to the same half-extents but keep RE-226's extent along
+/// the model axis their own Z lies on, since nothing here checks a solve that
+/// close to singular (#1193).
 const ORIENTED_BOX_MIN_DET: f64 = 0.05;
 
 /// The half-extents along `axes` (X, Y and Z, each in model coordinates) of
