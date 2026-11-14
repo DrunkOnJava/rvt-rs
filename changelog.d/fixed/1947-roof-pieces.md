@@ -3,4 +3,4 @@
   loop was written as a flat piece the height of the record box, so one roof was
   drawn two ways. Every loop of such a roof is now its plan's prism, as a roof
   sloped by arrows in several loops already was. No measured model holds one:
-  61 of 61 exports are unchanged.
+  120 of 120 exports, the Autodesk samples included, are unchanged.
