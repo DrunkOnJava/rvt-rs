@@ -341,10 +341,12 @@ fn choose_copy(copies: &[LayerCopy], current: Option<u32>) -> CopyChoice<'_> {
 /// disagree takes its current partition's copy, as on 2024 and later (RE-466,
 /// #1805): 2020, where the one file measured with such a type, a held-out
 /// file read as counts, has 5 floors whose current copy holds Revit's widths
-/// and materials on all 5 and whose first copy on none. The four layers with
-/// no material of their own take their category's, which RE-464's reader
-/// gives as Revit's export does. None of Autodesk's 34 samples of 2015 to
-/// 2023 has a type whose copies disagree, so no other release is measured.
+/// and, on every layer with a width, Revit's material, where the first copy
+/// holds them on none. The four layers with no material of their own take
+/// their category's, which RE-464's reader gives as Revit's export does. That
+/// export also writes the 0-wide membranes rvt-rs leaves out (RE-53), on 4 of
+/// the 5. None of Autodesk's 34 samples of 2015 to 2023 has a type whose copies
+/// disagree, so no other release is measured.
 pub const CURRENT_COPY_32BIT_REVIT_VERSIONS: &[u32] = &[2020];
 
 /// The layers of each type in `types`, by ElementId, from each type's own
