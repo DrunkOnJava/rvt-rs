@@ -178,8 +178,10 @@ fn partial_refusal(meshes: &GraphicsMeshes) -> Option<String> {
 /// mullion's box along its own axes (RE-106, RE-421: 327 mullions of the BIM4LCA
 /// timber office at permit, whose Revit solids have mitred ends), each a
 /// stand-in for the mesh; and a roof's level block, whose record box holds the
-/// reference surface and not the slope or thickness (#1612). A resolved outline
-/// is the body of any other class (a floor's plan, a ceiling's).
+/// reference surface and not the slope or thickness (#1612), whatever entity the
+/// roof is exported as: a roof whose "Export to IFC As" says `IfcSlab` is the
+/// same element with the same record box and the same mesh (#1713). A resolved
+/// outline is the body of any other class (a floor's plan, a ceiling's).
 fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
     let source = properties
         .iter()
@@ -190,6 +192,11 @@ fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
     let profile_resolved = properties.iter().any(|property| {
         property.name == "ProfileResolved" && matches!(property.value, PropertyValue::Boolean(true))
     });
+    let roof = ifc_type == "IFCROOF"
+        || properties.iter().any(|property| {
+            property.name == "RevitClass"
+                && matches!(&property.value, PropertyValue::Text(class) if class == "Roof")
+        });
     matches!(
         source,
         Some(
@@ -198,7 +205,7 @@ fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
                 | INSTANCE_TURNED_BODY_SOURCE
                 | INSTANCE_ORIENTED_BODY_SOURCE
         )
-    ) && !(profile_resolved && ifc_type != "IFCROOF")
+    ) && !(profile_resolved && !roof)
 }
 
 /// Say on each box body that no pass offered a saved mesh why none did

@@ -450,16 +450,27 @@ fn collect_export_parameters(
     (out, dropped)
 }
 
+/// What each partition holds of one `(owner, key)`: its value, or `None` where
+/// the partition sets the key to two different values.
+type KeyCopies = BTreeMap<u32, Option<String>>;
+
+/// The partitions that hold a copy of a key, by the element it belongs to.
+type Holders = BTreeMap<u32, BTreeSet<u32>>;
+
 /// [`find_export_parameters`] over every `Partitions/*` stream, or on Revit
-/// 2024 and later [`find_export_parameters_in_objects`]. On Revit 2024 and
-/// later an element that several partitions give different values for a key
-/// takes the value of the latest partition that holds one, which is its
-/// current copy: the BIM4LCA permit files edit the value in later increments,
-/// and 40 walls and 42 spaces of the three of them read no value while
-/// Revit's export writes the latest (#1713). A latest copy that disagrees with
-/// itself leaves the key out. Before Revit 2024 an element whose streams
-/// disagree about a key loses it. Empty for a release with no measured
-/// element-data header.
+/// 2024 and later [`find_export_parameters_in_objects`]. An element whose
+/// partitions agree about a key has its value.
+///
+/// On Revit 2024 and later an element that several partitions give different
+/// values for a key takes the value of its current copy, the one
+/// [`crate::native_document::current_partitions`] finds (RE-145, RE-216): the
+/// BIM4LCA permit files edit a wall's or a wall type's value in a later
+/// increment, and 40 walls, 42 spaces and 8 roofs of three of them read no
+/// value or the wrong class while Revit's export writes the current one
+/// (#1713). An element it has no current copy for, and one whose current copy
+/// disagrees with itself, leave the key out. Before Revit 2024 an element
+/// whose streams disagree about a key loses it. Empty for a release with no
+/// measured element-data header.
 pub fn scan_export_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -468,16 +479,14 @@ pub fn scan_export_parameters(
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
         return Ok(BTreeMap::new());
     };
-    let latest_wins = revit_version >= 2024;
-    let mut merged: BTreeMap<u32, ExportParameters> = BTreeMap::new();
-    let mut conflicting: BTreeSet<(u32, i64)> = BTreeSet::new();
-    // In ascending partition number, so that a later partition's copy comes
-    // after an earlier one's.
+    let by_current_copy = revit_version >= 2024;
+    let mut copies: BTreeMap<(u32, i64), KeyCopies> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let (found, dropped) = if latest_wins {
+        let partition = crate::partition_room_parameters::partition_number(&stream);
+        let (found, dropped) = if by_current_copy {
             let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
                 continue;
             };
@@ -486,7 +495,6 @@ pub fn scan_export_parameters(
             parameters_by_header(inflated.bytes(), &header, declared)
         };
         for (owner, parameters) in found {
-            let held = merged.entry(owner).or_default();
             for (key, value) in [
                 (IFC_EXPORT_ELEMENT_AS, parameters.export_as),
                 (IFC_EXPORT_PREDEFINEDTYPE, parameters.predefined_type),
@@ -496,29 +504,63 @@ pub fn scan_export_parameters(
                     parameters.type_predefined_type,
                 ),
             ] {
-                let Some(value) = value else {
-                    continue;
-                };
-                let slot = held.slot(key).expect("an export parameter key");
-                if !latest_wins && slot.as_ref().is_some_and(|existing| *existing != value) {
-                    conflicting.insert((owner, key));
-                    continue;
-                }
-                // This partition is later than the ones before it: its copy is
-                // the element's current one, and it is not in doubt.
-                *slot = Some(value);
-                if latest_wins {
-                    conflicting.remove(&(owner, key));
+                if let Some(value) = value {
+                    copies
+                        .entry((owner, key))
+                        .or_default()
+                        .insert(partition, Some(value));
                 }
             }
         }
-        if latest_wins {
-            conflicting.extend(dropped);
+        // A partition that sets a key to two values is a copy in doubt, which
+        // only the current-copy rule reads; before 2024 it is left out.
+        if by_current_copy {
+            for pair in dropped {
+                copies.entry(pair).or_default().insert(partition, None);
+            }
         }
     }
-    for (owner, key) in conflicting {
-        if let Some(slot) = merged.get_mut(&owner).and_then(|p| p.slot(key)) {
-            *slot = None;
+
+    // The value each pair takes. Partitions that agree give it; pairs they
+    // disagree about are routed below on 2024 and later and left out before.
+    let mut chosen: BTreeMap<(u32, i64), String> = BTreeMap::new();
+    let mut disagreeing: BTreeMap<i64, Holders> = BTreeMap::new();
+    for (&(owner, key), held) in &copies {
+        let mut values = held.values();
+        let Some(first) = values.next() else {
+            continue;
+        };
+        if values.all(|value| value == first) {
+            if let Some(value) = first {
+                chosen.insert((owner, key), value.clone());
+            }
+        } else if by_current_copy {
+            disagreeing
+                .entry(key)
+                .or_default()
+                .insert(owner, held.keys().copied().collect());
+        }
+    }
+    for (key, holders) in disagreeing {
+        // The pairs it leaves out are the ones whose current copy cannot be
+        // told: an element the index does not route, or one whose current copy
+        // sits in a stream too large to read. The native record read leaves
+        // those elements out too, and a latest-copy guess here would read a
+        // stale value.
+        for (owner, partition) in crate::native_document::current_partitions(rf, &holders) {
+            if let Some(Some(value)) = copies
+                .get(&(owner, key))
+                .and_then(|held| held.get(&partition))
+            {
+                chosen.insert((owner, key), value.clone());
+            }
+        }
+    }
+
+    let mut merged: BTreeMap<u32, ExportParameters> = BTreeMap::new();
+    for ((owner, key), value) in chosen {
+        if let Some(slot) = merged.entry(owner).or_default().slot(key) {
+            *slot = Some(value);
         }
     }
     Ok(merged)
