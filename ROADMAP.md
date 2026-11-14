@@ -379,8 +379,9 @@ the four levels a file can reach are in the
   on the other 44 no count that equals Revit's falls except those the
   changelog names (the saved-mesh `IfcCovering` row that the gutters leave, and
   the plan-outline and layer counts of the roofs now drawn from their saved
-  meshes), and none that differs rises but the layer counts of 4 floors of one
-  held-out Revit 2020 file (#1805). `PredefinedType` stays unset on some
+  meshes), and none that differs rises but 4 floors of one held-out Revit 2020
+  file, whose layer sets leave out Revit's 0-wide membrane layers (#1805).
+  `PredefinedType` stays unset on some
   held-out pairs of Revit 2023 and earlier (counts only: 4 of 12 roofs, 1 of 5
   stairs, 1 of 5 stair flights, 12 of 60 furniture and 2 of 10 railings), a
   ceiling's piece `GrossArea` rests on one building, a multistory stair's
