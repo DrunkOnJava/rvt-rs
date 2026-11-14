@@ -1078,9 +1078,9 @@ fn property_readers(name: &str, value: &str) -> &'static [&'static str] {
         "BodyHeightSource" => match value {
             ec::AREA_BODY_HEIGHT_SOURCE => &[crate::partition_area_records::AREA_LEVELS_READER],
             ec::LANDING_SLAB_BODY_HEIGHT_SOURCE => &["native_landing", "native_landing_type"],
-            ec::WALL_TOP_COVER_BODY_HEIGHT_SOURCE | ec::WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE => {
-                WALL_TOP_READERS
-            }
+            ec::WALL_TOP_COVER_BODY_HEIGHT_SOURCE
+            | ec::WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE
+            | ec::WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE => WALL_TOP_READERS,
             _ => &[],
         },
         ec::WALL_BASE_SOURCE_PROPERTY => match value {

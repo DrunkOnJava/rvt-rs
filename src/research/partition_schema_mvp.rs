@@ -228,6 +228,7 @@ pub fn recover_partition_schema_mvp(
                 &mut out.products,
                 [&mut out.doors, &mut out.windows],
                 Some(&references),
+                &mut wall_reads,
             );
             attach_curtain_axes(rf, revit_version, &mut out.products);
             attach_curtain_part_types_32(rf, revit_version, &references, &mut out.products);
@@ -260,7 +261,7 @@ pub fn recover_partition_schema_mvp(
         // readers skip it, since the trim rewrote the record box they would test
         // a line against. ---
         if crate::partition_beam_axes::beam_axis_read_on(revit_version) {
-            attach_beam_rotations(rf, &mut out.products);
+            attach_beam_rotations(rf, revit_version, &mut out.products);
             attach_beam_axes(rf, revit_version, &mut out.products);
         }
         // --- A steel beam's I section from its type (RE-103, RE-365) ---
@@ -447,6 +448,20 @@ pub fn recover_partition_schema_mvp(
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
     // --- Which floors, ceilings and roofs nothing cuts (RE-295) ---
     attach_slab_uncut(rf, &mut [&mut out.slabs, &mut out.products]);
+    // --- The sloped floors whose Depth and GrossVolume are measured (#1208) ---
+    if SLOPED_FLOOR_QUANTITIES_REVIT_VERSIONS.contains(&revit_version) {
+        for element in out
+            .slabs
+            .iter_mut()
+            .chain(out.products.iter_mut())
+            .filter(|element| slab_top_plane_from_fields(&element.fields).is_some())
+        {
+            element.fields.push((
+                SLOPED_FLOOR_QUANTITIES_FIELD.into(),
+                InstanceField::Bool(true),
+            ));
+        }
+    }
     // --- Base constraints of elements naming two Levels (RE-59), then
     // railings by their host and elements by the Level objects they name
     // (RE-60) ---
@@ -477,6 +492,7 @@ pub fn recover_partition_schema_mvp(
         &mut out.products,
         [&mut out.doors, &mut out.windows],
         None,
+        &mut wall_reads,
     );
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
@@ -493,7 +509,7 @@ pub fn recover_partition_schema_mvp(
     // --- Beams' Cross-Section Rotation, from their native records (RE-276),
     // before the axes, which RE-328's level beams longer than their lines
     // need it for ---
-    attach_beam_rotations(rf, &mut out.products);
+    attach_beam_rotations(rf, revit_version, &mut out.products);
     // --- Beams along their location lines (RE-49, RE-328) ---
     attach_beam_axes(rf, revit_version, &mut out.products);
     // --- Pipes as cylinders along their ends (RE-131) ---
@@ -702,6 +718,9 @@ pub fn recover_partition_schema_mvp(
     // --- Empty curtain panels are left out, as Revit leaves them out (#309) ---
     out.products
         .retain(|product| !is_empty_curtain_panel(product));
+    // --- Curtain panels that are the host panel of another curtain wall's
+    // grid are left out, as Revit leaves them out (#1975) ---
+    without_host_panels(rf, revit_version, &mut out.products, &mut wall_reads);
     // --- Plumbing fixtures whose type draws nothing visible are left out, as
     // Revit leaves them out (RE-363, #1496) ---
     without_invisible_plumbing_fixture_types(rf, revit_version, &mut out.products);
@@ -735,6 +754,18 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ] {
             attach_type_text_parameters(&type_parameters, elements);
+        }
+    }
+    // --- Roofs whose underside the walls under them are cut along (#1478) ---
+    if SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS.contains(&revit_version) {
+        for roof in out
+            .slabs
+            .iter_mut()
+            .chain(out.products.iter_mut())
+            .filter(|element| element.class == "Roof")
+        {
+            roof.fields
+                .push((ROOF_CUTS_WALL_TOPS_FIELD.into(), InstanceField::Bool(true)));
         }
     }
     // --- A door's or window's Fire Rating from its saved parameters (#1507) ---

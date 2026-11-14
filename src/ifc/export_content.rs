@@ -740,12 +740,16 @@ pub fn append_typed_production_elements(
     // profile, for the cut-out carried on to the wall's end.
     let mut pending_profiles: Vec<wall_profile::Pending> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
-    // RE-351: the roofs whose record box is exactly their type's layers and
-    // whose plan outline is read, the only roofs whose underside a wall's top
-    // may be cut at: the layers prove the underside level, and a roof without
-    // its outline is drawn over its box's rectangle, which an L-shaped roof
-    // does not fill.
-    let mut plate_roofs: HashSet<u32> = HashSet::new();
+    // RE-351: every Roof record, and whether its record box is exactly its
+    // type's layers and its plan outline is read, the only roofs whose
+    // underside a wall's top may be cut at: the layers prove the underside
+    // level, and a roof without its outline is drawn over its box's
+    // rectangle, which an L-shaped roof does not fill. Keyed on the record's
+    // class, whatever IFC entity it is exported as (#1480).
+    let mut plate_roofs: wall_tops::Roofs = HashMap::new();
+    // #1478: the roofs drawn from their slopes on the releases whose walls under
+    // them are cut along their underside.
+    let mut sloped_roofs: HashSet<u32> = HashSet::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -885,7 +889,20 @@ pub fn append_typed_production_elements(
             _ => None,
         });
         let mapping =
-            category_map::lookup_for_record(&decoded.class, record_class, structural_usage);
+            category_map::lookup_for_record(&decoded.class, record_class, structural_usage).map(
+                |mapping| {
+                    // #1841: a bracing measured as `BRACE` types as one.
+                    let brace = decoded.fields.iter().any(|(name, value)| {
+                        name == crate::partition_schema_mvp::BRACE_TYPE_FIELD
+                            && matches!(value, InstanceField::Bool(true))
+                    });
+                    if brace && std::ptr::eq(mapping, &category_map::HORIZONTAL_BRACING_MEMBER) {
+                        &category_map::HORIZONTAL_BRACING_BRACE
+                    } else {
+                        mapping
+                    }
+                },
+            );
         if mapping.is_none() && policy.require_mapped_ifc_type {
             continue;
         }
@@ -984,23 +1001,26 @@ pub fn append_typed_production_elements(
                 // and a 2022 file's export parameters are not read.
                 // A value that is no enumerator is left unset: what Revit writes
                 // for one is not measured.
-                (effective.ifc_type == "IFCFURNITURE"
-                    && decoded.fields.iter().any(|(name, value)| match value {
-                        InstanceField::Integer { value, .. }
-                            if name == crate::partition_schema_mvp::FURNITURE_RELEASE_FIELD =>
-                        {
-                            u32::try_from(*value).is_ok_and(|release| {
-                                crate::partition_schema_mvp::FURNITURE_DEFAULT_REVIT_VERSIONS
-                                    .contains(&release)
-                            })
-                        }
-                        _ => false,
-                    })
-                    && !decoded.fields.iter().any(|(name, value)| {
-                        matches!(value, InstanceField::String(text)
+                // #1713: roofs, stairs, stair flights and proxies the same way, each
+                // on the releases `NOTDEFINED_DEFAULTS` gives it.
+                (decoded.fields.iter().any(|(name, value)| match value {
+                    InstanceField::Integer { value, .. }
+                        if name == crate::partition_schema_mvp::FURNITURE_RELEASE_FIELD =>
+                    {
+                        u32::try_from(*value).is_ok_and(|release| {
+                            crate::partition_schema_mvp::NOTDEFINED_DEFAULTS.iter().any(
+                                |(entity, releases)| {
+                                    *entity == effective.ifc_type && releases.contains(&release)
+                                },
+                            )
+                        })
+                    }
+                    _ => false,
+                }) && !decoded.fields.iter().any(|(name, value)| {
+                    matches!(value, InstanceField::String(text)
                             if name == crate::partition_schema_mvp::IFC_PREDEFINED_TYPE_FIELD
                                 && !text.trim().is_empty())
-                    }))
+                }))
                 .then_some("NOTDEFINED")
             })
             .or(effective.predefined_type);
@@ -1413,6 +1433,7 @@ pub fn append_typed_production_elements(
             &decoded,
             extrusion.as_ref(),
             (solid_shape.is_none() || shaped_floor) && piece_bodies.is_empty(),
+            shaped_floor,
         );
         add_ceiling_quantities(
             &mut reference_sets,
@@ -1602,15 +1623,22 @@ pub fn append_typed_production_elements(
                     None => wall_tops::SlabTop::Flat,
                 };
                 slab_shapes.insert(id, top);
-                if decoded.class == "Roof"
-                    && crate::element_record_plan_profiles::plan_profile_from_fields(
+                if decoded.class == "Roof" {
+                    let plate = crate::element_record_plan_profiles::plan_profile_from_fields(
                         &decoded.fields,
                     )
                     .is_some()
-                    && crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
-                        .is_some_and(|layers| layers.stacked)
+                        && crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+                            .is_some_and(|layers| layers.stacked);
+                    plate_roofs.insert(id, plate);
+                }
+                if decoded.class == "Roof"
+                    && decoded.fields.iter().any(|(name, value)| {
+                        name == crate::partition_schema_mvp::ROOF_CUTS_WALL_TOPS_FIELD
+                            && matches!(value, InstanceField::Bool(true))
+                    })
                 {
-                    plate_roofs.insert(id);
+                    sloped_roofs.insert(id);
                 }
             }
         }
@@ -1914,7 +1942,7 @@ pub fn append_typed_production_elements(
     }
 
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
-    wall_tops::cut_wall_tops(entities, &pending_tops, &plate_roofs);
+    wall_tops::cut_wall_tops(entities, &pending_tops, &plate_roofs, &sloped_roofs);
 
     // #1396: a wall with an edited elevation profile that stops short of the
     // wall beneath it is drawn to that wall's face, where its base is still cut.
@@ -3089,7 +3117,10 @@ fn level_slab(
     property_set: Option<&PropertySet>,
 ) -> bool {
     const TOLERANCE_FEET: f64 = 1e-3;
-    if ifc_type != "IFCSLAB" {
+    // RE-238 is measured on floors, roofs and stair landings. A ceiling Revit
+    // exports as `IfcSlab` gets no `PitchAngle` from Revit's export: the
+    // BIM4LCA timber housing's 2337931 (`Compound Ceiling`) as built (#1987).
+    if ifc_type != "IFCSLAB" || decoded.class == "Ceiling" {
         return false;
     }
     let landing = property_set
@@ -3628,6 +3659,13 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
 ///
+/// A floor drawn along the plane of its shape-edited corners (#1384) gets its
+/// `Depth` as its type's layers' total thickness times the cosine of the
+/// slope, and its `GrossVolume` as that times its `GrossArea`: Revit's export
+/// writes the volume of the slab there, which no layer of a sloped floor
+/// holds, on all 8 sloped floors of the BIM4LCA office as built
+/// (RE-298, RE-384, #1208).
+///
 /// Where the floor's type's layers are read and its record holds no step that
 /// cuts it ([`crate::partition_schema_mvp::SLAB_UNCUT_FIELD`]), also its
 /// `NetVolume` (RE-295, #1016), that area times the layers' total thickness:
@@ -3668,6 +3706,7 @@ fn add_slab_gross_area(
     decoded: &DecodedElement,
     extrusion: Option<&Extrusion>,
     single: bool,
+    shaped_floor: bool,
 ) {
     const TOLERANCE_FEET: f64 = 1e-3;
     if ifc_type != "IFCSLAB" || !single {
@@ -3735,7 +3774,39 @@ fn add_slab_gross_area(
     let one_layer = layers
         .as_ref()
         .is_some_and(|layers| layers.layers.len() == 1);
-    let depth_quantity = (level && (roof || one_layer)).then_some(depth);
+    // A floor drawn along the plane of its shape-edited corners: Revit's
+    // export gives its `Depth` the type's layers' total thickness times the
+    // cosine of the slope, and its `GrossVolume` that times its `GrossArea`
+    // (RE-298, RE-384, #1208). A plane with no gradient is a level floor and
+    // keeps the rule below, which reads one layer where Revit does (RE-298).
+    // Only on the releases they are measured on (#1208).
+    let measured = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::SLOPED_FLOOR_QUANTITIES_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    let sloped_depth = if shaped_floor && !roof && measured {
+        let plane = crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields);
+        let thickness = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. }
+                if name == crate::partition_schema_mvp::SLAB_TYPE_THICKNESS_FIELD =>
+            {
+                Some(*value)
+            }
+            _ => None,
+        });
+        match (plane, thickness) {
+            (Some([a, b, _]), Some(thickness)) => {
+                // The gradient whose angle RE-384 writes as `PitchAngle`.
+                let gradient = a.hypot(b);
+                (gradient.is_finite() && gradient > 0.0 && thickness.is_finite() && thickness > 0.0)
+                    .then(|| thickness / (1.0 + gradient * gradient).sqrt())
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let depth_quantity = sloped_depth.or_else(|| (level && (roof || one_layer)).then_some(depth));
     if let Some(quantity) =
         depth_quantity.filter(|quantity| quantity.is_finite() && *quantity > 0.0)
     {
@@ -3978,7 +4049,13 @@ pub(super) fn curve_area_length(curve: &entities::IndexedCurve) -> Option<(f64, 
 /// is 0.7 to 1.1 percent larger than Revit's on the 2 of the BIM4LCA office's
 /// ceilings as built and the 9 at permit whose records hold a `CutPairGStep`,
 /// and on no other. On a ceiling of several pieces Revit's export gives the
-/// area of one of them, which no field of the record says. Its `Width` is left
+/// area of one of them: the piece its sketch's two lowest-ElementId lines, the
+/// first drawn, both lie on (`PlanProfile::first_drawn_piece`, #1209). That is
+/// Revit's piece on 62 of 62 ceilings of the BIM4LCA offices where the two
+/// lines share a piece; a ceiling whose two lines lie on two pieces (13 there)
+/// gets no `GrossArea`, since on one of them the lowest line's piece is not
+/// Revit's. Measured on that one building only: no other model with a Revit
+/// export has a ceiling in pieces. Its `Width` is left
 /// out (RE-294): Revit 2024's exporter writes the extrusion's depth there and
 /// a later one (Revit 2025 or 2026) writes none on a covering, so the exporters
 /// disagree.
@@ -4015,8 +4092,27 @@ fn add_ceiling_quantities(
             let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
             (total - body.height_feet).abs() <= TOLERANCE_FEET
         });
-    if layered && pieces.is_empty() && from_sketch && uncut {
-        if let Some(area) = profile_area(body) {
+    // #1209: a ceiling in pieces takes its first-drawn piece's area, or none.
+    let measured = if pieces.is_empty() {
+        Some(body)
+    } else {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(name, value)| match (name.as_str(), value) {
+                (
+                    crate::element_record_plan_profiles::PLAN_PROFILE_FIRST_PIECE_FIELD,
+                    InstanceField::Integer { value, .. },
+                ) => usize::try_from(*value).ok(),
+                _ => None,
+            })
+            .and_then(|piece| match piece {
+                0 => Some(body),
+                piece => pieces.get(piece - 1),
+            })
+    };
+    if layered && from_sketch && uncut {
+        if let Some(area) = measured.and_then(profile_area) {
             properties.push(Property {
                 name: "GrossArea".into(),
                 value: PropertyValue::AreaSquareFeet(area),
@@ -5263,6 +5359,10 @@ pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_fl
 /// of the plan outside the element from there to the top (#1067, RE-320).
 pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
 
+/// `BodyHeightSource` of a wall whose top is cut along the underside of the
+/// sloped roof its top join names (#1478).
+pub const WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_along_sloped_roof";
+
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] on a wall cut whole
 /// (`BodyHeightSource` [`WALL_TOP_COVER_BODY_HEIGHT_SOURCE`]) by a floor that
 /// does not cover all of its plan: what the floor leaves is a stub, which Revit
@@ -5635,8 +5735,15 @@ pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_
 pub const INSTANCE_ORIENTED_BODY_SOURCE: &str = "partition_family_instance_oriented_box";
 
 /// Below this, `|det|` of the axes' absolute components leaves the box along
-/// them undetermined by the record box (RE-106).
-const ORIENTED_BOX_MIN_DET: f64 = 0.1;
+/// them undetermined by the record box (RE-106). The BIM4LCA concrete office
+/// has 12 short mullions without a set (RE-226's shape, shorter than their own
+/// section, their own Z horizontal and turned some 45 degrees off the model's
+/// axes; #1760's probe): 6 at |det| 0.053, 0.082 and 0.096 are solved here,
+/// 3024608 (0.082) to Revit's `Length` within 0.0003 ft (0.3306 against 0.3309,
+/// #1193), and 6 at 0.015, 0.028 and 0.039 keep RE-226's extent along the
+/// model axis their own Z lies on. Those 6 solve to the same half-extents, but
+/// nothing here checks a solve that close to singular (#1193).
+const ORIENTED_BOX_MIN_DET: f64 = 0.05;
 
 /// The half-extents along `axes` (X, Y and Z, each in model coordinates) of
 /// the box whose axis-aligned box is `size` (RE-106): the box centred on the

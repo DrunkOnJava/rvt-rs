@@ -1251,6 +1251,44 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-462 (2026-11-14)** makes a wall of a curtain wall type a curtain wall on
+Revit 2024 to 2027, as it already was on 2023, and leaves a curtain wall that is
+the host panel of another out on both (#1960). The 2024 reader needed a mullion
+or a grid to name a wall, so the two single-cell curtain walls of `rme_basic`
+and `rme_advanced` that hold no mullion (573660 and 573664) came out as
+`IfcWall` where the 2023 reader writes `IfcCurtainWall`. Revit's exporter
+decides by the curtain grid a wall has, with no test of mullions or cells, and
+folds a host panel into its owner; Snowdon Towers' 23 one-cell walls that
+Revit's export leaves out are exactly its 23 host panels, each named by a panel
+of another curtain wall and holding a `HostPanelInfo`. The rule is Revit's on
+all 9 curtain walls of `rac_basic` (Revit's 2018 export) and all 42 of Snowdon
+Towers that are not host panels. No Revit export holds a mullion-free curtain
+wall, so what Revit writes for 573660 and 573664 rests on the exporter's source
+(`reports/element-framing/RE-462-curtain-wall-type-and-host-panels.md`).
+
+**#1975 (2026-11-14)** also leaves out the panel those host panels were written
+as: each kept the panel category in its element record, so it was written as
+an `IfcPlate` Revit's export has no entity for (23 on Snowdon Towers
+Architectural, local only). On Revit 2024 a curtain panel whose wall record
+holds a `HostPanelInfo` is left out and counted as
+`element_record_curtain_host_panel`; the release is the one a file holding
+host panels is measured on.
+
+**#1977 (2026-11-14)** writes the copies of a multistory stair that Revit's export holds on
+each storey its group repeats the stair on. A `MultistoryStairs` record lists its stairs in sets
+of 14 indexes and each set's `StairsElement` names the Levels it spans; where no set covers the
+span between two consecutive Levels of the group's stairs and the span is as high as the stair
+that ends where it begins, that stair is written once more with its flights, landing, stringers
+and railings, one storey up, named `:2` as Revit's export names them (RE-463). It runs on
+Revit 2024 only: Snowdon Towers architectural is the one file with a Revit export of a
+multistory stair, and its 53 missing entities are written, equal to Revit's in name, storey and
+type object and in place within 1 mm; no other export of the 120 compared moves. A copy's
+`GlobalId` is rvt-rs's own, derived from its original's, since no revit-ifc key shape
+reproduces Revit's, and its record set says so (`MultistoryCopyOf`). The span rule is inferred
+from three groups of one building, so a span it does not reach is counted in the export notes
+and not copied
+(`reports/element-framing/RE-463-multistory-stair-copies.md`).
+
 **RE-461 (2026-11-13)** holds four of the eight rules whose release range was
 wider than the range their report measured (#1945, found by the batch 9 export
 audit) to the release each is measured on, and says for the other four what
@@ -1786,12 +1824,39 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.22.0** (2026-11-13) is the latest release: crates.io (`rvt` and
+- **v0.23.0** (2026-11-14) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
-  PyPI, GitHub Release archives for Linux, macOS and Windows, and the
-  container image, each checked from its published artifacts
-  ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
-  (`rvt-rs-mcp` is a binary crate with no documentation there). It limits what
+  PyPI, GitHub Release archives for Linux, macOS and Windows, and the container
+  image, each checked from its published artifacts ([`install.md`](install.md));
+  docs.rs had built `rvt` when they were checked (`rvt-rs-mcp` is a binary crate
+  with no documentation there). It writes more of what Revit's own export writes
+  and narrows rules that audits found wider than their evidence: a wall of a
+  curtain wall type is an `IfcCurtainWall` on Revit 2023 to 2027 whether or not
+  a mullion names it, and a curtain wall that is the host panel of another is
+  not one (#1960); a roof, stair, stair flight or building element proxy with no
+  predefined type of its own gets Revit's `NOTDEFINED` (#1713); a sloped floor
+  gets its `Qto_SlabBaseQuantities.Depth` and `GrossVolume` (#1208); a door's or
+  window's `FireRating` is read from its saved parameter (#1507); a column whose
+  saved mesh is a prism of another section than its type's rectangle is drawn
+  from the mesh; the doors and windows of Revit 2015 to 2023 cut the outline
+  their symbol cuts and carry its `OverallWidth` and `OverallHeight`; a
+  material's colour reaches IFC viewers; and a file that stores no project GUID
+  gets the project, building and site GlobalIds Revit's export gives them, from
+  the GUID in its history header (RE-459). Against 0.22.0 all 146 measured
+  exports differ, and 120 of the 121 `diagnostics.json` files; 79 of the 146
+  have no Revit export (Autodesk's 59 sample projects, 19 families and
+  Einhoven), and on the other 67, scored against Revit's own exports, no count
+  that equals Revit's falls and none that differs rises. What it does not
+  measure: a horizontal bracing's `BRACE` type is checked on a reporter's counts
+  of one structural model (#1841); `NOTDEFINED` on stairs and flights is
+  measured on Revit 2024 only (#1713); a multistory stair is written once where
+  Revit's export writes it once per storey, so Snowdon Towers' three lack 53
+  entities (#1977, RE-463); and no Revit export holds a curtain wall without a
+  mullion, so what Revit writes for `rme_basic`'s two rests on the source of its
+  exporter (#1960). `[0.23.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what
+  each change measures and what it does not.
+- **v0.22.0** (2026-11-13): published on every channel, each checked from its
+  published artifacts. It limits what
   a crafted Revit file can make the MCP server, the command-line tools, the
   Python bindings and the viewer do: `rvt-rs-mcp` reads from and writes to one
   folder and bounds what an answer carries (#1883); `rvt-doc --redact`,
@@ -2043,7 +2108,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.22.0 has, and is ahead of it by the fragments
+- `main` has everything v0.23.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is

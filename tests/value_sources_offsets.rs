@@ -638,6 +638,11 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         WALL_TOP,
     ),
     (
+        "BodyHeightSource",
+        "wall_top_cut_along_sloped_roof",
+        WALL_TOP,
+    ),
+    (
         "BodyBaseSource",
         "wall_base_cut_at_covering_floor",
         WALL_BASE,

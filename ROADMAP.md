@@ -343,11 +343,33 @@ the four levels a file can reach are in the
   project's 2025 save, 5 corner mullions of the 2027 `rac_advanced` stand in no
   curtain wall (#1865), and `[0.22.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists
   what each change does not measure.
+- **0.23.0, 2026-11-14.** It writes more of what Revit's own export writes and
+  narrows rules that audits found wider than their evidence. A wall of a
+  curtain wall type is an `IfcCurtainWall` on Revit 2023 to 2027 whether or not
+  a mullion names it, and a curtain wall that is the host panel of another is
+  not one (#1960). A roof, stair, stair flight or building element proxy with
+  no predefined type of its own gets Revit's `NOTDEFINED` (#1713), a sloped
+  floor gets its `Qto_SlabBaseQuantities.Depth` and `GrossVolume` (#1208), a
+  door's or window's `FireRating` is read from its saved parameter (#1507), and
+  a column whose saved mesh is a prism of another section than its type's
+  rectangle is drawn from the mesh. The doors and windows of Revit 2015 to 2023
+  cut the outline their symbol cuts, a material's colour reaches IFC viewers,
+  and a file that stores no project GUID gets the project, building and site
+  GlobalIds Revit's export gives them, from the GUID in its history header
+  (RE-459). Against 0.22.0 all 146 measured exports differ, and 120 of the 121
+  `diagnostics.json` files; 79 of the 146 have no Revit export, and on the
+  other 67 no count that equals Revit's falls and none that differs rises. A
+  horizontal bracing's `BRACE` type is checked on one reporter's counts of a
+  structural model (#1841), `NOTDEFINED` on stairs and flights on Revit 2024
+  only (#1713), a multistory stair is written once where Revit's export writes
+  it once per storey (#1977, RE-463), no Revit export holds a curtain wall
+  without a mullion (#1960), and `[0.23.0]` in [`CHANGELOG.md`](CHANGELOG.md)
+  lists what each change does not measure.
 
-### 0.23.0: IFC geometry and element data
+### 0.24.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.22.0, moved from the
-0.22.0 milestone when 0.22.0 shipped. Each
+The geometry and element-data work that continues after 0.23.0, moved from the
+0.23.0 milestone when 0.23.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall

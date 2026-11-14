@@ -9,8 +9,8 @@
 //!
 //! - the element is a slab, roof or footing drawn as a plain extrusion (or
 //!   several pieces at one height), so that its underside is level across
-//!   the wall. A roof drawn from its slopes is a solid and is left out, which
-//!   keeps the R2025 roofs off the walls that sit under them. A roof drawn as
+//!   the wall. A roof drawn from its slopes is a solid and is left out here;
+//!   on Revit 2025 to 2027 the walls under one are cut along it instead (below). A roof drawn as
 //!   a plain extrusion counts only where its record box is exactly its
 //!   type's layers and its plan outline is read: a roof by extrusion that the
 //!   release's readers do not read is its record box, deeper than its layers,
@@ -69,6 +69,23 @@
 //! five buildings, is under the stub's size and inside other walls but the
 //! stub itself, and Revit keeps the wall's own height over most others.
 //!
+//! # A wall under a sloped roof (#1478)
+//!
+//! A wall that no level underside cuts, whose top join names one roof and
+//! nothing else, and whose roof is drawn from its slopes as one solid of faces,
+//! is cut along that roof's underside on Revit 2025 to 2027
+//! (`SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS`): each convex piece of its plan, cut
+//! by the plan of each face of the roof that looks down, rises to that face's
+//! plane, one item each, with `BodyHeightSource` `wall_top_cut_along_sloped_roof`.
+//! On puzzbobb's Revit 2025 models Revit's export cuts the walls under their
+//! roofs so (as polygonal face sets), and rvt-rs's roof has Revit's underside
+//! over each wall's plan (Measure run 43542785440). No Revit export of 2026 or
+//! 2027 has such a wall; there the cut is held to `rac_basic`'s 2025 save by
+//! the same-project gate. A wall whose plan the faces
+//! do not cover once, or under which the underside is at or below its base or
+//! above its top anywhere, keeps its body, and a base cut leaves such a wall as
+//! it is (`base_cut_left_under_a_sloped_top`).
+//!
 //! # A wall's base (#1384, RE-336)
 //!
 //! A wall's base join (`JoinToRoofGStep` with `m_baseOrTop` 0) takes its base
@@ -123,7 +140,8 @@ use super::{
     WALL_BASE_SOURCE_PROPERTY, WALL_END_AT_JOINED_WALLS_BODY_END_SOURCE,
     WALL_END_NOT_MARKED_PROPERTY, WALL_END_ORDER_DEPENDENT_PROPERTY, WALL_END_REFUSAL_PROPERTY,
     WALL_END_SOURCE_PROPERTY, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
-    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE, WALL_TOP_STUB_INSIDE_WALL, WALL_TOP_STUB_PROPERTY,
+    WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    WALL_TOP_STUB_INSIDE_WALL, WALL_TOP_STUB_PROPERTY,
 };
 use crate::ifc::body_geometry::{
     Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
@@ -769,32 +787,27 @@ enum Cut {
     },
 }
 
-/// Whether the slab, roof or footing made of `pieces` (ElementId `id`) has an
-/// underside a wall's top may be cut at: any slab or footing, and a roof only
-/// where it is one of `plates`, its record box exactly its type's layers and
-/// its plan outline read (RE-351). A roof whose box is deeper than its layers
-/// is not a level plate (a roof by extrusion, a slope its reader does not
-/// read): its box is drawn as a plain extrusion, but the box's underside is
-/// its lowest point, not a level the walls under it stop at. The layers are
-/// the proof that the underside is level; the outline is what the roof covers.
-fn level_underside(
-    entities: &[IfcEntity],
-    pieces: &[usize],
-    id: u32,
-    plates: &HashSet<u32>,
-) -> bool {
-    plates.contains(&id)
-        || !pieces.iter().any(|&index| {
-            matches!(
-                entities.get(index),
-                Some(IfcEntity::BuildingElement { ifc_type, .. }) if ifc_type.as_str() == "IFCROOF"
-            )
-        })
+/// Every Roof element record read, by ElementId, and whether it is a level
+/// plate: its record box exactly its type's layers and its plan outline read
+/// (RE-351). Keyed on the record's class, not the IFC entity it is exported
+/// as, so a Floor exported as `IfcRoof` keeps its cut and a Roof exported as
+/// `IfcSlab` is held to the plate rule (#1480).
+pub(super) type Roofs = HashMap<u32, bool>;
+
+/// Whether the slab, roof or footing `id` has an underside a wall's top may be
+/// cut at: any element whose record is not a Roof, and a Roof only where it is
+/// a level plate (`Roofs`). A roof whose box is deeper than its layers is not
+/// a level plate (a roof by extrusion, a slope its reader does not read): its
+/// box is drawn as a plain extrusion, but the box's underside is its lowest
+/// point, not a level the walls under it stop at. The layers are the proof
+/// that the underside is level; the outline is what the roof covers.
+fn level_underside(id: u32, roofs: &Roofs) -> bool {
+    roofs.get(&id).is_none_or(|plate| *plate)
 }
 
 /// For each of `pending` (a wall's entity index and the ElementIds its top
 /// join and cut pairs name) that is cut: its index and how.
-fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &HashSet<u32>) -> Vec<(usize, Cut)> {
+fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &Roofs) -> Vec<(usize, Cut)> {
     let Gathered {
         pieces,
         voids,
@@ -825,7 +838,7 @@ fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &HashSet<u32>) ->
             let Some(found) = pieces.get(&id) else {
                 continue;
             };
-            if !level_underside(entities, found, id, plates) {
+            if !level_underside(id, plates) {
                 continue;
             }
             let Some(cutter) = cutters
@@ -946,12 +959,53 @@ fn to_local(placement: &Placement, point: Point2) -> Point2 {
 pub(super) fn cut_wall_tops(
     entities: &mut [IfcEntity],
     pending: &[Pending],
-    plates: &HashSet<u32>,
+    plates: &Roofs,
+    sloped_roofs: &HashSet<u32>,
 ) {
     if pending.is_empty() {
         return;
     }
     let cuts = decide(entities, pending, plates);
+    let cut: HashSet<usize> = cuts.iter().map(|(index, _)| *index).collect();
+    let sloped: Vec<(usize, u32, SolidShape)> = pending
+        .iter()
+        .filter(|wall| !cut.contains(&wall.index))
+        .filter_map(|wall| {
+            let names = top_join_names(wall);
+            let &[id] = names.as_slice() else {
+                return None;
+            };
+            if !sloped_roofs.contains(&id) {
+                return None;
+            }
+            let shape = sloped_top_solid(entities, wall.index, id)?;
+            Some((wall.index, id, shape))
+        })
+        .collect();
+    for (index, id, shape) in sloped {
+        let Some(IfcEntity::BuildingElement {
+            solid_shape,
+            property_set,
+            ..
+        }) = entities.get_mut(index)
+        else {
+            continue;
+        };
+        *solid_shape = Some(shape);
+        if let Some(set) = property_set
+            .as_mut()
+            .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
+        {
+            set.properties.push(Property {
+                name: "BodyHeightSource".into(),
+                value: PropertyValue::Text(WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE.into()),
+            });
+            set.properties.push(Property {
+                name: "TopCoverElementId".into(),
+                value: PropertyValue::Integer(i64::from(id)),
+            });
+        }
+    }
     for (index, cut) in cuts {
         let Some(IfcEntity::BuildingElement {
             extrusion: Some(body),
@@ -1030,6 +1084,164 @@ pub(super) fn cut_wall_tops(
         }
     }
 }
+
+/// The ElementIds `wall`'s top join names, without those only a cut pair names.
+fn top_join_names(wall: &Pending) -> Vec<u32> {
+    wall.named
+        .iter()
+        .copied()
+        .filter(|id| !wall.pair_only.contains(id))
+        .collect()
+}
+
+/// The solid of the wall at `index` cut along the underside of the roof `id`
+/// drawn from its slopes (#1478): each convex piece of the wall's plan, cut by
+/// the plan of each face of the roof's solid that looks down, rises to that
+/// face's plane, one item each. Revit's export of puzzbobb's Revit 2025 models
+/// cuts the walls under a roof so, and rvt-rs's roof has Revit's underside over
+/// their plans. None where the wall is not one plain extrusion with no hole,
+/// the roof is not one solid of faces, the faces looking down do not cover the
+/// wall's plan once, or the underside is at or below the wall's base or above
+/// its top anywhere over the plan.
+fn sloped_top_solid(entities: &[IfcEntity], index: usize, id: u32) -> Option<SolidShape> {
+    let Some(IfcEntity::BuildingElement {
+        extrusion: Some(body),
+        location_feet: Some(location),
+        rotation_radians,
+        solid_shape: None,
+        ..
+    }) = entities.get(index)
+    else {
+        return None;
+    };
+    let tag = id.to_string();
+    let mut roofs = entities.iter().filter(|entity| {
+        matches!(entity, IfcEntity::BuildingElement { type_guid: Some(found), .. } if *found == tag)
+    });
+    let (Some(roof), None) = (roofs.next(), roofs.next()) else {
+        return None;
+    };
+    let IfcEntity::BuildingElement {
+        ifc_type,
+        location_feet: Some(roof_location),
+        rotation_radians: roof_rotation,
+        solid_shape:
+            Some(SolidShape::FacetedBrep {
+                vertices_feet,
+                triangles,
+            }),
+        ..
+    } = roof
+    else {
+        return None;
+    };
+    if ifc_type.as_str() != "IFCROOF" {
+        return None;
+    }
+    let (outer, holes) = extrusion_rings(body)?;
+    if !holes.is_empty() {
+        return None;
+    }
+    let base = location[2];
+    let top = body.height_feet;
+    let placement = Placement::new(Some(*location), *rotation_radians);
+    let roof_placement = Placement::new(Some(*roof_location), *roof_rotation);
+    // The faces of the roof that look down, each as its plan triangle,
+    // counter-clockwise, and the plane `z = a·x + b·y + c` it lies in.
+    let mut undersides: Vec<(Ring, [f64; 3])> = Vec::new();
+    for &BrepTriangle(a, b, c) in triangles {
+        let [p, q, r] = [a, b, c].map(|k| {
+            vertices_feet
+                .get(k as usize)
+                .map(|v| roof_placement.apply(*v))
+        });
+        let (Some(p), Some(q), Some(r)) = (p, q, r) else {
+            return None;
+        };
+        let u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+        let v = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
+        let n = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        if !length.is_finite() || length <= 0.0 || n[2] >= -SLOPED_FACE_MIN_DOWN * length {
+            continue;
+        }
+        let plane = [
+            -n[0] / n[2],
+            -n[1] / n[2],
+            p[2] + (n[0] * p[0] + n[1] * p[1]) / n[2],
+        ];
+        let ring = counter_clockwise(vec![(p[0], p[1]), (q[0], q[1]), (r[0], r[1])]);
+        if area(&ring) > PIECE_ROUNDING_SQUARE_FEET {
+            undersides.push((ring, plane));
+        }
+    }
+    let model: Ring = counter_clockwise(
+        outer
+            .iter()
+            .map(|&(x, y)| {
+                let at = placement.apply([x, y, 0.0]);
+                (at[0], at[1])
+            })
+            .collect(),
+    );
+    let height = |plane: &[f64; 3], (x, y): Point2| plane[0] * x + plane[1] * y + plane[2] - base;
+    let mut items = Vec::new();
+    let mut held = 0.0;
+    for convex in convex_pieces(&model)? {
+        for (triangle, plane) in &undersides {
+            let part = clip_convex(&convex, triangle);
+            if part.len() < 3 || area(&part) <= PIECE_ROUNDING_SQUARE_FEET {
+                continue;
+            }
+            let rises = part.iter().all(|&point| {
+                let at = height(plane, point);
+                at > UNDERSIDE_TOLERANCE_FEET && at <= top + UNDERSIDE_TOLERANCE_FEET
+            });
+            if !rises {
+                return None;
+            }
+            held += area(&part);
+            let local: Ring = part
+                .iter()
+                .map(|&point| to_local(&placement, point))
+                .collect();
+            let mesh = between_surfaces_mesh(
+                &local,
+                &[],
+                |_| 0.0,
+                |point| {
+                    let at = placement.apply([point.0, point.1, 0.0]);
+                    height(plane, (at[0], at[1]))
+                },
+            )?;
+            items.push(SolidShape::FacetedBrep {
+                vertices_feet: mesh.vertices,
+                triangles: mesh
+                    .triangles
+                    .into_iter()
+                    .map(|[a, b, c]| BrepTriangle(a, b, c))
+                    .collect(),
+            });
+        }
+    }
+    if items.is_empty() || (held - area(&model)).abs() > COVER_TOLERANCE_SQUARE_FEET {
+        return None;
+    }
+    Some(if items.len() == 1 {
+        items.remove(0)
+    } else {
+        SolidShape::Compound(items)
+    })
+}
+
+/// How far down a face of a roof must look, as the vertical part of its unit
+/// normal, to be part of its underside (#1478): a fascia or an edge's face
+/// stands upright, and a face nearly so lies over no plan worth cutting at.
+const SLOPED_FACE_MIN_DOWN: f64 = 1e-6;
 
 /// What the wall pass knows of the top of a floor, roof or ceiling (#1384).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1187,7 +1399,7 @@ struct BaseContext<'a> {
     entities: &'a [IfcEntity],
     gathered: Gathered<'a>,
     shapes: &'a HashMap<u32, SlabTop>,
-    plates: &'a HashSet<u32>,
+    plates: &'a Roofs,
 }
 
 /// How the base of `wall` is cut at the one element of
@@ -1253,7 +1465,7 @@ fn decide_base(
         // is a level plate (`level_underside`'s rule for the tops, RE-351): a
         // roof drawn as its record box has the box's top, not its own
         // (RE-351 section 4, #1947).
-        if !level_underside(entities, found, id, plates) {
+        if !level_underside(id, plates) {
             continue;
         }
         let Some(cutter) = cutters
@@ -1365,7 +1577,7 @@ fn decide_bases(
     entities: &[IfcEntity],
     pending: &[PendingBase],
     shapes: &HashMap<u32, SlabTop>,
-    plates: &HashSet<u32>,
+    plates: &Roofs,
 ) -> Vec<(usize, BaseDecision)> {
     let context = BaseContext {
         entities,
@@ -1403,7 +1615,7 @@ pub(super) fn cut_wall_bases(
     pending: &[PendingBase],
     shapes: &HashMap<u32, SlabTop>,
     steps: &HashMap<usize, SteppedPlan>,
-    plates: &HashSet<u32>,
+    plates: &Roofs,
 ) {
     if pending.is_empty() {
         return;
@@ -1420,6 +1632,20 @@ pub(super) fn cut_wall_bases(
         }) = entities.get_mut(index)
         else {
             continue;
+        };
+        // #1478: a wall cut along a sloped roof keeps that top; a base cut would
+        // draw the wall again from its plan to its own top.
+        let sloped_top = property_set.as_ref().is_some_and(|set| {
+            set.properties.iter().any(|property| {
+                property.name == "BodyHeightSource"
+                    && matches!(&property.value, PropertyValue::Text(source)
+                        if source == WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE)
+            })
+        });
+        let decision = if sloped_top && matches!(decision, BaseDecision::Cut(_)) {
+            BaseDecision::Left(WALL_BASE_REFUSAL_UNDER_SLOPED_TOP)
+        } else {
+            decision
         };
         let cut = match decision {
             BaseDecision::Cut(cut) => cut,
@@ -1754,6 +1980,10 @@ const WALL_END_REFUSAL_BASE_SOLID: &str = "base_solid_not_made_over_the_extended
 /// Why a wall whose base cut resolved keeps its prism: the solid of the cut
 /// cannot be made (#1411, RE-349).
 const WALL_BASE_REFUSAL_SOLID_NOT_MADE: &str = "base_cut_solid_not_made";
+
+/// `BaseCoverRefusal` of a wall whose top is cut along a sloped roof (#1478),
+/// whose base would be cut too: it keeps its base and its sloped top.
+const WALL_BASE_REFUSAL_UNDER_SLOPED_TOP: &str = "base_cut_left_under_a_sloped_top";
 
 /// Why such a wall keeps its end where another wall, one its record does not
 /// join there, stands in the stretch the end would be drawn over: the added
@@ -2582,7 +2812,7 @@ fn decide_ends(
     pending: &[PendingBase],
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
-    plates: &HashSet<u32>,
+    plates: &Roofs,
     refused: &mut BTreeMap<usize, &'static str>,
     unmarked: &mut BTreeMap<usize, &'static str>,
 ) -> Vec<WallEnds> {
@@ -2900,7 +3130,7 @@ pub(super) fn extend_wall_ends(
     pending: &[PendingBase],
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
-    plates: &HashSet<u32>,
+    plates: &Roofs,
     handoffs: &mut BTreeMap<usize, Vec<Property>>,
 ) -> HashMap<usize, SteppedPlan> {
     let mut stepped = HashMap::new();
