@@ -10,9 +10,10 @@ fragments a release moves into this file.
 
 ## [0.24.0] — 2026-11-14
 
-0.24.0 closes #1713: on the 42 models with a public Revit export, every one of the 58,665 elements both exports hold has Revit's `PredefinedType` (railings, doors, proxies, ramps and geographic elements have read it since 0.23.0), and a Revit 2024 or later file whose export parameters differ between its partitions gives each element its current copy's value. It also writes more of what Revit's own export writes: a ramp's railings are its parts, a gutter is an `IfcFlowSegment`, a multistory stair is written once on each storey it repeats on, a ceiling in pieces has its piece's `GrossArea`, and a wall under a roof drawn from its slopes is cut along the roof's underside. The export notes count the storeyless elements honestly, and the Semantic check now finds its artifact on every Measure run.
+0.24.0 closes #1713: on the 42 models with a public Revit export, every one of the 58,665 elements both exports hold has Revit's `PredefinedType` (Measure 43596206950) (railings, doors, proxies, ramps and geographic elements are new in this release), and a Revit 2024 or later file whose export parameters differ between its partitions gives each element its current copy's value. It also writes more of what Revit's own export writes: a ramp's railings are its parts, a gutter is an `IfcFlowSegment`, a multistory stair is written once on each storey it repeats on, a ceiling in pieces has its piece's `GrossArea`, and a wall under a roof drawn from its slopes is cut along the roof's underside. The export notes count the storeyless elements honestly, and the Semantic check now finds its artifact on every Measure run.
 
 Not measured, and said in each entry:
+- `PredefinedType` agrees on the 42 models with a public Revit export, not on every model: on the held-out pairs of Revit 2023 and earlier 4 of 12 roofs, 1 of 5 stairs, 1 of 5 stair flights, 12 of 60 furniture and 2 of 10 railings stay unset (counts only; none differs), since no default covers those releases.
 - A ceiling's piece `GrossArea` (#1209) rests on the one building that holds ceilings in pieces; a multistory stair's copies (#1977) are inferred from three groups of one building, since the file does not say how far a stair repeats.
 - `NOTDEFINED` on ramps and geographic elements (#1713) is measured on Revit 2024 only, the one release whose export holds them; on railings it is 2024 to 2026, and 2027 and the releases before 2024 write no such default.
 - A wall under a roof (#1478) is measured against Revit's exports on 2025; 2026 and 2027 are held to the same project's 2025 save.
@@ -138,9 +139,11 @@ RELEASE_MEASURE_SLOT
   (#1842).** `unsupported_geometry_missing_level` counted every element whose own
   storey is empty, so the flights and landings of a stair, which reach their
   storey through the stair as in Revit's export, were counted as storeyless: 28
-  of the 79 elements a Revit 2027 structural model reported. The count now holds
-  only the elements, and the wholes, that are in no storey. The IFC file does not
-  change.
+  of the 79 elements a Revit 2027 structural model reported, and 396 of the
+  2,407 that 28 of Measure's 102 `diagnostics.json` files held (2,011 after: 258
+  `IfcStairFlight`, 113 `IfcSlab` landings and 25 `IfcMember` stringers fewer).
+  The count now holds only the elements, and the wholes, that are in no storey.
+  The IFC file does not change.
 
 - **A curtain panel that is the host panel of another curtain wall's grid is
   left out on Revit 2024, as Revit's export leaves it out (#1975).** Snowdon
