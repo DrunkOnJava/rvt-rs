@@ -331,11 +331,32 @@ pub const CUT_SOLID_SIZE_FIELDS: [&str; 3] = [
     "m_cut_solid_height",
 ];
 
-/// Field holding the Revit release (its version, 2024) of the file a furniture
-/// or casework element was read from (RE-419): the `NOTDEFINED` its predefined
-/// type defaults to is written on the releases of
-/// [`FURNITURE_DEFAULT_REVIT_VERSIONS`] only.
+/// Field holding the Revit release (its version, 2024) of the file an element
+/// whose predefined type defaults to `NOTDEFINED` was read from (RE-419,
+/// #1713): the default is written on the releases its entity has in
+/// [`NOTDEFINED_DEFAULTS`] only. Carried by furniture and casework, and by the
+/// classes whose mapping is one of those entities.
 pub const FURNITURE_RELEASE_FIELD: &str = "m_furniture_release";
+
+/// The entities whose occurrence Revit's export writes with the
+/// `PredefinedType` `NOTDEFINED` where the element has no "IFC Predefined Type"
+/// of its own or its type's, with the releases each is measured on (RE-419,
+/// #1713, revit-ifc's `IFCExportInfoPair`, CLEANROOM.md source 5):
+/// - furniture: [`FURNITURE_DEFAULT_REVIT_VERSIONS`];
+/// - roofs, stairs and stair flights: 2024 to 2026, written so by Revit's
+///   export on the BIM4LCA files, the R2025 models and the held-out pairs
+///   (#1713's table: 25 roofs, 6 stairs, 4 flights). The 2027 export leaves
+///   the value off these classes (RE-427), and a 2022 file's export
+///   parameters are not read, as for furniture;
+/// - building element proxies: 2024 to 2027, `NOTDEFINED` on every proxy of
+///   every pair, 2027's included (RE-427).
+pub const NOTDEFINED_DEFAULTS: [(&str, &[u32]); 5] = [
+    ("IFCFURNITURE", FURNITURE_DEFAULT_REVIT_VERSIONS),
+    ("IFCROOF", &[2024, 2025, 2026]),
+    ("IFCSTAIR", &[2024, 2025, 2026]),
+    ("IFCSTAIRFLIGHT", &[2024, 2025, 2026]),
+    ("IFCBUILDINGELEMENTPROXY", &[2024, 2025, 2026, 2027]),
+];
 
 /// Releases whose furniture and casework take `NOTDEFINED` where they have no
 /// predefined type of their own or their type's (RE-419): 2024 (the BIM4LCA
