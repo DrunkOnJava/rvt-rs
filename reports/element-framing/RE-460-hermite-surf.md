@@ -1,7 +1,7 @@
 # RE-460: a HermiteSurf is a grid of nodes whose bicubic patches meet Revit's edge points to 0.001 ft, and to the last digit on three samples in five
 
 **Date:** 2026-11-13
-**Status:** positive on the layout (rows 1 and 2c); negative on exactness (rows 2a, 2b, 2e, 2g, 2l, 2n, 2o, 2p and 2q fail as registered); positive on the bound that decides the tessellator (every sample within 0.001 ft); the cause of the remainder is not explained.
+**Status:** positive on the layout (rows 1 and 2c); negative on exactness (rows 2a, 2b, 2e, 2g, 2l, 2n, 2o, 2p and 2q fail as registered); positive on the bound that decides the tessellator (every sample within 0.001 ft); the cause of the remainder is not explained; positive on the twist (the reader's reading, the node's value times the cell's area, is the one that fits Revit's vertices, section 7); negative on row 3b (the bodies drawn are not Revit's: section 7 says where they differ).
 **Probe:** `probes/examples/probe_re460_hermite_surf.rs`
 **Follows:** RE-329 (512 `unsupported surface HermiteSurf` faces on the BIM4LCA office as built), RE-434 (19 refused elements on Snowdon Towers Architectural), #1191 (W6), and mahach666's layout in Discussion #1241 (RvtIO, MIT).
 **Files:** the ten models of Measure whose saved graphics hold a `HermiteSurf` (BIM4LCA housing, concrete and timber, and office, as built; the r2025 `17_Rooms_Stairs_Spiral`; Autodesk's `rac_basic` 2023 to 2027 and Snowdon Towers Architectural 2024), with their sha256 in `research/bim4lca-measure.tsv`, `research/r2025-models.tsv` and `research/autodesk-sample-projects.tsv`; the 33 models of Revit 2023 to 2027 that the runs read. The reference is the file itself: each sample of an edge holds its (u, v) on both faces it borders, and a `Plane` is exact.
@@ -52,6 +52,39 @@ python3 -I .claude/scripts/measure-dispatch.py --ref 104995b9f7c0f112a18fe48e2ee
 
 The probe's stages and the commit each ran at: layout (`46a8cfd9`, run 43491955005), edge ends in four readings (`d5cdde48`, 43495347372), the plane control and the causes (`2189ae7b`, 43497671776), the scale fit (`ac226f37`, 43500051444), the continued cell and the classes (`4a2547a5`, 43502940864), the split off and in the plane (`8132042f`, 43504673637), the `f32` test (`f7ea5e19`, 43506677030) and the closest point (`104995b9`, 43509898172).
 
-## 7. Row 3
+## 7. Row 3: the faces drawn, and what the bodies hold
 
-To be filled from the unfiltered Measure of the pull request (rows 3a and 3b on #1191).
+**Row 3a holds on what the run can see.** Measure 43516088405 (`d07cdaf3` against `b817ac6a`, the ten models that hold a `HermiteSurf` face in their saved graphics, `-f keep_ifc=true`): five of the 33 exports differ, and in each the difference is the `HermiteSurf` faces. The BIM4LCA office as built draws 1 railing from its saved mesh that kept its record box (record-box bodies 100 to 99, saved-mesh bodies 1,741 to 1,742) and its stair 3057027 changes body; r2025's `17_Rooms_Stairs_Spiral` draws 2 railings (record-box bodies 4 to 2, saved-mesh bodies 13 to 15) and its stair 13535 changes body; Snowdon Towers architectural has 19 fewer swept solids (2,139 to 2,120), which the run cannot score because Revit's export of it is local only; the concrete and timber housing keep 7 record boxes each, now stopped at "a trim loop does not close in the surface's parameters" where they stopped at "unsupported surface HermiteSurf".
+
+**Row 3b fails: 0 of 3 newly drawn bodies that Revit's export also holds have every tested vertex of Revit's body within 0.001 ft** (at least 90 of every 100 registered).
+
+| Body | Volume ratio (ours / Revit's) | Revit's vertices to our surface, farthest | Ours to Revit's, farthest |
+|---|---:|---:|---:|
+| office railing 3076853 | 1.2408 | 0.1275 ft | 0.0156 ft |
+| r2025 railing 13680 | 1.0311 | 0.1283 ft | 0.0908 ft |
+| r2025 railing 13684 | 1.0591 | 0.1094 ft | 0.0823 ft |
+
+**The twist is not the cause.** A bicubic Hermite patch does not depend on `w` (`m_iMixedDer`) along a cell's edge, so rows 2a to 2q, which tested edge samples, left its scaling untested; a vertex of Revit's own mesh lies on the surface in the middle of a cell as well as on its edge, so it tests it. `tools/re/hermite_twist_vs_ifc.py` evaluates the patch of every cell under nine readings of `w` (the node's value times the cell's area, which the reader uses, and times the width in u, times the width in v, unscaled, none, minus, doubled, halved, quartered), finds the closest point of each patch to each vertex of Revit's body of the element that places the symbol (the nodes are the symbol's own coordinates: the instance's `m_Trf` places them, RE-450), and counts the vertices on a surface (within 0.006 ft of a reading's closest point) that are within 0.0005 ft and 0.001 ft of it. Measure 43533400782 (`f7187c8c`):
+
+| Reading of `w` | r2025 `17_Rooms_Stairs_Spiral`, 852 pairs: within 0.0005 / 0.001 ft, median, 90th percentile (ft) | office, 2,222 pairs of element 1448650's 11 surfaces: within 0.0005 / 0.001 ft, median |
+|---|---|---|
+| times the cell's area (the reader's) | 818 / 837, 0.00002, 0.00003 | 1,655 / 1,770, 0.00002 |
+| halved | 817 / 837, 0.00003, 0.00009 | 1,660 / 1,773, 0.00003 |
+| quartered | 814 / 836, 0.00003, 0.00013 | 1,659 / 1,772, 0.00003 |
+| none | 803 / 834, 0.00003, 0.00016 | 1,659 / 1,772, 0.00003 |
+| doubled | 802 / 835, 0.00003, 0.00017 | 1,654 / 1,772, 0.00003 |
+| minus the area | 782 / 817, 0.00003, 0.00032 | 1,655 / 1,769, 0.00006 |
+| unscaled | 759 / 819, 0.00005, 0.00055 | 1,505 / 1,736, 0.00010 |
+| times du | 759 / 819, 0.00005, 0.00055 | 1,654 / 1,772, 0.00004 |
+| times dv | 818 / 837, 0.00002, 0.00003 | 1,625 / 1,771, 0.00005 |
+
+On the railings du is 1, so times du is the unscaled reading and times dv the area's. The area reading has the smallest 90th percentile of the nine on the railings (3e-5 ft, 9 micrometres). The twist moves the office's cells at most 0.0017 ft under the area reading, so six readings are within 5 vertices of it there; the two that move a surface more are worse where they do (unscaled moves surface 0 by up to 0.22 ft: 33 of its 46 vertices within 0.0005 ft against 40; times dv on surface 3: 425 of 607 against 456). The first version of this scorer sampled each patch every 0.01 ft and put the nine readings alike, because a vertex on a patch is 0.002 ft from its nearest sample; the closest point is found now.
+
+**What row 3b's misses are.** Railing 13680 has 630 vertices in Revit's body: 560 are within 0.001 ft of the body rvt-rs drew and 576 within 0.005 ft. The other 54 are 0.079 to 0.128 ft from every face drawn. In each of its two rails' own section (0.25 by 0.1667 ft) they are in pairs 0.125 ft either side of the centre line across the wide direction, 0.08 to 0.135 ft below the rail's bottom face, at about every third station along it. The symbol holds 12 faces (8 `HermiteSurf`, 4 `Plane`), and none is there. Revit's body of the railing holds geometry that the symbol's faces do not; the bodies are not drawn wrong where they are drawn.
+
+**Rows 3c and 3d, registered before the probe's stage 4 ran** (the probe prints, for each element that places a symbol with a Hermite surface, the classes of its own record and of every symbol its `InstanceInfo` objects name):
+
+- 3c. The records reached from railing 13680 hold no `Face` beyond the 12 of symbol 13681, or hold them in a record that the reader does not read.
+- 3d. The same for the office's railing 3076853 and r2025's 13684: the Revit body's vertices that are not on the Hermite faces are explained by a record of the chain that the reader reads or does not read, or by none (then they are not in the file's saved graphics and the body is not drawable from them).
+
+To be filled from the next Measure of the probe.
