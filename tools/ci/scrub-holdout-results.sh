@@ -18,7 +18,10 @@
 # rule, with the walls it is wrong on as a count, the export's version, the
 # census of its wall representations, the hours between its save and its
 # export and the railing rules' counts), the count lines a probe prints for
-# such a model (`type refs:` and `type copies:`, RE-253), the `native framing:`
+# such a model (`type refs:` and `type copies:`, RE-253), the `layer copies:`
+# count lines of tools/re/layer_copies_vs_ifc.py (#1805: which copy of a host
+# type's layers Revit's export holds, numbers beside fixed words and a class
+# name, never an ElementId or a name), the `native framing:`
 # lines of probe_re280_native_framing_pre2023 (RE-280: counts, schema class and
 # field names and normalised error text, in a restricted alphabet; its JSON
 # example lines, which carry ElementIds, are dropped), the `saved graphics
@@ -122,6 +125,8 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # #1805: which copy of a host type's layers Revit's export holds, as counts beside fixed words and a class name.
+      grep -E "^layer copies: [A-Za-z0-9 ,;:'?]+$" "$f" || true
       # tools/re/beam_lines_vs_ifc.py (#1697): counts beside fixed words and the
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
