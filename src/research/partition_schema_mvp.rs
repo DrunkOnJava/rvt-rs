@@ -228,6 +228,7 @@ pub fn recover_partition_schema_mvp(
                 &mut out.products,
                 [&mut out.doors, &mut out.windows],
                 Some(&references),
+                &mut wall_reads,
             );
             attach_curtain_axes(rf, revit_version, &mut out.products);
             attach_curtain_part_types_32(rf, revit_version, &references, &mut out.products);
@@ -477,6 +478,7 @@ pub fn recover_partition_schema_mvp(
         &mut out.products,
         [&mut out.doors, &mut out.windows],
         None,
+        &mut wall_reads,
     );
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
