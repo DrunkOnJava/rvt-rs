@@ -358,14 +358,24 @@ pub const FURNITURE_RELEASE_FIELD: &str = "m_furniture_release";
 ///   files, the 10 of the R2025 models 13 to 17 and the 2 of each held-out pair
 ///   of 2024, 2025 and 2026 (#1713's 18 unset). The 2027 export writes none on
 ///   a railing (RE-427), and a 2022 pair's export parameters are not read, so
-///   neither release takes the default.
-pub const NOTDEFINED_DEFAULTS: [(&str, &[u32]); 6] = [
+///   neither release takes the default;
+/// - ramps: 2024 only, `NOTDEFINED` on the one ramp of each BIM4LCA housing file
+///   (6 in all) that has no value of its own or its type's, where the office's
+///   ramps carry one. No other measured file and no held-out pair holds a ramp
+///   in both exports, so no other release takes the default (RE-353);
+/// - geographic elements: 2024 only, `NOTDEFINED` on the 3 elements of each
+///   BIM4LCA terrain file (6 in all) that have no value, where the other 20 of
+///   each file carry `USERDEFINED`. No other measured file and no held-out pair
+///   holds one in both exports (RE-353).
+pub const NOTDEFINED_DEFAULTS: [(&str, &[u32]); 8] = [
     ("IFCFURNITURE", FURNITURE_DEFAULT_REVIT_VERSIONS),
     ("IFCROOF", &[2024, 2025, 2026]),
     ("IFCSTAIR", &[2024]),
     ("IFCSTAIRFLIGHT", &[2024]),
     ("IFCBUILDINGELEMENTPROXY", &[2024, 2025, 2026, 2027]),
     ("IFCRAILING", &[2024, 2025, 2026]),
+    ("IFCRAMP", &[2024]),
+    ("IFCGEOGRAPHICELEMENT", &[2024]),
 ];
 
 /// Releases whose furniture and casework take `NOTDEFINED` where they have no
