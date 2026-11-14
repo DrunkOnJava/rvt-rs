@@ -117,6 +117,8 @@ pub const PLAN_PROFILE_SEGMENTS_FIELD: &str = "m_plan_profile_segments";
 /// Field carrying the further pieces of a sketch made of separate loops
 /// (#331): each piece an outer loop followed by its voids.
 pub const PLAN_PROFILE_PIECES_FIELD: &str = "m_plan_profile_pieces";
+/// Field carrying [`PlanProfile::first_drawn_piece`] (#1209).
+pub const PLAN_PROFILE_FIRST_PIECE_FIELD: &str = "m_plan_profile_first_piece";
 /// Field carrying the void loops whose sketch lines tag them (RE-151): each
 /// the piece it is in, its tag and the loop.
 pub const PLAN_PROFILE_VOID_OPENINGS_FIELD: &str = "m_plan_profile_void_openings";
@@ -170,6 +172,15 @@ pub struct PlanProfile {
     /// The voids whose sketch lines tag them (RE-151), by piece and then
     /// largest first.
     pub void_openings: Vec<VoidOpening>,
+    /// Of a sketch of separate loops, the piece its two lowest-ElementId
+    /// lines, the first drawn, both lie on: 0 for the outer loop's piece,
+    /// `i + 1` for `pieces[i]` (#1209). Revit's export gives a ceiling in
+    /// pieces the area of that piece as its `GrossArea`: 62 of 62 on the BIM4LCA
+    /// offices, where the two lines lie on one piece (13 more ceilings, whose
+    /// two lowest lines lie on two pieces, include one where the lowest
+    /// line's piece is not Revit's). `None` for one piece, or where the two
+    /// lines are not both on one outer loop.
+    pub first_drawn_piece: Option<usize>,
 }
 
 impl PlanProfile {
@@ -254,6 +265,9 @@ impl PlanProfile {
                 ),
             ),
         ];
+        if let Some(piece) = self.first_drawn_piece {
+            fields.push((PLAN_PROFILE_FIRST_PIECE_FIELD.into(), integer(piece as i64)));
+        }
         if !self.void_openings.is_empty() {
             fields.push((
                 PLAN_PROFILE_VOID_OPENINGS_FIELD.into(),
@@ -288,6 +302,7 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
     let mut segments = 0usize;
     let mut pieces = Vec::new();
     let mut void_openings = Vec::new();
+    let mut first_drawn_piece = None;
     for (name, value) in fields {
         match (name.as_str(), value) {
             (PLAN_PROFILE_SOURCE_FIELD, InstanceField::String(text)) => {
@@ -310,6 +325,9 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
             (PLAN_PROFILE_VOID_OPENINGS_FIELD, InstanceField::Vector(items)) => {
                 void_openings = items.iter().filter_map(void_opening_from_field).collect();
             }
+            (PLAN_PROFILE_FIRST_PIECE_FIELD, InstanceField::Integer { value, .. }) => {
+                first_drawn_piece = usize::try_from(*value).ok();
+            }
             _ => {}
         }
     }
@@ -326,6 +344,7 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
         segment_ids: vec![0; segments],
         pieces,
         void_openings,
+        first_drawn_piece,
     })
 }
 
@@ -452,6 +471,7 @@ pub fn plan_profiles_from_sketch_line_records(
                 .map(|(id, b)| (*id, ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0), true))
                 .collect();
             tag_voids(&mut profile, &lines, &StoredEnds::new());
+            profile.first_drawn_piece = first_drawn_piece(&profile, &lines);
             profile.segment_ids = ids;
             out.insert(owner, profile);
         }
@@ -627,6 +647,34 @@ fn void_tag(ring: &[(f64, f64)], lines: &[(u32, (f64, f64), bool)]) -> Option<u3
     })
 }
 
+/// [`PlanProfile::first_drawn_piece`]: the one outer loop of a profile in
+/// pieces that the two lowest-ElementId lines of `lines` (each its id and a
+/// point on its edge) both lie on.
+fn first_drawn_piece(profile: &PlanProfile, lines: &[(u32, (f64, f64), bool)]) -> Option<usize> {
+    if profile.pieces.is_empty() {
+        return None;
+    }
+    let outers: Vec<&Vec<(f64, f64)>> = std::iter::once(&profile.outer_xy)
+        .chain(profile.pieces.iter().map(|piece| &piece.outer_xy))
+        .collect();
+    let mut sorted: Vec<&(u32, (f64, f64), bool)> = lines.iter().collect();
+    sorted.sort_by_key(|(id, _, _)| *id);
+    let piece_of = |point: (f64, f64)| {
+        let mut on = outers
+            .iter()
+            .enumerate()
+            .filter(|(_, ring)| edge_of(ring, point).is_some())
+            .map(|(index, _)| index);
+        match (on.next(), on.next()) {
+            (Some(index), None) => Some(index),
+            _ => None,
+        }
+    };
+    let first = piece_of(sorted.first()?.1)?;
+    let second = piece_of(sorted.get(1)?.1)?;
+    (first == second).then_some(first)
+}
+
 /// The first edge of the closed loop `ring` that `point` lies on, to within
 /// [`ON_LOOP_EPS_FEET`].
 fn edge_of(ring: &[(f64, f64)], point: (f64, f64)) -> Option<usize> {
@@ -765,6 +813,7 @@ fn profile_from_loops(loops: Vec<Vec<(f64, f64)>>) -> Option<PlanProfile> {
         segment_ids: Vec::new(),
         pieces: pieces.collect(),
         void_openings: Vec::new(),
+        first_drawn_piece: None,
     })
 }
 
