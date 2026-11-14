@@ -1274,6 +1274,21 @@ holds a `HostPanelInfo` is left out and counted as
 `element_record_curtain_host_panel`; the release is the one a file holding
 host panels is measured on.
 
+**#1977 (2026-11-14)** writes the copies of a multistory stair that Revit's export holds on
+each storey its group repeats the stair on. A `MultistoryStairs` record lists its stairs in sets
+of 14 indexes and each set's `StairsElement` names the Levels it spans; where no set covers the
+span between two consecutive Levels of the group's stairs and the span is as high as the stair
+that ends where it begins, that stair is written once more with its flights, landing, stringers
+and railings, one storey up, named `:2` as Revit's export names them (RE-463). It runs on
+Revit 2024 only: Snowdon Towers architectural is the one file with a Revit export of a
+multistory stair, and its 53 missing entities are written, equal to Revit's in name, storey and
+type object and in place within 1 mm; no other export of the 120 compared moves. A copy's
+`GlobalId` is rvt-rs's own, derived from its original's, since no revit-ifc key shape
+reproduces Revit's, and its record set says so (`MultistoryCopyOf`). The span rule is inferred
+from three groups of one building, so a span it does not reach is counted in the export notes
+and not copied
+(`reports/element-framing/RE-463-multistory-stair-copies.md`).
+
 **RE-461 (2026-11-13)** holds four of the eight rules whose release range was
 wider than the range their report measured (#1945, found by the batch 9 export
 audit) to the release each is measured on, and says for the other four what

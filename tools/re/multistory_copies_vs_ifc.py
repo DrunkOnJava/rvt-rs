@@ -19,6 +19,7 @@ import sys
 
 import ifcopenshell
 import ifcopenshell.geom
+import ifcopenshell.util.element
 import numpy as np
 
 PART_CLASSES = ("IfcStairFlight", "IfcMember", "IfcSlab", "IfcRailing")
@@ -46,7 +47,10 @@ def by_tag(model, classes):
 
 
 def centre(entity, settings):
-    shape = ifcopenshell.geom.create_shape(settings, entity)  # held: a chained .geometry reads back empty
+    try:
+        shape = ifcopenshell.geom.create_shape(settings, entity)  # held: a chained .geometry reads back empty
+    except RuntimeError:
+        return None  # a stair carried by its parts has no body of its own
     verts = np.array(shape.geometry.verts).reshape(-1, 3)
     if not len(verts):
         return None
@@ -101,6 +105,10 @@ def main(rvt_path, revit_path):
                 copy_revit, copy_rvt = ordered_revit[-1], ordered_rvt[-1]
                 row["copy name equal"] += int((copy_revit.Name or "") == (copy_rvt.Name or ""))
                 row["copy storey equal"] += int(storey_of(copy_revit) == storey_of(copy_rvt))
+                row["copy predefined type equal"] += int(getattr(copy_revit, "PredefinedType", None) == getattr(copy_rvt, "PredefinedType", None))
+                row["copy has a type object like Revit's"] += int(
+                    (ifcopenshell.util.element.get_type(copy_revit) is None) == (ifcopenshell.util.element.get_type(copy_rvt) is None)
+                )
                 whole_revit, whole_rvt = whole_of(copy_revit), whole_of(copy_rvt)
                 row["copy whole equal"] += int(bool(whole_revit is not None and whole_rvt is not None and (whole_revit.Name or "") == (whole_rvt.Name or "")))
                 shifts = []
