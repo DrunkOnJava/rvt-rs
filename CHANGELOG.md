@@ -29,8 +29,9 @@ Measured against 0.22.0 on every model Measure holds (run [43555120928](https://
   example, the 12 BIM4LCA models, the 24 Revit 2025 models, the six
   `rac_advanced` saves of 2015 to 2020, 18 held-out files and the spent Vitoria
   "Before". On them no count of values or quantities that equals Revit's falls
-  and none that differs rises, BIMcollab's example moves in no scorer line, and
-  every other line that moves is one of these:
+  and none that differs rises, what rvt-rs writes that Revit's export does not
+  rises on four files (the last two lines below), BIMcollab's example moves in
+  no scorer line, and every other line that moves is one of these:
   - The project's, building's and site's GlobalId is Revit's on 50 models (0 of
     1 each before), and the storeys' on 11 files of 2017 to 2022 (69 storeys,
     from 6) (RE-459). On the spent Vitoria "Before", 1,297 of the 1,314
@@ -71,8 +72,11 @@ Measured against 0.22.0 on every model Measure holds (run [43555120928](https://
     of Revit's, where 591 of 592 were).
   - Where Revit's setup wrote no base quantities, rvt-rs writes more of them,
     counted apart (RE-242): 24 more on Core Interior (3,859 to 3,883), 107 more
-    on each `rac_advanced` save of 2015 to 2020 (3,469 to 3,576), 37 more on one
-    held-out file (127 to 164) and 389 more opening depths on another.
+    on each `rac_advanced` save of 2015 to 2020 (3,469 to 3,576) and 37 more on
+    one held-out file (127 to 164). On another held-out file, whose export holds
+    no quantities on the objects rvt-rs writes, rvt-rs writes 389 more opening
+    depths, which the scorer counts as quantities Revit does not write (522 to
+    911), not apart.
   - One measured negative: the spent Vitoria "Before" gains one opening that
     nothing fills and that Revit's export does not hold (Revit's 5 unfilled
     openings in that file are other doors'), and a held-out Vitoria and a
