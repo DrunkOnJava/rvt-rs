@@ -55,7 +55,7 @@ only identifiers that exist in `src/`.
 | Einhoven | 2 |
 | flowbim.ee house (held out) | 2 |
 | synthetic fixtures | 2 |
-| a field reporter's Revit 2027 model (counts only) | 2 |
+| a field reporter's Revit 2027 model (counts only) | 4 |
 | Autodesk rst_basic sample | 1 |
 | 255ribeiro Exemplo_data | 1 |
 | named in the report | 1 |
@@ -205,6 +205,8 @@ runs, would test the largest share of the rules below.
 | [RE-434](../reports/element-framing/RE-434-pinched-plane-rings.md) | `split_pinched_rings`, `native_saved_mesh` | Snowdon Towers (local only) | 2024 | no, it names this model only | "**Status:** Positive. The area check failed on one face of one symbol, whose second loop is two lobes that touch at a point; split there, the face meshes, and all 21 elements that hold it are drawn from their saved meshes." |
 | [RE-457](../reports/element-framing/RE-457-foundation-slab-and-bracing-member.md) | `IfcSlab`, `BASESLAB`, `FOUNDATION_SLAB`, `ContFooting`, `IfcFooting`, `category_map` | a field reporter's Revit 2027 model (counts only) | 2027 | no, it names this model only | "both rules wait on the reporter's counts after a release, since no open model with a Revit export has a foundation or a bracing." |
 | [RE-457](../reports/element-framing/RE-457-foundation-slab-and-bracing-member.md) | `m_structUsage`, `IfcMember`, `IfcBeam`, `HORIZONTAL_BRACING_MEMBER`, `PredefinedType`, `category_map` | a field reporter's Revit 2027 model (counts only) | 2027 | no, it names this model only | "No open sample carries usage 8 (their values are 3 to 6), so no `IfcMember` is added and no `IfcBeam` is lost" |
+| [RE-469](../reports/element-framing/RE-469-column-and-footing-storeys-2027.md) | `below_base_level`, `COLUMN_BASE_LEVEL_SOURCE`, `resolve_base_constraint_levels` | a field reporter's Revit 2027 model (counts only) | 2027 | yes | "No model of ours with Revit's export holds a column that names three Levels." |
+| [RE-469](../reports/element-framing/RE-469-column-and-footing-storeys-2027.md) | `level_at_or_below`, `FOOTING_BASE_LEVEL_SOURCE`, `resolve_base_constraint_levels` | a field reporter's Revit 2027 model (counts only) | 2027 | yes | "No model of ours with Revit's export holds a footing that names no Level." |
 | [RE-124](../reports/element-framing/RE-124-revit-2026-element-records.md) | `partition_element_records`, `schema_bbox_marker` | flowbim.ee house (held out) | 2026 | no, it names this model only | "**Artefact:** `AA-SingleDwellingHouse-RVT-CIADD.rvt` (Revit 2026, 66.7 MB, sha256 `eeff78f3d07dc23397d276f870f42240cb453cfdd39d965531a9d0ccc7d0a654`) and Revit's own IFC4X3 export of it" … "The three blockers of section 3 are resolved, and Revit 2026 is admitted as experimental." |
 | [RE-126](../reports/element-framing/RE-126-wall-flip-flag-and-2026-joins.md) | `wall_join_count_offset` | flowbim.ee house (held out) | 2026 | no, it names this model only | "A 2026 wall's join list is laid out as on 2025: `07 · tag · 02 · 0 · count · count × (u32 · u64 ElementId · u32)`. It carries the same tag (`0x0b9f7d`) as Core Interior and Snowdon, so `wall_join_count_offset(2026)` is 16. The lists are sparse on this house: 2 of 59 walls name another." |
 | [RE-327](../reports/element-framing/RE-327-family-extrusions.md) | `m_flipZ`, `m_alwaysRefPlaneNorm` | named in the report | - | no, it names this model only | "One 2024 form, with a complete mesh, has a plane whose third column is +z, flipped, and differs from its mesh under the default convention (it matched under another one only)." |

@@ -214,7 +214,7 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ];
         resolve_framing_top_levels(&level_elevations, &mut record_backed);
-        resolve_base_constraint_levels(&level_elevations, &mut record_backed);
+        resolve_base_constraint_levels(revit_version, &level_elevations, &mut record_backed);
         resolve_base_at_level(&level_elevations, &mut record_backed);
         resolve_remaining_levels(&level_elevations, &mut record_backed);
         // --- Curtain walls, their parts and those parts' axes (RE-46, RE-106,
@@ -478,7 +478,7 @@ pub fn recover_partition_schema_mvp(
         &mut out.rooms,
         &mut out.products,
     ];
-    resolve_base_constraint_levels(&level_elevations, &mut record_backed);
+    resolve_base_constraint_levels(revit_version, &level_elevations, &mut record_backed);
     resolve_base_at_level(&level_elevations, &mut record_backed);
     resolve_hosted_levels(rf, &level_elevations, &mut record_backed);
     resolve_remaining_levels(&level_elevations, &mut record_backed);
@@ -1232,8 +1232,13 @@ fn element_record_decoded(
             }
         }
         // A beam or brace that names more than two keeps them too: its
-        // Reference Level is the highest (RE-175, RE-454).
-        if named.len() == 2 || (named.len() > 2 && class == "StructuralFraming") {
+        // Reference Level is the highest (RE-175, RE-454). So does a column,
+        // whose Level is chosen by its base on the release that is measured
+        // (#1842, RE-469).
+        if named.len() == 2
+            || (named.len() > 2
+                && matches!(class, "StructuralFraming" | "StructuralColumn" | "Column"))
+        {
             fields.push((
                 crate::element_record_level_refs::CONSTRAINT_LEVELS_FIELD.into(),
                 InstanceField::Vector(
