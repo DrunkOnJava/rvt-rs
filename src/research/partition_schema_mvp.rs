@@ -447,6 +447,20 @@ pub fn recover_partition_schema_mvp(
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
     // --- Which floors, ceilings and roofs nothing cuts (RE-295) ---
     attach_slab_uncut(rf, &mut [&mut out.slabs, &mut out.products]);
+    // --- The sloped floors whose Depth and GrossVolume are measured (#1208) ---
+    if SLOPED_FLOOR_QUANTITIES_REVIT_VERSIONS.contains(&revit_version) {
+        for element in out
+            .slabs
+            .iter_mut()
+            .chain(out.products.iter_mut())
+            .filter(|element| slab_top_plane_from_fields(&element.fields).is_some())
+        {
+            element.fields.push((
+                SLOPED_FLOOR_QUANTITIES_FIELD.into(),
+                InstanceField::Bool(true),
+            ));
+        }
+    }
     // --- Base constraints of elements naming two Levels (RE-59), then
     // railings by their host and elements by the Level objects they name
     // (RE-60) ---

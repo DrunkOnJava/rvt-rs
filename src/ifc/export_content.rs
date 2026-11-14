@@ -3742,7 +3742,12 @@ fn add_slab_gross_area(
     // cosine of the slope, and its `GrossVolume` that times its `GrossArea`
     // (RE-298, RE-384, #1208). A plane with no gradient is a level floor and
     // keeps the rule below, which reads one layer where Revit does (RE-298).
-    let sloped_depth = if shaped_floor && !roof {
+    // Only on the releases they are measured on (#1208).
+    let measured = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::SLOPED_FLOOR_QUANTITIES_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    let sloped_depth = if shaped_floor && !roof && measured {
         let plane = crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields);
         let thickness = decoded.fields.iter().find_map(|(name, value)| match value {
             InstanceField::Float { value, .. }
