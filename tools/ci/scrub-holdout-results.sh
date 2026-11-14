@@ -228,7 +228,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     done
     for f in "$dir"layer_sets_vs_ifc.txt; do
       [ -f "$f" ] || continue
-      grep -E "^( +[0-9]+  [a-z][a-z ]*(: [A-Za-z',: ]+| = Revit's Family:Type)?|  [a-z ]+ within [0-9.]+ ft of Revit's: [0-9]+ of [0-9]+)$" "$f" | sed 's/^/layer sets: /' || true
+      grep -E "^( +[0-9]+  [a-z][a-z ]*(: [A-Za-z',: ]+| = Revit's Family:Type)?| +[0-9]+  (layer sets whose count differs from Revit's|layer count: (Revit's export names no layers|rvt-rs fewer than Revit's|rvt-rs more than Revit's|every name rvt-rs writes is one of Revit's))|  [a-z ]+ within [0-9.]+ ft of Revit's: [0-9]+ of [0-9]+)$" "$f" | sed 's/^/layer sets: /' || true
     done
     for f in "$dir"class_sets_vs_ifc.txt; do
       [ -f "$f" ] || continue

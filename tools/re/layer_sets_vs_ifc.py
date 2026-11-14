@@ -126,6 +126,14 @@ def main():
                         print(f"    name {element.Tag}: {our_names} vs {revit_names}")
         else:
             stats["layer sets whose count differs from Revit's"] += 1
+            # #1805: which way, and whether each name rvt-rs writes is one of Revit's.
+            if not revit_names:
+                stats["layer count: Revit's export names no layers"] += 1
+            else:
+                fewer = len(our_names) < len(revit_names)
+                stats["layer count: rvt-rs fewer than Revit's" if fewer else "layer count: rvt-rs more than Revit's"] += 1
+                if set(our_names) <= set(revit_names):
+                    stats["layer count: every name rvt-rs writes is one of Revit's"] += 1
             if VERBOSE:
                 print(f"    count {element.Tag}: {our_names} vs {revit_names}")
         # Place the layers.
