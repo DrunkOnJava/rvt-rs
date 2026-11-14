@@ -112,7 +112,7 @@
       "area": "elements",
       "name": "Revit 2024 partition element records as typed IFC elements, with joins, profiles and cuts where decoded, storeys, family and type names, materials and layers, GlobalIds and stair dimensions",
       "status": "partial",
-      "evidence": "Production iter_elements: ArcWall (2023) + partition MVP Level/Material + 2024 partition element-record Wall/Door/Window/Column instances (RE-21/#211) Slab/BuildingPad instances with per-element IFC export overrides (RE-22/#212) and Room instances with their parameter-block name, number and Level (RE-29/#90); RE-19/RE-20 negatives",
+      "evidence": "Production iter_elements: ArcWall (2023, a match whose native record is a wall: none on the corpus, RE-440) + partition MVP Level/Material + 2024 partition element-record Wall/Door/Window/Column instances (RE-21/#211) Slab/BuildingPad instances with per-element IFC export overrides (RE-22/#212) and Room instances with their parameter-block name, number and Level (RE-29/#90); RE-19/RE-20 negatives",
       "notes": "Revit 2024 projects export typed elements from their partition element records (RE-21 onward), with joins, profiles and cuts where decoded and the element's bounding box elsewhere; the measured figures are in docs/evidence.md. Full model conversion is not solved. Never mark verified without corpus-backed converter-grade evidence (COR-001).",
       "user_impact": "Useful recovery on supported subsets; full model conversion is not ready."
     },
@@ -688,7 +688,7 @@
       "area": "ifc",
       "name": "IFC4 export from real Revit project files",
       "status": "partial",
-      "evidence": "Synthetic fixtures validate; 2023 ArcWall IfcWall + partition Level/Floor/Room/Material emission; 2024 record-backed IfcWall / IfcDoor / IfcWindow / IfcColumn / IfcSlab / IfcShadingDevice with placement, envelope solid, measured slab thickness, recovered slab plan profiles (IfcArbitraryClosedProfileDef / IfcArbitraryProfileDefWithVoids) and storey containment; rvt-ifc --mode / --diagnostics",
+      "evidence": "Synthetic fixtures validate; 2023 element-record IfcWall / IfcCurtainWall / IfcPlate (RE-81, RE-440) + partition Level/Floor/Room/Material emission; 2024 record-backed IfcWall / IfcDoor / IfcWindow / IfcColumn / IfcSlab / IfcShadingDevice with placement, envelope solid, measured slab thickness, recovered slab plan profiles (IfcArbitraryClosedProfileDef / IfcArbitraryProfileDefWithVoids) and storey containment; rvt-ifc --mode / --diagnostics",
       "notes": "Correct writer path exists. Real-file typed inputs remain incomplete. Scaffold success is not typed conversion.",
       "user_impact": "Valid IFC scaffold and narrow typed subsets; not general RVT-to-IFC."
     },

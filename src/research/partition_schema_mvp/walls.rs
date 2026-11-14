@@ -1082,6 +1082,10 @@ pub(super) fn attach_wall_top_joins(
     };
     for wall in walls.iter_mut() {
         if let Some(joined) = wall.id.and_then(|id| joined.get(&u64::from(id))) {
+            // `attach_wall_layers` may have pushed it already from the same
+            // records: one copy, this read's, as the field's doc says.
+            wall.fields
+                .retain(|(name, _)| name != WALL_TOP_JOINED_FIELD);
             wall.fields
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
         }
