@@ -21,12 +21,11 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.24.0: IFC geometry and element data
+### 0.25.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
-| [#1989](https://github.com/DrunkOnJava/rvt-rs/issues/1989) | Ducts on the BIM4LCA housing: 1 of Revit's 3 written, its box 3.0 ft off (RE-212, RE-370, RE-371) |
-| [#1988](https://github.com/DrunkOnJava/rvt-rs/issues/1988) | Stair railings: 2 per BIM4LCA housing file are aggregated under their stair by Revit and not by rvt-rs (RE-390) |
+| [#2007](https://github.com/DrunkOnJava/rvt-rs/issues/2007) | IfcRampFlight: Revit's export writes one under a ramp it exports as a container, and rvt-rs writes none (RE-467) |
 | [#1987](https://github.com/DrunkOnJava/rvt-rs/issues/1987) | Opening Reference, sloped floor PitchAngle and door FireRating write values Revit leaves out on the BIM4LCA housing (RE-381, RE-384, RE-354) |
 | [#1977](https://github.com/DrunkOnJava/rvt-rs/issues/1977) | Multistory stairs: Revit writes the stair once per storey (a ":2" copy with its flights, stringers, landing and railings), rvt-rs writes it once |
 | [#1973](https://github.com/DrunkOnJava/rvt-rs/issues/1973) | View graphic overrides: the classes are in the file's schema, no instance is located, and Revit's IFC export gives no oracle |
@@ -47,7 +46,6 @@ milestone is for.
 | [#1801](https://github.com/DrunkOnJava/rvt-rs/issues/1801) | Autodesk rme samples, 2025 to 2027 saves: 131 columns in each hold a Length (3.5, 7.3, 10.6 or 7.0 m) that is not their mesh's extent, which the 2024 saves give |
 | [#1798](https://github.com/DrunkOnJava/rvt-rs/issues/1798) | Mullion NetSurfaceArea: 120 mullions of the concrete office and 127 of the timber office, as built, are still without a value after RE-441 |
 | [#1719](https://github.com/DrunkOnJava/rvt-rs/issues/1719) | Beams with no bounded line in their element data: Revit writes Length, Span, Slope and Roll on 9 BIM4LCA beams that rvt-rs cannot give them (RE-428 residual) |
-| [#1713](https://github.com/DrunkOnJava/rvt-rs/issues/1713) | PredefinedType: Revit's export writes one that rvt-rs leaves none or NOTDEFINED on, on walls, railings, ramps, roofs, proxies, light fixtures, pipe segments and stairs (42 models with a Revit export) |
 | [#1712](https://github.com/DrunkOnJava/rvt-rs/issues/1712) | volume_readings: a round bar cut at a slant has elliptical end faces, which the shell reading leaves as another reason |
 | [#1706](https://github.com/DrunkOnJava/rvt-rs/issues/1706) | Snowdon Towers Architectural: roofs 1916596 and 964559 stay level blocks (a plane edge across a curved face that is not isoparametric; a cylinder face with several trim loops) |
 | [#1698](https://github.com/DrunkOnJava/rvt-rs/issues/1698) | Beams: a body that is not Revit's solid (the office's 8 hollow tubes, 20 of the concrete housing's 22 beams, 10 of the timber housing's 41) |
@@ -128,7 +126,6 @@ earlier year as a supported release.
 | [#1982](https://github.com/DrunkOnJava/rvt-rs/issues/1982) | A 2015 to 2023 wall's IsExternal from its type's Function, and parameters named for a property, each rest on one file (RE-283) |
 | [#1981](https://github.com/DrunkOnJava/rvt-rs/issues/1981) | Beams cut at the column their list names, on Revit 2023, rest on one file (RE-122) |
 | [#1980](https://github.com/DrunkOnJava/rvt-rs/issues/1980) | A framing element's top Level on Revit 2015 to 2023 rests on eight beams of one file (RE-119, RE-461) |
-| [#1805](https://github.com/DrunkOnJava/rvt-rs/issues/1805) | RE-446 follow-up: do the current copies of a floor or wall type's layers hold on Revit 2008 to 2023? The held-out Revit 2020 file's four floors say not for materials |
 | [#1695](https://github.com/DrunkOnJava/rvt-rs/issues/1695) | Revit 2022 and earlier: the export parameters are not read, so a furniture element carries no PredefinedType where Revit's export writes NOTDEFINED |
 | [#1603](https://github.com/DrunkOnJava/rvt-rs/issues/1603) | Revit 2015 to 2023: family instances' materials: 70 windows and 14 railings lack Revit's, the default material is written on 72 elements Revit gives none (Vitoria) |
 | [#1584](https://github.com/DrunkOnJava/rvt-rs/issues/1584) | Revit 2015 to 2023 walls: a record's control joins read empty, so Length, side areas, footprint, volumes and angled walls' line bodies stay out (RE-364 section 6, from #1535) |

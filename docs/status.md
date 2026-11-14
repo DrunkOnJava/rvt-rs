@@ -1824,12 +1824,43 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.23.0** (2026-11-14) is the latest release: crates.io (`rvt` and
+- **v0.24.0** (2026-11-14) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the container
   image, each checked from its published artifacts ([`install.md`](install.md));
   docs.rs had built `rvt` when they were checked (`rvt-rs-mcp` is a binary crate
-  with no documentation there). It writes more of what Revit's own export writes
+  with no documentation there). It closes #1713: on the 42 models with a public
+  Revit export, every one of the 58,665 elements both exports hold has Revit's
+  `PredefinedType` (railings, doors, proxies, ramps and geographic elements are
+  new in this release), and a Revit 2024 or later file whose export parameters
+  differ between its partitions gives each element its current copy's value. A
+  ramp's railings are its parts (#1988); a gutter is an `IfcFlowSegment` typed
+  by an `IfcPipeSegmentType` `GUTTER` (#1989); a multistory stair is written
+  once on each storey it repeats on (#1977, RE-463); a ceiling in pieces has its
+  piece's `GrossArea` (#1209, RE-465); and a wall under a roof drawn from its
+  slopes is cut along the roof's underside (#1478). The export notes count the
+  storeyless elements honestly (#1842), and the Semantic check finds its
+  artifact on every Measure run (#2010). Against 0.23.0, 72 of the 126 measured
+  exports differ, and 29 of the 102 `diagnostics.json` files; 28 of the 72 are
+  Autodesk's sample projects, which no Revit export covers, and on the other 44,
+  scored against Revit's own exports, no count that equals Revit's falls except
+  those the changelog names (the saved-mesh `IfcCovering` row that the gutters
+  leave, and the plan-outline and layer counts of the roofs now drawn from their
+  saved meshes), and none that differs from Revit's rises but 4 floors of one
+  held-out Revit 2020 file, whose layer sets leave out Revit's 0-wide membrane
+  layers (#1805, RE-466). What it does not
+  measure: `PredefinedType` stays unset on some held-out pairs of Revit 2023 and
+  earlier (counts only: 4 of 12 roofs, 1 of 5 stairs, 1 of 5 stair flights, 12
+  of 60 furniture and 2 of 10 railings; none differs); a ceiling's piece
+  `GrossArea` rests on the one building that holds ceilings in pieces, and a
+  multistory stair's copies are inferred from three groups of one building;
+  `NOTDEFINED` on ramps and geographic elements is measured on Revit 2024 only
+  (on railings 2024 to 2026); a wall under a roof is measured against Revit's
+  exports on 2025; and the layers of a type whose copies disagree are measured
+  on one Revit 2020 file. `[0.24.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives
+  what each change measures and what it does not.
+- **v0.23.0** (2026-11-14): published on every channel, each checked from its
+  published artifacts. It writes more of what Revit's own export writes
   and narrows rules that audits found wider than their evidence: a wall of a
   curtain wall type is an `IfcCurtainWall` on Revit 2023 to 2027 whether or not
   a mullion names it, and a curtain wall that is the host panel of another is
@@ -2108,7 +2139,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.23.0 has, and is ahead of it by the fragments
+- `main` has everything v0.24.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
