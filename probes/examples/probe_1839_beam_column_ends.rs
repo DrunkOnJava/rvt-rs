@@ -48,8 +48,9 @@
 //!       end, when it lies more than 1 mm inside the box (#1839, a follow-up to RE-455).
 //!     - `endcol_low` and `endcol_high` (#1839, the S5 probe): the column the beam names that lies
 //!       nearest that end, as `<ElementId>:<t>:<extent>:<source>` (`-` where it names none in line
-//!       with the beam). `extent` is the column's span along the beam's centre line in feet, by its
-//!       section where the export draws one (`s`), else by its record box (`b`); `t` is where the
+//!       with the beam, or none within its own extent of the end). `extent` is the column's span
+//!       along the beam's centre line in feet, by its section where the export draws one (`s`),
+//!       else by its record box (`b`); `t` is where the
 //!       record box ends in that span, from the face toward the beam's middle (0) to the face away
 //!       from it (1), below 0 where the box stops short of the column and above 1 where it runs
 //!       past it. The scorer sets Revit's end beside it as the same fraction of the column Revit
@@ -397,11 +398,13 @@ fn nearest_column(
             best = Some((distance, member.element_id, along, source));
         }
     }
-    let Some((_, id, along, source)) = best else {
+    let Some((distance, id, along, source)) = best else {
         return "-".to_string();
     };
+    // A column more than its own extent away from the end holds none: a beam whose list names
+    // one column has it at the other end, and the first run took it for both (#1839, S5).
     let extent = along[1] - along[0];
-    if extent <= 0.0 {
+    if extent <= 0.0 || distance > extent {
         return "-".to_string();
     }
     let (near, far) = if low_end {
