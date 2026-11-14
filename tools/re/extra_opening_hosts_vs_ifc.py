@@ -75,8 +75,12 @@ def main():
     both = collections.Counter()
     for (tag, host_tag) in ours_open:
         if (tag, host_tag) in revit_open and host_tag in revit_by_tag:
-            both[", ".join(body_types(revit_by_tag[host_tag]))] += 1
-    print(f"hosts of openings both write, by Revit's body: {dict(sorted(both.items()))}")
+            cutter = revit_by_tag.get(tag)
+            kind = cutter.is_a() if cutter else "none"
+            both[f"{', '.join(body_types(revit_by_tag[host_tag]))} | {kind}"] += 1
+    print("hosts of openings both write, by Revit's body and cutter:")
+    for key, count in sorted(both.items()):
+        print(f"  {count:>4}  {key}")
 
 
 if __name__ == "__main__":
