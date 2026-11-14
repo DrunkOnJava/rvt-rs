@@ -50,7 +50,10 @@
 //! the timber office, and one with an end that has no partner where an
 //! overlapped mullion's axis lies on the plane of the end, a vertical standing
 //! on the face of a bar, where Revit hides the end on all 4 of the timber
-//! office, none of the 216 chain ends without such a mullion being wrong. A
+//! office, none of the 216 chain ends without such a mullion being wrong. The
+//! overlapped mullion counts there only where its end nearest the bar is the
+//! one lain over (#1803: a vertical overlapped at its foot alone leaves the
+//! ends of the bars on its top as Revit counts them). A
 //! mullion shorter than its section is read like any other and is not a reason
 //! to leave its neighbours out (RE-400).
 
@@ -331,6 +334,8 @@ pub fn kept_ends_with_partners(group: &[MullionBox]) -> BTreeMap<u32, KeptEnds> 
     let mut found: BTreeMap<u32, (usize, [Neighbours; 2])> = BTreeMap::new();
     let mut left_out: BTreeSet<u32> = BTreeSet::new();
     let mut overlapped: BTreeSet<u32> = BTreeSet::new();
+    // Which ends of each mullion have another lying over them.
+    let mut overlapped_ends: BTreeMap<u32, [bool; 2]> = BTreeMap::new();
     for m in group {
         let Some(along) = m.along.filter(|a| *a < 3) else {
             left_out.insert(m.id);
@@ -344,6 +349,7 @@ pub fn kept_ends_with_partners(group: &[MullionBox]) -> BTreeMap<u32, KeptEnds> 
                 left_out.insert(m.id);
             } else {
                 overlapped.insert(m.id);
+                overlapped_ends.insert(m.id, [ends[0].overlapped(), ends[1].overlapped()]);
             }
         }
         found.insert(m.id, (along, ends));
@@ -371,6 +377,22 @@ pub fn kept_ends_with_partners(group: &[MullionBox]) -> BTreeMap<u32, KeptEnds> 
                 })
             })
         };
+        // The overlapped mullion counts here only by its end nearest `p`
+        // being the one lain over (#1803): the timber office's vertical
+        // 3027086, overlapped at its foot only, stands at the joint of two
+        // pieces 14 ft above, whose ends Revit counts.
+        let overlapped_near = |o: &MullionBox, p: [f64; 3]| {
+            let (Some(o_along), Some(sides)) =
+                (o.along.filter(|a| *a < 3), overlapped_ends.get(&o.id))
+            else {
+                return false;
+            };
+            let [first, second] = end_points(o, o_along).map(|(q, _)| {
+                let d = sub(q, p);
+                dot(d, d)
+            });
+            if first <= second { sides[0] } else { sides[1] }
+        };
         let doubtful = || {
             ends.iter().any(|end| end.centre)
                 || points.iter().zip(ends).any(|((p, _), end)| {
@@ -379,6 +401,7 @@ pub fn kept_ends_with_partners(group: &[MullionBox]) -> BTreeMap<u32, KeptEnds> 
                             overlapped.contains(&o.id)
                                 && distance_to_box(o, *p) < NEAR_FEET
                                 && centred_on_end_plane(m, *along, o, *p)
+                                && overlapped_near(o, *p)
                         })
                 })
         };
