@@ -87,7 +87,7 @@ All 11 rooms keep their area and outline, and one more matches Revit's vertices 
 Snowdon's IFC4 export holds no IfcSpace. `vimaec/vim-hackathon`'s `Snowdon.r2027.vim` (MIT repository, Autodesk's model content, local only) does. It is a later edition of the same model, and its `Vim.Room` table gives each room's area. `tools/re/room_areas_vs_vim.py`:
 
 - **Within 0.1%:** 45 of 54 rooms (10 on main).
-- **Two more differ from the VIM by 0.5% and 0.25%** (828534, 829817). Their rvt-rs areas (1484.790 and 2424.686 ft²) are stored verbatim in the 2024 file itself, in the area cache described below, so the difference is the later edition's.
+- **Two more differ from the VIM by 0.5% and 0.25%** (828534, 829817). Their rvt-rs areas are stored verbatim in the 2024 file itself, in the area cache described below, so the difference is the later edition's.
 - **The other seven** are the rooms in §3 that keep their box.
 
 ### A second check inside the file

@@ -30,13 +30,13 @@ The rule holds exactly where the body is centred. It fails on the two Exemplo_da
 - one differs along the wall too (0.063 and 0.124 ft), so its box holds more than the swing;
 - one is a double door whose body sits 1.376 ft off the wall's centre.
 
-Snowdon Towers' door families sit their frame at one face of the wall. Door 631418 (internal feet across the wall):
+Snowdon Towers' door families sit their frame at one face of the wall. Door 631418 (feet across the wall, from one face of the host wall):
 
 | | from | to |
 |---|---:|---:|
-| host wall | -100.625 | -99.625 |
-| rvt-rs's box | -103.542 | -99.583 |
-| Revit's body | -100.748 | -100.063 |
+| host wall | 0.000 | 1.000 |
+| rvt-rs's box | -2.917 | 1.042 |
+| Revit's body | -0.123 | 0.562 |
 
 Its box holds the swing on one side and reaches past the far face on the other. Door 742710's box holds a swing on both sides.
 
