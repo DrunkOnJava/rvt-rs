@@ -418,7 +418,9 @@ pub fn family_forms(
 /// [`family_forms`] on any of `releases` (the caller's reader is measured on
 /// them: [`native_document::NATIVE_RELEASES`] is every release the native
 /// framing holds on, RE-280). A save before Revit 2024 holds its documents'
-/// ids in the older shape, which is read as the 2024 one is (RE-479).
+/// ids in the older shape, which is read as the 2024 one is (RE-479). What
+/// [`FamilyForms`] concludes is the Revit 2024 exporter's rule: on a save
+/// before 2024 it is not Revit's (RE-481), so an export does not use it there.
 pub fn family_forms_in(
     rf: &mut RevitFile,
     families: &BTreeSet<u64>,

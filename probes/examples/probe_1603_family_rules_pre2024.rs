@@ -3,9 +3,9 @@
 //! material set?
 //!
 //! FACT to check: RE-478 found that the drawn symbol's map equals Revit's set
-//! on 558 of 992 doors and windows (603 once Revit 2018's spelling of the
-//! unset material is dropped), and that the other 389 need the rules the
-//! family's own document gives on Revit 2024 and later: `<Unnamed>` is written
+//! on 414 of 846 doors and windows of Revit 2015 to 2023 (459 once Revit
+//! 2018's spelling of the unset material is dropped), and that the other 387
+//! need the rules the family's own document gives on Revit 2024 and later: `<Unnamed>` is written
 //! only where the family shows a visible form with no material (RE-204), and a
 //! material only hidden forms hold is left out (RE-205, RE-206). RE-479 found
 //! the family documents' forms on every release, with their ids in the older
