@@ -480,6 +480,17 @@ pub fn butt_joins(
                         > JOIN_EPS_FEET
                 })
                 .collect();
+            if wall.omitted[slot] {
+                eprintln!(
+                    "re488 wall {} slot {} mates {:?}",
+                    wall.element_id,
+                    slot,
+                    mates
+                        .iter()
+                        .map(|m| lines[*m].element_id)
+                        .collect::<Vec<_>>()
+                );
+            }
             let into = if slot == 0 {
                 along
             } else {
@@ -529,6 +540,18 @@ pub fn butt_joins(
             let half = other.thickness_feet * 0.5;
             let single = wall.layers.len() == 1 && other.layers.len() == 1;
             let mut layer_reach_feet = layer_reaches(wall, other, point, into, runs_through);
+            if wall.omitted[slot] {
+                eprintln!(
+                    "re488 layered wall {} slot {} partner {} through {} half {:.9} other_layers_sum {:.9} reaches {:?}",
+                    wall.element_id,
+                    slot,
+                    other.element_id,
+                    runs_through,
+                    half,
+                    other.layers.iter().map(|l| l.0).sum::<f64>() * 0.5,
+                    layer_reach_feet
+                );
+            }
             if let Some(reaches) = layer_reach_feet
                 .as_mut()
                 .filter(|_| !runs_through && wall.omitted[slot])

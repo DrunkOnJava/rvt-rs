@@ -333,6 +333,14 @@ fn wall_lines(
                     }
                 })
                 .unwrap_or([false, false]);
+            if let Some(curve) = native.get(&u64::from(wall.id?)) {
+                if curve.omitted.iter().any(Option::is_some) {
+                    eprintln!(
+                        "re488 line wall {} curve omitted {:?} mapped {:?} start {:?}/{:?} end {:?}/{:?}",
+                        wall.id?, curve.omitted, omitted, curve.start, axis.start, curve.end, axis.end
+                    );
+                }
+            }
             Some(joins::WallLine {
                 element_id: wall.id?,
                 start: axis.start,
