@@ -183,7 +183,7 @@ Section 5 says a 2015 to 2023 record is "read without its control joins" and sec
 
 **Not measured:** `Length`, the side areas, the footprint and the volumes written from these joins; the angled walls of 2015 to 2020 with their ends trimmed at the joins. Each is its own pull request held to Measure, as #1584 says.
 
-**Reproduce:**
+**Reproduce** (the probe's commit is archived under `refs/archive/2026-11-15/cited/35e4130ec3d5` because the pull request is squashed):
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=35e4130ec3d5787c1f1dbd48af5b588d3e51aa11 -f base=none -f samples=true \
