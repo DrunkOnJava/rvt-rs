@@ -185,15 +185,12 @@ fn read_record(graph: &ObjectGraph) -> Option<Record> {
         let bound = bound_visible(graph).is_some();
         return Some(Record::Nested { stored, bound });
     }
-    match root.class_name.as_str() {
-        "ParamElemFamily" => {
-            let caption = graph
-                .objects
-                .iter()
-                .find_map(|object| object.fields.get("m_caption")?.as_str());
-            return Some(Record::Param(caption.map(str::to_string)));
-        }
-        _ => {}
+    if root.class_name == "ParamElemFamily" {
+        let caption = graph
+            .objects
+            .iter()
+            .find_map(|object| object.fields.get("m_caption")?.as_str());
+        return Some(Record::Param(caption.map(str::to_string)));
     }
     let (stored, bound) = (stored_visible(graph), bound_visible(graph));
     Some(Record::Form {
