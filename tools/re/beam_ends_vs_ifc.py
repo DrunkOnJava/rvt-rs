@@ -66,6 +66,12 @@ the beam's axis (the projection of every point of the mesh) and the chord the be
 through the column (#1839). The two differ for a column turned against the beam. The probe's `angle`
 splits the chord count into beams in line with a plan axis (within half a degree), oblique to them, and
 of unknown direction.
+
+For the same ends the scorer also says why the probe's extent and the chord differ, in counts: the probe's
+extent over the chord in bins; whether the probe's extent is the extent of Revit's column along a plan
+axis (the record box's extent, when the column is turned, is longer than the column across the beam);
+whether Revit's column has a rectangular plan outline (the convex hull fills 98 per cent or more of its
+smallest rectangle) and, of those, how far the rectangle is turned from the plan axes and from the beam.
 """
 
 import collections
@@ -339,6 +345,90 @@ def chord(triangles, origin, axis):
     return (float(crossings.min()), float(crossings.max())) if crossings.size else None
 
 
+RATIO_BINS = (
+    ("under 0.5", 0.5),
+    ("0.5 to 0.9", 0.9),
+    ("0.9 to 0.99", 0.99),
+    ("within 1 per cent", 1.01),
+    ("1.01 to 1.1", 1.1),
+    ("1.1 to 1.5", 1.5),
+    ("over 1.5", math.inf),
+)
+CHORD_NONE = "chord under 1 mm"
+TURN_BINS = (
+    ("in line", 0.5),
+    ("up to 5 degrees", 5.0),
+    ("up to 15 degrees", 15.0),
+    ("up to 40 degrees", 40.0),
+    ("about 45 degrees", 45.0),
+)
+RECTANGLE_FILL = 0.98  # a plan outline whose hull fills this much of its smallest rectangle is a rectangle
+
+
+def ratio_bin(extent, chord_feet):
+    """The bin of the probe's extent over the chord (both in feet)."""
+    if chord_feet < TOLERANCE_FEET:
+        return CHORD_NONE
+    ratio = extent / chord_feet
+    for name, top in RATIO_BINS:
+        if ratio < top:
+            return name
+    return RATIO_BINS[-1][0]
+
+
+def turn_bin(degrees):
+    """The bin of a turn between two directions, folded to 0 up to 45 degrees."""
+    for name, top in TURN_BINS:
+        if degrees <= top:
+            return name
+    return TURN_BINS[-1][0]
+
+
+def convex_hull(points):
+    """The convex hull of the 2-D `points` (Andrew's monotone chain), counter-clockwise, no repeated point."""
+    unique = sorted({(round(float(x), 6), round(float(y), 6)) for x, y in points})
+    if len(unique) < 3:
+        return unique
+
+    def turn(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower = []
+    for p in unique:
+        while len(lower) >= 2 and turn(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper = []
+    for p in reversed(unique):
+        while len(upper) >= 2 and turn(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
+def outline_of(points):
+    """(orientation in degrees from 0 up to 90 of the smallest rectangle around the plan outline of a mesh,
+    the share of that rectangle the convex hull fills), or None where the hull has no area. `points` is (n, 2)."""
+    hull = numpy.array(convex_hull(points))
+    if len(hull) < 3:
+        return None
+    x, y = hull[:, 0], hull[:, 1]
+    area = abs(float(numpy.dot(x, numpy.roll(y, -1)) - numpy.dot(y, numpy.roll(x, -1)))) / 2
+    best = None
+    for i in range(len(hull)):
+        edge = hull[(i + 1) % len(hull)] - hull[i]
+        length = float(numpy.hypot(edge[0], edge[1]))
+        if length < 1e-9:
+            continue
+        c, s = edge / length
+        rectangle = float(numpy.ptp(x * c + y * s) * numpy.ptp(-x * s + y * c))
+        if best is None or rectangle < best[0]:
+            best = (rectangle, math.degrees(math.atan2(s, c)) % 90.0)
+    if best is None or best[0] <= 0:
+        return None
+    return best[1], area / best[0]
+
+
 def alignment(fields):
     """Whether the probe's `angle` puts the beam in line with a plan axis, oblique to them, or gives none."""
     angle = fields.get("angle", "-")
@@ -353,6 +443,8 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
     joint = collections.defaultdict(collections.Counter)
     seen = collections.Counter()
     chords = collections.Counter()
+    shapes = collections.Counter()
+    outlines = {}
     for tag, fields in beams.items():
         stands = stands_by_tag.get(tag)
         beam = by_tag.get(tag)
@@ -401,8 +493,27 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 chords[(kind, "ends whose line crosses no face of Revit's column")] += 1
             else:
                 chords[(kind, "ends with a chord through Revit's column")] += 1
-                if abs((crossing[1] - crossing[0]) * factor - extent) > 0.05:
+                chord_feet = (crossing[1] - crossing[0]) * factor
+                if abs(chord_feet - extent) > 0.05:
                     chords[(kind, "of those, the chord differs from the probe's extent by over 0.05 ft")] += 1
+                shapes[(kind, "ratio", ratio_bin(extent, chord_feet))] += 1
+                # Whether the probe's extent is the column's extent along a plan axis in Revit's export.
+                along_x = float(numpy.ptp(column_points[:, 0])) * factor
+                along_y = float(numpy.ptp(column_points[:, 1])) * factor
+                if min(abs(along_x - extent), abs(along_y - extent)) <= 0.05:
+                    shapes[(kind, "plan axis", "equal")] += 1
+                if column not in outlines:
+                    outlines[column] = outline_of(column_points[:, :2])
+                outline = outlines[column]
+                if outline is None or outline[1] < RECTANGLE_FILL:
+                    shapes[(kind, "outline", "not a rectangle")] += 1
+                else:
+                    theta = outline[0]
+                    shapes[(kind, "outline", "a rectangle")] += 1
+                    shapes[(kind, "turned from the plan axes", turn_bin(min(theta, 90.0 - theta)))] += 1
+                    beam_theta = math.degrees(math.atan2(axis[1], axis[0])) % 90.0
+                    delta = abs(beam_theta - theta) % 90.0
+                    shapes[(kind, "turned from the beam", turn_bin(min(delta, 90.0 - delta)))] += 1
             t_revit = (float(caps[placed[end]] @ axis) - near) / (far - near)
             width = width_bin(beam_across, float(numpy.ptp(column_points @ sideways)))
             if width is None:
@@ -422,6 +533,29 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
             print(
                 f"beam ends:   beams {kind}: {total} ends with a chord of the beam's line through Revit's column, "
                 f"{differ} differing from the probe's extent by over 0.05 ft, and {none} whose line crosses no face of it"
+            )
+            if not total:
+                continue
+
+            def bins(group, names):
+                parts = [f"{name} {shapes[(kind, group, name)]}" for name in names if shapes[(kind, group, name)]]
+                return "; ".join(parts) if parts else "none"
+
+            ratio_names = [name for name, _ in RATIO_BINS] + [CHORD_NONE]
+            turn_names = [name for name, _ in TURN_BINS]
+            print(f"beam ends:   beams {kind}, the probe's extent over the chord: {bins('ratio', ratio_names)}")
+            print(
+                f"beam ends:   beams {kind}, the probe's extent is the extent of Revit's column along a plan axis "
+                f"(within 0.05 ft) on {shapes[(kind, 'plan axis', 'equal')]} of {total} ends"
+            )
+            print(
+                f"beam ends:   beams {kind}, Revit's column plan outline: "
+                f"{bins('outline', ['a rectangle', 'not a rectangle'])}"
+            )
+            print(
+                f"beam ends:   beams {kind}, of the rectangular outlines, turned from the plan axes: "
+                f"{bins('turned from the plan axes', turn_names)}; turned from the beam: "
+                f"{bins('turned from the beam', turn_names)}"
             )
     order = {name: i for i, name in enumerate(FRACTION_BINS)}
     for stands in ("shorter", "same", "longer"):
