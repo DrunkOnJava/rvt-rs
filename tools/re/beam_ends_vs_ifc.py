@@ -72,6 +72,9 @@ extent over the chord in bins; whether the probe's extent is the extent of Revit
 axis (the record box's extent, when the column is turned, is longer than the column across the beam);
 whether Revit's column has a rectangular plan outline (the convex hull fills 98 per cent or more of its
 smallest rectangle) and, of those, how far the rectangle is turned from the plan axes and from the beam.
+The plan axes there are rvt-rs's own, the probe's and the record boxes': Revit's export is turned from them
+by the turn of its IfcSite's placement, which is taken out before a column's extent along a plan axis and its
+turn from the plan axes are read.
 """
 
 import collections
@@ -82,6 +85,7 @@ import sys
 
 import ifcopenshell
 import ifcopenshell.geom
+import ifcopenshell.util.placement
 import numpy
 
 TOLERANCE_FEET = 0.0033  # 1 mm
@@ -429,6 +433,17 @@ def outline_of(points):
     return best[1], area / best[0]
 
 
+def site_turn_degrees(model):
+    """How far Revit's export turns the shared frame from rvt-rs's own (the turn of the IfcSite's placement),
+    in degrees. The probe's `angle` and the record boxes' axes are in rvt-rs's frame, so a turn of a column
+    from the plan axes means from those, and Revit's world axes are turned from them by this much."""
+    sites = model.by_type("IfcSite")
+    if not sites:
+        return 0.0
+    matrix = ifcopenshell.util.placement.get_local_placement(sites[0].ObjectPlacement)
+    return math.degrees(math.atan2(matrix[1][0], matrix[0][0]))
+
+
 def alignment(fields):
     """Whether the probe's `angle` puts the beam in line with a plan axis, oblique to them, or gives none."""
     angle = fields.get("angle", "-")
@@ -437,7 +452,7 @@ def alignment(fields):
     return "in line with a plan axis" if abs(float(angle)) <= ALIGNED_DEGREES else "oblique to the plan axes"
 
 
-def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
+def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_degrees=0.0):
     """Count the ends of the beams by where the record box and Revit's beam end in the named column
     nearest the end, as fractions of that column's extent along the beam."""
     joint = collections.defaultdict(collections.Counter)
@@ -497,9 +512,11 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 if abs(chord_feet - extent) > 0.05:
                     chords[(kind, "of those, the chord differs from the probe's extent by over 0.05 ft")] += 1
                 shapes[(kind, "ratio", ratio_bin(extent, chord_feet))] += 1
-                # Whether the probe's extent is the column's extent along a plan axis in Revit's export.
-                along_x = float(numpy.ptp(column_points[:, 0])) * factor
-                along_y = float(numpy.ptp(column_points[:, 1])) * factor
+                # Whether the probe's extent is the column's extent along a plan axis of rvt-rs's frame, the
+                # axes of the record boxes: Revit's export is turned from that frame by the site's turn.
+                site = math.radians(site_degrees)
+                along_x = float(numpy.ptp(column_points[:, 0] * math.cos(site) + column_points[:, 1] * math.sin(site))) * factor
+                along_y = float(numpy.ptp(-column_points[:, 0] * math.sin(site) + column_points[:, 1] * math.cos(site))) * factor
                 if min(abs(along_x - extent), abs(along_y - extent)) <= 0.05:
                     shapes[(kind, "plan axis", "equal")] += 1
                 if column not in outlines:
@@ -510,7 +527,8 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 else:
                     theta = outline[0]
                     shapes[(kind, "outline", "a rectangle")] += 1
-                    shapes[(kind, "turned from the plan axes", turn_bin(min(theta, 90.0 - theta)))] += 1
+                    own = (theta - site_degrees) % 90.0
+                    shapes[(kind, "turned from the plan axes", turn_bin(min(own, 90.0 - own)))] += 1
                     beam_theta = math.degrees(math.atan2(axis[1], axis[0])) % 90.0
                     delta = abs(beam_theta - theta) % 90.0
                     shapes[(kind, "turned from the beam", turn_bin(min(delta, 90.0 - delta)))] += 1
@@ -603,7 +621,7 @@ def print_ends(model, stands_by_tag, factor, beams):
             continue
         cells = ", ".join(f"{kind} {ends[(stands, kind)]}" for kind in (*FACE_KINDS, "nothing"))
         print(f"beam ends:   Revit {stands:<8} {total} ends: {cells}")
-    print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor)
+    print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_turn_degrees(model))
 
 
 def feet_per_unit(raw, records):
