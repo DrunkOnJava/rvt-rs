@@ -144,8 +144,8 @@ use super::{
     WALL_TOP_STUB_INSIDE_WALL, WALL_TOP_STUB_PROPERTY,
 };
 use crate::ifc::body_geometry::{
-    Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
-    section,
+    Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, body_mesh, element_body,
+    extrusion_rings, plan_outline, section,
 };
 use crate::ifc::entities::{
     BrepTriangle, Extrusion, IfcEntity, ProfileDef, Property, PropertyValue, SolidShape,
@@ -1990,6 +1990,12 @@ const WALL_BASE_REFUSAL_UNDER_SLOPED_TOP: &str = "base_cut_left_under_a_sloped_t
 /// end would lie inside that wall (#1396).
 const WALL_END_REFUSAL_IN_THE_WAY: &str = "wall_stands_in_the_added_end";
 
+/// Why such a wall keeps its end where a wall the pass does not read (one
+/// [`followed_walls`] leaves out), and that its record does not join there,
+/// stands in the stretch the end would be drawn over, or has a body whose
+/// reach is not known and so may (#1583, RE-337).
+const WALL_END_REFUSAL_UNREAD_IN_THE_WAY: &str = "unread_wall_stands_in_the_added_end";
+
 /// A wall drawn as an upright rectangle along a model axis: its plan bounds
 /// (least x and y, then greatest x and y), its base and top, and which of its
 /// extrusion's two plan sides lies along x (#1396).
@@ -2179,6 +2185,75 @@ fn followed_walls(entities: &[IfcEntity], based: &HashSet<usize>) -> HashMap<u32
         found.remove(&id);
     }
     found
+}
+
+/// A wall of `entities` that [`followed_walls`] does not read: its entity
+/// index, its ElementId where it has one, and the plan its drawn body covers in
+/// model feet with the heights it stands between. `reach` is `None` where the
+/// body cannot be bounded here (a representation map's, or one no mesh is made
+/// of), so that the wall may stand anywhere.
+struct Unread {
+    index: usize,
+    id: Option<u32>,
+    reach: Option<(Ring, f64, f64)>,
+}
+
+/// Every wall of `entities` with a body that is not one of `followed`: a wall
+/// drawn as any other solid, one whose base join names elements, and one whose
+/// ElementId more than one entity holds (#1583). A wall with no body draws
+/// nothing for an end to pass through.
+fn unread_walls(entities: &[IfcEntity], followed: &HashMap<u32, Followed>) -> Vec<Unread> {
+    let read: HashSet<usize> = followed.values().map(|wall| wall.index).collect();
+    entities
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !read.contains(index))
+        .filter_map(|(index, entity)| {
+            let IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid,
+                location_feet,
+                rotation_radians,
+                representation_map_index,
+                ..
+            } = entity
+            else {
+                return None;
+            };
+            if !matches!(ifc_type.as_str(), "IFCWALL" | "IFCWALLSTANDARDCASE") {
+                return None;
+            }
+            // A representation map's shape is not given to this pass, so a
+            // wall drawn from one is not bounded rather than not searched.
+            let reach = if representation_map_index.is_some() {
+                None
+            } else {
+                let body = element_body(entity, &[])?;
+                let placement = Placement::new(*location_feet, *rotation_radians);
+                let heights = body_mesh(body).map(|mesh| {
+                    mesh.vertices
+                        .iter()
+                        .map(|&point| placement.apply(point)[2])
+                        .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), z| {
+                            (low.min(z), high.max(z))
+                        })
+                });
+                match (plan_outline(body, &placement), heights) {
+                    (Some((plan, _)), Some((low, high)))
+                        if plan.len() >= 3 && low.is_finite() && high > low =>
+                    {
+                        Some((plan, low, high))
+                    }
+                    _ => None,
+                }
+            };
+            Some(Unread {
+                index,
+                id: type_guid.as_deref().and_then(|guid| guid.parse().ok()),
+                reach,
+            })
+        })
+        .collect()
 }
 
 /// The wall `entity` is, where its top was cut in steps by the floors that
@@ -2851,6 +2926,7 @@ fn decide_ends(
     // from its base.
     let based: HashSet<usize> = pending.iter().map(|base| base.index).collect();
     let followed = followed_walls(entities, &based);
+    let unread = unread_walls(entities, &followed);
     let context = BaseContext {
         entities,
         gathered: gather(entities),
@@ -2967,6 +3043,43 @@ fn decide_ends(
                 refused
                     .entry(wall.index)
                     .or_insert(WALL_END_REFUSAL_IN_THE_WAY);
+                continue;
+            }
+            // A wall the pass does not read is searched over the plan its body
+            // covers, not its bounds, since it may stand at any angle: the end
+            // would be drawn through it as through one it reads (#1583). The
+            // strip is drawn in by the tolerance on every side first, so that a
+            // wall must enter it by more than that, as `overlaps` asks of one
+            // the pass reads, and one against its side is not in the way.
+            let unread_in_the_way = strips.iter().any(|strip| {
+                let along = if at_low {
+                    (low - strip.outer, low - strip.inner)
+                } else {
+                    (high + strip.inner, high + strip.outer)
+                };
+                let along = (along.0 + END_TOLERANCE_FEET, along.1 - END_TOLERANCE_FEET);
+                let across = (
+                    side_low + END_TOLERANCE_FEET,
+                    side_high - END_TOLERANCE_FEET,
+                );
+                if along.1 <= along.0 || across.1 <= across.0 {
+                    return false;
+                }
+                let block = rect(long, along, across);
+                unread.iter().any(|other| {
+                    other.index != wall.index
+                        && !other.id.is_some_and(|id| list.contains(&id))
+                        && other.reach.as_ref().is_none_or(|(plan, from, to)| {
+                            to.min(strip.top) - from.max(wall.base) > END_TOLERANCE_FEET
+                                && area(&clip_convex(plan, &block)).abs()
+                                    > PIECE_ROUNDING_SQUARE_FEET
+                        })
+                })
+            });
+            if unread_in_the_way {
+                refused
+                    .entry(wall.index)
+                    .or_insert(WALL_END_REFUSAL_UNREAD_IN_THE_WAY);
                 continue;
             }
             ends.push(End {

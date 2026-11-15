@@ -106,7 +106,7 @@ Compare `ifc.sha256` per model between `measure-base` and `measure-head`; `BodyE
   Take the office's lists (RE-348 section 1) as an example, with the wall beneath drawn as a solid:
   - on 2057670, 2058499 and 2058501 as built, it comes after 3490093, whose face lies 0.115 ft off the end, so it would be marked;
   - on 2057668 as built, and on all four walls at permit, it comes before any wall whose face is off the end, so it would be counted unmarked.
-- **Still not counted: a wall in the way that the pass does not read.** A wall the record does not join is found in a strip only among the walls the pass reads, because `in_the_way` searches `followed_walls`. A wall of any kind the list above leaves unread is not found, and a strip would be drawn through it, with no marker and no count. This is section 5's last item, now without its quarter-turn case: `followed_wall` reads a prism at any angle.
+- **Not counted until #1583: a wall in the way that the pass does not read.** A wall the record does not join was found in a strip only among the walls the pass reads, because `in_the_way` searches `followed_walls`. A wall of any kind the list above leaves unread was not found, and a strip would have been drawn through it, with no marker and no count. This was section 5's last item, without its quarter-turn case: `followed_wall` reads a prism at any angle. Section 7 counts it.
 - **`walls_beneath_reach_the_end_at_different_faces` is gone (RE-348).** The end follows each joined wall over that wall's own heights. Where two walls standing at one height have faces that differ, the end depends on the order and is counted in `EndOrderDependent` and `exported.wall_ends_order_dependent`; it is not refused.
 - **`base_cut_lost_on_extended_plan` is still a reason, and still has no instance.** It is reachable: the cut of the base resolves on the plan the record gives but not on the longer plan. Two ways that can happen:
   - the strips reach a second element that covers part of the longer plan, so `decide_base` finds two covers (`several_elements_cover_the_wall`);
@@ -134,3 +134,26 @@ gh workflow run measure.yml --ref main -f ref=83417fde026c4e1a02359a0ce89b1841e3
 ```
 
 Each model's `wall_rules.txt` gives the counts and its `info.json` the release (`document.revit_version`). Each kept `model.ifc` gives the `BodyEndSource` and `BodyBaseSource` of every wall, and the openings that void it.
+
+## 7. A wall the pass does not read, standing in a strip (2026-11-15, #1583)
+
+`decide_ends` now searches the walls `followed_walls` leaves out as well, after the walls it reads. Those are the `IfcWall` entities with a body that `followed_wall` does not read, or that `based` or a repeated ElementId removes (`unread_walls`). For each, the search takes two things from the body the export draws:
+- the plan the body covers (`plan_outline`): an extrusion's profile, or the convex hull of any other solid;
+- the heights it stands between, from the body's mesh.
+
+Such a wall is in the way where two things hold:
+- its plan enters the strip's rectangle by more than 0.001 ft. The rectangle is drawn in by 0.001 ft on every side, and the plan must share more than 1e-9 ft² of area with what is left. So a wall flush against the strip's side, off by rounding, is not in the way;
+- it stands over more than 0.001 ft of the heights from the wall's base to the strip's top.
+
+The record must not join that wall at that end, and it must not be the wall itself. A wall the pass reads gets the same tolerances, with one difference. Its plan's bounds are compared with the strip's, where an unread wall's plan is clipped to the strip, because an unread wall may stand at any angle. For a body that is not an extrusion the plan is its convex hull. A hull of a body that is not convex can therefore reach a strip that no part of the body stands in, and keep an end that nothing blocks.
+
+A wall whose body cannot be bounded here is taken to stand in every strip, and the end is kept. That means a body drawn from a representation map, whose shape the pass is not given, or a body no mesh is made of. A wall with no body draws nothing an end could pass through, and is not searched.
+
+The end is kept and marked with `unread_wall_stands_in_the_added_end`. It is counted in `exported.wall_end_refusals` and logged as `wall_end_extension_refused`, as `wall_stands_in_the_added_end` is for a wall the pass reads. Where both kinds of wall stand in a strip, the reason is the older one.
+
+**Measured.** No export reaches the refusal. Measure [43680522537](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43680522537) ran this change (`95bb555d`) against its merge base (`f99403c7`), unfiltered, with the BIM4LCA models, the Revit 2025 models, the samples and the held-out pairs:
+- all 120 exports and all 102 `diagnostics.json` are byte-identical, so no wall carries `unread_wall_stands_in_the_added_end`;
+- the office files still draw their 4 ends each;
+- the same-project gates pass.
+
+No synthetic fixture can reach the refusal either, for the reason section 6 gives. So it stays unexercised against a Revit export until a Revit 2024 model has a wall the pass does not read standing where an end would be drawn.
