@@ -60,9 +60,10 @@ Registered in RE-473 section 5 as "the next row", and here as the questions the 
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref research/1603-unjoined-lists-pre2024 -f ref=82a5e79c3f394d894f4e450080463394b760e75c -f base=none \
+gh workflow run measure.yml --ref main -f ref=82a5e79c3f394d894f4e450080463394b760e75c -f base=none \
   -f samples=true -f sample_years='2018 2023 2024' -f holdout=true -f models='spent-* holdout-bimspeed-*' -f scorers=none \
   -f probe=probe_1603_native_instance_types_pre2024 -f probe_scorer=untyped_types_vs_ifc
-# after this lands, `--ref main` holds the probes, the scorers and the scrub patterns
 # the lists: the same with -f ref=e80cb1b5332d1ce44816dee798e307fd6f1c618e -f probe=probe_1603_unjoined_lists_pre2024 -f probe_scorer=unjoined_types_vs_ifc
 ```
+
+Once this lands, `main` holds the probes, `tools/re/unjoined_types_vs_ifc.py` and the scrub patterns. `tools/re/untyped_types_vs_ifc.py` is RE-240's scorer, already on `main`; the native-record probe prints its input form.
