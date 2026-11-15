@@ -1427,6 +1427,7 @@ pub fn append_typed_production_elements(
             property_set.as_ref(),
             &decoded,
         );
+        add_tube_beam_quantities(&mut reference_sets, &ifc_type, solid_shape.as_ref());
         add_beam_span(&mut reference_sets, &ifc_type);
         add_beam_slope(&mut reference_sets, &ifc_type, &decoded);
         add_beam_roll(&mut reference_sets, &ifc_type, &decoded);
@@ -6222,6 +6223,109 @@ fn beam_i_solid(
     }
 }
 
+/// The `SectionShape` of a beam drawn as its type's rectangular tube (#1698).
+pub const TUBE_SECTION_SHAPE: &str = "RectangleHollow";
+
+/// A rectangular tube beam's body (#1698): its type's tube, rounded corners and
+/// all ([`hollow_section_profile`]), extruded along its centreline from one end
+/// as a beam's I section is ([`beam_i_solid`]): the profile's X axis level
+/// across the line and its Y axis in the line's vertical plane, as Revit's
+/// export writes it.
+fn beam_tube_solid(
+    beam: &crate::partition_beam_axes::BeamBody,
+    section: &crate::partition_type_parameters::HollowSection,
+    location: [f64; 3],
+) -> entities::SolidShape {
+    let (a, _) = beam.centreline();
+    let d = beam.direction;
+    let plan = d[0].hypot(d[1]).max(1e-12);
+    entities::SolidShape::PlacedExtrusion {
+        profile: hollow_section_profile(section),
+        origin_feet: [a[0] - location[0], a[1] - location[1], a[2] - location[2]],
+        axis: d,
+        ref_direction: [-d[1] / plan, d[0] / plan, 0.0],
+        depth_feet: beam.length_feet,
+    }
+}
+
+/// Add the six base quantities of a rectangular tube beam to the
+/// `Qto_BeamBaseQuantities` among `sets` (#1698): the profile's area, and the
+/// areas and volumes that follow from it and the length, as Revit's export
+/// writes them on the BIM4LCA office's 8 tube beams to the digits it prints
+/// (`CrossSectionArea` the profile's area, `OuterSurfaceArea` the outside
+/// outline times the length, `GrossSurfaceArea` that plus the two ends,
+/// `NetSurfaceArea` the outside and inside outlines times the length plus the
+/// two ends, `GrossVolume` and `NetVolume` the area times the length), with the
+/// corners' arcs counted as arcs. Only for a beam drawn as the tube
+/// ([`beam_tube_solid`]), and only where `sets` holds the base quantity set
+/// ([`add_beam_length`]) with no `CrossSectionArea` yet.
+fn add_tube_beam_quantities(
+    sets: &mut [PropertySet],
+    ifc_type: &str,
+    solid_shape: Option<&entities::SolidShape>,
+) {
+    if ifc_type != "IFCBEAM" {
+        return;
+    }
+    let Some(entities::SolidShape::PlacedExtrusion {
+        profile: entities::ProfileDef::IndexedPolyCurveWithVoids { outer, voids },
+        depth_feet,
+        ..
+    }) = solid_shape
+    else {
+        return;
+    };
+    let Some(set) = sets
+        .iter_mut()
+        .find(|set| set.name == "Qto_BeamBaseQuantities")
+    else {
+        return;
+    };
+    if set
+        .properties
+        .iter()
+        .any(|property| property.name == "CrossSectionArea")
+    {
+        return;
+    }
+    let Some((outer_area, outer_length)) = curve_area_length(outer) else {
+        return;
+    };
+    let (mut area, mut inner_length) = (outer_area.abs(), 0.0);
+    for void in voids {
+        let Some((hole, length)) = curve_area_length(void) else {
+            return;
+        };
+        area -= hole.abs();
+        inner_length += length;
+    }
+    let length = *depth_feet;
+    if !(area.is_finite() && area > 0.0 && length.is_finite() && length > 0.0) {
+        return;
+    }
+    let areas = [
+        ("CrossSectionArea", area),
+        ("OuterSurfaceArea", outer_length * length),
+        ("GrossSurfaceArea", outer_length * length + 2.0 * area),
+        (
+            "NetSurfaceArea",
+            (outer_length + inner_length) * length + 2.0 * area,
+        ),
+    ];
+    for (name, value) in areas {
+        set.properties.push(Property {
+            name: name.into(),
+            value: PropertyValue::AreaSquareFeet(value),
+        });
+    }
+    for name in ["GrossVolume", "NetVolume"] {
+        set.properties.push(Property {
+            name: name.into(),
+            value: PropertyValue::VolumeCubicFeet(area * length),
+        });
+    }
+}
+
 /// `BodySource` of a stair run drawn as its treads and risers (RE-52).
 pub const STAIR_RUN_BODY_SOURCE: &str = "partition_stair_run_sketch";
 /// `BodySource` of a spiral stair run drawn as its treads, from its native
@@ -7734,6 +7838,17 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         crate::partition_beam_axes::i_section_body(beam, &section, bbox, start, end)
             .map(|body| (body, section))
     });
+    // #1698: a beam whose type is a rectangular tube, drawn as it where its
+    // body along its line is as wide and as deep as the tube's outside.
+    let tube_beam = beam_closed.and_then(|beam| {
+        let section = crate::partition_schema_mvp::hollow_section_from_fields(&decoded.fields)?;
+        let near = |a: f64, b: f64| (a - b).abs() <= HOLLOW_SECTION_BOX_TOLERANCE_FEET;
+        (class == "StructuralFraming"
+            && i_beam.is_none()
+            && near(beam.width_feet, section.width_feet)
+            && near(beam.depth_feet, section.height_feet))
+        .then_some((beam, section))
+    });
     // RE-104: an upright structural column whose type is an I section,
     // turned to its X axis where that fills its record box.
     let i_column = if class == "StructuralColumn" {
@@ -8566,6 +8681,16 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             });
         }
     }
+    if let Some((_, section)) = tube_beam {
+        properties.push(Property {
+            name: "SectionShape".into(),
+            value: PropertyValue::Text(TUBE_SECTION_SHAPE.into()),
+        });
+        properties.push(Property {
+            name: "SectionWallThickness".into(),
+            value: PropertyValue::LengthFeet(section.wall_feet),
+        });
+    }
     if let Some(stream) = source_stream {
         properties.push(Property {
             name: "SourceStream".into(),
@@ -8671,6 +8796,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     None,
                     record_body,
                     i_beam.map(|(body, section)| beam_i_solid(&body, &section, [x, y, z])),
+                ),
+                Some(_) if tube_beam.is_some() => (
+                    None,
+                    record_body,
+                    tube_beam.map(|(body, section)| beam_tube_solid(&body, &section, [x, y, z])),
                 ),
                 Some(beam) if beam.is_horizontal() => (
                     Some(beam.plan_angle_radians()),

@@ -908,6 +908,38 @@ pub fn hollow_section(by_name: &BTreeMap<String, f64>) -> Option<HollowSection> 
         .then_some(section)
 }
 
+/// The family parameters a rectangular tube beam type holds its outside width
+/// and height, its wall thickness (twice, as flange and as web) and its two
+/// corner radii under, by caption (#1698): the BIM4LCA office's
+/// `Putkipalkki - suorakaide` family, 200 by 300 mm with a 4 mm wall. Its `ri`
+/// is the OUTSIDE corner radius (8 mm) and its `ra` the inside one (4 mm), the
+/// reverse of what the letters suggest, as Revit draws the tube.
+pub const TUBE_BEAM_PARAMETER_NAMES: [&str; 6] = ["bf", "d", "tf", "tw", "ri", "ra"];
+
+/// The tube section `by_name` (a type's [`type_named_lengths`]) makes: the
+/// captions of [`TUBE_BEAM_PARAMETER_NAMES`] hold a hollow section
+/// ([`hollow_section`]) of width `bf`, height `d`, wall `tf`, whose `tw` is the
+/// same wall, whose outside corner radius is `ri` and whose inside radius `ra`
+/// is `ri` less the wall. A type whose six captions do not fit that, whatever
+/// else it holds, is not read as a tube.
+pub fn tube_beam_section(by_name: &BTreeMap<String, f64>) -> Option<HollowSection> {
+    let [width, height, flange, web, outside, inside] =
+        TUBE_BEAM_PARAMETER_NAMES.map(|name| by_name.get(name).copied());
+    let (width, height, flange, web, outside, inside) =
+        (width?, height?, flange?, web?, outside?, inside?);
+    // Lengths in feet from a metric family: equal to a part in 1e9 of a foot.
+    const SAME: f64 = 1e-9;
+    if (flange - web).abs() > SAME || (outside - flange - inside).abs() > SAME {
+        return None;
+    }
+    let as_hollow: BTreeMap<String, f64> = HOLLOW_SECTION_PARAMETER_NAMES
+        .into_iter()
+        .map(String::from)
+        .zip([width, height, flange, outside])
+        .collect();
+    hollow_section(&as_hollow)
+}
+
 /// The two sides, feet, of the plain rectangular section a column type holds
 /// as its parameters `b` and `h` (`b` alone for a square one), from `by_name`
 /// (a type's [`type_named_lengths`]). On the BIM4LCA office the square and
