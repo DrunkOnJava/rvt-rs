@@ -296,14 +296,15 @@ def width_bin(beam_across, column_across):
 
 
 def end_columns(fields):
-    """The probe's `endcol_low` and `endcol_high` of a beam: end -> (column Tag, t, extent in feet)."""
+    """The probe's `endcol_low` and `endcol_high` of a beam: end -> (column Tag, t, extent in feet, source),
+    the source `s` where the extent is the column's section along the beam and `b` its record box."""
     out = {}
     for end in ("low", "high"):
         value = fields.get(f"endcol_{end}", "-")
         if value == "-":
             continue
-        tag, t, extent, _source = value.split(":")
-        out[end] = (tag, float(t), float(extent))
+        tag, t, extent, source = value.split(":")
+        out[end] = (tag, float(t), float(extent), source)
     return out
 
 
@@ -452,6 +453,10 @@ def alignment(fields):
     return "in line with a plan axis" if abs(float(angle)) <= ALIGNED_DEGREES else "oblique to the plan axes"
 
 
+# The probe's `endcol_*` source: the extent is read from the column's section or its record box.
+SOURCES = {"s": "column's section", "b": "column's record box"}
+
+
 def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_degrees=0.0):
     """Count the ends of the beams by where the record box and Revit's beam end in the named column
     nearest the end, as fractions of that column's extent along the beam."""
@@ -480,18 +485,18 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_degre
         beam_across = float(numpy.ptp(points @ sideways))
         named = end_columns(fields)
         found = {}
-        for end, (column_tag, t, extent) in named.items():
+        for end, (column_tag, t, extent, source) in named.items():
             column = by_tag.get(column_tag)
             if column is not None:
-                found[end] = (column, t, extent)
+                found[end] = (column, t, extent, source)
         seen["beam ends the probe names a column for"] += len(named)
         seen["of those the export draws the column of"] += len(found)
         seen["beam ends the probe finds no column in line for"] += 2 - len(named)
         centres = {
-            end: (meshes[column][4][0] + meshes[column][4][1]) / 2 for end, (column, _, _) in found.items()
+            end: (meshes[column][4][0] + meshes[column][4][1]) / 2 for end, (column, _, _, _) in found.items()
         }
         placed = assign_caps(caps, centres)
-        for end, (column, t_box, extent) in found.items():
+        for end, (column, t_box, extent, source) in found.items():
             column_points = meshes[column][2].reshape(-1, 3)
             along = column_points @ axis
             low, high = float(along.min()), float(along.max())
@@ -511,7 +516,9 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_degre
                 chord_feet = (crossing[1] - crossing[0]) * factor
                 if abs(chord_feet - extent) > 0.05:
                     chords[(kind, "of those, the chord differs from the probe's extent by over 0.05 ft")] += 1
-                shapes[(kind, "ratio", ratio_bin(extent, chord_feet))] += 1
+                ratio = ratio_bin(extent, chord_feet)
+                shapes[(kind, "ratio", ratio)] += 1
+                shapes[(kind, f"ratio, extent from the {SOURCES.get(source, source)}", ratio)] += 1
                 # Whether the probe's extent is the column's extent along a plan axis of rvt-rs's frame, the
                 # axes of the record boxes: Revit's export is turned from that frame by the site's turn.
                 site = math.radians(site_degrees)
@@ -522,7 +529,9 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_degre
                 if column not in outlines:
                     outlines[column] = outline_of(column_points[:, :2])
                 outline = outlines[column]
-                if outline is None or outline[1] < RECTANGLE_FILL:
+                is_rectangle = outline is not None and outline[1] >= RECTANGLE_FILL
+                shapes[(kind, f"ratio, column {'a rectangle' if is_rectangle else 'not a rectangle'}", ratio)] += 1
+                if not is_rectangle:
                     shapes[(kind, "outline", "not a rectangle")] += 1
                 else:
                     theta = outline[0]
@@ -562,6 +571,14 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_degre
             ratio_names = [name for name, _ in RATIO_BINS] + [CHORD_NONE]
             turn_names = [name for name, _ in TURN_BINS]
             print(f"beam ends:   beams {kind}, the probe's extent over the chord: {bins('ratio', ratio_names)}")
+            for group in (
+                "ratio, extent from the column's section",
+                "ratio, extent from the column's record box",
+                "ratio, column a rectangle",
+                "ratio, column not a rectangle",
+            ):
+                if any(shapes[(kind, group, name)] for name in ratio_names):
+                    print(f"beam ends:   beams {kind}, the probe's extent over the chord, {group[7:]}: {bins(group, ratio_names)}")
             print(
                 f"beam ends:   beams {kind}, the probe's extent is the extent of Revit's column along a plan axis "
                 f"(within 0.05 ft) on {shapes[(kind, 'plan axis', 'equal')]} of {total} ends"
