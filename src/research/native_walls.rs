@@ -81,6 +81,9 @@ pub struct NativeWall {
     /// The elements whose faces the `JoinEndGStep.m_exposedFaceMap` of the
     /// curve's start and of its end names, in its order.
     pub exposed: [Vec<u64>; 2],
+    /// The wall the `JoinEndGStep.m_omittedTarget` of the curve's start and
+    /// of its end names, `None` where it names none (RE-488).
+    pub omitted: [Option<u64>; 2],
     /// The walls whose end meets this wall's middle, from its `CDJoinInfo`
     /// objects, each with that end (0 or 1).
     pub side_joins: Vec<(u64, u32)>,
@@ -1095,6 +1098,7 @@ pub fn native_walls_and_top_joins_into(
                 .map(|object| &object.fields)
                 .collect();
             let mut exposed = [Vec::new(), Vec::new()];
+            let mut omitted = [None, None];
             let mut stepped = [false, false];
             for step in graph
                 .objects
@@ -1118,6 +1122,10 @@ pub fn native_walls_and_top_joins_into(
                         .flatten()
                         .filter_map(|face| identifier_u64(face.pointer("/second/m_elemId")?))
                         .collect();
+                    omitted[slot] = step
+                        .get("m_omittedTarget")
+                        .and_then(|target| target.get("m_elemId"))
+                        .and_then(identifier_u64);
                 }
             }
             let side_joins = graph
@@ -1163,6 +1171,7 @@ pub fn native_walls_and_top_joins_into(
                 shells: None,
                 faces: face_offsets(&planes, start, direction),
                 exposed,
+                omitted,
                 side_joins,
                 partners,
                 type_id: None,
