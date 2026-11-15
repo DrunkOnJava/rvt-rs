@@ -52,6 +52,7 @@ def names(state, text):
 
 
 def main():
+    listing = "--list" in sys.argv[1:]
     args = [a for a in sys.argv[1:] if a != "--list"]
     if len(args) != 2:
         print(__doc__)
@@ -69,6 +70,10 @@ def main():
         if not theirs:
             continue
         drawn, master = names(d_state, d_text), names(m_state, m_text)
+        if listing and theirs not in (drawn, master):
+            # Tags and names: the held-out scrub keeps only the count lines.
+            shown = lambda found: "|".join(sorted(found)).replace(" ", "_") if found else "-"
+            print(f"differs {tag} {entity} drawn={shown(drawn)} master={shown(master)} revit={shown(theirs)}")
         for key in ((entity, False), (entity, True)) if grouped == "1" else ((entity, False),):
             row = counts[key]
             row["elements"] += 1
