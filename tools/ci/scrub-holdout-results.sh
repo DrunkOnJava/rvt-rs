@@ -105,7 +105,9 @@
 # numbers beside the scorer's fixed words, never a Tag, a height or the files'
 # offset), and
 # the `opening boxes:` lines of tools/re/opening_boxes_vs_ifc.py (#227: how many
-# openings are within each fixed distance of Revit's, by IFC class), and
+# openings are within each fixed distance of Revit's, by IFC class), the
+# `export parameters pre2024:` count lines of probe_1695_export_parameters_pre2024
+# (#1695: entries by IFC export key and value, never an id or a name), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -174,6 +176,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^census stages: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^previous lines: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # probe_1695_export_parameters_pre2024 (#1695): the counts of a release's
+      # IFC export parameter entries by key and by value (an IFC entity name or an
+      # upper-case word, anything else as other-text), of their owners and of the
+      # byte patterns before an IfcFurnitureTypeEnum word; never an id or a name.
+      grep -E '^export parameters pre2024: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       # probe_1842_level_storeys (#1842): the release and Level counts, no names.
       grep -E '^levels release=[0-9]+ recovered=[0-9]+ building_story_true=[0-9]+ false=[0-9]+ unread=[0-9]+ false_below_first_storey=[0-9]+ false_above=[0-9]+ false_at_a_storey_elevation=[0-9]+$' "$f" || true
       # probe_1335_projected_graphs (#1335): counts, verdict words, schema class
