@@ -141,6 +141,13 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # `<Unnamed>`, by what the family's forms show: numbers beside fixed words and an
       # IFC entity name, never a Tag or a material name; its `--list` lines are dropped.
       grep -E '^unnamed before 2024: class Ifc[A-Za-z0-9]+( grouped)? map unset [0-9]+; unset form shown: written [0-9]+, not written [0-9]+; unset form hidden: written [0-9]+, not written [0-9]+; unset voids only: written [0-9]+, not written [0-9]+; no unset form, nested instance: written [0-9]+, not written [0-9]+; no unset form: written [0-9]+, not written [0-9]+; family not read: written [0-9]+, not written [0-9]+$' "$f" || true
+      # tools/re/window_door_unnamed_bound_vs_ifc.py (#1603, RE-483): the same counts
+      # by what the family's forms with no material show once a Visible bound to a
+      # parameter is read from the parameter's value, and the reference export's IFC
+      # schema and Revit release: numbers and fixed words, never a Tag, a material
+      # name or an author; its `--list` lines are dropped.
+      grep -E '^unnamed bound before 2024: class Ifc[A-Za-z0-9]+( grouped)? map unset [0-9]+; unset form effectively shown: written [0-9]+, not written [0-9]+; unset form unresolved, none shown: written [0-9]+, not written [0-9]+; unset forms effectively hidden: written [0-9]+, not written [0-9]+; unset voids only: written [0-9]+, not written [0-9]+; no unset form, nested instance: written [0-9]+, not written [0-9]+; no unset form: written [0-9]+, not written [0-9]+; family not read: written [0-9]+, not written [0-9]+$' "$f" || true
+      grep -E '^reference export: schema [A-Za-z0-9_]+, Revit (20[0-9]{2}|unknown)$' "$f" || true
       # tools/re/beam_lines_vs_ifc.py (#1697): counts beside fixed words and the
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
@@ -225,6 +232,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # probe_1603_unnamed_before_2024 (#1603, RE-482): a family's forms by stored
       # Visible value, as counts beside fixed words.
       grep -E '^family visible values: release [0-9]+ forms [0-9]+ stored zero [0-9]+ stored one [0-9]+ stored other [0-9]+ stored none [0-9]+$' "$f" || true
+      # probe_1603_unnamed_bound_before_2024 (#1603, RE-483): the unset forms of the
+      # doors and windows whose map holds a -1, how many have a Visible bound to a
+      # family parameter and how many of those the parameter's value resolves, as
+      # counts beside fixed words.
+      grep -E '^bound visible values: release [0-9]+ unset forms [0-9]+ bound [0-9]+ resolved [0-9]+ unresolved [0-9]+$' "$f" || true
       # probe_1603_family_forms_pre2024 (#1603, RE-479): per release, how many
       # families of doors and windows have a document and how many forms of each
       # class (a schema class name) hold a material or a stored Visible, as
