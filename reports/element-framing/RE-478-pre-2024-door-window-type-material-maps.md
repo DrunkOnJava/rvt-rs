@@ -1,10 +1,12 @@
-# RE-478: the geometry-material map to read for a Revit 2015 to 2023 door or window is the drawn symbol's, which is Revit's material set on 558 of 992 before three rules are applied; the master symbol's is never right where it is not
+# RE-478: the geometry-material map to read for a Revit 2015 to 2023 door or window is the drawn symbol's, which is Revit's material set on 414 of 846 before three rules are applied; the master symbol's is never right where it is not
 
 **Date:** 2026-11-15
 **Issues:** #1603 (Revit 2015 to 2023: the 70 windows of the spent Revit 2018 project lack Revit's materials); follows RE-477 (the doors and windows the list join leaves untyped are typed from their native record), RE-473 (the type material map is on every 2015 to 2023 save, in the older id shape), RE-203 (`FamilySymbol.m_geomTag2MaterialId`), RE-204 to RE-206 (when Revit writes `<Unnamed>`, and the materials only hidden forms hold).
-**Artefacts:** the spent Revit 2018 project and the 18 held-out projects of Measure (counts only; one of them is the held-out save of the spent project, read as the spent project is and counted once), with Revit's own export of each; BIM Whale's `AdvancedProject` is among them.
+**Artefacts:** the spent Revit 2018 project and the 18 held-out projects of Measure (counts only), with Revit's own export of each; BIM Whale's `AdvancedProject` is among them. Eight of the projects are of Revit 2015 to 2023 (the spent project, the held-out save of the spent project, which is read as the spent project is and counted once, and seven other held-out projects); the other ten are of Revit 2024 to 2027 and are counted apart (see the correction under Status).
 **Probe and scorer:** `probe_1603_window_door_type_maps_pre2024` and `tools/re/window_door_type_maps_vs_ifc.py`, at `8b5fd1dde0c4` (Measure 43700046741), archived under `refs/archive/2026-11-15/cited/`. Nothing in the export changes.
-**Status:** positive for which symbol, negative for the map alone. The symbol an instance's record draws (`InstanceInfo.m_symbolId`, Revit's type) holds the map that names Revit's materials, and its master symbol's map is never equal where the drawn one is not. Of the 992 doors and windows of the spent project and 17 held-out projects (the 18th held-out project, the held-out save of the spent project, reads as the spent project does and is counted once) that Revit's export gives materials, the drawn map is Revit's set as written on 558 (603 once Revit's spelling of the unset material is dropped), and on every element of 13 of the 18 projects. The other 389 differ in three ways that need rules the 2015 to 2023 readers do not have: 299 only in whether `<Unnamed>` is written, 81 by names Revit's set does not hold, and 9 by one material Revit names that none of the four records name. A reader that wrote the map as it stands would be wrong on those 389; the next reader is the rules, not the map.
+**Status:** positive for which symbol, negative for the map alone. The symbol an instance's record draws (`InstanceInfo.m_symbolId`, Revit's type) holds the map that names Revit's materials, and its master symbol's map is never equal where the drawn one is not. Of the 846 doors and windows of the 8 projects of Revit 2015 to 2023 (the spent project and 7 held-out ones) that Revit's export gives materials, the drawn map is Revit's set as written on 414 (459 once Revit's spelling of the unset material is dropped), and on every element of 4 of the 8 projects. The other 387 differ in three ways that need rules the 2015 to 2023 readers do not have: 299 only in whether `<Unnamed>` is written, 79 by names Revit's set does not hold, and 9 by one material Revit names that none of the four records name. A reader that wrote the map as it stands would be wrong on those 387; the next reader is the rules, not the map.
+
+**Correction (2026-11-15, found by RE-481, which read the same run by release).** The first version of this report counted the 146 doors and windows of ten held-out projects of Revit 2024 to 2027 (105 windows, 41 doors) among "the 992 of Revit 2015 to 2023" and gave 558 of 992 equal, 389 differing and 13 of 18 projects fully equal. Those ten projects give 144 equal as written and 2 "drawn more" (two doors of Held-out B, a Revit 2026 project); with them out, the counts above are the Revit 2015 to 2023 ones. The symbol that is Revit's (the drawn one), the master's never being better, and the three kinds of difference are unchanged; only the counts and the share of projects are.
 
 ## 1. The question
 
@@ -27,7 +29,7 @@ Counts only for the held-out projects (`tools/ci/scrub-holdout-results.sh` keeps
 
 **Reach (row 1).** Every door and window Revit gives materials has both symbols' maps read: on the spent project 70 of 70 windows and 4 of 4 doors (2 of them members of a model group); on every held-out project the read count equals the element count. The scorer skips an element Revit gives no material: the spent project's other 64 doors have a map of unset values only (the probe's lines) and no material in Revit's export.
 
-**The drawn symbol against Revit's set (rows 2 and 3).** Doors and windows Revit gives materials, per kind (all 992: 630 windows and 362 doors; equal as written 558, spelled apart 45, unset material only 299, drawn more 81, Revit more not found 9, apart 0):
+**The drawn symbol against Revit's set (rows 2 and 3).** Doors and windows Revit gives materials, per kind (the 8 projects of Revit 2015 to 2023: 525 windows and 321 doors; equal as written 414, spelled apart 45, unset material only 299, drawn more 79, Revit more not found 9, apart 0; the 10 projects of Revit 2024 to 2027, in the table by their release, give 105 windows and 41 doors, 144 equal as written and 2 drawn more):
 
 | Project | Elements | Equal | Spelled apart | Unset material only | Revit more, not found | Drawn more |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -37,13 +39,14 @@ Counts only for the held-out projects (`tools/ci/scrub-holdout-results.sh` keeps
 | Held-out Revit 2020, doors | 27 | 4 | 0 | 22 | 0 | 1 |
 | BIM Whale Revit 2021, windows | 263 | 0 | 0 | 263 | 0 | 0 |
 | BIM Whale Revit 2021, doors | 126 | 116 | 0 | 0 | 0 | 10 |
-| Held-out A, windows | 110 | 56 | 0 | 0 | 0 | 54 |
-| Held-out A, doors | 140 | 126 | 0 | 0 | 0 | 14 |
-| Held-out B, windows | 16 | 16 | 0 | 0 | 0 | 0 |
-| Held-out B, doors | 13 | 11 | 0 | 0 | 0 | 2 |
-| Held-out C, windows | 21 | 21 | 0 | 0 | 0 | 0 |
-| Held-out C, doors | 16 | 16 | 0 | 0 | 0 | 0 |
-| The other 12 held-out projects (ten saves of two projects, and two others), windows and doors | 1 to 12 and 1 to 4 each | all | 0 | 0 | 0 | 0 |
+| Held-out A (Revit 2021), windows | 110 | 56 | 0 | 0 | 0 | 54 |
+| Held-out A (Revit 2021), doors | 140 | 126 | 0 | 0 | 0 | 14 |
+| Held-out B (Revit 2026), windows | 16 | 16 | 0 | 0 | 0 | 0 |
+| Held-out B (Revit 2026), doors | 13 | 11 | 0 | 0 | 0 | 2 |
+| Held-out C (Revit 2020), windows | 21 | 21 | 0 | 0 | 0 | 0 |
+| Held-out C (Revit 2020), doors | 16 | 16 | 0 | 0 | 0 | 0 |
+| Three more held-out projects of Revit 2022 and 2023 (the 2022 saves of two projects, and one Revit 2023 project), windows and doors | 1 to 12 and 1 to 4 each | all | 0 | 0 | 0 | 0 |
+| Nine more held-out projects of Revit 2024 to 2027 (the 2024 to 2027 saves of the same two projects, and one Revit 2025 project), windows and doors | 1 to 12 and 0 to 4 each | all | 0 | 0 | 0 | 0 |
 
 No element is apart. "Revit more" found in the drawn symbol's record, the master's, the family's or the instance's: 0 in every project, so the 9 windows' extra material is named in none of the four records.
 
@@ -59,7 +62,7 @@ Registered on #1603 before the first run (2026-11-15), read from Measure 4370004
 
 1. **Reach.** Reported above: 70 of 70 windows and 4 of 4 doors on the spent project, all on the held-out projects.
 2. **Which symbol.** Not met as registered (one symbol equal everywhere it is read, none different). The drawn symbol is the symbol, and the master's is never better. As written, the drawn map equals Revit's set on 2 of the spent project's 70 windows; 47 once Revit's leading-space spelling is dropped; 61 once whether `<Unnamed>` is in the set is not counted; the last 9 have a material Revit names that none of the four records name.
-3. **Held-out.** Reported in the table. The drawn map is exactly Revit's on every window and door of 13 of the 18 projects (the spent project and 17 held-out ones; the spent project is not among the 13); on the other five it is the "unset material only" and "drawn more" cases below.
+3. **Held-out.** Reported in the table. The drawn map is exactly Revit's on every window and door of 4 of the 8 projects of Revit 2015 to 2023 and 9 of the 10 of Revit 2024 to 2027 (the spent project is not among them; 13 of 18 as first reported); on the other four before 2024 and the one from it, it is the "unset material only" and "drawn more" cases below.
 4. **Group members.** Met: 2 of 2.
 5. **No map.** Met: 0.
 
@@ -67,10 +70,10 @@ Registered on #1603 before the first run (2026-11-15), read from Measure 4370004
 
 - **Decided.** The map to read is the one on the symbol the instance's record draws (`m_symbolId`, the type RE-477 writes), not on its master. For a model-group member the two are the same material set (2 of 2).
 - **Not decided: when `<Unnamed>` is written.** 14 of the spent project's windows, all 263 of BIM Whale's windows and 22 of the held-out Revit 2020 project's 27 doors are "unset material only": the map holds geometry mapped to no material and Revit's set has no `<Unnamed>`. On Revit 2024 and later this is RE-204 and RE-206 (a family whose unset geometry is hidden or void has none), read from `native_family_forms`, which takes the 2024 shape of an ElementId only. That the same rule decides these 299 elements is not measured here.
-- **Not decided: the drawn symbol's extra materials.** 54 of one held-out project's 110 windows, and 14, 10, 2 and 1 doors of four others have names in the map that Revit's set does not. On Revit 2024 and later, a material only hidden forms hold is not exported (RE-205), also read from the family forms. Not measured here.
+- **Not decided: the drawn symbol's extra materials.** 54 of one held-out project's 110 windows, and 14, 10 and 1 doors of three others (and 2 doors of a Revit 2026 project) have names in the map that Revit's set does not. On Revit 2024 and later, a material only hidden forms hold is not exported (RE-205), also read from the family forms. Not measured here.
 - **Not decided: the 9 windows with one more material.** Six types of the spent project, 9 windows (every window of those types), have `LKS_VEN_MADERA` in Revit's set, in none of the drawn symbol's, master's, family's or instance's records outside the map. On Revit 2024 and later the instances of a type with unset geometry take their material parameters (`attach_partly_unset_materials`, columns and products only). Whether these windows' frames take it from a parameter is not measured.
 - **Not decided: the unset material's spelling.** Revit 2018's IFC2X3 export of the spent project names it " <Unnamed>" on 52 of the 70 windows. `<Unnamed>` is the spelling RE-149 measured on Revit 2024. The other projects' counts show no such name; that other Revit 2015 to 2018 exports spell it so rests on this one project.
-- **What follows.** A reader that wrote the drawn map as it stands would write a set different from Revit's on 389 of the 992 elements, and `<Unnamed>` on the spent project's 64 doors that Revit gives no material. The next reader is therefore the family forms in the older id shape (when `<Unnamed>` is written, which materials only hidden forms hold) and the partly unset types' material parameters, each measured against these counts, with the type map in the older id shape (RE-473) last. Whether the family documents hold their forms in the same members before Revit 2024 is not measured.
+- **What follows.** A reader that wrote the drawn map as it stands would write a set different from Revit's on 387 of the 846 elements of Revit 2015 to 2023, and `<Unnamed>` on the spent project's 64 doors that Revit gives no material. The next reader is therefore the family forms in the older id shape (when `<Unnamed>` is written, which materials only hidden forms hold) and the partly unset types' material parameters, each measured against these counts, with the type map in the older id shape (RE-473) last. Whether the family documents hold their forms in the same members before Revit 2024 is not measured.
 
 ## 6. Reproduce
 
