@@ -120,6 +120,7 @@ earlier year as a supported release.
 
 | Issue | Remainder |
 |---|---|
+| [#2053](https://github.com/DrunkOnJava/rvt-rs/issues/2053) | Door and window Reference is written where Revit's export has none: 11 doors and 6 windows on BIM Whale's Revit 2021 project (IFC2X3; RE-477) |
 | [#1985](https://github.com/DrunkOnJava/rvt-rs/issues/1985) | The export phase on Revit 2015 rests on one file (RE-372) |
 | [#1984](https://github.com/DrunkOnJava/rvt-rs/issues/1984) | Stored storey GlobalIds on Revit 2015 to 2023 rest on one file (RE-220) |
 | [#1983](https://github.com/DrunkOnJava/rvt-rs/issues/1983) | Room outlines from their stored solid on Revit 2023 rest on one file (RE-102) |
