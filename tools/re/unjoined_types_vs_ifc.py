@@ -40,7 +40,8 @@ def norm(text: str) -> str:
 
 
 def main() -> int:
-    args = sys.argv[1:]
+    # Measure passes `--list` to every probe scorer; the detail lines print anyway.
+    args = [arg for arg in sys.argv[1:] if arg != "--list"]
     if len(args) != 2:
         print(__doc__)
         return 2
