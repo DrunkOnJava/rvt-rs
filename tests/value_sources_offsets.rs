@@ -868,6 +868,16 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         Gap { reason: BINDING },
     ),
     (
+        "LevelBindSource",
+        "partition_element_record_column_base_level",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_footing_base_level",
+        Gap { reason: BINDING },
+    ),
+    (
         "StoreyBindSource",
         "record_base_elevation",
         Gap { reason: BINDING },
