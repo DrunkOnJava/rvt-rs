@@ -429,11 +429,13 @@ pub(super) fn resolve_base_constraint_levels(
                 _ => {}
             }
         }
-        // #1842, RE-469: on the release that is measured, a column that names
-        // three or more Levels takes the highest at or below its base, and a
-        // footing that names none the highest Level of the model at or below
-        // its base. Both rest on one model (docs/one-project-rules.md).
-        if matches!(element.class.as_str(), "StructuralColumn" | "Column") && named.len() > 2 {
+        // #1842, RE-469: on the release that is measured, a structural column
+        // that names three or more Levels takes the highest at or below its
+        // base, and a footing whose record names no Level (not one, two or
+        // three or more: `named` keeps the last two kinds) the highest Level of
+        // the model at or below its base. Both rest on one model
+        // (docs/one-project-rules.md), which holds only those cases.
+        if element.class == "StructuralColumn" && named.len() > 2 {
             let level = base
                 .filter(|_| base_levels)
                 .and_then(|z| refs::below_base_level(&named, elevations, z));
@@ -442,7 +444,10 @@ pub(super) fn resolve_base_constraint_levels(
             }
             continue;
         }
-        if base_levels && element.class == "StructuralFoundation" && record_level(element).is_none()
+        if base_levels
+            && element.class == "StructuralFoundation"
+            && named.is_empty()
+            && record_level(element).is_none()
         {
             let level = base.and_then(|z| refs::level_at_or_below(elevations, z));
             if let Some(level) = level {

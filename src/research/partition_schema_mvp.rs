@@ -1232,12 +1232,16 @@ fn element_record_decoded(
             }
         }
         // A beam or brace that names more than two keeps them too: its
-        // Reference Level is the highest (RE-175, RE-454). So does a column,
-        // whose Level is chosen by its base on the release that is measured
-        // (#1842, RE-469).
+        // Reference Level is the highest (RE-175, RE-454). So does a structural
+        // column, whose Level is chosen by its base on the release that is
+        // measured (#1842, RE-469), and a footing, so that one that names three
+        // or more is told from one that names none, which is the case measured.
         if named.len() == 2
             || (named.len() > 2
-                && matches!(class, "StructuralFraming" | "StructuralColumn" | "Column"))
+                && matches!(
+                    class,
+                    "StructuralFraming" | "StructuralColumn" | "StructuralFoundation"
+                ))
         {
             fields.push((
                 crate::element_record_level_refs::CONSTRAINT_LEVELS_FIELD.into(),

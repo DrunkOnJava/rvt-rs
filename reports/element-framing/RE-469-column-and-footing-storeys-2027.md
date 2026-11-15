@@ -24,10 +24,10 @@ On the save, 0.22.0's default export read by `storeys_vs_ifc.py` against Revit's
 
 On Revit 2027 only:
 
-- A column whose record names three or more Levels is in the storey of the highest of them at or below its record box's base, else of the lowest (`<base`, `below_base_level`). `LevelBindSource` is `partition_element_record_column_base_level`.
+- A structural column (class `StructuralColumn`) whose record names three or more Levels is in the storey of the highest of them at or below its record box's base, else of the lowest (`<base`, `below_base_level`). `LevelBindSource` is `partition_element_record_column_base_level`.
 - A footing whose record names no Level is in the storey of the highest Level of the model at or below its record box's base (`base*`, `level_at_or_below`), placed ahead of the elevation band of RE-68. `LevelBindSource` is `partition_element_record_footing_base_level`.
 
-A column that names two Levels, a beam, and every element that names one are bound as before. The rule for a footing also reaches a Structural Foundations floor that names no Level, which the reporter's model does not hold.
+A column that names two Levels, an architectural column (class `Column`) of any number, a footing that names one, two or three or more Levels, a beam, and every element that names one are bound as before: the rules are asked of the cases the reporter's model holds, which are structural columns (its `Structural Columns` category) that name three or more Levels and footings that name none, and of nothing else. The rule for a footing also reaches a Structural Foundations floor that names no Level, which the reporter's model does not hold.
 
 ## 3. Measured
 
