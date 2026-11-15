@@ -6418,8 +6418,8 @@ Autodesk's sample projects, the held-out models and the families (Measure run
   - Measure's `racadv` input scores the 2015 to 2020 saves against that
     export, fetched for the run and never stored or cached; only its summary
     counts are uploaded.
-  - Revit's own area for `rac_basic` room 101 (its `GSA Space Areas`,
-    781.08 ft²) is the geometry with the column taken off, as the schedule
+  - Revit's own area for `rac_basic` room 101 (its
+    `GSA Space Areas`) is the geometry with the column taken off, as the schedule
     area now is; 4.95 ft² of the reader's 0.628% are in the room's outer
     ring, which this does not change and is not explained.
   - On Autodesk's samples (run 41909382808) the six rooms with columns
