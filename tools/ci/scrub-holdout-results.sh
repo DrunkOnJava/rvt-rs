@@ -130,6 +130,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # tools/re/window_door_type_maps_vs_ifc.py (#1603, RE-478): per IFC class
+      # of door and window, how many Revit gives materials and how many a
+      # symbol's map names exactly, as numbers beside fixed words and an IFC
+      # entity name, never a Tag or a material name.
+      grep -E '^window door type maps: class Ifc[A-Za-z0-9]+( grouped)? elements [0-9]+ revit materials [0-9]+ drawn read [0-9]+ drawn equal [0-9]+ master read [0-9]+ master equal [0-9]+ either equal [0-9]+ both equal [0-9]+$' "$f" || true
       # tools/re/beam_lines_vs_ifc.py (#1697): counts beside fixed words and the
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
