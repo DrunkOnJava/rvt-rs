@@ -26,7 +26,7 @@ The result (Measure [43683865183](https://github.com/DrunkOnJava/rvt-rs/actions/
 
 ## 3. The host wall's flip
 
-Every door bound to none has a stored host, the wall its native record's `m_hostId` names (RE-361). Its native record gives a straight line and `m_isFlipped` on 67 of the office as built's 75. It is an ordinary wall, the same kind as the walled doors' hosts. Split by that flip, the 21 doors the flips get wrong are exactly the 19 in flipped walls plus 2 with no wall record. Of the doors in walls whose flip is read:
+Every door bound to none has a stored host, the element its native record's `m_hostId` names (RE-361). On 67 of the office as built's 75 that host's native record gives a straight line and `m_isFlipped`. rvt-rs decodes 66 of those hosts as `CurtainWall` (`probe_1494_door_axes_trace`, Measure [43687911646](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43687911646)). These are doors set in curtain walls, which is why Revit's export cuts no opening for them (RE-357) and rvt-rs binds them to no plain wall. Split by that flip, the 21 doors the flips get wrong are exactly the 19 in flipped walls plus 2 with no wall record. Of the doors in walls whose flip is read:
 
 | file | doors bound to none | with a read host wall | flips alone | flips xor wall flip |
 |---|---:|---:|---:|---:|
@@ -38,12 +38,12 @@ Every door bound to none has a stored host, the wall its native record's `m_host
 
 That is 273 of 273 doors with 0 wrong, where the flips alone are wrong on 86. The doors bound to none in the housing files (8 per file) and 8 per office file have no such host record, so they are outside the rule.
 
-For the doors rvt-rs binds to a plain wall, the wall's flip is not part of the rule. The flips alone are exact there (RE-347), and "xor the wall's flip" would be wrong on 33 to 70 of them per file. These are the doors RE-357 found Revit's export gives no opening: 75, 77 and 1. So the difference is between a door Revit cuts into its wall and one it does not. Why revit-ifc's transform differs there is not read; the rule is the measurement.
+For the doors rvt-rs binds to a plain wall, the wall's flip is not part of the rule. The flips alone are exact there (RE-347), and "xor the wall's flip" would be wrong on 33 to 70 of them per file. These are the doors RE-357 found Revit's export gives no opening: 75, 77 and 1. So the difference is between a door set in a wall Revit cuts and a door set in a curtain wall. Why revit-ifc's transform differs there is not read; the rule is the measurement.
 
 ## 4. The rule
 
 A door or window that rvt-rs binds to no plain wall is placed on these axes, under three conditions:
-- its native record's `m_hostId` names a wall that is not a curtain wall, whose native record gives one straight level line and a flip;
+- its native record's `m_hostId` names a curtain wall whose native record gives one straight level line and a flip;
 - its two flips are read;
 - its stored transform is upright, its X runs along that wall, and that X is within `INSTANCE_TURN_MIN_RADIANS` of a model axis. These are the same checks as RE-347.
 

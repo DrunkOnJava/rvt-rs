@@ -124,16 +124,19 @@ pub fn opening_placement_from_stored_host(fields: &[(String, InstanceField)]) ->
 /// - whose X is within [`INSTANCE_TURN_MIN_RADIANS`] of one of the model's
 ///   axes (one turned further keeps its turned box, RE-87).
 ///
-/// A door or window rvt-rs binds to no such wall gets the same, from the wall
-/// its own native record's `m_hostId` names, where that is such a wall whose
-/// flip is read: its stored X reversed where its two flips differ or the wall
-/// is flipped (`SWall.m_isFlipped`), but not both, and marked
-/// [`OPENING_PLACEMENT_FROM_STORED_HOST_FIELD`] (RE-474). On the doors of the
-/// BIM4LCA office and RE1 Architecture that rvt-rs binds to no wall, that is
-/// Revit's placement X on every one whose `m_hostId` names such a wall (273 of
-/// 273 over the office's four files, 1 of 1 on RE1), where the flips alone are
-/// wrong on 21 to 23 of them per file. The wall's flip is not part of the rule
-/// for an element rvt-rs binds: there the flips alone are exact.
+/// A door or window rvt-rs binds to no such wall gets the same from the wall
+/// its own native record's `m_hostId` names, where that is a curtain wall
+/// whose native record gives a straight level line and a flip: its stored X
+/// reversed where its two flips differ or the curtain wall is flipped
+/// (`m_isFlipped`), but not both, marked
+/// [`OPENING_PLACEMENT_FROM_STORED_HOST_FIELD`] (RE-474). Revit's export cuts
+/// no opening for a door in a curtain wall (RE-357), so rvt-rs binds it to no
+/// wall. On the doors of the BIM4LCA office and RE1 Architecture whose
+/// `m_hostId` names such a curtain wall, that is Revit's placement X on every
+/// one (273 of 273 over the office's four files, 1 of 1 on RE1), where the
+/// flips alone are wrong on 21 to 23 of them per file. The wall's flip is no
+/// part of the rule for an element set in a plain wall: there the flips alone
+/// are exact.
 ///
 /// Run after `attach_cut_loop_sizes`, which gives the flips on Revit 2024 to
 /// 2027 (`CUT_LOOP_REVIT_VERSIONS`) and may rebind the host (RE-245).
@@ -146,6 +149,13 @@ pub(super) fn attach_opening_placement_axes(
     let directions: BTreeMap<u32, [f64; 2]> = walls
         .iter()
         .filter(|wall| wall.class != CURTAIN_WALL_CLASS)
+        .filter_map(|wall| Some((wall.id?, wall_native_direction_from_fields(&wall.fields)?)))
+        .collect();
+    // RE-474: the doors rvt-rs binds to no wall are set in curtain walls,
+    // which are read for this rule alone.
+    let curtain_directions: BTreeMap<u32, [f64; 2]> = walls
+        .iter()
+        .filter(|wall| wall.class == CURTAIN_WALL_CLASS)
         .filter_map(|wall| Some((wall.id?, wall_native_direction_from_fields(&wall.fields)?)))
         .collect();
     let flipped: BTreeMap<u32, bool> = walls
@@ -195,7 +205,7 @@ pub(super) fn attach_opening_placement_axes(
                     continue;
                 };
                 let (Some(wall), Some(flip), Ok(id)) = (
-                    directions.get(&host),
+                    curtain_directions.get(&host),
                     flipped.get(&host),
                     u32::try_from(*id),
                 ) else {

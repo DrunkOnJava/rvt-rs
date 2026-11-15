@@ -137,15 +137,16 @@ pub const OPENING_PLACEMENT_X_AXIS_FIELDS: [&str; 2] = [
     "m_opening_placement_x_axis_y",
 ];
 
-/// Field holding a straight wall's native flip (`SWall.m_isFlipped`), beside
-/// [`WALL_NATIVE_DIRECTION_FIELDS`] on every wall that has them (RE-474).
+/// Field holding a straight wall's or curtain wall's native flip
+/// (`m_isFlipped`), beside [`WALL_NATIVE_DIRECTION_FIELDS`] on every wall that
+/// has them (RE-474).
 pub const WALL_NATIVE_FLIPPED_FIELD: &str = "m_wall_native_flipped";
 
 /// Field set (true) on a door or window whose
-/// [`OPENING_PLACEMENT_X_AXIS_FIELDS`] come from the wall its own native record
-/// names (`m_hostId`), where rvt-rs binds it to no plain wall (RE-474): the
-/// stored X axis, reversed where its two flips differ or its host wall is
-/// flipped, but not both.
+/// [`OPENING_PLACEMENT_X_AXIS_FIELDS`] come from the curtain wall its own
+/// native record names (`m_hostId`), where rvt-rs binds it to no plain wall
+/// (RE-474): the stored X axis, reversed where its two flips differ or that
+/// curtain wall is flipped, but not both.
 pub const OPENING_PLACEMENT_FROM_STORED_HOST_FIELD: &str = "m_opening_placement_from_stored_host";
 
 /// Field carrying a family instance's original symbol (RE-167): the

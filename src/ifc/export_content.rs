@@ -5938,9 +5938,9 @@ pub const PLACEMENT_AXES_SOURCE_PROPERTY: &str = "PlacementAxesSource";
 pub const OPENING_PLACEMENT_AXES_SOURCE: &str = "stored_axes_reversed_by_flips";
 
 /// [`PLACEMENT_AXES_SOURCE_PROPERTY`] of a door or window rvt-rs binds to no
-/// plain wall, placed by the wall its own native record names: its stored X
-/// axis, reversed where its two flips differ or that wall is flipped, but not
-/// both (RE-474).
+/// plain wall, placed by the curtain wall its own native record names: its
+/// stored X axis, reversed where its two flips differ or that curtain wall is
+/// flipped, but not both (RE-474).
 pub const OPENING_STORED_HOST_PLACEMENT_AXES_SOURCE: &str =
     "stored_axes_reversed_by_flips_and_host_wall_flip";
 
