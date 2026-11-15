@@ -28,6 +28,12 @@ pub(crate) fn identifier_i64(value: &Fv) -> Option<i64> {
         .and_then(Fv::as_i64)
 }
 
+/// [`identifier_i64`] as an unsigned id, `None` for a missing, non-integer or
+/// negative one (an id of 0 comes back as `Some(0)`).
+pub(crate) fn identifier_u64(value: &Fv) -> Option<u64> {
+    identifier_i64(value).and_then(|n| u64::try_from(n).ok())
+}
+
 /// A three-number array as a point, `None` unless every coordinate is finite.
 pub(crate) fn finite_triple(value: &Fv) -> Option<[f64; 3]> {
     let [x, y, z] = value.as_array()? else {
