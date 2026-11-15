@@ -73,7 +73,9 @@ use super::mesh_volume::{
     beam_quantities, box_plan_width, closed_mesh_volume, column_quantities, mullion_surface_area,
     partner_ends, partners_the_boxes_missed, prism_along,
 };
-use super::mesh_wall_quantities::{WallFrame, WallMeshQuantities, wall_mesh_quantities};
+use super::mesh_wall_quantities::{
+    OpeningBox, WallFrame, WallMeshQuantities, wall_mesh_quantities,
+};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -615,7 +617,7 @@ pub fn attach_scoped_with_control(
             if let Some([index]) = walls.get(&element.identity.element_id).map(Vec::as_slice) {
                 let held = wall_openings.get(index);
                 let frame = held.map_or(WallFrame { turn: 0.0 }, |held| held.frame);
-                let boxes: &[[f64; 6]] = held.map_or(&[], |held| held.boxes.as_slice());
+                let boxes: &[OpeningBox] = held.map_or(&[], |held| held.boxes.as_slice());
                 // A mesh that decoded only in part can still hold one closed
                 // solid (another of its solids is what failed), and its
                 // quantities would be that solid's alone: refused, as a
@@ -1522,15 +1524,14 @@ const WALL_BOX_MESH_TOLERANCE: f64 = 1e-3;
 const WALL_HEIGHT_AGREE_FEET: f64 = 5e-4;
 
 /// How far, radians, an element's turn may lie off its wall's own axes for its
-/// world box, which is axis aligned, to be that element's extent in the wall's
-/// frame (#1046).
+/// rectangle's corners to give that element's extent in the wall's frame: a
+/// rectangle turned with the wall, or across it (#1046).
 const OPENING_TURN_TOLERANCE: f64 = 1e-6;
 
-/// A wall's own axes and the world boxes, feet, of the openings rvt-rs cuts in
-/// it, `[min_x, min_y, min_z, max_x, max_y, max_z]` (#1046).
+/// A wall's own axes and the openings rvt-rs cuts in it (#1046).
 struct WallOpenings {
     frame: WallFrame,
-    boxes: Vec<[f64; 6]>,
+    boxes: Vec<OpeningBox>,
 }
 
 /// #1046: each wall's frame, by its index in `model.entities`, and the boxes of
@@ -1599,29 +1600,26 @@ fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
             .and_then(|cut| cut.z_range_feet)
             .unwrap_or([0.0, body.height_feet]);
         let (sin, cos) = rotation_radians.unwrap_or(0.0).sin_cos();
-        let mut x = [f64::INFINITY, f64::NEG_INFINITY];
-        let mut y = [f64::INFINITY, f64::NEG_INFINITY];
-        for side_x in [-1.0, 1.0] {
-            for side_y in [-1.0, 1.0] {
+        let corners =
+            [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]].map(|[side_x, side_y]| {
                 let (px, py) = (cx + side_x * x_dim / 2.0, cy + side_y * y_dim / 2.0);
-                let corner = [
+                [
                     location[0] + px * cos - py * sin,
                     location[1] + px * sin + py * cos,
-                ];
-                x = [x[0].min(corner[0]), x[1].max(corner[0])];
-                y = [y[0].min(corner[1]), y[1].max(corner[1])];
-            }
-        }
-        let world = [
-            x[0],
-            y[0],
-            location[2] + start,
-            x[1],
-            y[1],
-            location[2] + start + height,
-        ];
-        if world.iter().all(|value| value.is_finite()) {
-            hosted.boxes.push(world);
+                ]
+            });
+        let opening = OpeningBox {
+            corners,
+            heights: [location[2] + start, location[2] + start + height],
+        };
+        if opening
+            .corners
+            .iter()
+            .flatten()
+            .chain(&opening.heights)
+            .all(|value| value.is_finite())
+        {
+            hosted.boxes.push(opening);
         }
     }
     out
