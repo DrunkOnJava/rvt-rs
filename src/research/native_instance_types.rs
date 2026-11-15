@@ -1,5 +1,6 @@
 //! The type of a Revit 2015 to 2023 family instance, read from its own native
-//! record and the records of the symbol and family it names (RE-475, #1603).
+//! record and the records of the symbol and family it names (RE-477, #1603;
+//! RE-475 found where the type is).
 //!
 //! The scan's reference-list join (`type_and_family_names_2023`) names a type
 //! only when the list holds a symbol record with a name entry. On the spent
@@ -79,7 +80,10 @@ fn root_id(graph: &ObjectGraph, field: &str) -> Option<u64> {
 /// An instance whose record is not a `FamilyInstance`, that names no symbol or
 /// no master symbol, whose master symbol is not a `FamilySymbol` with a name
 /// and a family, or whose family is not a `Family` with a name, is left out.
-/// Each record is the current copy the native record path routes to. One pass reads the instances, every symbol and every family, since which
+/// So is a member of a model group whose `m_symbolId` is neither its master
+/// symbol nor a symbol whose `m_masterId` names it: the master is then a
+/// guess. Each record is the current copy the native record path routes to.
+/// One pass reads the instances, every symbol and every family, since which
 /// symbols they name is known only once they are read. Errs where the native
 /// record path does not read the file's release.
 pub fn instance_types(
@@ -92,6 +96,7 @@ pub fn instance_types(
     let mut drawn_by: BTreeMap<u64, u64> = BTreeMap::new();
     let mut grouped: BTreeSet<u64> = BTreeSet::new();
     let mut masters: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut symbol_masters: BTreeMap<u64, u64> = BTreeMap::new();
     let mut symbol_names: BTreeMap<u64, String> = BTreeMap::new();
     let mut symbol_families: BTreeMap<u64, u64> = BTreeMap::new();
     let mut family_names: BTreeMap<u64, String> = BTreeMap::new();
@@ -108,6 +113,9 @@ pub fn instance_types(
         let id = record.identity.element_id;
         match record.class_name.as_deref() {
             Some("FamilySymbol") => {
+                if let Some(master) = root_id(graph, "m_masterId") {
+                    symbol_masters.insert(id, master);
+                }
                 if let (Some(name), Some(family)) = (
                     text(graph, "SymbolInfo", "m_name"),
                     root_id(graph, "m_familyId"),
@@ -144,10 +152,14 @@ pub fn instance_types(
     Ok(masters
         .iter()
         .filter_map(|(&instance, master)| {
+            let drawn = *drawn_by.get(&instance)?;
             let type_id = if grouped.contains(&instance) {
-                *master
+                // The symbol that draws a group's instance is a copy of the
+                // master made for it; anything else is not measured.
+                (drawn == *master || symbol_masters.get(&drawn) == Some(master))
+                    .then_some(*master)?
             } else {
-                *drawn_by.get(&instance)?
+                drawn
             };
             let type_name = symbol_names.get(master)?.clone();
             let family_name = family_names.get(symbol_families.get(master)?)?.clone();

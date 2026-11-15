@@ -5,7 +5,8 @@
   and Revit's own type is an id the scan knows nothing of. The instance's native
   record names it (`InstanceInfo.m_symbolId`), its master symbol the type's name
   and the family. A member of a model group takes its master symbol as the type,
-  as Revit does. On the spent project the 70 windows and 68 doors now have
+  as Revit's export does for the spent project's 2 grouped doors, and is left
+  untyped where its symbol is not a copy of that master. On the spent project the 70 windows and 68 doors now have
   Revit's Name, `ObjectType` and type object (0 of 70 windows before), with the
   type's `Pset_WindowCommon.Reference` and `Pset_DoorCommon.Reference`; on a
   held-out Revit 2020 project the 4 windows and 9 doors that differed are

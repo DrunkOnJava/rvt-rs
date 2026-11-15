@@ -66,7 +66,7 @@ pub(super) fn recover_2023_records(
     let level_ids = level_element_ids(rf, revit_version).unwrap_or_default();
     // A door or window the reference-list join leaves untyped is typed from its
     // own native record, its master symbol's and that symbol's family's
-    // (RE-475): the list holds the master symbol, not Revit's type.
+    // (RE-477): the list holds the master symbol, not Revit's type.
     let untyped_openings: BTreeSet<u64> = selected
         .values()
         .filter(|record| {

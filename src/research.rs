@@ -75,7 +75,7 @@
 //! - [`native_graphics_traversal`]: Bounded traversal of saved graphics under the default 3D context
 //! - [`native_index`]: Native project identities and creation-episode UniqueIds
 //! - [`native_instance_materials`]: The materials a family instance's own parameters give it (RE-200, #355)
-//! - [`native_instance_types`]: The type and family of a Revit 2015 to 2023 family instance, from its own native record and the symbol and family records it names (RE-475, #1603)
+//! - [`native_instance_types`]: The type and family of a Revit 2015 to 2023 family instance, from its own native record and the symbol and family records it names (RE-477, #1603)
 //! - [`native_metadata`]: Lossless projections of selected saved metadata from a complete native graph
 //! - [`native_mullion_hosts`]: Which curtain mullions Revit's export draws as an extrusion of their section (RE-243)
 //! - [`native_multistory_stairs`]: The sets of a multistory stair and the Levels each spans, read by member name (#1977, RE-463)

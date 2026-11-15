@@ -10,7 +10,7 @@ pub(super) fn attach_type_materials(
 ) {
     for element in elements.iter_mut() {
         // A type read from the element's own native record has no scanned map
-        // that is the type's (RE-475).
+        // that is the type's (RE-477).
         if element
             .fields
             .iter()
