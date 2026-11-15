@@ -64,6 +64,20 @@ pub(super) fn recover_2023_records(
     // Each record names its Level in its reference list, as on 2024
     // (RE-107).
     let level_ids = level_element_ids(rf, revit_version).unwrap_or_default();
+    // A door or window the reference-list join leaves untyped is typed from its
+    // own native record, its master symbol's and that symbol's family's
+    // (RE-475): the list holds the master symbol, not Revit's type.
+    let untyped_openings: BTreeSet<u64> = selected
+        .values()
+        .filter(|record| {
+            matches!(record.builtin_category, per::OST_DOORS | per::OST_WINDOWS)
+                && !nested.contains(&record.element_id)
+                && !names.contains_key(&record.element_id)
+        })
+        .map(|record| u64::from(record.element_id))
+        .collect();
+    let native_types =
+        crate::native_instance_types::instance_types(rf, &untyped_openings).unwrap_or_default();
     for record in selected.values() {
         if nested.contains(&record.element_id) {
             stages.counts_mut(&record.stream).nested_in_door_or_window += 1;
@@ -94,6 +108,25 @@ pub(super) fn recover_2023_records(
             decoded.fields.push((
                 FAMILY_NAME_FIELD.into(),
                 InstanceField::String(family_name.clone()),
+            ));
+        } else if let Some((type_id, native)) = native_types
+            .get(&u64::from(record.element_id))
+            .and_then(|native| Some((u32::try_from(native.type_id).ok()?, native)))
+        {
+            decoded.fields.push((
+                TYPE_ID_FIELD.into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: type_id,
+                },
+            ));
+            decoded.fields.push((
+                TYPE_NAME_FIELD.into(),
+                InstanceField::String(native.type_name.clone()),
+            ));
+            decoded.fields.push((
+                FAMILY_NAME_FIELD.into(),
+                InstanceField::String(native.family_name.clone()),
             ));
         } else if let Some((type_id, type_name)) = system_types.get(&record.element_id) {
             decoded.fields.push((
