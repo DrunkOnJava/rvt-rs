@@ -51,4 +51,28 @@ The axes are the stored X, reversed where the flips differ or the wall's `m_isFl
 
 ## 5. Measured on the rule
 
-To come.
+The rule is in two commits. The first (`dfeb9fad`) read a door's stored host among plain walls only and wrote nothing: its full Measure, [43686098590](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43686098590), is byte-identical on all 120 exports. A trace (`probe_1494_door_axes_trace`, commit `a99a0028`, archived as `refs/archive/2026-11-15/cited/a99a0028e503`) showed why. The 66 hosts with a read line and flip on the office as built are decoded as `CurtainWall`, and the plain-wall map leaves them out. The second (`1be73ffb`) reads them among curtain walls.
+
+On `1be73ffb` there are two runs: [43688985749](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43688985749) (`probe_re343_door_flips` and `door_placements_vs_ifc`, `keep_ifc`) and the full Measure [43688981702](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43688981702) against the merge base `4b1d8f19`. Rows, as registered in the pull request before they were read:
+
+1. **Every door the rule places gets Revit's axes. Held.**
+
+   | file | doors bound to none | placed by this rule | same as Revit |
+   |---|---:|---:|---:|
+   | office as built | 75 | 66 | 66 |
+   | office at permit | 77 | 68 | 68 |
+   | timber office as built | 76 | 67 | 67 |
+   | timber office at permit | 76 | 67 | 67 |
+   | RE1 Architecture | 1 | 1 | 1 |
+
+   That is 269 of 269. The housing files' 8 doors per file name no curtain wall and are left as they were. So are 9 per office file: the 8 with no host record, and one per file whose transform fails the along-the-wall or near-axis check. `door_axes_vs_ifc` agrees: the doors placed on Revit's axes go from 194 to 260 on the office as built and from 4 to 5 on RE1, with 0 different from Revit everywhere. On the office as built, the doors whose axes are Revit's go from 212 to 261 of 269.
+2. **Nothing the RE-347 rule places changes. Held.** Its doors and windows read as before on every file, the held-out ones included (counts only), each `same` as Revit's.
+3. **Bodies and openings keep their place. Held.** No `diagnostics.json` changes (102 of 102), and the box keeps its world extents as in RE-347.
+4. **Only exports with such doors move, and the same-project gates pass. Held.** The 22 that move are:
+   - the four office files and RE1;
+   - Autodesk's `rac_advanced`, `rac_basic`, `rme_advanced` and `rme_basic` saves of 2024 to 2027;
+   - Snowdon Towers Architectural.
+
+   The samples have no Revit export. The same-project check compares each of their doors with the same project's 2024 save, and it passes: `rac_advanced`, `rme_advanced` and `rme_basic` compare 124 doors where they compared 107, and `rac_basic` 22 where it compared 17. The gates are a success on `1be73ffb`.
+
+What this does not show: that a door in a curtain wall of another building turns the same way. The doors are those of one office, in four files, and one door of RE1. The samples hold the rule to themselves across releases, not to Revit.
