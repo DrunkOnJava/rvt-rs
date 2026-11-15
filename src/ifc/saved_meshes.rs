@@ -684,9 +684,13 @@ pub fn attach_scoped_with_control(
                 .get(&element.identity.element_id)
                 .map(Vec::as_slice)
             {
+                let primitives = &element.meshes.primitives;
                 let found = partial_refusal(&element.meshes)
                     .is_none()
-                    .then(|| one_piece_face_area(&element.meshes.primitives))
+                    .then(|| {
+                        one_piece_face_area(primitives)
+                            .or_else(|| first_piece_face_area(primitives))
+                    })
                     .flatten();
                 if let Some(area) = found {
                     covering_areas.push((*index, area));
@@ -1996,50 +2000,20 @@ fn coverings_without_area(
 /// 1e-6 ft apart), and the two must be the same area to 0.1%. Revit's export
 /// gives such a ceiling that area as its `GrossArea` on all 370 one-piece
 /// ceilings of the eight BIM4LCA office and housing files, cut or uncut. On a
-/// ceiling in pieces it gives one piece's, and not always the largest,
-/// so one in pieces gets none, as does a sloped ceiling, which has no
-/// horizontal face. The direction of a triangle is its winding turned outward
-/// by its saved normals, where the primitive has one per vertex.
+/// ceiling in pieces it gives one piece's, and not always the largest
+/// ([`first_piece_face_area`]); a sloped ceiling, which has no horizontal
+/// face, gets none.
 fn one_piece_face_area(primitives: &[Primitive]) -> Option<f64> {
-    const HORIZONTAL: f64 = 0.999;
     const SAME_AREA: f64 = 1e-3;
     type Level = Vec<[[f64; 3]; 3]>;
     let mut levels: BTreeMap<(i64, bool), (f64, Level)> = BTreeMap::new();
     for primitive in primitives {
-        let oriented = primitive.normals.len() == primitive.vertices.len();
-        for triangle in &primitive.triangles {
-            let corners = triangle.map(|i| primitive.vertices.get(i as usize).copied());
-            let [Some(a), Some(b), Some(c)] = corners else {
-                continue;
-            };
-            let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-            let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-            let mut normal = [
-                u[1] * v[2] - u[2] * v[1],
-                u[2] * v[0] - u[0] * v[2],
-                u[0] * v[1] - u[1] * v[0],
-            ];
-            let length =
-                (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
-            if !length.is_finite() || length < 1e-12 {
-                continue;
-            }
-            if oriented {
-                let outward = triangle.iter().fold([0.0; 3], |sum, i| {
-                    let n = primitive.normals[*i as usize];
-                    [sum[0] + n[0], sum[1] + n[1], sum[2] + n[2]]
-                });
-                if normal[0] * outward[0] + normal[1] * outward[1] + normal[2] * outward[2] < 0.0 {
-                    normal = [-normal[0], -normal[1], -normal[2]];
-                }
-            }
-            if normal[2].abs() / length < HORIZONTAL {
-                continue;
-            }
-            let key = ((a[2] * 1000.0).round() as i64, normal[2] > 0.0);
-            let level = levels.entry(key).or_insert_with(|| (0.0, Vec::new()));
-            level.0 += length / 2.0;
-            level.1.push([a, b, c]);
+        for triangle in horizontal_triangles(primitive).into_iter().flatten() {
+            let level = levels
+                .entry((triangle.height, triangle.up))
+                .or_insert_with(|| (0.0, Vec::new()));
+            level.0 += triangle.area;
+            level.1.push(triangle.corners);
         }
     }
     let largest = |up: bool| {
@@ -2054,6 +2028,116 @@ fn one_piece_face_area(primitives: &[Primitive]) -> Option<f64> {
         return None;
     }
     ((upper.0 - lower.0).abs() <= SAME_AREA * upper.0.max(lower.0)).then_some(lower.0)
+}
+
+/// A horizontal triangle of a saved mesh: its height (0.001 ft), whether its
+/// outward normal points up, its corners and its area.
+struct Horizontal {
+    height: i64,
+    up: bool,
+    corners: [[f64; 3]; 3],
+    area: f64,
+}
+
+/// Each triangle of `primitive`, in order, where its outward normal is
+/// vertical to 0.999 (none where it is not, has no area or names a vertex the
+/// primitive lacks). The direction of a triangle is its winding turned outward
+/// by its saved normals, where the primitive has one per vertex.
+fn horizontal_triangles(primitive: &Primitive) -> Vec<Option<Horizontal>> {
+    const HORIZONTAL: f64 = 0.999;
+    let oriented = primitive.normals.len() == primitive.vertices.len();
+    primitive
+        .triangles
+        .iter()
+        .map(|triangle| {
+            let corners = triangle.map(|i| primitive.vertices.get(i as usize).copied());
+            let [Some(a), Some(b), Some(c)] = corners else {
+                return None;
+            };
+            let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+            let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+            let mut normal = [
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0],
+            ];
+            let length =
+                (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
+            if !length.is_finite() || length < 1e-12 {
+                return None;
+            }
+            if oriented {
+                let outward = triangle.iter().fold([0.0; 3], |sum, i| {
+                    let n = primitive.normals[*i as usize];
+                    [sum[0] + n[0], sum[1] + n[1], sum[2] + n[2]]
+                });
+                if normal[0] * outward[0] + normal[1] * outward[1] + normal[2] * outward[2] < 0.0 {
+                    normal = [-normal[0], -normal[1], -normal[2]];
+                }
+            }
+            (normal[2].abs() / length >= HORIZONTAL).then(|| Horizontal {
+                height: (a[2] * 1000.0).round() as i64,
+                up: normal[2] > 0.0,
+                corners: [a, b, c],
+                area: length / 2.0,
+            })
+        })
+        .collect()
+}
+
+/// The area of a ceiling's piece that Revit's export names, where its saved
+/// face is in pieces (#1209, RE-486). revit-ifc 24.2's `BodyExporter.ExportBody`
+/// sets the body's `ScaledArea` from each extrusion as it creates it, so a
+/// ceiling in pieces gets the area of the piece it creates last as its
+/// `GrossArea`. The saved mesh stores the slab one face per primitive, the
+/// pieces as connected parts of each face (triangles sharing a vertex 1e-6 ft
+/// apart). The part of the first primitive that holds its first triangle is
+/// Revit's piece on all 83 ceilings in pieces of the four BIM4LCA office
+/// files, cut or uncut, where the largest piece is Revit's on 45 of the 78
+/// uncut. The first primitive must be one horizontal face, every triangle at
+/// one height facing one way, in more than one part. A horizontal face facing
+/// the other way must hold a part of the same area to 0.1%. Anything else
+/// gets none.
+fn first_piece_face_area(primitives: &[Primitive]) -> Option<f64> {
+    const SAME_AREA: f64 = 1e-3;
+    let first = primitives.first()?;
+    let face: Vec<Horizontal> = horizontal_triangles(first)
+        .into_iter()
+        .collect::<Option<Vec<Horizontal>>>()?;
+    let (height, up) = face.first().map(|t| (t.height, t.up))?;
+    if face.iter().any(|t| t.height != height || t.up != up) {
+        return None;
+    }
+    let corners: Vec<[[f64; 3]; 3]> = face.iter().map(|t| t.corners).collect();
+    let roots = part_roots(&corners);
+    if roots.iter().collect::<BTreeSet<_>>().len() < 2 {
+        return None;
+    }
+    let area: f64 = face
+        .iter()
+        .zip(&roots)
+        .filter(|(_, root)| **root == roots[0])
+        .map(|(t, _)| t.area)
+        .sum();
+    let mut opposite: BTreeMap<i64, Vec<Horizontal>> = BTreeMap::new();
+    for primitive in &primitives[1..] {
+        for triangle in horizontal_triangles(primitive).into_iter().flatten() {
+            if triangle.up != up {
+                opposite.entry(triangle.height).or_default().push(triangle);
+            }
+        }
+    }
+    let matched = opposite.values().any(|level| {
+        let corners: Vec<[[f64; 3]; 3]> = level.iter().map(|t| t.corners).collect();
+        let mut parts: BTreeMap<usize, f64> = BTreeMap::new();
+        for (triangle, root) in level.iter().zip(part_roots(&corners)) {
+            *parts.entry(root).or_insert(0.0) += triangle.area;
+        }
+        parts
+            .values()
+            .any(|part| (part - area).abs() <= SAME_AREA * part.max(area))
+    });
+    matched.then_some(area)
 }
 
 /// Whether `primitives` make one connected part (#1209). A family instance
@@ -2081,6 +2165,15 @@ fn one_part(primitives: &[Primitive]) -> bool {
 /// How many connected parts `triangles` make, two triangles joined where they
 /// share a vertex 1e-6 ft apart.
 fn pieces(triangles: &[[[f64; 3]; 3]]) -> usize {
+    part_roots(triangles)
+        .into_iter()
+        .collect::<BTreeSet<usize>>()
+        .len()
+}
+
+/// The connected part of each of `triangles`, as one triangle index per part,
+/// two triangles joined where they share a vertex 1e-6 ft apart.
+fn part_roots(triangles: &[[[f64; 3]; 3]]) -> Vec<usize> {
     fn root(parent: &mut [usize], mut i: usize) -> usize {
         while parent[i] != i {
             parent[i] = parent[parent[i]];
@@ -2108,12 +2201,12 @@ fn pieces(triangles: &[[[f64; 3]; 3]]) -> usize {
     }
     (0..triangles.len())
         .map(|index| root(&mut parent, index))
-        .collect::<BTreeSet<usize>>()
-        .len()
+        .collect()
 }
 
-/// Give each covering of `found` (an index into the entities and its one-piece
-/// face's area) the `GrossArea` of its `Qto_CoveringBaseQuantities` (#1209),
+/// Give each covering of `found` (an index into the entities and the area of
+/// its saved face, or of the piece of it Revit names) the `GrossArea` of its
+/// `Qto_CoveringBaseQuantities` (#1209),
 /// in the set it holds or a new one. A value a covering holds is never
 /// replaced.
 fn add_covering_areas(model: &mut IfcModel, found: &[(usize, f64)]) {
