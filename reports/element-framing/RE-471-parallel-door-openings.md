@@ -53,7 +53,23 @@ A door whose Y lies along its walls keeps the reason `door_second_wall_parallel_
 
 ## 5. Measured on the change
 
-To be filled from Measure 43668574318 before the pull request is ready.
+Measure [43677087993](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43677087993), head `5862892f` against the merge base `f961f2aa`, unfiltered with the BIM4LCA models, the Revit 2025 models, the Autodesk samples and the held-out files; Snowdon Towers Architectural scored locally on rvt-rs's export of the same head (run 43675092848) against Revit's local export. The rows were registered in the pull request before either was read.
+
+| file | door openings in a second wall written, before → after | each with Revit's box, GlobalId and `Depth` | openings Revit's export lacks |
+|---|---|---|---|
+| office, as built | 25 → 30 | 30 of 30 | 3, unchanged |
+| office, permit | 33 → 39 | 39 of 39 | 4, unchanged |
+| timber office, as built | 16 → 21 | 21 of 21 | 2, unchanged |
+| timber office, permit | 16 → 21 | 21 of 21 | 2, unchanged |
+| timber housing, as built | 1 → 2 | 2 of 2 | 1, unchanged |
+| timber housing, permit | 1 → 2 | 2 of 2 | 1, unchanged |
+| concrete housing, as built | 3 → 3 | 3 of 3 | 1, unchanged |
+| concrete housing, permit | 3 → 3 | 3 of 3 | 1, unchanged |
+
+- **23 openings of Revit's are written, none that Revit's export lacks.** Each new opening's `Pset_OpeningElementCommon.Reference` and `Pset_EnvironmentalImpactIndicators.Reference` are Revit's, and its `Qto_OpeningElementBaseQuantities` `Depth` and `Height`. Its `Width` is left out, as for every door opening in a second wall: Revit's `Width` there is the door's wall's thickness. In the quantity and property censuses, `different` and the values Revit does not write are unchanged on every file.
+- **The steps not written** are counted as `door_second_wall_spans_other_heights_than_door_wall`: 4, 3, 2, 2, 9, 9, 9 and 9 by file. The heights are compared before the box is held to the wall's height, and every step whose box would stand above or below its wall also has walls of other heights, so `opening_outside_wall_height` gains none. `door_second_wall_parallel_to_door_wall` is 0 on every BIM4LCA file.
+- **Snowdon Towers Architectural:** no opening is added or lost (81 unfilled openings written, 78 of them Revit's, before and after). Its 38 parallel steps are now counted as 15 `door_opening_not_in_second_wall`, 20 `door_second_wall_spans_other_heights_than_door_wall` and 3 `opening_outside_wall_height`.
+- **Nothing else moves.** 114 of 120 exports are byte for byte the merge base's; the 6 that are not are the BIM4LCA files with new openings. No held-out file moves, and `same-project gates` pass.
 
 ## 6. Not claimed
 
