@@ -447,11 +447,14 @@ fn door_box(door: &IfcEntity, cut: &OpeningCut) -> Option<[f64; 6]> {
 const DOOR_PARALLEL_DEPTH_FEET: f64 = 10.0;
 
 /// How far a second wall's base and top may lie from those of the wall a door
-/// stands in for Revit's export to cut the door's opening in it, feet
-/// (RE-471): on the BIM4LCA models it writes the opening in each second wall
-/// along the door's wall that spans the same heights (23 of 23), and not in
-/// the one that does not (a 4.35 m wall beside a 3.5 m one, 3064459 in
-/// 1619525 on the office as built).
+/// stands in for the door's opening in it to be written, feet (RE-471). Of the
+/// BIM4LCA models' openings that lie within their second wall's height, Revit's
+/// export writes each whose wall spans the door's wall's heights (23 of 23)
+/// and not the one whose wall does not (3064459 in 1619525, office as built).
+/// Of the openings that stand above or below a second wall of other heights,
+/// Revit writes 42 on the BIM4LCA models and 1 on Snowdon Towers Architectural
+/// and leaves out 4 and 3, which nothing read tells apart, so none of those is
+/// written.
 const DOOR_WALL_HEIGHT_TOLERANCE_FEET: f64 = 0.01;
 
 /// The heights a wall's body spans, its base and top, feet.
