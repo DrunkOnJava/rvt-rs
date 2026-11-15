@@ -312,11 +312,6 @@ struct Cut {
     /// there is the thickness of the wall the door stands in and this
     /// outline is not always that to the scorer's tolerance (#1165).
     quantities: bool,
-    /// Whether the opening is written whatever the wall's height: Revit's
-    /// export cuts a door's opening in a second wall along its own as tall as
-    /// the door's own opening, on the 46 of the BIM4LCA models' 82 where the
-    /// second wall stands lower or higher than the door (RE-471).
-    spans_its_door: bool,
 }
 
 fn overlap(a: [f64; 2], b: [f64; 2]) -> f64 {
@@ -343,7 +338,6 @@ fn rect_cut(host: &Host, rectangle: &[f64; 6]) -> Result<Cut, &'static str> {
         recess: false,
         reference_from: host.index,
         quantities: true,
-        spans_its_door: false,
     })
 }
 
@@ -363,7 +357,6 @@ fn cabinet_cut(host: &Host, world: &[f64; 6], cabinet: usize) -> Result<Cut, &'s
         recess,
         reference_from: cabinet,
         quantities: true,
-        spans_its_door: false,
     })
 }
 
@@ -401,7 +394,6 @@ fn curtain_cut(
         recess: false,
         reference_from: curtain,
         quantities: true,
-        spans_its_door: false,
     })
 }
 
@@ -486,8 +478,7 @@ fn door_cut(
     let wall_runs_along_x = host.axis[0].abs() > 0.5;
     let door_wall_runs_along_x = dx >= dy;
     let mut world = *world;
-    let parallel = wall_runs_along_x == door_wall_runs_along_x;
-    if parallel {
+    if wall_runs_along_x == door_wall_runs_along_x {
         let across = usize::from(door_wall_runs_along_x);
         let toward = y_axis[across];
         if toward.abs() < 0.5 {
@@ -513,7 +504,6 @@ fn door_cut(
         recess: false,
         reference_from: door,
         quantities: false,
-        spans_its_door: parallel,
     })
 }
 
@@ -756,7 +746,6 @@ pub(super) fn attach_wall_cut_openings(
                 }
             };
             if step.kind != WallCutKind::RectOpening
-                && !cut.spans_its_door
                 && (cut.up[0] < -HEIGHT_TOLERANCE_FEET
                     || cut.up[1] > host.height + HEIGHT_TOLERANCE_FEET)
             {
