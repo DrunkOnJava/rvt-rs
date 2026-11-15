@@ -34,7 +34,7 @@ Measure run 43667663717 (head `3666499531d7`, the two office files, `beam_tubes_
 
 ## 5. Not measured, not read
 
-- A tube on another release: the rule is gated to Revit 2024, the one release a file with such a type was found for. No Revit 2025 to 2027 model local holds one.
+- A tube on another release: the rule is gated to Revit 2024, the one release a file with such a type was found for. No Revit 2025 to 2027 model measured holds one.
 - A tube of another shape (round, or with a wall that differs on two sides): a beam whose type does not fit the six captions as above keeps its box.
 - A tube beam turned so that its body is not as wide and deep as the tube's outside keeps its box.
 - The structural framing sections #94 still lists (channels, angles, one HSS column, 17 I beams) are not changed here.
