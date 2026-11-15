@@ -5669,7 +5669,7 @@ pub const SPACE_OUTLINE_STORED_SOLID_APPROXIMATE: &str = "stored_solid_approxima
 /// a vertical edge. It reads two rooms of the
 /// models measured: the BIM4LCA office's room 3095831 at building permit,
 /// 1864.737 ft² against the 1864.74 of Revit's IFC4 export, and Snowdon
-/// Towers' room 830902, 304.059 ft², within 0.001 ft² of Revit's
+/// Towers' room 830902, within 0.001 ft² of Revit's area
 /// (`Vim.Room.Area` of the model's 2027 edition, a later save). On every room
 /// of Autodesk's samples, the office and the Revit 2025 models that the walk
 /// or the span reads and this rule accepts, it gives the same outline, to

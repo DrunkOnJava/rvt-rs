@@ -37,7 +37,7 @@
 The counted reference list at +0x88 (RE-23, RE-27) names the Levels that constrain the element. A wall, column or stair names its base and top constraint in no fixed order: the lower Level comes first on 452 of Snowdon's 650 two-Level records and second on the other 198, and first on 194 of Core Interior's 493 and second on 299. RE-27 therefore declined every record naming two.
 
 Revit's IFC export contains such an element in its base constraint. That is the lower Level, except where the element's base sits on the upper one:
-- Snowdon's specialty equipment 2029960 names R3 (68.83 ft) and Parapet 2 (70.83 ft), and its box base is 70.83 ft. Revit contains it in Parapet 2.
+- Snowdon's specialty equipment 2029960 names R3 and Parapet 2, 2.0 ft above it, and its box base is at Parapet 2's height. Revit contains it in Parapet 2.
 - So the rule is: the higher of the two whose elevation is at or below the record's base (within 1e-3 ft), else the lower.
 
 "The lower Level" alone gives 649 of 650 on Snowdon. "At or below the base" alone leaves 78 unresolved, the walls whose base offset puts them below their base Level. Together they give 650 of 650.

@@ -9,7 +9,7 @@
   04 00 08 00 · f64 0 · f64 0 · f64×3 X · f64×3 Y · f64 radius · f64×3 centre
   ```
 
-- Shaft 903725 on Snowdon Towers is round. Its sketch is circle 903763 (radius 1.0417 ft, centre (5.917, 21.792)) and the X of two diagonals Revit draws across it, which end on the circle. The circle is now read, drawn as chords within 0.0005 ft (RE-96). Only straight lines can be the crossing diagonals left out (RE-99), so the circle alone closes the shaft's outline.
+- Shaft 903725 on Snowdon Towers is round. Its sketch is circle 903763 (radius 1.0417 ft) and the X of two diagonals Revit draws across it, which end on the circle. The circle is now read, drawn as chords within 0.0005 ft (RE-96). Only straight lines can be the crossing diagonals left out (RE-99), so the circle alone closes the shaft's outline.
 
 | Snowdon Towers against Revit's IFC4 (top surface, `plan_profiles_vs_ifc.py`) | main | RE-100 |
 |---|---:|---:|

@@ -3,8 +3,8 @@
 //! outline from the floors, roofs and ceilings within that height.
 //!
 //! FACT: on Autodesk's Snowdon Towers 2024 architectural sample, 9 element
-//! records carry category −2000996. Shaft 759388's box runs from −17.92 ft to
-//! 58.83 ft, and its Sketch (RE-97) closes into a 9.17 × 8.25 ft rectangle.
+//! records carry category −2000996. Shaft 759388's box is 76.75 ft tall, and its
+//! Sketch (RE-97) closes into a 9.17 × 8.25 ft rectangle.
 //! That rectangle is missing from Revit's IFC4 outline of every floor within
 //! the height that it overlaps. Most shafts' sketches also hold the two
 //! diagonals of the X Revit draws across a shaft in plan; they cross each

@@ -47,7 +47,7 @@ Room 25967 on `2024_Core_Interior.rvt` ("14 Nested 1") is U-shaped. Its record b
 - Their v directions and extents, in order, are 5.5 ft −x, 12 ft −y, 20 ft −x, 12 ft +y, 6 ft −x, 15.5 ft −y, 31.5 ft +x and 15.5 ft +y.
 - From (82.917, 49.25) that walk closes on itself and encloses 248.25 ft².
 
-A face's origin is its plane's, not a point on the face. On Snowdon room 826593 the walls' origins sit at z 70.8 above a floor at −16.9, and the faces run 1.25 to 87.7 ft down from there.
+A face's origin is its plane's, not a point on the face. On Snowdon room 826593 the walls' origins sit 87.7 ft above the floor, and the faces run 1.25 to 87.7 ft down from there.
 
 ## 2. Which copy
 
@@ -87,7 +87,7 @@ All 11 rooms keep their area and outline, and one more matches Revit's vertices 
 Snowdon's IFC4 export holds no IfcSpace. `vimaec/vim-hackathon`'s `Snowdon.r2027.vim` (MIT repository, Autodesk's model content, local only) does. It is a later edition of the same model, and its `Vim.Room` table gives each room's area. `tools/re/room_areas_vs_vim.py`:
 
 - **Within 0.1%:** 45 of 54 rooms (10 on main).
-- **Two more differ from the VIM by 0.5% and 0.25%** (828534, 829817). Their rvt-rs areas (1484.790 and 2424.686 ft²) are stored verbatim in the 2024 file itself, in the area cache described below, so the difference is the later edition's.
+- **Two more differ from the VIM by 0.5% and 0.25%** (828534, 829817). Their rvt-rs areas are stored verbatim in the 2024 file itself, in the area cache described below, so the difference is the later edition's.
 - **The other seven** are the rooms in §3 that keep their box.
 
 ### A second check inside the file

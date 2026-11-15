@@ -184,8 +184,8 @@ never committed. Every exported element carries its Revit ElementId as
 **Placing the two in one frame.** The export uses shared coordinates.
 World boxes from IfcOpenShell 0.8.5 (`use-world-coords`, converted to
 feet) against the record boxes of the five decodable walls whose ElementId
-is also a `Tag` give a rigid transform: rotation 26.0156°, translation
-(1,370,151.83, 258,247.98) ft, and z + 780.5 ft. The five walls sit at two
+is also a `Tag` give a rigid transform: a rotation about the vertical, a plan translation
+and a vertical shift. The five walls sit at two
 positions, so the fit is exact rather than over-determined. The match rate
 below is what validates it.
 

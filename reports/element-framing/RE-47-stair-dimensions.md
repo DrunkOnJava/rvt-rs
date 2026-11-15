@@ -69,5 +69,5 @@ IFC schema arity and IfcOpenShell 0.8.5 validation pass on the Snowdon export (0
 ## 4. What this does not do
 
 - **`NumberOfTreads` is not written.** For a stair it is risers minus runs on 23 of 26 Snowdon stairs. The other 3 are the three single-run stairs whose run reads one riser more, and they have as many treads as risers. Both point to the same begin- or end-with-riser setting, which is not read.
-- **No stair geometry changes.** Revit's Snowdon flights are thin tread and riser plates (flight 621141 is 0.033 m³, its treads 0.0208 ft thick). Drawing them needs the tread and riser thicknesses from the stair's type, which are not read yet. A solid sawtooth would misstate the volume by orders of magnitude, so runs keep their record boxes.
+- **No stair geometry changes.** Revit's Snowdon flights are thin tread and riser plates (flight 621141's treads are 0.0208 ft thick). Drawing them needs the tread and riser thicknesses from the stair's type, which are not read yet. A solid sawtooth would misstate the volume by orders of magnitude, so runs keep their record boxes.
 - It reads Revit 2024 only. No 2025 file in the corpus has a stair.
