@@ -1503,12 +1503,7 @@ pub(super) fn attach_wall_layers(
         attach_wall_butt_joins(rf, revit_version, walls, &layers, &native);
         attach_native_tee_reaches(walls, &native);
         attach_wall_corner_reaches(walls, &layers, &native);
-        // A 2015 to 2023 record is read without its control joins (RE-364), and
-        // the rule takes a wall with none listed as joined to nothing, so its
-        // `Length` is left out.
-        if !crate::partition_element_records_2023::is_32bit_release(revit_version) {
-            attach_wall_lengths(walls, &native, &located_lines);
-        }
+        attach_wall_lengths(walls, &native, &located_lines);
     }
 }
 
