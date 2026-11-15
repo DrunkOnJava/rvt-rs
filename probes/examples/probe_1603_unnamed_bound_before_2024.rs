@@ -16,17 +16,20 @@
 //! reads:
 //!   wbound <tag> <IFC class> grouped=<0|1> map_unset=<0|1|na> found=<0|1> \
 //!        eff_shown=<n> eff_hidden=<n> unresolved=<n> bound=<n> resolved=<n> \
-//!        voids=<n> nested=<n>
+//!        ambiguous=<n> voids=<n> nested=<n>
 //! where, for the family's forms with no material that are not voids,
 //! `eff_shown` and `eff_hidden` count those a stored `Visible` that is not
 //! bound (or the bound parameter's value on the instance, else on its type, by
 //! the parameter's caption, as `instances_without_body` reads it) shows or
 //! hides, `unresolved` those bound to a parameter whose caption or value was
 //! not read, `bound` those bound at all and `resolved` those of them whose
-//! value was read; `voids` counts the forms with no material that are voids
+//! value was read; `ambiguous` counts the bound forms left unresolved because
+//! their parameter's caption names two family parameters, or two project
+//! parameters with different ids that the instance or its type sets (the value
+//! is never taken from either); `voids` counts the forms with no material that are voids
 //! and `nested` the nested family instances. And one line per model, the
 //! counts the held-out scrub keeps:
-//!   bound visible values: release R unset forms U bound B resolved C unresolved D
+//!   bound visible values: release R unset forms U bound B resolved C unresolved D ambiguous E
 //! summed over the doors and windows whose type map holds a -1.
 //!
 //! Usage:
@@ -100,6 +103,17 @@ struct Facts {
     voids: usize,
     nested: usize,
     captions: BTreeMap<u64, String>,
+}
+
+impl Facts {
+    /// Whether two family parameters share `caption`.
+    fn ambiguous(&self, caption: &str) -> bool {
+        self.captions
+            .values()
+            .filter(|c| c.as_str() == caption)
+            .count()
+            > 1
+    }
 }
 
 /// An element's own parameters: its drawn symbol, whether it is grouped, and
@@ -324,8 +338,8 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    let (mut unset_forms, mut bound_forms, mut resolved_forms, mut unresolved_forms) =
-        (0usize, 0usize, 0usize, 0usize);
+    let (mut unset_forms, mut bound_forms, mut resolved_forms) = (0usize, 0usize, 0usize);
+    let (mut unresolved_forms, mut ambiguous_forms) = (0usize, 0usize);
     for (tag, class) in &elements {
         let instance = drawn.get(tag);
         let symbol = instance.and_then(|i| i.symbol);
@@ -338,7 +352,10 @@ fn main() -> anyhow::Result<()> {
         let family = kind.and_then(|t| t.family);
         let found = family.and_then(|id| facts.get(&id));
         // The instance's value of a parameter, else its type's, by caption.
-        let mut by_caption: BTreeMap<&str, i64> = BTreeMap::new();
+        // Two project parameters with the same caption are ambiguous: neither
+        // value is taken.
+        let mut by_caption: BTreeMap<&str, (u64, i64)> = BTreeMap::new();
+        let mut shared: BTreeSet<&str> = BTreeSet::new();
         for (parameter, value) in kind
             .map(|t| t.params.as_slice())
             .unwrap_or_default()
@@ -346,21 +363,32 @@ fn main() -> anyhow::Result<()> {
             .chain(instance.map(|i| i.params.as_slice()).unwrap_or_default())
         {
             if let Some(caption) = project_captions.get(parameter) {
-                by_caption.insert(caption.as_str(), *value);
+                match by_caption.insert(caption.as_str(), (*parameter, *value)) {
+                    Some((other, _)) if other != *parameter => {
+                        shared.insert(caption.as_str());
+                    }
+                    _ => {}
+                }
             }
         }
-        let (mut shown, mut hidden, mut unresolved, mut bound, mut resolved) =
-            (0usize, 0usize, 0usize, 0usize, 0usize);
+        let (mut shown, mut hidden, mut unresolved, mut bound, mut resolved, mut ambiguous) =
+            (0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
         if let Some(here) = found {
             for form in &here.unset {
                 let effective = match form.bound {
                     None => Some(form.stored_shown),
                     Some(parameter) => {
                         bound += 1;
-                        parameter
-                            .and_then(|id| here.captions.get(&id))
-                            .and_then(|caption| by_caption.get(caption.as_str()))
-                            .map(|value| *value != 0)
+                        let caption = parameter.and_then(|id| here.captions.get(&id));
+                        if caption.is_some_and(|c| here.ambiguous(c) || shared.contains(c.as_str()))
+                        {
+                            ambiguous += 1;
+                            None
+                        } else {
+                            caption
+                                .and_then(|caption| by_caption.get(caption.as_str()))
+                                .map(|(_, value)| *value != 0)
+                        }
                     }
                 };
                 match effective {
@@ -378,9 +406,10 @@ fn main() -> anyhow::Result<()> {
             bound_forms += bound;
             resolved_forms += resolved;
             unresolved_forms += unresolved;
+            ambiguous_forms += ambiguous;
         }
         println!(
-            "wbound {tag} {class} grouped={} map_unset={map_unset} found={} eff_shown={shown} eff_hidden={hidden} unresolved={unresolved} bound={bound} resolved={resolved} voids={} nested={}",
+            "wbound {tag} {class} grouped={} map_unset={map_unset} found={} eff_shown={shown} eff_hidden={hidden} unresolved={unresolved} bound={bound} resolved={resolved} ambiguous={ambiguous} voids={} nested={}",
             u8::from(instance.is_some_and(|i| i.grouped)),
             u8::from(found.is_some()),
             found.map_or(0, |here| here.voids),
@@ -388,7 +417,7 @@ fn main() -> anyhow::Result<()> {
         );
     }
     println!(
-        "bound visible values: release {version} unset forms {unset_forms} bound {bound_forms} resolved {resolved_forms} unresolved {unresolved_forms}"
+        "bound visible values: release {version} unset forms {unset_forms} bound {bound_forms} resolved {resolved_forms} unresolved {unresolved_forms} ambiguous {ambiguous_forms}"
     );
     eprintln!(
         "{} doors and windows, {} symbol maps read, {} families with a document, {} parameter captions",

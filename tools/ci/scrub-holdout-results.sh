@@ -242,7 +242,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # doors and windows whose map holds a -1, how many have a Visible bound to a
       # family parameter and how many of those the parameter's value resolves, as
       # counts beside fixed words.
-      grep -E '^bound visible values: release [0-9]+ unset forms [0-9]+ bound [0-9]+ resolved [0-9]+ unresolved [0-9]+$' "$f" || true
+      grep -E '^bound visible values: release [0-9]+ unset forms [0-9]+ bound [0-9]+ resolved [0-9]+ unresolved [0-9]+ ambiguous [0-9]+$' "$f" || true
       # probe_1603_family_forms_pre2024 (#1603, RE-479): per release, how many
       # families of doors and windows have a document and how many forms of each
       # class (a schema class name) hold a material or a stored Visible, as

@@ -60,7 +60,7 @@ from window_door_type_maps_vs_ifc import UNNAMED
 LINE = re.compile(
     r"^wbound (\d+) (IFC[A-Z]+) grouped=([01]) map_unset=(0|1|na) found=([01]) "
     r"eff_shown=(\d+) eff_hidden=(\d+) unresolved=(\d+) bound=(\d+) resolved=(\d+) "
-    r"voids=(\d+) nested=(\d+)$"
+    r"ambiguous=(\d+) voids=(\d+) nested=(\d+)$"
 )
 CATEGORIES = [
     "unset form effectively shown",
@@ -119,7 +119,7 @@ def main():
         match = LINE.match(line.strip())
         if not match:
             continue
-        tag, ifc_class, grouped, map_unset, found, shown, hidden, unresolved, bound, resolved, voids, nested = match.groups()
+        tag, ifc_class, grouped, map_unset, found, shown, hidden, unresolved, bound, resolved, ambiguous, voids, nested = match.groups()
         if map_unset != "1" or tag not in revit:
             continue
         entity, theirs = revit[tag]
@@ -131,7 +131,7 @@ def main():
             print(
                 f"differs {tag} {entity} {kind.replace(' ', '_').replace(',', '')} {written.replace(' ', '_')} "
                 f"eff_shown={shown} eff_hidden={hidden} unresolved={unresolved} bound={bound} "
-                f"resolved={resolved} voids={voids} nested={nested}"
+                f"resolved={resolved} ambiguous={ambiguous} voids={voids} nested={nested}"
             )
         for key in ((entity, False), (entity, True)) if grouped == "1" else ((entity, False),):
             mapped[key] += 1
