@@ -32,6 +32,7 @@ import sys
 import ifcopenshell
 
 LINE = re.compile(r"^unjoined instance: (\d+) category (-?\d+) candidates(.*)$")
+LIST = re.compile(r"^unjoined list: (\d+) category (-?\d+) ids(.*)$")
 SHOWN = 12
 
 
@@ -46,8 +47,16 @@ def main() -> int:
         print(__doc__)
         return 2
     instances = {}
+    lists = {}
     with open(args[0], errors="replace") as probe:
         for line in probe:
+            held = LIST.match(line.rstrip("\n"))
+            if held:
+                tag, _, rest = held.groups()
+                lists[tag] = dict(
+                    part.split(":", 1) for part in rest.split() if ":" in part
+                )
+                continue
             found = LINE.match(line.rstrip("\n"))
             if found:
                 tag, category, rest = found.groups()
@@ -81,12 +90,25 @@ def main() -> int:
             continue
         counts["typed by Revit"] += 1
         counts[f"candidates {min(len(candidates), 3)}"] += 1
+        # Where Revit's own type id sits in the element's reference list, and
+        # what the scan knows of that id: `n` a name entry, `r<category>/<kind>`
+        # a record.
+        type_tag = str(getattr(kind, "Tag", None))
+        listed = lists.get(tag)
+        if listed is not None:
+            flags = listed.get(type_tag)
+            counts[
+                "the type's Tag is not in the list"
+                if flags is None
+                else f"the type's Tag is in the list, flags {flags}"
+            ] += 1
         if len(candidates) != 1:
             continue
         counts["exactly one candidate"] += 1
         candidate_id, candidate_name = candidates[0]
         full = kind.Name or ""
-        family, _, kind_name = full.partition(":")
+        # Revit's IFC2X3 type Name may be the type's alone, with no family.
+        family, _, kind_name = full.partition(":") if ":" in full else ("", "", full)
         is_tag = str(getattr(kind, "Tag", None)) == candidate_id
         counts["the candidate is the type's Tag"] += is_tag
         name = norm(candidate_name)

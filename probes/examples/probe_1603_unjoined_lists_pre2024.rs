@@ -50,6 +50,8 @@ struct Held {
     category: i64,
     has_symbol: bool,
     free: BTreeSet<u32>,
+    /// Every id the list names but the instance's own, in list order.
+    list: Vec<u32>,
 }
 
 /// `0 a 1 b 2 c 3 or more d` for a list of counts.
@@ -75,6 +77,13 @@ fn main() -> anyhow::Result<()> {
         &rvt::elem_table::declared_ids(&table),
     );
     let recorded: BTreeSet<u32> = records.iter().map(|record| record.element_id).collect();
+    // The first record each id carries: its category and placement kind.
+    let mut by_id: BTreeMap<u32, (i64, u32)> = BTreeMap::new();
+    for record in &records {
+        by_id
+            .entry(record.element_id)
+            .or_insert((record.builtin_category, record.placement_kind));
+    }
 
     // Who holds each named id that has no record: the categories of every
     // scanned record whose list names it.
@@ -132,6 +141,12 @@ fn main() -> anyhow::Result<()> {
             category: record.builtin_category,
             has_symbol,
             free: free_in(record),
+            list: record
+                .references
+                .iter()
+                .filter_map(|&reference| u32::try_from(reference).ok())
+                .filter(|id| *id != record.element_id)
+                .collect(),
         };
         match per_instance.get(&record.element_id) {
             Some(kept) if kept.has_symbol && !held.has_symbol => {}
@@ -253,6 +268,27 @@ fn main() -> anyhow::Result<()> {
                 "unjoined instance: {} category {category} candidates {}",
                 held.id,
                 listed.join(" ")
+            );
+            // The whole list, each id with what the scan knows of it: `n` for a
+            // name entry, `r<category>/<placement kind>` for the first record
+            // it carries, so that Revit's own type id can be found among them.
+            let whole: Vec<String> = held
+                .list
+                .iter()
+                .map(|id| {
+                    let record = by_id.get(id).map_or_else(String::new, |(category, kind)| {
+                        format!("r{category}/{kind:x}")
+                    });
+                    format!(
+                        "{id}:{}{record}",
+                        if names.contains_key(id) { "n" } else { "-" }
+                    )
+                })
+                .collect();
+            println!(
+                "unjoined list: {} category {category} ids {}",
+                held.id,
+                whole.join(" ")
             );
         }
         println!(
