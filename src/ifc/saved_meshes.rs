@@ -1543,7 +1543,8 @@ struct WallOpenings {
 /// with the axis across the wall cut to the wall's thickness, placed on that
 /// element's own placement and extruded up its height, as the writer emits it
 /// (#227, RE-84), and the rectangle of every opening rvt-rs cuts through the wall
-/// with nothing filling it (`WallCutOpening`). A wall whose element is not read,
+/// with nothing filling it (`WallCutOpening`) or that the wall's edited
+/// elevation profile cuts (`WallProfileOpening`). A wall whose element is not read,
 /// and an opening whose turn is not one of its wall's, is left out, so the wall
 /// gets no areas of the mesh for them.
 fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
@@ -1628,23 +1629,39 @@ fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
         }
     }
     // The openings rvt-rs cuts in a wall with nothing filling them (#1165,
-    // RE-321): a rectangle in the wall's vertical plane, along an axis turned
-    // with the wall's, extruded through it. A recess does not pass through, so
-    // its back face is no jamb, and an outline that is not a rectangle makes
-    // faces no box explains: both are left out.
+    // RE-321), and those its edited elevation profile cuts (RE-358, RE-380):
+    // a rectangle in the wall's vertical plane, along an axis turned with the
+    // wall's, extruded through it. A recess does not pass through, so its back
+    // face is no jamb, and an outline that is not a rectangle makes faces no
+    // box explains: both are left out.
     for entity in &model.entities {
-        let IfcEntity::WallCutOpening {
-            host,
-            outline_feet,
-            axis_turn_radians,
-            plane_offset_feet,
-            thickness_feet,
-            recess: false,
-            ..
-        } = entity
-        else {
-            continue;
-        };
+        let (host, outline_feet, axis_turn_radians, plane_offset_feet, thickness_feet) =
+            match entity {
+                IfcEntity::WallCutOpening {
+                    host,
+                    outline_feet,
+                    axis_turn_radians,
+                    plane_offset_feet,
+                    thickness_feet,
+                    recess: false,
+                    ..
+                }
+                | IfcEntity::WallProfileOpening {
+                    host,
+                    outline_feet,
+                    axis_turn_radians,
+                    plane_offset_feet,
+                    thickness_feet,
+                    ..
+                } => (
+                    host,
+                    outline_feet,
+                    axis_turn_radians,
+                    plane_offset_feet,
+                    thickness_feet,
+                ),
+                _ => continue,
+            };
         let Some(IfcEntity::BuildingElement {
             location_feet: Some(location),
             rotation_radians,
