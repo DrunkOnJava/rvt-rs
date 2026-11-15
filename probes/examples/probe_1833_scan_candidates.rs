@@ -13,7 +13,7 @@
 //! Output (one model per run, counts and byte lengths only):
 //!
 //! ```text
-//! file revit=<release> scan=<supported|unsupported> streams=<n> inflated_bytes=<n> candidates=<n> largest_stream=<n> fill_max=<percent>
+//! file revit=<release> scan=<supported|unsupported> streams=<n> inflated_bytes=<n> candidates=<n> largest_stream=<n> fill_max=<percent> truncated=<0|1>
 //! stream <name> inflated_bytes=<n> candidates=<n> bytes_per_candidate=<x|->
 //! candidate_inline_bytes=<n>
 //! ```
@@ -70,7 +70,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     println!(
-        "file revit={release} scan={} streams={} inflated_bytes={inflated_total} candidates={} largest_stream={largest} fill_max={fill_max:.3}",
+        "file revit={release} scan={} streams={} inflated_bytes={inflated_total} candidates={} largest_stream={largest} fill_max={fill_max:.3} truncated={}",
         if scan.status.is_supported() {
             "supported"
         } else {
@@ -78,6 +78,7 @@ fn main() -> anyhow::Result<()> {
         },
         names.len(),
         scan.candidates.len(),
+        u8::from(scan.truncated),
     );
     for line in lines {
         println!("{line}");
