@@ -29,13 +29,13 @@ starts a bounded line:
 | offset | type | beam 627866 (W18x55) |
 |---:|---|---|
 | +0 | tag | `04 00 08 01` |
-| +4 | f64, feet | start parameter 0.405647 |
-| +12 | f64, feet | end parameter 23.015746 |
-| +20 | f64 × 3, model feet | origin (61.767124, 41.951037, 18.333333) |
+| +4 | f64, feet | start parameter |
+| +12 | f64, feet | end parameter |
+| +20 | f64 × 3, model feet | origin |
 | +44 | f64 × 3 | unit direction (0.130526, −0.991445, 0) |
 
-- The line's ends are `origin + parameter · direction`. For 627866 they lie at the top of the steel (z 18.333, the record box's top), 22.610 ft apart.
-- The data holds a second line with the same parameters, origin and direction at the section's mid-depth (z 17.579).
+- The line's ends are `origin + parameter · direction`. For 627866 they lie at the top of the steel (the record box's top), 22.610 ft apart.
+- The data holds a second line with the same parameters, origin and direction at the section's mid-depth, 0.754 ft lower.
 - The line sits between 0x4a1 and 0x1000 bytes into the data on 899 of the 942 beams. The longer data of some concrete beams puts it up to 0x64a8 bytes in, so it is found, not assumed.
 - The same record is in the data of walls, model lines and sketch lines. Only structural framing is read.
 

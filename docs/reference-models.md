@@ -252,7 +252,8 @@ differences between rvt-rs and "Revit's export" are settings, not decoding:
   (for example `IfcFlowTerminal` in IFC2X3 for what IFC4 types more finely).
 - **Coordinates.** Every export here uses shared coordinates. rvt-rs writes
   Revit's internal coordinates, so compare after the export's own transform
-  (Snowdon: rotate 26.0156°, translate (1370151.83, 258247.98) ft, z + 780.5 ft).
+  (Snowdon's is a rotation and a translation, the site placement its export
+  states).
 - **What is exported.** Revit's exporter leaves out non-primary design
   options, elements not in the exported phase, 2D-only families and some
   types (#309, #328); rvt-rs follows it where the bytes say which. A room is left out by its own phase, which Revit does by a room's own phase parameter (RE-326); no model here has a room outside the last phase with a Revit export made with the default setup.

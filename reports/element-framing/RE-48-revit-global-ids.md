@@ -82,7 +82,7 @@ Rooms are exported as element records, so they take the same rule. Neither entit
 
 Revit's storey GlobalIds follow the rule with the Level's ElementId on all 15 Core storeys and all 18 Snowdon storeys. rvt-rs gives a storey its Level's GlobalId when the storey's name is exactly one recovered Level's.
 
-On Snowdon, the Level names are not recovered, and the storeys are named by elevation ("Elevation -16.917 ft"), so they keep generated GlobalIds. That is a gap in Level recovery, not in this rule.
+On Snowdon, the Level names are not recovered, and the storeys are named by elevation ("Elevation" and the Level's height in feet), so they keep generated GlobalIds. That is a gap in Level recovery, not in this rule.
 
 ## 3. What this does not do
 

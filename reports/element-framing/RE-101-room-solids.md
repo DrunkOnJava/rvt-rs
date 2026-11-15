@@ -47,7 +47,7 @@ Room 25967 on `2024_Core_Interior.rvt` ("14 Nested 1") is U-shaped. Its record b
 - Their v directions and extents, in order, are 5.5 ft −x, 12 ft −y, 20 ft −x, 12 ft +y, 6 ft −x, 15.5 ft −y, 31.5 ft +x and 15.5 ft +y.
 - From (82.917, 49.25) that walk closes on itself and encloses 248.25 ft².
 
-A face's origin is its plane's, not a point on the face. On Snowdon room 826593 the walls' origins sit at z 70.8 above a floor at −16.9, and the faces run 1.25 to 87.7 ft down from there.
+A face's origin is its plane's, not a point on the face. On Snowdon room 826593 the walls' origins sit 87.7 ft above the floor, and the faces run 1.25 to 87.7 ft down from there.
 
 ## 2. Which copy
 

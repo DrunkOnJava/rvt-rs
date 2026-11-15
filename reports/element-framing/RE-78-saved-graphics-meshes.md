@@ -12,7 +12,7 @@
 
 ## Measured
 
-`tools/re/saved_meshes_vs_ifc.py` compares each replaced element's world box with the box of the same Tag in Revit's own IFC export (IfcOpenShell 0.8.5, `IfcOpeningElement` skipped on both sides). Snowdon's export is in shared coordinates: internal feet are rotated 26.0156° and translated (1370151.83, 258247.98, 780.5) ft, and the published transform's rounding leaves one file-wide residual of (0.0347, 0.0038, 0) ft, which is removed. The column "box" scores the record boxes these bodies replace, on the same elements, with the same offset.
+`tools/re/saved_meshes_vs_ifc.py` compares each replaced element's world box with the box of the same Tag in Revit's own IFC export (IfcOpenShell 0.8.5, `IfcOpeningElement` skipped on both sides). Snowdon's export is in shared coordinates: internal feet are rotated and translated by the site placement the export states, and the published transform's rounding leaves one file-wide residual of (0.0347, 0.0038, 0) ft, which is removed. The column "box" scores the record boxes these bodies replace, on the same elements, with the same offset.
 
 | file | category | n | within 0.01 ft, saved mesh | within 0.01 ft, box |
 |---|---|---:|---:|---:|
