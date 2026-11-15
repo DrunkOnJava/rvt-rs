@@ -217,6 +217,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # kind's flag word, never an ElementId or a name.
       grep -E '^type join pre2024: release [0-9]+ category -?[0-9]+ instances [0-9]+ symbol types [0-9]+ named types [0-9]+ no candidate [0-9]+ of which unnamed symbol [0-9]+ of which other category symbol [0-9]+ several [0-9]+ no family [0-9]+ joined [0-9]+$' "$f" || true
       grep -E '^type join pre2024: release [0-9]+ category -?[0-9]+ unjoined instances [0-9]+ refer to (a record of kind 0x[0-9a-f]+|a named id with no record) in [0-9]+$' "$f" || true
+      # probe_1603_unjoined_lists_pre2024 (#1603): per category, how many
+      # instances with and without a symbol record hold how many ids that no
+      # scanned record carries and only this category's records hold, as
+      # numbers beside fixed words and a category's Revit id.
+      grep -E '^unjoined lists pre2024: release [0-9]+ category -?[0-9]+ (instances [0-9]+ with a symbol record [0-9]+ without [0-9]+|(unjoined|joined) instances hold (named ids with no record|ids only this category holds): 0 [0-9]+ 1 [0-9]+ 2 [0-9]+ 3 or more [0-9]+|ids only this category holds, held by unjoined instances [0-9]+ held by 1 instance [0-9]+ by 2 to 9 [0-9]+ by 10 or more [0-9]+ most held by one id [0-9]+|unjoined instances hold an id an instance with a symbol record holds [0-9]+ hold the family of a symbol record [0-9]+|unjoined instances hold one id only this category holds [0-9]+ of them held by 2 or more instances [0-9]+)$' "$f" || true
       grep -E '^exit [0-9]+$' "$f" | sed 's/^/probe: /' || true
       grep -E '^void rule: [A-Za-z0-9 ,]+$' "$f" || true
     done
