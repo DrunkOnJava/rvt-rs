@@ -12,7 +12,7 @@ RE-478 found that the drawn symbol's map is Revit's material set on 414 of the 8
 
 ## 2. What the probe and the scorer count
 
-For each door and window the export writes, the probe prints the drawn symbol's map (as RE-478) and the set after the rules, as `refine_type_materials` applies them: the map's materials minus the materials only hidden forms of the family hold (`FamilyForms::hidden_only`), and `<Unnamed>` where the map has geometry mapped to no material and the family shows it (`shows_unset` not false; true where a form that is neither a void nor hidden has no material; false where every such form is hidden or void; unknown where the family nests an instance or a form did not decode). The scorer classes both against Revit's set in RE-478's kinds and counts the moves between them. Counts only for held-out projects (`tools/ci/scrub-holdout-results.sh` keeps the scorer's lines).
+For each door and window the export writes, the probe prints the drawn symbol's map (as RE-478) and the set after the rules, as `refine_type_materials` applies them: the map's materials minus the materials only hidden forms of the family hold (`FamilyForms::hidden_only`), and `<Unnamed>` where the map has geometry mapped to no material and the family shows it (`shows_unset` not false; true where a form that is neither a void nor hidden has no material; false where no such form is shown (the family has no form with no material, or each has a stored `Visible` of 0; a void's is not counted); unknown where the family nests an instance or a form did not decode). The scorer classes both against Revit's set in RE-478's kinds and counts the moves between them. Counts only for held-out projects (`tools/ci/scrub-holdout-results.sh` keeps the scorer's lines).
 
 ## 3. Measured
 
