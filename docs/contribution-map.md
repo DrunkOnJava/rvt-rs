@@ -128,7 +128,7 @@ earlier year as a supported release.
 | [#1980](https://github.com/DrunkOnJava/rvt-rs/issues/1980) | A framing element's top Level on Revit 2015 to 2023 rests on eight beams of one file (RE-119, RE-461) |
 | [#1695](https://github.com/DrunkOnJava/rvt-rs/issues/1695) | Revit 2022 and earlier: the export parameters are not read, so a furniture element carries no PredefinedType where Revit's export writes NOTDEFINED |
 | [#1603](https://github.com/DrunkOnJava/rvt-rs/issues/1603) | Revit 2015 to 2023: family instances' materials: 70 windows and 14 railings lack Revit's, the default material is written on 72 elements Revit gives none (Vitoria) |
-| [#1584](https://github.com/DrunkOnJava/rvt-rs/issues/1584) | Revit 2015 to 2023 walls: a record's control joins read empty, so Length, side areas, footprint, volumes and angled walls' line bodies stay out (RE-364 section 6, from #1535) |
+| [#1584](https://github.com/DrunkOnJava/rvt-rs/issues/1584) | Revit 2015 to 2023 walls: the control joins are read since RE-364 section 11 and a Revit 2023 curtain wall gets its Length; an ordinary wall's Length, the side areas, footprint, volumes and angled walls' line bodies stay out |
 | [#1335](https://github.com/DrunkOnJava/rvt-rs/issues/1335) | Revit 2015–2023 exports: the remaining time against 0.11.0 after #1237 |
 | [#1158](https://github.com/DrunkOnJava/rvt-rs/issues/1158) | Native records on Revit 2015 to 2022: types, materials, stairs, cut loops, mullion hosts, connectors, family forms and saved meshes are read only from 2023 |
 | [#879](https://github.com/DrunkOnJava/rvt-rs/issues/879) | Revit 2015 BIMcollab example: 3 air terminals Revit's export leaves out, and 16 footings on no storey |
