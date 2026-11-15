@@ -11,6 +11,12 @@
 //! shows which stage it fails: no symbol of its category in the list, a symbol
 //! with no name entry, several symbols, or a type whose family is not found.
 //!
+//! For the instances that stop with no candidate it also counts, per placement
+//! kind, how many name a record of their own category that is not a symbol
+//! (the kind is a flag word of the format, never an id), and how many name an id
+//! with a name entry but no record, which would be a type whose record the scan
+//! does not find.
+//!
 //! The counts are the stages of the join alone, with no frame selection, so a
 //! category's `instances` can exceed the decode's by the frames it drops;
 //! `probe_1603_type_maps_pre2024` prints the decode's own totals beside them.
@@ -99,7 +105,7 @@ fn main() -> anyhow::Result<()> {
     // One result per instance id: joined if any of its frames joined, else the
     // last frame's stage, as `type_and_family_names_2023` keeps the entries it
     // inserts.
-    let mut per_instance: BTreeMap<u32, (i64, Stage)> = BTreeMap::new();
+    let mut per_instance = BTreeMap::new();
     for record in records
         .iter()
         .filter(|record| record.is_exported_instance())
@@ -132,11 +138,13 @@ fn main() -> anyhow::Result<()> {
             [type_id] if family_found(*type_id) && names.contains_key(type_id) => Stage::Joined,
             [_] => Stage::NoFamily,
         };
-        let entry = per_instance
-            .entry(record.element_id)
-            .or_insert((record.builtin_category, stage));
+        let entry = per_instance.entry(record.element_id).or_insert((
+            record.builtin_category,
+            stage,
+            record,
+        ));
         if entry.1 != Stage::Joined {
-            *entry = (record.builtin_category, stage);
+            *entry = (record.builtin_category, stage, record);
         }
     }
 
@@ -146,7 +154,7 @@ fn main() -> anyhow::Result<()> {
         counts.symbols = set.len();
         counts.named_symbols = set.iter().filter(|id| names.contains_key(id)).count();
     }
-    for (category, stage) in per_instance.values() {
+    for (category, stage, _) in per_instance.values() {
         let counts = by_category.entry(*category).or_default();
         counts.instances += 1;
         match stage {
@@ -180,6 +188,60 @@ fn main() -> anyhow::Result<()> {
             counts.several,
             counts.no_family,
             counts.joined,
+        );
+    }
+
+    // What the lists of the instances that stop with no candidate do name: a
+    // record of the category that is not a symbol (by its placement kind), or
+    // a named id that has no record of its own.
+    let mut by_id: BTreeMap<u32, Vec<(i64, u32)>> = BTreeMap::new();
+    for record in &records {
+        by_id
+            .entry(record.element_id)
+            .or_default()
+            .push((record.builtin_category, record.placement_kind));
+    }
+    let mut kinds: BTreeMap<(i64, u32), usize> = BTreeMap::new();
+    let mut named_without_record: BTreeMap<i64, usize> = BTreeMap::new();
+    for (own_id, (category, stage, record)) in &per_instance {
+        if !matches!(stage, Stage::NoCandidate { .. }) {
+            continue;
+        }
+        let mut seen = BTreeSet::new();
+        let mut free = false;
+        for id in record
+            .references
+            .iter()
+            .filter_map(|&reference| u32::try_from(reference).ok())
+            .filter(|id| id != own_id)
+        {
+            match by_id.get(&id) {
+                Some(found) => seen.extend(
+                    found
+                        .iter()
+                        .filter(|(found_category, _)| found_category == category)
+                        .map(|(_, kind)| *kind),
+                ),
+                None => free |= names.contains_key(&id),
+            }
+        }
+        for kind in seen {
+            *kinds.entry((*category, kind)).or_default() += 1;
+        }
+        *named_without_record.entry(*category).or_default() += usize::from(free);
+    }
+    for ((category, kind), count) in &kinds {
+        let total = by_category[category].no_candidate;
+        println!(
+            "{TAG} release {version} category {category} unjoined instances {total} \
+             refer to a record of kind {kind:#x} in {count}"
+        );
+    }
+    for (category, count) in &named_without_record {
+        let total = by_category[category].no_candidate;
+        println!(
+            "{TAG} release {version} category {category} unjoined instances {total} \
+             refer to a named id with no record in {count}"
         );
     }
     Ok(())
