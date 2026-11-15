@@ -872,7 +872,8 @@ pub struct ExportedModelDiagnostics {
     /// gives, why, by reason: the `BodyEndRefusal` property of each (#1396,
     /// RE-337; #1410, RE-348), such as `joined_wall_not_read`,
     /// `joined_wall_face_inside_the_wall`, `base_cut_lost_on_extended_plan`,
-    /// `base_not_cut_over_the_extended_plan` or `wall_stands_in_the_added_end`.
+    /// `base_not_cut_over_the_extended_plan`, `wall_stands_in_the_added_end` or
+    /// `unread_wall_stands_in_the_added_end`.
     #[serde(default)]
     pub wall_end_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls, how many have an end drawn to the walls their
