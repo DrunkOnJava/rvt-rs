@@ -1,0 +1,13 @@
+- **A door or window of a Revit 2015 to 2023 file that the reference-list join
+  leaves untyped is typed from its own native record (#1603, RE-477).** The scan
+  names a type only through a symbol record with a name entry. On the spent
+  Revit 2018 project 68 of the 70 windows name only their master symbol there,
+  and Revit's own type is an id the scan knows nothing of. The instance's native
+  record names it (`InstanceInfo.m_symbolId`), its master symbol the type's name
+  and the family. A member of a model group takes its master symbol as the type,
+  as Revit does. On the spent project the 70 windows and 68 doors now have
+  Revit's Name, `ObjectType` and type object (0 of 70 windows before), with the
+  type's `Pset_WindowCommon.Reference` and `Pset_DoorCommon.Reference`; on a
+  held-out Revit 2020 project the 4 windows and 9 doors that differed are
+  equal. Their type objects' GlobalIds are not Revit's, and they take no
+  material from the type map yet.
