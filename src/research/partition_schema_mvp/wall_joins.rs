@@ -316,6 +316,24 @@ fn wall_lines(
             let [Some(ex), Some(ey)] = WALL_EXTERIOR_FIELDS.map(|name| float(wall, name)) else {
                 return None;
             };
+            let near = |a: [f64; 2], b: [f64; 2]| {
+                (a[0] - b[0]).hypot(a[1] - b[1]) <= NATIVE_WALL_LINE_TOLERANCE_FEET
+            };
+            // The record's join steps are indexed by its curve's ends.
+            let omitted = native
+                .get(&u64::from(wall.id?))
+                .filter(|curve| !curve.roof_joined)
+                .and_then(|curve| {
+                    let [start, end] = curve.omitted.map(|target| target.is_some());
+                    if near(curve.start, axis.start) && near(curve.end, axis.end) {
+                        Some([start, end])
+                    } else if near(curve.start, axis.end) && near(curve.end, axis.start) {
+                        Some([end, start])
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or([false, false]);
             Some(joins::WallLine {
                 element_id: wall.id?,
                 start: axis.start,
@@ -328,6 +346,7 @@ fn wall_lines(
                 shells: native
                     .get(&u64::from(wall.id?))
                     .and_then(|native| native.shells),
+                omitted,
             })
         })
         .collect()
