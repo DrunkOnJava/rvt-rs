@@ -130,6 +130,12 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # tools/re/window_door_type_maps_vs_ifc.py (#1603, RE-478): per IFC class
+      # of door and window, how many Revit gives materials and how many a
+      # symbol's map names exactly, as numbers beside fixed words and an IFC
+      # entity name, never a Tag or a material name.
+      grep -E '^window door type maps: class Ifc[A-Za-z0-9]+( grouped)? elements [0-9]+ revit materials [0-9]+ drawn read [0-9]+ drawn equal [0-9]+ master read [0-9]+ master equal [0-9]+ either equal [0-9]+ both equal [0-9]+$' "$f" || true
+      grep -E '^window door type maps: class Ifc[A-Za-z0-9]+( grouped)? drawn symbol: equal [0-9]+, equal with the unset material spelled apart [0-9]+, unset material only [0-9]+, Revit more found in the drawn symbol'"'"'s record [0-9]+, Revit more found in the master symbol'"'"'s record [0-9]+, Revit more found in the family'"'"'s record [0-9]+, Revit more found in the instance'"'"'s record [0-9]+, Revit more not found [0-9]+, drawn more [0-9]+, apart [0-9]+; Revit spells the unset material apart on [0-9]+$' "$f" || true
       # tools/re/beam_lines_vs_ifc.py (#1697): counts beside fixed words and the
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
@@ -211,6 +217,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # wording, never an id or a name. The `type map:` lines name ElementIds
       # and are not kept.
       grep -E '^type maps pre2024: (release [0-9]+ native read failed|release [0-9]+ types [0-9]+ records [0-9]+ read [0-9]+ entries in the 2024 shape [0-9]+ in the 2015 to 2023 shape [0-9]+|class [A-Za-z0-9_]+ types [0-9]+ read [0-9]+ named by the map [0-9]+ named by the scan [0-9]+ only by the map [0-9]+ only by the scan [0-9]+ unset only [0-9]+|instances class [A-Za-z0-9_]+ total [0-9]+ naming a type [0-9]+)$' "$f" || true
+      # probe_1603_family_forms_pre2024 (#1603, RE-479): per release, how many
+      # families of doors and windows have a document and how many forms of each
+      # class (a schema class name) hold a material or a stored Visible, as
+      # numbers beside fixed words, never an id or a name.
+      grep -E '^family forms pre2024: (release [0-9]+ read failed|release [0-9]+ families [0-9]+ with a document [0-9]+ forms [0-9]+ nested instances [0-9]+|class [A-Za-z0-9_]+ forms [0-9]+ material in the 2015 to 2023 shape [0-9]+ in the 2024 shape [0-9]+ unset [0-9]+ none [0-9]+ cutting [0-9]+ visible stored [0-9]+ visible bound [0-9]+)$' "$f" || true
       # probe_1603_instance_types_pre2024 (#1603): per category of family
       # instance, how many instances stop at each stage of the type join, as
       # numbers beside fixed words, a category's Revit id and a placement
