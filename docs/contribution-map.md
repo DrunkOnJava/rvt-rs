@@ -39,7 +39,7 @@ milestone is for.
 | [#1839](https://github.com/DrunkOnJava/rvt-rs/issues/1839) | Beams run to the ends of their location line, where Revit's export cuts them back at the columns they frame into (#1829) |
 | [#1829](https://github.com/DrunkOnJava/rvt-rs/issues/1829) | Report: Revit 2027 structural model (CHL), compared element by element with Revit's IFC4 export and run through a clash engine |
 | [#1824](https://github.com/DrunkOnJava/rvt-rs/issues/1824) | Revit 2015 to 2023 exports read every wall record twice for its top join, and GStyleElem twice for category materials |
-| [#1814](https://github.com/DrunkOnJava/rvt-rs/issues/1814) | Concrete housing at permit: wall ends 1.28 to 1.38 ft short where the box's join trim meets a partner whose join decides no reach |
+| [#1814](https://github.com/DrunkOnJava/rvt-rs/issues/1814) | Concrete housing at permit: wall ends 1.28 to 1.38 ft short where the box's join trim meets a partner whose join decides no reach; an end whose join step names an omitted target stops flat at the partner's near face (RE-488), and the issue's own six ends stay open |
 | [#1808](https://github.com/DrunkOnJava/rvt-rs/issues/1808) | saved_meshes::attach on 0.14: owner graphs are the peak holder (request for a 0.14-compatible fix) |
 | [#1798](https://github.com/DrunkOnJava/rvt-rs/issues/1798) | Mullion NetSurfaceArea: 120 mullions of the concrete office and 127 of the timber office, as built, are still without a value after RE-441 |
 | [#1712](https://github.com/DrunkOnJava/rvt-rs/issues/1712) | volume_readings: a round bar cut at a slant has elliptical end faces, which the shell reading leaves as another reason |
