@@ -41,12 +41,12 @@ only identifiers that exist in `src/`.
 
 | Project the rules rest on | Rules |
 |---|---:|
-| BIM4LCA office | 47 |
+| BIM4LCA office | 49 |
 | Snowdon Towers (local only) | 38 |
 | RE1 (IFC-ECS) | 12 |
 | Core Interior | 6 |
 | Autodesk rac_advanced sample | 5 |
-| BIM-Speed Vitoria (held out) | 5 |
+| BIM-Speed Vitoria (held out) | 4 |
 | puzzbobb's Revit 2025 models | 5 |
 | 255ribeiro modelo_bim | 4 |
 | Autodesk rac_basic sample | 4 |
@@ -60,6 +60,7 @@ only identifiers that exist in `src/`.
 | 255ribeiro Exemplo_data | 1 |
 | named in the report | 1 |
 | Autodesk rme_basic sample | 1 |
+| Vitoria spent Revit 2018 project | 1 |
 
 Snowdon Towers and the BIMcollab and MIT models are local only: their Revit
 exports cannot be fetched by Measure, so a rule resting on them is measured on
@@ -97,6 +98,7 @@ runs, would test the largest share of the rules below.
 | [RE-425](../reports/element-framing/RE-425-rectangle-column-quantities.md) | `column_rectangles`, `saved_meshes`, `attach_scoped_with_control`, `column_mesh_quantities`, `add_column_quantities` | BIM4LCA housing | - | no, it names this model only | "Positive on the BIM4LCA housing, where 526 values on 6 files become Revit's and none differs, the four chamfered columns among them; the offices are byte-identical." |
 | [RE-465](../reports/element-framing/RE-465-ceiling-piece-gross-area.md) | `first_drawn_piece`, `add_ceiling_quantities` | BIM4LCA office | 2024 | yes | "The four files are one building. No other model with a Revit export ... has a ceiling in pieces" |
 | [RE-480](../reports/element-framing/RE-480-ceiling-saved-face-gross-area.md) | `coverings_without_area`, `one_piece_face_area`, `add_covering_areas` | BIM4LCA office | 2024 | yes | "The cut ceilings it reaches are those of the BIM4LCA office" |
+| [RE-486](../reports/element-framing/RE-486-ceiling-pieces-first-face-gross-area.md) | `coverings_without_area`, `first_piece_face_area`, `add_covering_areas` | BIM4LCA office | 2024 | yes | "four saves of one building by Revit 2024" |
 | [RE-488](../reports/element-framing/RE-488-omitted-target-flat-stop.md) | `butt_joins`, `NativeWall`, `WallLine` | BIM4LCA housing | 2024 | yes | "one save of one building by Revit 2024" |
 | [RE-188](../reports/element-framing/RE-188-curtain-wall-export-as.md) | `export_override_applies`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "On both BIM4LCA office files (Revit 2024), 124 curtain walls carry their own "Export to IFC As" (`IFC_EXPORT_ELEMENT_AS`) of `IfcShadingDevice`, read by RE-45 on a `Walls` record." |
 | [RE-190](../reports/element-framing/RE-190-office-export-values.md) | `EXPORT_OVERRIDE_TARGETS`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "positive on both office files: 185 elements of the as-built file and 165 of the permit file now have the class Revit gives them" |
