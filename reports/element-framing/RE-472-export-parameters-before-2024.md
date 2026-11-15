@@ -3,7 +3,7 @@
 **Date:** 2026-11-15
 **Issues:** #1695 (Revit 2022 and earlier: the export parameters are not read, so a furniture element carries no `PredefinedType` where Revit's export writes `NOTDEFINED`); follows RE-45 (the four export parameters), RE-111 (the element data header of a 32-bit release), RE-417 and RE-419 (`Export to IFC As` values, furniture `PredefinedType`) and RE-280 (the id shape before 2024).
 **Artefacts:** every model Measure fetches with `samples`, `holdout` and `bimcollab` (85 models; Autodesk's sample projects of Revit 2015 to 2027, the reference models, the held-out models as counts only, BIMcollab's example), never stored.
-**Probe:** `probe_1695_export_parameters_pre2024` (commit `b8715e75b644`, archived under `refs/archive/2026-11-15/cited/b8715e75b644`); `tools/ci/scrub-holdout-results.sh` keeps its count lines for a held-out model.
+**Probe:** `probe_1695_export_parameters_pre2024` (commit `b8715e75b644`, archived under `refs/archive/2026-11-15/cited/b8715e75b644`); `tools/ci/scrub-holdout-results.sh` keeps its count lines for a held-out model, each in a fixed wording, with a value only from the probe's fixed lists (the run above printed values through a looser filter; the only two it printed from a held-out file, `IfcCoveringType` and `CLADDING`, are on those lists, and none of the 45 files before 2024 sets a value).
 **Status:** negative, undecided. None of the 45 files of Revit 2015 to 2023 sets any of the four parameters, and neither do 38 of the 40 files of Revit 2024 to 2027, so the corpus cannot show where a 32-bit release keeps them. Nothing in the output changes.
 
 ## 1. The question
@@ -16,7 +16,7 @@ For each file, every partition stream:
 
 - **The key, in two widths.** Each of the four keys as `i64` (the 2024 form) and as `i32` (a hit whose next four bytes are not `ff ff ff ff`), with a value after it that RE-45 accepts (ASCII letters, digits and underscores, an `Ifc` name for the two "as" keys).
 - **The owner.** The last element data header before the entry within `EXPORT_PARAMETER_WINDOW` (`element_data_layout`: a `u32` id from Revit 2008 to 2023), and whether the id is declared in `Global/ElemTable`.
-- **Without a key.** Every `u32 n · UTF-16` string equal to a word of `IfcFurnitureTypeEnum` (`BED`, `CHAIR`, `DESK`, `FILECABINET`, `SHELF`, `SOFA`, `TABLE`, `TECHNICALCABINET`, `USERDEFINED`, `NOTDEFINED`), with the 8 bytes before it, which would name the key's own encoding in a release that keeps it in another form.
+- **Without a key.** Every `u32 n · UTF-16` string equal to a word of `IfcFurnitureTypeEnum` (`BED`, `CHAIR`, `DESK`, `FILECABINET`, `SHELF`, `SOFA`, `TABLE`, `TECHNICALCABINET`, `USERDEFINED`, `NOTDEFINED`), with the 8 bytes before it, which would name the key's own encoding in a release that keeps it in another form. Those bytes can be an id, a length or an offset, so a held-out result keeps only how many strings and how many distinct prefixes there were.
 
 ## 3. Measured
 
@@ -40,7 +40,7 @@ Measure run 43678279528 (head `b8715e75b644`, `-f samples=true -f holdout=true -
 
 - **No file before 2024 sets a parameter, in either width.** All 45 files of Revit 2015 to 2023 print 0 entries and 0 furniture words, the held-out Revit 2022 pair among them (both files: 0 and 0, counts only). The element data layout the probe used on them is the `u32` one.
 - **The 2024 form has one positive control.** `2024_Core_Interior.rvt` holds all 58 entries of Revit 2024, every one in the `i64` form (`IfcShadingDevice`, `IfcSpace`, `ifcSlab` and `ifcFooting` for `Export to IFC As`; `ROOF` and 7 texts that are not IFC words for the predefined type), and one held-out Revit 2025 project 2. The other 38 files of 2024 to 2027, Autodesk's sample projects of those years among them, set none. The BIM4LCA files (Revit 2024), which hold the `CHAIR` and `BED` of RE-419, are not in this run.
-- **The keyless search finds words in one file only.** The single-dwelling house of the CIADD pair (Revit 2026, held out) holds 18 strings equal to a furniture word, 9 after `00 00 01 00 00 00 00 00` and 9 after `ff ff 00 00 00 00 00 00`. Neither prefix is one of the four keys, and Revit writes `NOTDEFINED` on all 6 of that house's furniture; the words are not export parameter entries.
+- **The keyless search finds words in one file only.** The single-dwelling house of the CIADD pair (Revit 2026, held out) holds 18 strings equal to a furniture word, 9 after one 8-byte prefix and 9 after another. Neither prefix is one of the four keys, and Revit writes `NOTDEFINED` on all 6 of that house's furniture; the words are not export parameter entries.
 
 ## 4. The registered rows
 

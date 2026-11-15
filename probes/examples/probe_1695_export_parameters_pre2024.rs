@@ -24,10 +24,14 @@
 //! prints a histogram of the 8 bytes before it, which names the key's own
 //! encoding if a release keeps it in another form.
 //!
-//! Counts only, one `export parameters pre2024:` line per figure in the alphabet
-//! `tools/ci/scrub-holdout-results.sh` keeps for a held-out model: a value is
-//! printed when it is an IFC entity name or an upper-case enumerator, and every
-//! other text is counted as `other-text`; no id, offset or name is printed.
+//! Counts only, one `export parameters pre2024:` line per figure, in the fixed
+//! wording `tools/ci/scrub-holdout-results.sh` keeps for a held-out model. A
+//! value is printed only when it is on a fixed list of IFC entity names or
+//! predefined type words, in the list's spelling, and every other text, which a
+//! user types, is counted as `other-text`. The bytes before a furniture word are
+//! raw file bytes, which can be an id, a length or an offset, so they are printed
+//! under their own tag (`export parameters pre2024 bytes:`), which the scrub does
+//! not keep; no id, offset or name reaches a held-out result.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1695_export_parameters_pre2024 -- FILE.rvt
@@ -62,11 +66,65 @@ const ENUMERATORS: [&str; 10] = [
     "NOTDEFINED",
 ];
 
+/// IFC entity names an "as" key's value is printed as; any other text is
+/// `other-text`.
+const ENTITIES: [&str; 29] = [
+    "IfcBeam",
+    "IfcBuildingElementProxy",
+    "IfcColumn",
+    "IfcCovering",
+    "IfcCoveringType",
+    "IfcCurtainWall",
+    "IfcDoor",
+    "IfcDuctSegment",
+    "IfcFlowSegment",
+    "IfcFlowTerminal",
+    "IfcFooting",
+    "IfcFurniture",
+    "IfcFurnitureType",
+    "IfcLightFixture",
+    "IfcMember",
+    "IfcOpeningElement",
+    "IfcPipeSegment",
+    "IfcPlate",
+    "IfcRailing",
+    "IfcRamp",
+    "IfcRoof",
+    "IfcSanitaryTerminal",
+    "IfcShadingDevice",
+    "IfcSlab",
+    "IfcSpace",
+    "IfcStair",
+    "IfcWall",
+    "IfcWasteTerminal",
+    "IfcWindow",
+];
+
+/// Predefined type words a predefined key's value is printed as, besides
+/// [`ENUMERATORS`]; any other text is `other-text`.
+const PREDEFINED_WORDS: [&str; 12] = [
+    "BASESLAB",
+    "CLADDING",
+    "ELEMENTEDWALL",
+    "FLOOR",
+    "LANDING",
+    "MOVABLE",
+    "PARAPET",
+    "PARTITIONING",
+    "PLUMBINGWALL",
+    "ROOF",
+    "SHEAR",
+    "SOLIDWALL",
+];
+
 /// The longest value an entry holds, in UTF-16 units.
 const MAX_VALUE_UNITS: usize = 64;
 
-/// Starts every line, so the held-out scrub can keep them by it.
+/// Starts every count line, which the held-out scrub keeps by its wording.
 const TAG: &str = "export parameters pre2024:";
+
+/// Starts the lines of raw bytes, which the scrub does not keep.
+const BYTES_TAG: &str = "export parameters pre2024 bytes:";
 
 /// The most byte patterns printed per file for FACT 3.
 const PATTERNS_PRINTED: usize = 8;
@@ -98,15 +156,19 @@ fn export_value(buf: &[u8], at: usize, entity: bool) -> Option<String> {
     Some(value)
 }
 
-/// Whether a value may be printed: an IFC entity name or an upper-case word.
-fn vocabulary(value: &str) -> bool {
-    let upper = value
-        .bytes()
-        .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_');
-    upper
-        || value
-            .get(..3)
-            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("ifc"))
+/// How a value is printed: its spelling on the fixed list for its key, else
+/// `other-text`, since the text is a user's.
+fn printable(value: &str, entity: bool) -> &'static str {
+    let lists: [&[&'static str]; 2] = if entity {
+        [&ENTITIES[..], &[][..]]
+    } else {
+        [&ENUMERATORS[..], &PREDEFINED_WORDS[..]]
+    };
+    lists
+        .iter()
+        .flat_map(|list| list.iter().copied())
+        .find(|word| word.eq_ignore_ascii_case(value))
+        .unwrap_or("other-text")
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -134,7 +196,7 @@ fn main() -> rvt::Result<()> {
     );
 
     // (key label, form) -> value -> entries with that value.
-    let mut valued: BTreeMap<(&str, &str), BTreeMap<String, usize>> = BTreeMap::new();
+    let mut valued: BTreeMap<(&str, &str), BTreeMap<&str, usize>> = BTreeMap::new();
     // (owner, key) -> the values its entries hold.
     let mut owned: BTreeMap<(u32, i64), BTreeSet<String>> = BTreeMap::new();
     let (mut no_header, mut undeclared) = (0usize, 0usize);
@@ -158,15 +220,10 @@ fn main() -> rvt::Result<()> {
                 let Some(value) = export_value(buf, value_at, entity) else {
                     continue;
                 };
-                let text = if vocabulary(&value) {
-                    value.clone()
-                } else {
-                    "other-text".to_string()
-                };
                 *valued
                     .entry((label, if wide { "i64" } else { "i32" }))
                     .or_default()
-                    .entry(text)
+                    .entry(printable(&value, entity))
                     .or_default() += 1;
                 let owner = layout.and_then(|layout| {
                     let from = hit.saturating_sub(EXPORT_PARAMETER_WINDOW);
@@ -230,7 +287,10 @@ fn main() -> rvt::Result<()> {
         before.len()
     );
     for (prefix, count) in patterns.into_iter().take(PATTERNS_PRINTED) {
-        println!("{TAG} prefix {} count {count}", prefix.replace(' ', ""));
+        println!(
+            "{BYTES_TAG} prefix {} count {count}",
+            prefix.replace(' ', "")
+        );
     }
     Ok(())
 }
