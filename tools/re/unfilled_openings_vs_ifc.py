@@ -169,11 +169,14 @@ def main(argv):
             if mine["depth"] is not None and abs(mine["depth"] - theirs["depth"]) <= 1e-5 * max(1.0, theirs["depth"]):
                 row["Depth equal"] += 1
     # Research trace for #1165 (not to land): each door opening in a wall that
-    # Revit writes and rvt-rs does not, beside the door's own body box and its
-    # own (filled) opening's box in Revit's export, internal feet.
+    # Revit writes and rvt-rs does not, beside the door's own body box, its own
+    # (filled) opening's box and its placement in Revit's export, internal feet;
+    # for a 10 ft deep one, which plane its depth is centred on.
     if missing_doors:
+        import ifcopenshell.util.placement
         f = ifcopenshell.open(args[1])
         frame = site_frame(f)
+        unit = ifcopenshell.util.unit.calculate_unit_scale(f)
         settings = ifcopenshell.geom.settings()
         settings.set("use-world-coords", True)
         def box_of(element):
@@ -183,18 +186,62 @@ def main(argv):
                 return verts.min(axis=0), verts.max(axis=0)
             except Exception:
                 return None
+        def place_of(element):
+            mat = np.array(ifcopenshell.util.placement.get_local_placement(element.ObjectPlacement), dtype=float)
+            o = mat[:3, 3] * unit
+            pts = frame(np.array([o, o + mat[:3, 0], o + mat[:3, 1]]))
+            x = pts[1] - pts[0]
+            y = pts[2] - pts[0]
+            return pts[0], x / np.linalg.norm(x), y / np.linalg.norm(y)
         doors = {d.Tag: d for d in f.by_type("IfcDoor") if d.Tag}
         fmt = lambda b: "-" if b is None else " ".join(f"{v:.4f}" for v in (*b[0], *b[1]))
+        tally = collections.Counter()
         for (tag, host), box in sorted(missing_doors):
             door = doors.get(tag)
             own = None
             if door is not None:
                 for rel in door.FillsVoids or []:
                     own = box_of(rel.RelatingOpeningElement)
+            body = None if door is None else box_of(door)
             ext = box[1] - box[0]
             print(f"trace door {tag} in wall {host}: opening {fmt(box)} extent {ext[0]:.4f} {ext[1]:.4f} {ext[2]:.4f}")
-            print(f"  door body {fmt(None if door is None else box_of(door))}")
+            print(f"  door body {fmt(body)}")
             print(f"  door own opening {fmt(own)}")
+            deep = [i for i in range(2) if abs(ext[i] - 10.0) < 0.01]
+            tally["openings"] += 1
+            if len(deep) != 1 or own is None or body is None:
+                tally["not one 10 ft axis, or no own opening or body"] += 1
+                continue
+            a, b = deep[0], 1 - deep[0]
+            tally["10 ft deep"] += 1
+            centre = (box[0][a] + box[1][a]) / 2
+            lo, hi = own[0][a], own[1][a]
+            body_centre = (body[0][a] + body[1][a]) / 2
+            far = lo if abs(body_centre - lo) > abs(body_centre - hi) else hi
+            near = hi if far == lo else lo
+            origin, xdir, ydir = place_of(door)
+            same_rest = all(abs(box[k][i] - own[k][i]) < 1e-3 for k in range(2) for i in (b, 2))
+            hits = {
+                "own min": abs(centre - lo) < 1e-3,
+                "own max": abs(centre - hi) < 1e-3,
+                "own face far from body": abs(centre - far) < 1e-3,
+                "own face near body": abs(centre - near) < 1e-3,
+                "door placement": abs(centre - origin[a]) < 1e-3,
+                "own centre": abs(centre - (lo + hi) / 2) < 1e-3,
+                "other axes equal own": same_rest,
+                "depth 10 ft within 1e-4": abs(ext[a] - 10.0) < 1e-4,
+            }
+            for label, hit in hits.items():
+                tally[label] += hit
+            # which side of the placement the far face lies, along the door's local Y
+            side = np.sign((far - origin[a]) * ydir[a]) if abs(ydir[a]) > 0.5 else 0
+            tally[f"far face on local Y side {side:+.0f}"] += 1
+            print(
+                f"  rule axis {'xy'[a]} centre {centre:.4f} own {lo:.4f}..{hi:.4f} body {body[0][a]:.4f}..{body[1][a]:.4f}"
+                f" placement {origin[a]:.4f} xdir {xdir[0]:+.3f} {xdir[1]:+.3f} ydir {ydir[0]:+.3f} {ydir[1]:+.3f}"
+                f" hits {' / '.join(k for k, v in hits.items() if v) or 'none'}"
+            )
+        print("trace rule tally: " + "; ".join(f"{k} {v}" for k, v in sorted(tally.items())))
     for kind, row in sorted(rows.items()):
         print(f"{kind}:")
         for label, count in row.items():
