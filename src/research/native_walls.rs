@@ -47,7 +47,7 @@ use crate::graph_value::Fv;
 
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
-use crate::native_json::{element_id_i64, identifier_u64};
+use crate::native_json::{element_id_2024_i64, identifier_u64};
 use crate::native_wall_types::{functions_of_types, type_function, wall_type_id};
 
 /// A wall's curve and the joins at its ends, from its native record.
@@ -167,7 +167,7 @@ fn line_ends(fields: &Fv) -> Option<([f64; 2], [f64; 2])> {
 /// a step names its elements in a shape that is not read, so that no step is
 /// left out unseen.
 ///
-/// Read in the 2024 shape only, with [`element_id_i64`], as a step's ids on
+/// Read in the 2024 shape only, with [`element_id_2024_i64`], as a step's ids on
 /// Revit 2015 to 2023 are in the other one: the rules these ids start (the
 /// wall top at a covering floor, RE-267; the areas of a wall joined to floors,
 /// RE-270) are measured on 2024 and later, and reading the ids there moved
@@ -190,7 +190,7 @@ fn named_by_steps<'a>(
             _ => continue,
         };
         for reference in references {
-            let id = element_id_i64(reference)?;
+            let id = element_id_2024_i64(reference)?;
             if id > 0 {
                 named.insert(u64::try_from(id).ok()?);
             }
@@ -212,7 +212,7 @@ fn base_joined_by_steps<'a>(
             continue;
         }
         for reference in fields.get("m_ids")?.as_array()? {
-            let id = element_id_i64(reference)?;
+            let id = element_id_2024_i64(reference)?;
             if id > 0 {
                 named.insert(u64::try_from(id).ok()?);
             }
@@ -1050,7 +1050,7 @@ pub fn native_walls_and_top_joins_into(
                 .and_then(|lists| {
                     let mut named = BTreeSet::new();
                     for reference in lists.into_iter().flatten() {
-                        let id = element_id_i64(reference)?;
+                        let id = element_id_2024_i64(reference)?;
                         if id > 0 {
                             named.insert(u64::try_from(id).ok()?);
                         }

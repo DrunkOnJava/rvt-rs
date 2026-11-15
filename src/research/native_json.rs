@@ -4,16 +4,20 @@
 use crate::graph_value::Fv;
 use std::collections::BTreeMap;
 
-/// `{"m_id":{"m_id64":n}}` as `n`.
+/// An ElementId field as `n`, in either shape the schema saves it in
+/// ([`identifier_i64`]).
 pub(crate) fn element_id(value: &Fv) -> Option<u64> {
-    value
-        .pointer("/m_id/m_id64")
-        .and_then(Fv::as_i64)
-        .and_then(|n| u64::try_from(n).ok())
+    identifier_u64(value)
 }
 
-/// `{"m_id":{"m_id64":n}}` as `n`, signed.
+/// [`element_id`], signed.
 pub(crate) fn element_id_i64(value: &Fv) -> Option<i64> {
+    identifier_i64(value)
+}
+
+/// `{"m_id":{"m_id64":n}}` as `n`, signed: the shape of Revit 2024 and later
+/// only.
+pub(crate) fn element_id_2024_i64(value: &Fv) -> Option<i64> {
     value.pointer("/m_id/m_id64").and_then(Fv::as_i64)
 }
 
