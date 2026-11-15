@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Whether the id a Revit 2015 to 2023 instance holds that only its category
-holds is the element's type in Revit's own export (#1603, RE-474).
+holds is the element's type in Revit's own export (#1603, RE-475).
 
 `probe_1603_unjoined_lists_pre2024` prints, for each instance whose reference
 list holds no symbol record of its category, the named ids with no record of
