@@ -28,7 +28,8 @@ pub(crate) fn identifier_i64(value: &Fv) -> Option<i64> {
         .and_then(Fv::as_i64)
 }
 
-/// [`identifier_i64`] as an unsigned id, `None` for a null or negative one.
+/// [`identifier_i64`] as an unsigned id, `None` for a missing, non-integer or
+/// negative one (an id of 0 comes back as `Some(0)`).
 pub(crate) fn identifier_u64(value: &Fv) -> Option<u64> {
     identifier_i64(value).and_then(|n| u64::try_from(n).ok())
 }

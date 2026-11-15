@@ -1137,6 +1137,9 @@ pub fn native_walls_and_top_joins_into(
                     (other != id && joined < 2).then_some((other, joined))
                 })
                 .collect();
+            // Read in either shape, unlike the ids of a step's top join above:
+            // these only decide whether the cut-back length can be trusted
+            // ([`trimmed_ends`] refuses one whose partner is not read).
             let partners = graph
                 .objects
                 .iter()
