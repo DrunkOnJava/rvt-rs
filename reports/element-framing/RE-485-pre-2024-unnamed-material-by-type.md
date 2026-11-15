@@ -11,7 +11,7 @@ RE-483 left 15 of the spent project's 68 windows with identical facts of the hos
 
 ## 2. What the probe and the scorer count
 
-For each door and window the export writes, the probe prints RE-482's facts of the family's forms and the drawn symbol's and the family's ElementIds, the number of geometry tags the symbol's `m_geomTag2MaterialId` holds and how many map to no material. The scorer counts, per project and IFC class, for the elements whose type map holds geometry mapped to no material and to which Revit gives materials: the drawn symbols and families whose elements all have `<Unnamed>` written, none of them, or some; the fact groups (elements sharing every fact of RE-482's probe) with both outcomes and whether each is constant within a symbol, a family or an unset tag count; and the elements by the number of unset tags (1, 2, 3 or more). Counts only for held-out projects.
+For each door and window the export writes, the probe prints RE-483's facts of the family's forms (effective visibility), the nested instances' stored and bound `Visible` and the drawn symbol's and the family's ElementIds, the number of geometry tags the symbol's `m_geomTag2MaterialId` holds and how many map to no material. The scorer counts, per project and IFC class, for the elements whose type map holds geometry mapped to no material and to which Revit gives materials: the drawn symbols and families whose elements all have `<Unnamed>` written, none of them, or some; the fact groups (elements sharing every fact of RE-483's probe) with both outcomes and whether each is constant within a symbol, a family or an unset tag count; the elements by the number of unset tags (1, 2, 3 or more), and by the visibility of the family's nested instances (their own stored `Visible` and whether it is bound to a parameter). Each record of a family's document is read once, from its last copy. Counts only for held-out projects.
 
 ## 3. The registered rows
 
@@ -20,5 +20,6 @@ Registered on #1603 before the run (2026-11-15, comment 6894163538).
 1. **Type.** Reported per project: drawn symbols with `<Unnamed>` on all, none, and some of their elements.
 2. **Family.** The same for families.
 3. **The 15.** The spent project's 15 windows with identical host-form facts: their symbols and families and the written count of each.
-4. **Unset tags.** The elements by the number of unset tags, written and not written, per project; a rule is worth proposing only if it is right on every element of every pre-2024 project.
-5. **Nothing moves.** No `src/` change.
+4. **Nested instances.** The elements by whether the family's nested instances are all shown, one is hidden or one is bound to a parameter, written and not written, per project; the nested instance's own `Visible` is the one fact of the host family's document that RE-483 did not read. Reported.
+5. **Unset tags.** The elements by the number of unset tags, written and not written, per project; a rule is worth proposing only if it is right on every element of every pre-2024 project.
+6. **Nothing moves.** No `src/` change.

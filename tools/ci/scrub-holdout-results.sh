@@ -155,6 +155,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^unnamed by type before 2024: class Ifc[A-Za-z0-9]+ elements [0-9]+ symbols [0-9]+: all written [0-9]+, none written [0-9]+, mixed [0-9]+; elements of mixed symbols: written [0-9]+, not written [0-9]+; families [0-9]+: all written [0-9]+, none written [0-9]+, mixed [0-9]+; elements of mixed families: written [0-9]+, not written [0-9]+$' "$f" || true
       grep -E '^unnamed by facts before 2024: class Ifc[A-Za-z0-9]+ fact groups [0-9]+ with both outcomes [0-9]+: constant within a symbol [0-9]+, within a family [0-9]+, within an unset tag count [0-9]+$' "$f" || true
       grep -E '^unnamed by unset tags before 2024: class Ifc[A-Za-z0-9]+ unset tags 1: written [0-9]+, not written [0-9]+; unset tags 2: written [0-9]+, not written [0-9]+; unset tags 3 or more: written [0-9]+, not written [0-9]+$' "$f" || true
+      grep -E '^unnamed by nested before 2024: class Ifc[A-Za-z0-9]+ no nested instance: written [0-9]+, not written [0-9]+; nested instances all shown, none bound: written [0-9]+, not written [0-9]+; a nested instance hidden: written [0-9]+, not written [0-9]+; a nested instance bound to a parameter: written [0-9]+, not written [0-9]+$' "$f" || true
       # tools/re/window_door_family_rules_vs_ifc.py (#1603, RE-481): the same counts
       # before and after the family rules, as numbers beside fixed words and an IFC
       # entity name, never a Tag or a material name; its `--list` lines are dropped.

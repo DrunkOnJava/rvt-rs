@@ -8,8 +8,8 @@ whose drawn symbol's map holds geometry mapped to no material (-1) and to which
 Revit gives materials, takes whether Revit's material set for the same Tag (the
 occurrence's, or its type's, through IfcOpenShell) holds `<Unnamed>` (Revit
 2018's IFC2X3 export spells it " <Unnamed>"; the white space around a name is
-dropped), and counts it by the drawn symbol, the family and the number of
-unset tags of the symbol's map.
+dropped), and counts it by the drawn symbol, the family, the number of unset
+tags of the symbol's map and the visibility of the family's nested instances.
 
 Counts only, in fixed wording, for held-out projects
 (`tools/ci/scrub-holdout-results.sh` keeps these lines), per IFC class:
@@ -24,10 +24,14 @@ Counts only, in fixed wording, for held-out projects
     unnamed by unset tags before 2024: class IfcWindow unset tags 1: written a,
         not written b; unset tags 2: written c, not written d; unset tags 3 or
         more: written e, not written f
+    unnamed by nested before 2024: class IfcWindow no nested instance: written
+        a, not written b; nested instances all shown, none bound: written c,
+        not written d; a nested instance hidden: written e, not written f; a
+        nested instance bound to a parameter: written g, not written h
 
 A *fact group* is the doors or windows of one project that share every fact of
-RE-482's probe (forms shown, hidden, voids, nested instances, forms of any
-material hidden, unset forms bound to a parameter); one *with both outcomes*
+RE-483's probe (the family's forms with no material effectively shown, hidden
+or unresolved, bound and ambiguous, voids, nested instances); one *with both outcomes*
 has `<Unnamed>` written on some of its elements and not on others, and is
 *constant within a symbol* where each symbol's elements in it are all written
 or all not written.
@@ -51,7 +55,8 @@ from window_door_type_maps_vs_ifc import UNNAMED
 
 LINE = re.compile(
     r"^wtype (\d+) (IFC[A-Z]+) grouped=([01]) map_unset=(0|1|na) found=([01]) "
-    r"shown=(\d+) hidden=(\d+) voids=(\d+) nested=(\d+) zero=(\d+) unset_bound=(\d+) "
+    r"eff_shown=(\d+) eff_hidden=(\d+) unresolved=(\d+) bound=(\d+) resolved=(\d+) "
+    r"ambiguous=(\d+) voids=(\d+) nested=(\d+) nested_hidden=(\d+) nested_bound=(\d+) "
     r"symbol=(\d+) family=(\d+) tags=(\d+) unset_tags=(\d+)$"
 )
 
@@ -88,8 +93,9 @@ def main():
         match = LINE.match(line.strip())
         if not match:
             continue
-        (tag, ifc_class, grouped, map_unset, found, shown, hidden, voids, nested,
-         zero, bound, symbol, family, tags, unset_tags) = match.groups()
+        (tag, ifc_class, grouped, map_unset, found, shown, hidden, unresolved, bound,
+         resolved, ambiguous, voids, nested, nested_hidden, nested_bound, symbol,
+         family, tags, unset_tags) = match.groups()
         if map_unset != "1" or tag not in revit:
             continue
         entity, theirs = revit[tag]
@@ -101,14 +107,19 @@ def main():
             "symbol": symbol,
             "family": family,
             "unset_tags": int(unset_tags),
-            "facts": (shown, hidden, voids, nested, zero, bound),
+            "facts": (shown, hidden, unresolved, bound, voids, nested),
+            "nested": "none" if int(nested) == 0 else (
+                "bound" if int(nested_bound) else ("hidden" if int(nested_hidden) else "shown")
+            ),
         }
         elements[entity].append(element)
         if listing:
             print(
                 f"differs {tag} {entity} {'written' if written else 'not_written'} "
                 f"symbol={symbol} family={family} tags={tags} unset_tags={unset_tags} "
-                f"shown={shown} hidden={hidden} voids={voids} nested={nested} zero={zero} unset_bound={bound}"
+                f"eff_shown={shown} eff_hidden={hidden} unresolved={unresolved} bound={bound} "
+                f"ambiguous={ambiguous} voids={voids} nested={nested} "
+                f"nested_hidden={nested_hidden} nested_bound={nested_bound}"
             )
     for entity, items in sorted(elements.items()):
         by_symbol = collections.defaultdict(lambda: [0, 0])
@@ -140,6 +151,22 @@ def main():
             f"constant within a symbol {sum(constant(g, lambda e: e['symbol']) for g in both)}, "
             f"within a family {sum(constant(g, lambda e: e['family']) for g in both)}, "
             f"within an unset tag count {sum(constant(g, lambda e: min(e['unset_tags'], 3)) for g in both)}"
+        )
+        by_nested = collections.defaultdict(lambda: [0, 0])
+        for e in items:
+            by_nested[e["nested"]][0 if e["written"] else 1] += 1
+        names = [
+            ("none", "no nested instance"),
+            ("shown", "nested instances all shown, none bound"),
+            ("hidden", "a nested instance hidden"),
+            ("bound", "a nested instance bound to a parameter"),
+        ]
+        print(
+            f"unnamed by nested before 2024: class {entity} "
+            + "; ".join(
+                f"{label_}: written {by_nested[key][0]}, not written {by_nested[key][1]}"
+                for key, label_ in names
+            )
         )
         label = {1: "unset tags 1", 2: "unset tags 2", 3: "unset tags 3 or more"}
         print(
