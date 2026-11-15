@@ -4,17 +4,16 @@
 **Issue:** #1209 (W7: coverings' `GrossArea` on cut ceilings and ceilings in pieces); follows RE-297 (a cut ceiling's `GrossArea` is the area left after the cut, and rvt-rs writes none), RE-465 (a ceiling in pieces: the piece its first-drawn lines lie on), RE-413 (floors and ceilings lose sketch holes from `GrossArea`).
 **Artefacts:** the BIM4LCA office (concrete and timber, as built and at building permit, Revit 2024) and housing (Revit 2024) with Revit's own IFC4 exports; the Revit 2025 models, Core Interior, RE1, the Autodesk samples of Revit 2015 to 2027 and the held-out projects (counts only) for what else moves.
 **Probes:** `probe_1209_ceiling_params` with `ceiling_area_params_vs_ifc` at `6cc358b59adb`, and `probe_1209_ceiling_mesh_faces` with `ceiling_mesh_areas_vs_ifc` at `3bddff0693df`, both archived under `refs/archive/2026-11-15/cited/`. Neither lands.
-**Status:** positive, on one building. The 22 cut ceilings of the BIM4LCA office whose saved face is one piece now have Revit's `GrossArea`, 22 of 22 equal and none different; nothing else that a Revit export checks moves. On the Autodesk sample projects, which no Revit export checks, 15 ceilings gain one (section 6, row 5), each with the same value on every save of its project.
+**Status:** positive, on one building. The 22 cut ceilings of the BIM4LCA office whose saved face is one piece now have Revit's `GrossArea`, 22 of 22 equal and none different; nothing else that a Revit export checks moves. On the Autodesk sample projects, which no Revit export's quantities check, 15 ceilings gain one (section 6, row 5): 12 on the four saves of three projects, the same value on every save, and 3 on Snowdon Towers Architectural, which has one save, where each is the area of the lower face of Revit's own body for that ceiling.
 
 ## 1. Where Revit's value comes from
 
-revit-ifc's `GrossAreaCalculator` (CLEANROOM.md source 5, `Exporter/PropertySet/Calculators/GrossAreaCalculator.cs` at `7fe314fd`; cited, not copied) tries three sources in order:
+revit-ifc's `GrossAreaCalculator` (CLEANROOM.md source 5, `Exporter/PropertySet/Calculators/GrossAreaCalculator.cs`; cited, not copied) differs between add-in versions:
 
-1. an `IfcQtyGrossArea` override parameter;
-2. the area the body exporter recorded for the element's extrusion, set only when the body was exported as an extrusion;
-3. the element's own computed area (`HOST_AREA_COMPUTED`).
+- **24.2** (`e5caa9b81d`, 2023-12, the add-in of Revit 2024's time): an `IfcQtyGrossArea` override parameter, else the area the body exporter recorded for the element's extrusion (`IFCExportBodyParams.ScaledArea`), else nothing.
+- **26.1** (`ef15008e2e`, 2025-04) **and later** (`7fe314fd`): the same two, then the element's own computed area (`HOST_AREA_COMPUTED`).
 
-A ceiling drawn as one extrusion of its sketch takes source 2, the sketch's area, which `add_ceiling_quantities` writes (RE-297). A ceiling that a step cuts is no longer one extrusion, so its value falls to source 3: the area of what is left.
+A ceiling drawn as one extrusion of its sketch takes the extrusion's area, the sketch's, which `add_ceiling_quantities` writes (RE-297). A ceiling that a step cuts keeps "the area of what is left" (RE-297): with 24.2 it can only be the area of the extrusion the body exporter made of the cut solid (no override is saved, section 2); with 26.1 and later it can also be the computed area. Which add-in wrote the BIM4LCA exports is not read here; either way the value is an area of the body after the cut, which is what the saved mesh holds. Whether a given ceiling has a value at all can turn on the body exporter's choice, as it does for walls (#1046), so the rule is measured where Revit's exports say whether it has one.
 
 ## 2. The computed area is not saved as a parameter
 
@@ -57,7 +56,7 @@ Measure [43703086686](https://github.com/DrunkOnJava/rvt-rs/actions/runs/4370308
 
 `qtos_vs_ifc`, `Qto_CoveringBaseQuantities.GrossArea`, before and after:
 
-| file | ceilings | equal | different | missing |
+| file | coverings with Revit's `GrossArea` | equal | different | missing |
 |---|---:|---:|---:|---:|
 | concrete office, as built | 90 | 72 → 74 | 0 → 0 | 18 → 16 |
 | concrete office, permit | 75 | 61 → 71 | 0 → 0 | 14 → 4 |
@@ -88,7 +87,10 @@ Registered on #1209 before the run (2026-11-15, comment 6892736291), read from M
 | `rme_basic_sample_project` | 2024 to 2027 | 43 | 1 (579747) | 62.509 |
 | Snowdon Towers Architectural | 2024 | 68 | 3 (1558154, 1558379, 1558472) | 22.479, 54.602, 60.225 |
 
-15 values in all, none checked by a Revit export: Snowdon's local-only Revit export holds no base quantities, and the other three projects have none. The same-project gates hold them to the project's other saves, where each value is the same.
+15 values in all, none checked against a quantity Revit writes: Snowdon's local-only Revit IFC4 export holds no base quantities, and the other three projects have no Revit export.
+
+- The 12 of `rac_advanced`, `rme_advanced` and `rme_basic` are one value per project on each of its four saves, read from both sides' kept exports.
+- Snowdon Towers Architectural has one save in Measure, so no other save holds its 3 values. Against its local-only Revit IFC4 export (geometry only, read on this machine), each is the area of the largest downward face of Revit's own body for that ceiling, meshed by IfcOpenShell 0.9.0.post1: 22.478810, 54.602116 and 60.225868 m², within 1e-5 relative (rvt-rs 22.478664, 54.602043, 60.225795). Revit's upper faces are 0.09%, 0.02% and 0.02% larger, within the rule's 0.1%, and the rule takes the lower face. Revit writes the three as tessellations; which of section 1's sources its value would come from, and whether it would write one, is not shown by an export that holds no base quantities. This is the one building beside the BIM4LCA office where the rule fires, and only its geometry is checked.
 
 ## 7. Where it rests
 
