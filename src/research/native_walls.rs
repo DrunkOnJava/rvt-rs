@@ -47,7 +47,7 @@ use crate::graph_value::Fv;
 
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
-use crate::native_json::{element_id, element_id_i64};
+use crate::native_json::{identifier_i64, identifier_u64};
 use crate::native_wall_types::{functions_of_types, type_function, wall_type_id};
 
 /// A wall's curve and the joins at its ends, from its native record.
@@ -181,7 +181,7 @@ fn named_by_steps<'a>(
             _ => continue,
         };
         for reference in references {
-            let id = element_id_i64(reference)?;
+            let id = identifier_i64(reference)?;
             if id > 0 {
                 named.insert(u64::try_from(id).ok()?);
             }
@@ -203,7 +203,7 @@ fn base_joined_by_steps<'a>(
             continue;
         }
         for reference in fields.get("m_ids")?.as_array()? {
-            let id = element_id_i64(reference)?;
+            let id = identifier_i64(reference)?;
             if id > 0 {
                 named.insert(u64::try_from(id).ok()?);
             }
@@ -220,7 +220,7 @@ fn join_members(control: &Fv) -> Vec<(u64, u32)> {
         .into_iter()
         .flatten()
         .filter_map(|member| {
-            let id = element_id(member.get("m_elemId")?)?;
+            let id = identifier_u64(member.get("m_elemId")?)?;
             let joined = u32::try_from(member.get("m_joinedEnd")?.as_u64()?).ok()?;
             Some((id, joined))
         })
@@ -525,7 +525,7 @@ fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Optio
             .and_then(|items| {
                 items
                     .iter()
-                    .map(|item| element_id(item.get("m_elemId")?))
+                    .map(|item| identifier_u64(item.get("m_elemId")?))
                     .collect()
             });
         out[slot] = listed.map(|ids| {
@@ -1041,7 +1041,7 @@ pub fn native_walls_and_top_joins_into(
                 .and_then(|lists| {
                     let mut named = BTreeSet::new();
                     for reference in lists.into_iter().flatten() {
-                        let id = element_id_i64(reference)?;
+                        let id = identifier_i64(reference)?;
                         if id > 0 {
                             named.insert(u64::try_from(id).ok()?);
                         }
@@ -1107,7 +1107,7 @@ pub fn native_walls_and_top_joins_into(
                         .and_then(Fv::as_array)
                         .into_iter()
                         .flatten()
-                        .filter_map(|face| element_id(face.pointer("/second/m_elemId")?))
+                        .filter_map(|face| identifier_u64(face.pointer("/second/m_elemId")?))
                         .collect();
                 }
             }
@@ -1123,7 +1123,7 @@ pub fn native_walls_and_top_joins_into(
                         .flatten()
                 })
                 .filter_map(|member| {
-                    let other = element_id(member.get("m_elemId")?)?;
+                    let other = identifier_u64(member.get("m_elemId")?)?;
                     let joined = u32::try_from(member.get("m_joinedEnd")?.as_u64()?).ok()?;
                     (other != id && joined < 2).then_some((other, joined))
                 })
@@ -1137,7 +1137,7 @@ pub fn native_walls_and_top_joins_into(
                         "WallEmbedWallGStep" => "m_instId",
                         _ => return None,
                     };
-                    Some(object.fields.get(field).and_then(element_id))
+                    Some(object.fields.get(field).and_then(identifier_u64))
                 })
                 .map(|other| other.unwrap_or(u64::MAX))
                 .collect();
@@ -1155,7 +1155,7 @@ pub fn native_walls_and_top_joins_into(
                 partners,
                 type_id: None,
             };
-            let type_id = root.and_then(|fields| element_id(fields.get("m_WallAttributesId")?));
+            let type_id = root.and_then(|fields| identifier_u64(fields.get("m_WallAttributesId")?));
             (wall, type_id)
         });
         match read {
