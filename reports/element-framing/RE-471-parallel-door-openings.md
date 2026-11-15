@@ -5,7 +5,7 @@
 **Scorer:** `tools/re/unfilled_openings_vs_ifc.py` with a research trace on `research/1165-parallel-door-trace` (not to land; its last commit is archived as `refs/archive/2026-11-15/cited/9bf4c959c8de`)
 **Artefacts:** the BIM4LCA office (concrete and timber, as built and at building permit) and housing (concrete and timber, as built and at building permit), with Revit 24's IFC4 exports (CC BY-SA 4.0, as Measure fetches them); Autodesk's Snowdon Towers Architectural 2024 sample (sha256 `33271010919acb2a0d0d040851393a511d86ea7fd9a1f4c054797ae03e5e44a1`) and Revit's IFC4 export of it (local only, never committed)
 **Runs:** Measure [43666219918](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43666219918) (first trace, the office), [43667090229](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43667090229) (the planes in Revit's export, eight files; rvt-rs's IFCs kept, Snowdon's among them), [43668183253](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43668183253) (the rule from rvt-rs's own export, eight files), all on `main`; the change: [43668574318](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43668574318)
-**Status:** Positive. Measured on the change in section 5.
+**Status:** Positive, narrow. The opening's box is Revit's wherever it is written; it is written only where the second wall spans the door's own wall's heights, the one condition that separates the openings Revit writes from the one it does not on the files measured (section 4). Measured on the change in section 5.
 
 ## 1. The steps
 
@@ -40,11 +40,16 @@ The other door openings the trace lists are not ten feet deep: they equal the do
 
 ## 3. The rule from rvt-rs's own export
 
-The same trace builds the box from rvt-rs's export alone. It takes the opening the door fills there, and the Y axis of the door's `IfcAxis2Placement3D`, which is the door's rotation about Z turned a further quarter turn. The box is that opening widened across the door's wall to 10 ft, centred on the opening's face on the side the Y points away from. It equals Revit's box to within 0.01 ft (the scorer's tolerance) on 82 of 82 BIM4LCA openings: 8, 8, 12, 12, 11, 9, 11 and 11, in the order of the table. On Snowdon Towers Architectural, scored locally on rvt-rs's export from run 43667090229 against Revit's local export, it holds on 24 of 24.
+The same trace builds the box from rvt-rs's export alone. It takes the opening the door fills there, and the Y axis of the door's `IfcAxis2Placement3D`, which is the door's rotation about Z turned a further quarter turn. The box is that opening widened across the door's wall to 10 ft, centred on the opening's face on the side the Y points away from. It equals Revit's box to within 0.01 ft (the scorer's tolerance) on 82 of 82 BIM4LCA openings: 8, 8, 12, 12, 11, 9, 11 and 11, in the order of the table. On Snowdon Towers Architectural, scored locally on rvt-rs's export from run 43667090229 against Revit's local export, it holds on 24 of 24. This tests the box of each opening Revit writes, not which steps get one: section 4 measures that.
 
-## 4. The rule as written
+## 4. The rule as written, and the two narrowings measured
 
-`door_cut` (`src/ifc/wall_cut_openings.rs`) widens the door's own box across the door's wall to `DOOR_PARALLEL_DEPTH_FEET`, 10 ft, about that face. It does so for a second wall running along the door's wall, where the door's Y (`door_y_axis`) lies across the walls. A door whose Y lies along its walls keeps the reason `door_second_wall_parallel_to_door_wall`: which face Revit takes is then not known.
+`door_cut` (`src/ifc/wall_cut_openings.rs`) widens the door's own box across the door's wall to `DOOR_PARALLEL_DEPTH_FEET`, 10 ft, about that face, for a second wall running along the door's wall where the door's Y (`door_y_axis`) lies across the walls. Writing the box wherever that holds was measured first (Measure 43668574318 on `1ee5c187`, and 43671978478 on `643b6e4a`) and was wrong on some steps:
+
+- **The wall-height check stays.** As every opening rvt-rs writes in a wall, the box must lie within the second wall's base and top (`opening_outside_wall_height`). Skipping it for these openings (`643b6e4a`) wrote 42 more of Revit's on the BIM4LCA files but 4 that Revit's export lacks (1429543 in 1427469, on the four housing files), and on Snowdon Towers Architectural 1 of Revit's and 3 that are not (1309129 in 1341852, 660430 in 1299759, 760053 in 697096), all 4 standing above their wall's top: 7 wrong of 50. That skip is not kept.
+- **The second wall must span the door's own wall's heights** (`DOOR_WALL_HEIGHT_TOLERANCE_FEET`, 0.01 ft, base and top; else `door_second_wall_spans_other_heights_than_door_wall`). With the height check alone (`1ee5c187`), the rule wrote 23 of Revit's openings on the BIM4LCA files and 1 that Revit's export lacks: 3064459 in 1619525 on the office as built, where the second wall rises to 210.138 ft and the door's wall to 207.349 (at permit, where both rise to 207.349, Revit writes it). This condition was registered on the pull request before the timber office and the housing were read for it; on all eight files every one of the 23 openings Revit writes has a second wall of the door's wall's heights, and the one it lacks does not. Its exclusion rests on that one opening.
+
+A door whose Y lies along its walls keeps the reason `door_second_wall_parallel_to_door_wall`.
 
 ## 5. Measured on the change
 
@@ -53,7 +58,8 @@ To be filled from Measure 43668574318 before the pull request is ready.
 ## 6. Not claimed
 
 - Where the ten feet come from in Revit's exporter, and whether another depth occurs on other files: every opening read is ten feet.
-- Snowdon holds 38 steps of this kind and 24 openings Revit writes for them. What the rule writes for the other 14 is read in section 5.
+- Why Revit leaves the opening out of a second wall of other heights: Revit's export draws 1619525 as built as a tessellated body with no opening in it at all (`tools/re/extra_opening_hosts_vs_ifc.py` on `research/1987-extra-values`, run 43671916577), the case #1987 has no rule for. The height condition holds on these files; it is not explained.
+- Snowdon Towers Architectural: of its 38 parallel steps, 34 are refused because the door's width lies beyond the second wall's end (`door_opening_not_in_second_wall`), and Revit's export writes the box in several such walls but not all; the 4 others stand above or below their wall. Snowdon gains none of its 24 openings of this kind here, and loses nothing (#1165).
 
 ## Reproduce
 
