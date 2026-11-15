@@ -404,15 +404,22 @@ fn load(
     }))
 }
 
-/// [`FamilyForms`] of each of `families`, by the family's ElementId. A family
-/// whose document is not found, or holds no form or nested instance that
-/// decodes, is left out. Errs where the file's partitions or schema are not
-/// read.
+/// The releases [`family_forms`] reads: Revit 2024 to 2027, the saves whose
+/// exporter the rules on [`FamilyForms`] are Revit's (RE-204). They are not
+/// Revit's on 2015 to 2023 (RE-481), so a reader that wants the forms there
+/// asks [`family_forms_in`] for them, as the research probes do.
+pub const RULE_RELEASES: std::ops::RangeInclusive<u32> = 2024..=2027;
+
+/// [`FamilyForms`] of each of `families`, by the family's ElementId, on a save
+/// of [`RULE_RELEASES`] (a save before 2024 gives none, by its release and not
+/// by the shape of the ids read). A family whose document is not found, or
+/// holds no form or nested instance that decodes, is left out. Errs where the
+/// file's partitions or schema are not read.
 pub fn family_forms(
     rf: &mut RevitFile,
     families: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, FamilyForms>> {
-    family_forms_in(rf, families, &native_document::Options::default().releases)
+    family_forms_in(rf, families, &RULE_RELEASES)
 }
 
 /// [`family_forms`] on any of `releases` (the caller's reader is measured on
@@ -420,7 +427,8 @@ pub fn family_forms(
 /// framing holds on, RE-280). A save before Revit 2024 holds its documents'
 /// ids in the older shape, which is read as the 2024 one is (RE-479). What
 /// [`FamilyForms`] concludes is the Revit 2024 exporter's rule: on a save
-/// before 2024 it is not Revit's (RE-481), so an export does not use it there.
+/// before 2024 it is not Revit's (RE-481), which is why [`family_forms`], the
+/// reader an export uses, is held to [`RULE_RELEASES`].
 pub fn family_forms_in(
     rf: &mut RevitFile,
     families: &BTreeSet<u64>,
