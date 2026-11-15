@@ -364,6 +364,13 @@ pub struct WallLine {
     /// and its interior side, feet, where its type's native record gives
     /// them (RE-223).
     pub shells: Option<[f64; 2]>,
+    /// Whether the `JoinEndGStep` of the line's start and of its end names
+    /// an omitted target (`m_omittedTarget`, RE-488), where its native
+    /// record's curve is this line either way round and the record joins no
+    /// roof or floor to the wall (`NativeWall::roof_joined`); false
+    /// otherwise. Revit can clean a roof-joined wall's end layer by layer
+    /// over the height the join shapes, so it is not read as flat.
+    pub omitted: [bool; 2],
 }
 
 /// How one end of a wall meets another wall: a butt join its join lists
@@ -421,6 +428,12 @@ pub struct ButtJoin {
 /// where both walls show the same layer functions in the same order from
 /// the corner and share their base and top, and those ends get
 /// `layer_reach_feet`.
+///
+/// Where the wall that stops names an omitted target in its end's
+/// `JoinEndGStep` (`m_omittedTarget`, [`WallLine::omitted`]), Revit does not
+/// clean the join layer by layer: the whole end stops flat at the partner's
+/// near face, the reach of its layer that stops shallowest (RE-488). Those
+/// ends' layers all reach the near face, where one of them already does.
 ///
 /// An end no other wall's centreline ends at is read as a T joint where it
 /// lies part way along another wall's centreline ([`tee_join`], RE-73).
@@ -518,11 +531,23 @@ pub fn butt_joins(
             }
             let half = other.thickness_feet * 0.5;
             let single = wall.layers.len() == 1 && other.layers.len() == 1;
+            let mut layer_reach_feet = layer_reaches(wall, other, point, into, runs_through);
+            if let Some(reaches) = layer_reach_feet
+                .as_mut()
+                .filter(|_| !runs_through && wall.omitted[slot])
+                .filter(|reaches| {
+                    reaches
+                        .iter()
+                        .any(|reach| (reach + half).abs() <= JOIN_EPS_FEET)
+                })
+            {
+                reaches.fill(-half);
+            }
             joins[slot] = Some(ButtJoin {
                 partner: other.element_id,
                 runs_through,
                 reach_feet: single.then_some(if runs_through { half } else { -half }),
-                layer_reach_feet: layer_reaches(wall, other, point, into, runs_through),
+                layer_reach_feet,
                 layer_edge_reach_feet: None,
             });
         }
