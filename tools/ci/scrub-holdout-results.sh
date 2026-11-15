@@ -205,6 +205,18 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^file (left|right) entities=[0-9]+ duplicates=[0-9]+$' "$f" || true
       grep -E '^class IFC[A-Z0-9]+ both=[0-9]+ left_only=[0-9]+ right_only=[0-9]+$' "$f" || true
       grep -E '^projects shared=[0-9]+( IFC[A-Z0-9]+=[0-9]+)*$' "$f" || true
+      # probe_1603_type_maps_pre2024 (#1603): per release and class of family
+      # instance, the counts of types a geometry-material map or the scan names
+      # a material for, beside a schema class name; each line in its own fixed
+      # wording, never an id or a name. The `type map:` lines name ElementIds
+      # and are not kept.
+      grep -E '^type maps pre2024: (release [0-9]+ native read failed|release [0-9]+ types [0-9]+ records [0-9]+ read [0-9]+ entries in the 2024 shape [0-9]+ in the 2015 to 2023 shape [0-9]+|class [A-Za-z0-9_]+ types [0-9]+ read [0-9]+ named by the map [0-9]+ named by the scan [0-9]+ only by the map [0-9]+ only by the scan [0-9]+ unset only [0-9]+|instances class [A-Za-z0-9_]+ total [0-9]+ naming a type [0-9]+)$' "$f" || true
+      # probe_1603_instance_types_pre2024 (#1603): per category of family
+      # instance, how many instances stop at each stage of the type join, as
+      # numbers beside fixed words, a category's Revit id and a placement
+      # kind's flag word, never an ElementId or a name.
+      grep -E '^type join pre2024: release [0-9]+ category -?[0-9]+ instances [0-9]+ symbol types [0-9]+ named types [0-9]+ no candidate [0-9]+ of which unnamed symbol [0-9]+ of which other category symbol [0-9]+ several [0-9]+ no family [0-9]+ joined [0-9]+$' "$f" || true
+      grep -E '^type join pre2024: release [0-9]+ category -?[0-9]+ unjoined instances [0-9]+ refer to (a record of kind 0x[0-9a-f]+|a named id with no record) in [0-9]+$' "$f" || true
       grep -E '^exit [0-9]+$' "$f" | sed 's/^/probe: /' || true
       grep -E '^void rule: [A-Za-z0-9 ,]+$' "$f" || true
     done
