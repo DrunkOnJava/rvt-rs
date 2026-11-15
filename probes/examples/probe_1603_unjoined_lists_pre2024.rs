@@ -24,9 +24,13 @@
 //! the exported ones of `scan_records`, one result per ElementId, and a frame
 //! with a candidate wins over one without.
 //!
-//! Counts only: each line carries a category's Revit id (a constant of the
-//! format) and numbers beside fixed words, never an ElementId or a name, so
-//! `tools/ci/scrub-holdout-results.sh` keeps them for a held-out model.
+//! The `unjoined lists pre2024:` lines are counts only: a category's Revit id
+//! (a constant of the format) and numbers beside fixed words, never an
+//! ElementId or a name, so `tools/ci/scrub-holdout-results.sh` keeps them for
+//! a held-out model. The `unjoined instance:` lines name each unjoined
+//! instance's ElementId, the ids it holds that only its category holds and
+//! their names, for `tools/re/unjoined_types_vs_ifc.py` to hold against
+//! Revit's own type of the element; the scrub drops them.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1603_unjoined_lists_pre2024 -- FILE.rvt
@@ -42,6 +46,7 @@ const TAG: &str = "unjoined lists pre2024:";
 /// The named ids with no record in one instance's list, split by who else
 /// holds them, and whether the instance has a symbol record of its category.
 struct Held {
+    id: u32,
     category: i64,
     has_symbol: bool,
     free: BTreeSet<u32>,
@@ -123,6 +128,7 @@ fn main() -> anyhow::Result<()> {
                 .is_ok_and(|id| own.is_some_and(|set| set.contains(&id)) && names.contains_key(&id))
         });
         let held = Held {
+            id: record.element_id,
             category: record.builtin_category,
             has_symbol,
             free: free_in(record),
@@ -228,6 +234,27 @@ fn main() -> anyhow::Result<()> {
                     .any(|id| families.is_some_and(|set| set.contains(id))))
                 .count()
         );
+        // Each unjoined instance with the ids it holds that only this category
+        // holds and the names they carry, for `unjoined_types_vs_ifc` to hold
+        // against Revit's own type of the element. These name ElementIds and
+        // types, so the held-out scrub drops them (their prefix is not kept).
+        for held in &unjoined {
+            let listed: Vec<String> = candidates(held)
+                .iter()
+                .map(|id| {
+                    let name = names.get(id).map_or_else(
+                        || "-".to_string(),
+                        |name| name.split_whitespace().collect::<Vec<_>>().join("_"),
+                    );
+                    format!("{id}={name}")
+                })
+                .collect();
+            println!(
+                "unjoined instance: {} category {category} candidates {}",
+                held.id,
+                listed.join(" ")
+            );
+        }
         println!(
             "{head} unjoined instances hold one id only this category holds {} of them held by 2 or more instances {}",
             unjoined
