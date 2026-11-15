@@ -119,7 +119,8 @@ A reader change of its own: `native_type_materials` and `native_family_forms` ta
 ## 7. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref research/1603-type-maps-pre2024 -f ref=af1b6805d0122c1285c7b241c1cff370a2c4c48b -f base=none \
+# run 43681309215 measured the commit below with the scrub patterns of this change; main holds both once it lands
+gh workflow run measure.yml --ref main -f ref=af1b6805d0122c1285c7b241c1cff370a2c4c48b -f base=none \
   -f samples=true -f holdout=true -f scorers=none -f probe=probe_1603_type_maps_pre2024
 # the same with -f probe=probe_1603_instance_types_pre2024 for the join
 # each model's probe.txt (counts.txt for a held-out model) holds its `type maps pre2024:` and `type join pre2024:` lines
