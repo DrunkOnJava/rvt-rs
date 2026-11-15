@@ -97,6 +97,40 @@ def main():
             continue
         along = lambda p: p[0] * d[0] + p[1] * d[1]
         revit = (min(map(along, theirs)), max(map(along, theirs)))
+        if tag == 1348326:
+            # Research trace for #1870 (not to land): each layer's ends along the
+            # wall against Revit's, and its plan outline's corners.
+            import math
+            across = lambda p: -p[0] * d[1] + p[1] * d[0]
+            print(f"trace {tag}: Revit along {revit[0]:.4f} {revit[1]:.4f}, across "
+                  f"{min(map(across, theirs)):.4f} {max(map(across, theirs)):.4f}")
+            for k, pts in enumerate(ours[tag]):
+                uniq = sorted({(round(along(p), 4), round(across(p), 4)) for p in pts})
+                print(f"  layer {k}: along {min(map(along, pts)):.4f} {max(map(along, pts)):.4f} "
+                      f"across {min(map(across, pts)):.4f} {max(map(across, pts)):.4f} points {len(uniq)}")
+                # The outline in plan: the hull of the layer's points, with each
+                # corner's two edge lengths and its turn's sine.
+                def hull(q):
+                    q = sorted(set(q))
+                    if len(q) < 3:
+                        return q
+                    def t(o, a, b):
+                        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+                    lo, up = [], []
+                    for v in q:
+                        while len(lo) >= 2 and t(lo[-2], lo[-1], v) <= 0: lo.pop()
+                        lo.append(v)
+                    for v in reversed(q):
+                        while len(up) >= 2 and t(up[-2], up[-1], v) <= 0: up.pop()
+                        up.append(v)
+                    return lo[:-1] + up[:-1]
+                ring = hull(uniq)
+                for i, v in enumerate(ring):
+                    a, b = ring[i - 1], ring[(i + 1) % len(ring)]
+                    e1 = math.dist(a, v); e2 = math.dist(v, b)
+                    cross = (v[0] - a[0]) * (b[1] - v[1]) - (v[1] - a[1]) * (b[0] - v[0])
+                    sine = cross / (e1 * e2) if e1 and e2 else float("nan")
+                    print(f"    corner {v[0]:.4f} {v[1]:.4f} edges {e1:.4f} {e2:.4f} sine {sine:.6f}")
         starts = [min(map(along, pts)) for pts in ours[tag]]
         ends = [max(map(along, pts)) for pts in ours[tag]]
         # At the start, "furthest" is the smallest value; at the end, the largest.
