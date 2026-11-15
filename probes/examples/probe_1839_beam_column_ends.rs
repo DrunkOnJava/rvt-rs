@@ -55,6 +55,10 @@
 //!       from it (1), below 0 where the box stops short of the column and above 1 where it runs
 //!       past it. The scorer sets Revit's end beside it as the same fraction of the column Revit
 //!       draws, which does not depend on the frame the two files are placed in.
+//!     - `angle` (#1839, S5): the beam's plan angle from the bounded line in its element data, in
+//!       degrees from the nearest plan axis (0 for a beam along X or Y, within (-45, 45]), or `-`
+//!       where the element data holds no line. The record box is the axis-aligned box of the
+//!       body, so on a beam that runs oblique to the plan axes its long axis is not the beam's.
 //!   file ... columns_exported=<n> sections=<n> unread=<n> section_centre_offset=<median>/<largest>:
 //!   the `IfcColumn`s the export holds, those whose section is read, and those drawn another way
 //!   (a mapped or solid body, another profile) or not placed, which the probe leaves out; and how
@@ -63,7 +67,7 @@
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1839_beam_column_ends -- MODEL.rvt
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use rvt::RevitFile;
@@ -352,6 +356,24 @@ fn near_face(
     (b[axis] + MIN_CUT_FEET < face && face < b[axis + 3] - MIN_CUT_FEET).then_some(face)
 }
 
+/// The beam's plan angle from its bounded line, in degrees from the nearest plan axis, within
+/// (-45, 45]: 0 for a beam along X or Y. `None` for a line with no length in plan.
+fn plan_angle(line: &rvt::research::partition_beam_axes::BoundedLine) -> Option<f64> {
+    let (start, end) = (line.start(), line.end());
+    let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
+    let length = dx.hypot(dy);
+    if !length.is_finite() || length <= 1e-6 {
+        return None;
+    }
+    let mut angle = dy.atan2(dx).to_degrees() % 90.0;
+    if angle > 45.0 {
+        angle -= 90.0;
+    } else if angle <= -45.0 {
+        angle += 90.0;
+    }
+    Some(angle)
+}
+
 fn feet(value: Option<f64>) -> String {
     value.map_or_else(|| "-".to_string(), |v| format!("{v:.4}"))
 }
@@ -437,6 +459,11 @@ fn main() -> anyhow::Result<()> {
         .collect();
     let beams = instances(&records, &[per::OST_STRUCTURAL_FRAMING]);
     let columns = &kinds[0].1;
+    // Each beam's own line, for its plan angle (RE-428): none where the element data holds none.
+    let beam_ids: BTreeSet<u32> = beams.keys().copied().collect();
+    let lines =
+        rvt::research::partition_beam_axes::scan_first_bounded_lines(&mut rf, version, &beam_ids)
+            .unwrap_or_default();
     let beam_list: Vec<per::PartitionElementRecord> = beams.values().cloned().collect();
     let column_list: Vec<per::PartitionElementRecord> = columns.values().cloned().collect();
     let trims = beam_column_trims(&beam_list, &column_list);
@@ -462,9 +489,13 @@ fn main() -> anyhow::Result<()> {
             .keys()
             .filter(|column| beam.references.contains(&u64::from(**column)))
             .count();
+        let angle = lines
+            .get(id)
+            .and_then(plan_angle)
+            .map_or_else(|| "-".to_string(), |degrees| format!("{degrees:.2}"));
         if along_x == along_y {
             println!(
-                "beam tag={id} axis=- low=0 high=0 across=0 height={:.4} named={named} held_low=0 held_high=0 trim_low=- trim_high=-",
+                "beam tag={id} axis=- low=0 high=0 across=0 height={:.4} named={named} held_low=0 held_high=0 trim_low=- trim_high=- angle={angle}",
                 b[5] - b[2]
             );
             continue;
@@ -523,7 +554,7 @@ fn main() -> anyhow::Result<()> {
         // The named column nearest each end, and where the record box ends in it (#1839).
         write!(
             line,
-            " endcol_low={} endcol_high={}",
+            " endcol_low={} endcol_high={} angle={angle}",
             nearest_column(beam, columns, &sections, axis, true),
             nearest_column(beam, columns, &sections, axis, false),
         )?;

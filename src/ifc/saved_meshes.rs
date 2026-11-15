@@ -550,6 +550,8 @@ pub fn attach_scoped_with_control(
     let mut columns: Vec<(usize, ColumnQuantities)> = Vec::new();
     // RE-416: the volume of each column's mesh, whatever its faces.
     let mut column_volumes: Vec<(usize, f64)> = Vec::new();
+    // #1801: the height of each column's mesh, whatever its faces.
+    let mut column_heights: Vec<(usize, f64)> = Vec::new();
     // RE-388: what the mesh of each wall gives of its quantities.
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
     // #1046: what a wall's mesh needs besides itself to be read as a vertical
@@ -704,6 +706,17 @@ pub fn attach_scoped_with_control(
                 .eq_ignore_ascii_case("IFCCOLUMN")
                 .then(|| oriented_mesh_volume(primitives, *origin))
                 .flatten();
+            let column_height = ifc_type
+                .eq_ignore_ascii_case("IFCCOLUMN")
+                .then(|| {
+                    let (low, high) = vertices
+                        .iter()
+                        .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), v| {
+                            (low.min(v[2]), high.max(v[2]))
+                        });
+                    high - low
+                })
+                .filter(|height| height.is_finite() && *height > 0.0);
             // RE-418: the mullion's own axis, from its record, turned into the
             // element's frame as its mesh is.
             let member = volume
@@ -773,6 +786,9 @@ pub fn attach_scoped_with_control(
             if let Some(volume) = column_volume {
                 column_volumes.push((*index, volume));
             }
+            if let Some(height) = column_height {
+                column_heights.push((*index, height));
+            }
             if let Some(width) = plate_width {
                 plate_widths.push((*index, width));
             }
@@ -800,6 +816,7 @@ pub fn attach_scoped_with_control(
         },
     )?;
     drop_column_box_quantities(model, &column_volumes);
+    shorten_column_box_lengths(model, &column_heights);
     let moved = add_mesh_volumes(model, &volumes, &members);
     follow_mesh_span(model, &moved);
     add_mullion_surface_areas(model, &members);
@@ -953,6 +970,67 @@ fn drop_column_box_quantities(model: &mut IfcModel, found: &[(usize, f64)]) {
                     "CrossSectionArea" | "OuterSurfaceArea" | "GrossVolume" | "NetVolume"
                 )
             });
+        }
+    }
+}
+
+/// How much shorter than its box's height a column's mesh must be for the
+/// box's height not to be its `Length`, feet (about 0.3 mm).
+const COLUMN_LENGTH_TOLERANCE_FEET: f64 = 0.001;
+
+/// Give each column of `found` (an index into the entities and the height of
+/// the mesh its body was drawn from) its mesh's height as its `Length` where
+/// the `Length` it holds is its record box's height and the mesh is shorter
+/// (#1801). revit-ifc takes a column's `Length` from the extrusion its exporter
+/// finds, which is the column's solid. Over the exports Measure kept (RE-444,
+/// Measure 43115049478), no written `Length` is shorter than its column's mesh
+/// by 2 mm, and one is longer only on 786 columns of the Revit 2025 to 2027
+/// saves of Autodesk's rme samples (and 5 BIM4LCA elements RE-444 itself
+/// fixed). Those saves record boxes up to 7.3 m taller than the meshes, which
+/// are the same as in each project's 2024 save, whose box is the mesh's height.
+/// It applies to any column drawn from its mesh, on the releases whose meshes
+/// are drawn (Revit 2023 to 2027), with flat faces or curved: a round column's
+/// mesh is left out of the quantities read from a mesh of flat faces (RE-424),
+/// and a flat-faced one's `Length` from that reading is never written over a
+/// held value, so either kept the box's height. A `Length` from anything but
+/// the box (a clean pair's, RE-291 and #1203) is left as it is.
+fn shorten_column_box_lengths(model: &mut IfcModel, found: &[(usize, f64)]) {
+    if found.is_empty() {
+        return;
+    }
+    let mut held: BTreeMap<usize, usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_ColumnBaseQuantities" {
+                held.entry(*element).or_insert(position);
+            }
+        }
+    }
+    for &(index, mesh_height) in found {
+        let Some(IfcEntity::BuildingElement {
+            extrusion: Some(body),
+            ..
+        }) = model.entities.get(index)
+        else {
+            continue;
+        };
+        let box_height = body.height_feet;
+        let Some(&position) = held.get(&index) else {
+            continue;
+        };
+        let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
+        else {
+            continue;
+        };
+        for property in &mut set.properties {
+            if let PropertyValue::PositiveLengthFeet(length) = &mut property.value {
+                if property.name == "Length"
+                    && (*length - box_height).abs() <= 1e-9 * box_height.max(1.0)
+                    && mesh_height < *length - COLUMN_LENGTH_TOLERANCE_FEET
+                {
+                    *length = mesh_height;
+                }
+            }
         }
     }
 }
