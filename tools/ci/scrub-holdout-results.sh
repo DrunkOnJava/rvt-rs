@@ -136,6 +136,12 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # entity name, never a Tag or a material name.
       grep -E '^window door type maps: class Ifc[A-Za-z0-9]+( grouped)? elements [0-9]+ revit materials [0-9]+ drawn read [0-9]+ drawn equal [0-9]+ master read [0-9]+ master equal [0-9]+ either equal [0-9]+ both equal [0-9]+$' "$f" || true
       grep -E '^window door type maps: class Ifc[A-Za-z0-9]+( grouped)? drawn symbol: equal [0-9]+, equal with the unset material spelled apart [0-9]+, unset material only [0-9]+, Revit more found in the drawn symbol'"'"'s record [0-9]+, Revit more found in the master symbol'"'"'s record [0-9]+, Revit more found in the family'"'"'s record [0-9]+, Revit more found in the instance'"'"'s record [0-9]+, Revit more not found [0-9]+, drawn more [0-9]+, apart [0-9]+; Revit spells the unset material apart on [0-9]+$' "$f" || true
+      # tools/re/window_door_family_rules_vs_ifc.py (#1603, RE-481): the same counts
+      # before and after the family rules, as numbers beside fixed words and an IFC
+      # entity name, never a Tag or a material name; its `--list` lines are dropped.
+      grep -E '^family rules: class Ifc[A-Za-z0-9]+( grouped)? elements [0-9]+ map read [0-9]+ forms found [0-9]+ shows unset true [0-9]+ false [0-9]+ unknown [0-9]+$' "$f" || true
+      grep -E '^family rules: class Ifc[A-Za-z0-9]+( grouped)? (before|after) the rules: equal [0-9]+, equal with the unset material spelled apart [0-9]+, unset material only [0-9]+, Revit more [0-9]+, drawn more [0-9]+, apart [0-9]+$' "$f" || true
+      grep -E '^family rules: class Ifc[A-Za-z0-9]+( grouped)? moves: (none|[A-Za-z ]+ to [A-Za-z ]+ [0-9]+(, [A-Za-z ]+ to [A-Za-z ]+ [0-9]+)*)$' "$f" || true
       # tools/re/beam_lines_vs_ifc.py (#1697): counts beside fixed words and the
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
