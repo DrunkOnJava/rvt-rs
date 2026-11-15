@@ -148,6 +148,12 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # name or an author; its `--list` lines are dropped.
       grep -E '^unnamed bound before 2024: class Ifc[A-Za-z0-9]+( grouped)? map unset [0-9]+; unset form effectively shown: written [0-9]+, not written [0-9]+; unset form unresolved, none shown: written [0-9]+, not written [0-9]+; unset forms effectively hidden: written [0-9]+, not written [0-9]+; unset voids only: written [0-9]+, not written [0-9]+; no unset form, nested instance: written [0-9]+, not written [0-9]+; no unset form: written [0-9]+, not written [0-9]+; family not read: written [0-9]+, not written [0-9]+$' "$f" || true
       grep -E '^reference export: schema [A-Za-z0-9_]+, Revit (20[0-9]{2}|unknown)$' "$f" || true
+      # tools/re/window_door_family_rules_vs_ifc.py (#1603, RE-481): the same counts
+      # before and after the family rules, as numbers beside fixed words and an IFC
+      # entity name, never a Tag or a material name; its `--list` lines are dropped.
+      grep -E '^family rules: class Ifc[A-Za-z0-9]+( grouped)? elements [0-9]+ map read [0-9]+ forms found [0-9]+ shows unset true [0-9]+ false [0-9]+ unknown [0-9]+$' "$f" || true
+      grep -E '^family rules: class Ifc[A-Za-z0-9]+( grouped)? (before|after) the rules: equal [0-9]+, equal with the unset material spelled apart [0-9]+, unset material only [0-9]+, Revit more [0-9]+, drawn more [0-9]+, apart [0-9]+$' "$f" || true
+      grep -E '^family rules: class Ifc[A-Za-z0-9]+( grouped)? moves: (none|[A-Za-z ]+ to [A-Za-z ]+ [0-9]+(, [A-Za-z ]+ to [A-Za-z ]+ [0-9]+)*)$' "$f" || true
       # tools/re/beam_lines_vs_ifc.py (#1697): counts beside fixed words and the
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
