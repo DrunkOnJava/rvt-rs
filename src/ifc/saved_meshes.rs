@@ -519,8 +519,10 @@ pub fn attach_scoped_with_control(
         }
     }
     // #1209: the ceilings with no `GrossArea`, which their saved mesh's face
-    // gives where it is one piece.
-    let ceilings = ceilings_without_area(model, &wholes, scope);
+    // gives where it is one piece, and the family instances Revit writes as
+    // coverings (`ROOFING` units), which it gives where the mesh is one part.
+    let ceilings = coverings_without_area(model, &wholes, scope, "Ceiling");
+    let instances = coverings_without_area(model, &wholes, scope, "FamilyInstance");
     let hosts = match embed_hosts(rf, model, &by_id) {
         Ok(hosts) => hosts,
         Err(error) => {
@@ -535,6 +537,7 @@ pub fn attach_scoped_with_control(
         && beam_lines.is_empty()
         && column_rectangles.is_empty()
         && ceilings.is_empty()
+        && instances.is_empty()
     {
         for (index, reason) in refusals {
             note_refusal(model, index, reason);
@@ -549,6 +552,7 @@ pub fn attach_scoped_with_control(
             .chain(beam_lines.keys())
             .chain(column_rectangles.keys())
             .chain(ceilings.keys())
+            .chain(instances.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
         max_graph_values: 1_000_000,
@@ -584,8 +588,8 @@ pub fn attach_scoped_with_control(
         crate::native_wall_cuts::walls_with_no_base_join(rf, &wall_ids).unwrap_or_default();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
-    // #1209: the area of each ceiling's one-piece saved face.
-    let mut ceiling_areas: Vec<(usize, f64)> = Vec::new();
+    // #1209: the area of each covering's one-piece saved face.
+    let mut covering_areas: Vec<(usize, f64)> = Vec::new();
     // #1645: the candidates the scene held graphics for.
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
@@ -685,7 +689,19 @@ pub fn attach_scoped_with_control(
                     .then(|| one_piece_face_area(&element.meshes.primitives))
                     .flatten();
                 if let Some(area) = found {
-                    ceiling_areas.push((*index, area));
+                    covering_areas.push((*index, area));
+                }
+            }
+            if let Some([index]) = instances
+                .get(&element.identity.element_id)
+                .map(Vec::as_slice)
+            {
+                let found = (partial_refusal(&element.meshes).is_none()
+                    && one_part(&element.meshes.primitives))
+                .then(|| one_piece_face_area(&element.meshes.primitives))
+                .flatten();
+                if let Some(area) = found {
+                    covering_areas.push((*index, area));
                 }
             }
             if let Some(&index) = hosts.get(&element.identity.element_id) {
@@ -867,7 +883,7 @@ pub fn attach_scoped_with_control(
     add_column_quantities(model, &mut columns);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
-    add_ceiling_areas(model, &ceiling_areas);
+    add_covering_areas(model, &covering_areas);
     // #1645: a candidate the scene held no graphics for keeps its box too.
     for (id, indices) in &by_id {
         if !seen.contains(id) {
@@ -1922,14 +1938,18 @@ fn add_plate_widths(model: &mut IfcModel, widths: &[(usize, f64)]) {
     }
 }
 
-/// The ceilings of `model` (by ElementId) that hold no
+/// The coverings of `model` (by ElementId) that hold no
 /// `Qto_CoveringBaseQuantities.GrossArea`: an `IfcCovering` whose `RevitClass`
-/// is `Ceiling` (#1209). They are the ceilings `add_ceiling_quantities` leaves
-/// out: those a step cuts, and the uncut ones whose sketch it does not read.
-fn ceilings_without_area(
+/// is `class` (#1209). Of `Ceiling`, they are the ceilings
+/// `add_ceiling_quantities` leaves out: those a step cuts, and the uncut ones
+/// whose sketch it does not read. Of `FamilyInstance`, they are the family
+/// instances Revit writes as `IfcCovering` `ROOFING` (ventilation units, snow
+/// guards, downpipes and their casings on the BIM4LCA office and housing).
+fn coverings_without_area(
     model: &IfcModel,
     wholes: &BTreeSet<usize>,
     scope: SavedMeshScope,
+    class: &str,
 ) -> BTreeMap<u64, Vec<usize>> {
     let with_area: BTreeSet<usize> = model
         .entities
@@ -1958,7 +1978,7 @@ fn ceilings_without_area(
             || !scope.includes(ifc_type)
             || wholes.contains(&index)
             || with_area.contains(&index)
-            || !has_text_property(set, "RevitClass", "Ceiling")
+            || !has_text_property(set, "RevitClass", class)
         {
             continue;
         }
@@ -2036,6 +2056,28 @@ fn one_piece_face_area(primitives: &[Primitive]) -> Option<f64> {
     ((upper.0 - lower.0).abs() <= SAME_AREA * upper.0.max(lower.0)).then_some(lower.0)
 }
 
+/// Whether `primitives` make one connected part (#1209). A family instance
+/// that Revit writes as a covering is given the area of the extrusion its body
+/// was exported as (revit-ifc 24.2's `GrossAreaCalculator`). Where the body is
+/// one part with one-piece faces, that area is its face's, on all 72 such
+/// coverings of the BIM4LCA office and housing with Revit's export. A body of
+/// several solids, such as a vent's plate and duct, is given one solid's
+/// instead (0.338 ft² against a face of 1.012 ft²), so it gets none.
+fn one_part(primitives: &[Primitive]) -> bool {
+    let triangles: Vec<[[f64; 3]; 3]> = primitives
+        .iter()
+        .flat_map(|primitive| {
+            primitive.triangles.iter().filter_map(|triangle| {
+                match triangle.map(|i| primitive.vertices.get(i as usize).copied()) {
+                    [Some(a), Some(b), Some(c)] => Some([a, b, c]),
+                    _ => None,
+                }
+            })
+        })
+        .collect();
+    !triangles.is_empty() && pieces(&triangles) == 1
+}
+
 /// How many connected parts `triangles` make, two triangles joined where they
 /// share a vertex 1e-6 ft apart.
 fn pieces(triangles: &[[[f64; 3]; 3]]) -> usize {
@@ -2070,11 +2112,11 @@ fn pieces(triangles: &[[[f64; 3]; 3]]) -> usize {
         .len()
 }
 
-/// Give each ceiling of `found` (an index into the entities and its one-piece
+/// Give each covering of `found` (an index into the entities and its one-piece
 /// face's area) the `GrossArea` of its `Qto_CoveringBaseQuantities` (#1209),
-/// in the set it holds or a new one. A value a ceiling holds is never
+/// in the set it holds or a new one. A value a covering holds is never
 /// replaced.
-fn add_ceiling_areas(model: &mut IfcModel, found: &[(usize, f64)]) {
+fn add_covering_areas(model: &mut IfcModel, found: &[(usize, f64)]) {
     if found.is_empty() {
         return;
     }
