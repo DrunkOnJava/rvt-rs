@@ -462,7 +462,11 @@ window's body, and the opening it fills, is where it was in world
 coordinates, as a saved mesh and as a record box, and its GlobalId, type
 GlobalId and host wall are unchanged, on Core Interior, RE1 Architecture and
 the two office files (`tools/re/placed_bodies_vs_base.py`, runs 42092391898
-and 42106731054). A door bound to none, an element with no stored transform
+and 42106731054). A door set in a curtain wall, which rvt-rs binds to no wall since Revit's export
+cuts it no opening, is placed the same way, reversed also where its curtain
+wall's `m_isFlipped` is set (RE-474, #1494): 269 of 269 equal to Revit's on
+the BIM4LCA office's four files and RE1 Architecture (Measure run
+43688985749). Another door bound to none, an element with no stored transform
 (Revit 2023 and older) and a turned instance keep the default axes, which say
 nothing of the direction they face; the origin is still the record box's
 centre, more than 0.5 ft from Revit's on all 1,061 walled doors and windows

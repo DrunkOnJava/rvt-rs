@@ -1175,14 +1175,15 @@ pub(super) fn attach_wall_layers(
         let line = wall
             .id
             .and_then(|id| native.get(&u64::from(id)))
-            .filter(|record| record.flipped.is_some())
-            .map(|record| {
-                (
+            .and_then(|record| {
+                let flipped = record.flipped?;
+                Some((
                     record.end[0] - record.start[0],
                     record.end[1] - record.start[1],
-                )
+                    flipped,
+                ))
             });
-        if let Some((dx, dy)) = line {
+        if let Some((dx, dy, flipped)) = line {
             let length = dx.hypot(dy);
             if length.is_finite() && length > 1e-9 {
                 for (name, value) in WALL_NATIVE_DIRECTION_FIELDS
@@ -1192,6 +1193,12 @@ pub(super) fn attach_wall_layers(
                     wall.fields
                         .push(((*name).into(), InstanceField::Float { value, size: 8 }));
                 }
+                // RE-474: a door set in it that rvt-rs binds to no wall turns
+                // with the wall's flip.
+                wall.fields.push((
+                    WALL_NATIVE_FLIPPED_FIELD.into(),
+                    InstanceField::Bool(flipped),
+                ));
             }
         }
         if let Some(joined) = wall.id.and_then(|id| top_joined.get(&u64::from(id))) {

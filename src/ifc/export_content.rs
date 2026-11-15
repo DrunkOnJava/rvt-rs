@@ -5937,6 +5937,13 @@ pub const PLACEMENT_AXES_SOURCE_PROPERTY: &str = "PlacementAxesSource";
 /// flip differ (RE-343 Rule 1, RE-347).
 pub const OPENING_PLACEMENT_AXES_SOURCE: &str = "stored_axes_reversed_by_flips";
 
+/// [`PLACEMENT_AXES_SOURCE_PROPERTY`] of a door or window rvt-rs binds to no
+/// plain wall, placed by the curtain wall its own native record names: its
+/// stored X axis, reversed where its two flips differ or that curtain wall is
+/// flipped, but not both (RE-474).
+pub const OPENING_STORED_HOST_PLACEMENT_AXES_SOURCE: &str =
+    "stored_axes_reversed_by_flips_and_host_wall_flip";
+
 /// `BodySource` of a beam whose body runs along its location line (RE-49).
 pub const BEAM_AXIS_BODY_SOURCE: &str = "partition_beam_axis";
 
@@ -8891,9 +8898,16 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     } else {
                         body
                     };
+                    let source = if crate::partition_schema_mvp::opening_placement_from_stored_host(
+                        &decoded.fields,
+                    ) {
+                        OPENING_STORED_HOST_PLACEMENT_AXES_SOURCE
+                    } else {
+                        OPENING_PLACEMENT_AXES_SOURCE
+                    };
                     properties.push(Property {
                         name: PLACEMENT_AXES_SOURCE_PROPERTY.into(),
-                        value: PropertyValue::Text(OPENING_PLACEMENT_AXES_SOURCE.into()),
+                        value: PropertyValue::Text(source.into()),
                     });
                     ((angle != 0.0).then_some(angle), body)
                 }

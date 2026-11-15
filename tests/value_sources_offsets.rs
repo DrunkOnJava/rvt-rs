@@ -682,6 +682,14 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         },
     ),
     (
+        "PlacementAxesSource",
+        "stored_axes_reversed_by_flips_and_host_wall_flip",
+        Sourced {
+            all: &["instance_transform", "native_opening", "opening_host_wall"],
+            any: &[],
+        },
+    ),
+    (
         "PlacementOriginSource",
         "stored_origin_no_opening",
         Sourced {
