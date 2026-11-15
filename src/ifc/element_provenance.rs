@@ -1103,7 +1103,9 @@ fn property_readers(name: &str, value: &str) -> &'static [&'static str] {
         | ec::WALL_PROFILE_TOP_PROPERTY
         | ec::WALL_PROFILE_CUT_PROPERTY => &["sketch_lines", "sketch_list"],
         ec::PLACEMENT_AXES_SOURCE_PROPERTY => match value {
-            ec::OPENING_PLACEMENT_AXES_SOURCE => PLACEMENT_READERS,
+            ec::OPENING_PLACEMENT_AXES_SOURCE | ec::OPENING_STORED_HOST_PLACEMENT_AXES_SOURCE => {
+                PLACEMENT_READERS
+            }
             _ => &[],
         },
         // RE-361: a door set in no wall is placed at its stored transform's

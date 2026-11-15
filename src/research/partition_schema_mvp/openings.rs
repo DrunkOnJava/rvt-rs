@@ -96,9 +96,19 @@ pub fn opening_placement_x_axis_from_fields(
 /// placed in the open models has 0.999999 or more (the rejects are about 1e-15).
 const OPENING_ALONG_WALL_MIN: f64 = 0.999;
 
-/// A host wall's plan direction and whether the flips of a door or window set
-/// in it differ.
-type WallAndFlip = ([f64; 2], bool);
+/// A host wall's plan direction, whether the stored X of a door or window set
+/// in it is reversed, and the wall, where it is the one the element's own
+/// native record names rather than one rvt-rs binds (RE-474).
+type WallAndFlip = ([f64; 2], bool, Option<u32>);
+
+/// Whether a door's or window's placement X axis was taken from the wall its
+/// own native record names ([`OPENING_PLACEMENT_FROM_STORED_HOST_FIELD`]).
+pub fn opening_placement_from_stored_host(fields: &[(String, InstanceField)]) -> bool {
+    fields.iter().any(|(name, value)| {
+        name == OPENING_PLACEMENT_FROM_STORED_HOST_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    })
+}
 
 /// Give each door and window set in a plain wall the plan direction of the X
 /// axis of its Revit placement ([`OPENING_PLACEMENT_X_AXIS_FIELDS`], RE-347):
@@ -114,6 +124,17 @@ type WallAndFlip = ([f64; 2], bool);
 /// - whose X is within [`INSTANCE_TURN_MIN_RADIANS`] of one of the model's
 ///   axes (one turned further keeps its turned box, RE-87).
 ///
+/// A door or window rvt-rs binds to no such wall gets the same, from the wall
+/// its own native record's `m_hostId` names, where that is such a wall whose
+/// flip is read: its stored X reversed where its two flips differ or the wall
+/// is flipped (`SWall.m_isFlipped`), but not both, and marked
+/// [`OPENING_PLACEMENT_FROM_STORED_HOST_FIELD`] (RE-474). On the doors of the
+/// BIM4LCA office and RE1 Architecture that rvt-rs binds to no wall, that is
+/// Revit's placement X on every one whose `m_hostId` names such a wall (273 of
+/// 273 over the office's four files, 1 of 1 on RE1), where the flips alone are
+/// wrong on 21 to 23 of them per file. The wall's flip is not part of the rule
+/// for an element rvt-rs binds: there the flips alone are exact.
+///
 /// Run after `attach_cut_loop_sizes`, which gives the flips on Revit 2024 to
 /// 2027 (`CUT_LOOP_REVIT_VERSIONS`) and may rebind the host (RE-245).
 pub(super) fn attach_opening_placement_axes(
@@ -127,6 +148,16 @@ pub(super) fn attach_opening_placement_axes(
         .filter(|wall| wall.class != CURTAIN_WALL_CLASS)
         .filter_map(|wall| Some((wall.id?, wall_native_direction_from_fields(&wall.fields)?)))
         .collect();
+    let flipped: BTreeMap<u32, bool> = walls
+        .iter()
+        .filter_map(|wall| {
+            let id = wall.id?;
+            wall.fields.iter().find_map(|(name, value)| match value {
+                InstanceField::Bool(flip) if name == WALL_NATIVE_FLIPPED_FIELD => Some((id, *flip)),
+                _ => None,
+            })
+        })
+        .collect();
     if directions.is_empty() {
         return;
     }
@@ -139,15 +170,40 @@ pub(super) fn attach_opening_placement_axes(
     // Each door and window set in such a wall: the wall's direction and
     // whether its two flips differ.
     let mut wanted: BTreeMap<u32, WallAndFlip> = BTreeMap::new();
+    // RE-474: the ones bound to no such wall, by whether their flips differ.
+    let mut unbound: BTreeMap<u64, bool> = BTreeMap::new();
     for element in groups.iter().flat_map(|elements| elements.iter()) {
-        let (Some(id), Some(wall), Some([hand, facing])) = (
-            element.id,
-            host_of(element).and_then(|host| directions.get(&host)),
-            opening_flips_from_fields(&element.fields),
-        ) else {
+        let (Some(id), Some([hand, facing])) =
+            (element.id, opening_flips_from_fields(&element.fields))
+        else {
             continue;
         };
-        wanted.insert(id, (*wall, hand != facing));
+        match host_of(element).and_then(|host| directions.get(&host)) {
+            Some(wall) => {
+                wanted.insert(id, (*wall, hand != facing, None));
+            }
+            None => {
+                unbound.insert(u64::from(id), hand != facing);
+            }
+        }
+    }
+    if !unbound.is_empty() {
+        let ids: BTreeSet<u64> = unbound.keys().copied().collect();
+        if let Ok(stored) = crate::native_symbol_cuts::instance_hosts(rf, &ids) {
+            for (id, differ) in &unbound {
+                let Some(host) = stored.get(id).and_then(|host| u32::try_from(*host).ok()) else {
+                    continue;
+                };
+                let (Some(wall), Some(flip), Ok(id)) = (
+                    directions.get(&host),
+                    flipped.get(&host),
+                    u32::try_from(*id),
+                ) else {
+                    continue;
+                };
+                wanted.insert(id, (*wall, differ != flip, Some(host)));
+            }
+        }
     }
     if wanted.is_empty() {
         return;
@@ -162,7 +218,8 @@ pub(super) fn attach_opening_placement_axes(
         let Some(id) = element.id else {
             continue;
         };
-        let (Some(&(wall, differ)), Some(transform)) = (wanted.get(&id), transforms.get(&id))
+        let (Some(&(wall, differ, stored_host)), Some(transform)) =
+            (wanted.get(&id), transforms.get(&id))
         else {
             continue;
         };
@@ -188,9 +245,15 @@ pub(super) fn attach_opening_placement_axes(
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
+        if stored_host.is_some() {
+            element.fields.push((
+                OPENING_PLACEMENT_FROM_STORED_HOST_FIELD.into(),
+                InstanceField::Bool(true),
+            ));
+        }
         // #1498: the host wall's native record holds the line the axis was
         // taken along.
-        if let Some(host) = host_of(element) {
+        if let Some(host) = stored_host.or_else(|| host_of(element)) {
             rf.attribute_value_source(host, "native_wall", id, "opening_host_wall");
         }
     }
