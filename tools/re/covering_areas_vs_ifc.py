@@ -56,12 +56,43 @@ def faces(path, product, settings):
     nz = np.zeros(len(t))
     nz[live] = n[live, 2] / length[live]
     levels = collections.defaultdict(float)
+    members = collections.defaultdict(list)
     for i in np.where(live & (np.abs(nz) >= 0.999))[0]:
-        levels[(round(float(a[i, 2]), 3), bool(nz[i] > 0))] += float(length[i]) / 2
-    down = max((x for (z, up), x in levels.items() if not up), default=None)
-    up = max((x for (z, up_), x in levels.items() if up_), default=None)
+        key = (round(float(a[i, 2]), 3), bool(nz[i] > 0))
+        levels[key] += float(length[i]) / 2
+        members[key].append(int(i))
+    down_key = max((k for k in levels if not k[1]), key=lambda k: levels[k], default=None)
+    up_key = max((k for k in levels if k[1]), key=lambda k: levels[k], default=None)
+    down = levels[down_key] if down_key else None
+    up = levels[up_key] if up_key else None
     span = v.max(axis=0) - v.min(axis=0)
-    return down, up, float(span[0]), float(span[1]), float(span[2])
+    # Connected parts: of the whole mesh, and of each largest face, joining
+    # triangles that share a corner 1e-5 ft apart.
+    corner = {}
+    for i, row in enumerate(t):
+        for j in row:
+            corner.setdefault(tuple(np.round(v[j] / 1e-5).astype(np.int64)), len(corner))
+    ids = np.array([[corner[tuple(np.round(v[j] / 1e-5).astype(np.int64))] for j in row] for row in t])
+
+    def parts(rows):
+        parent = {}
+
+        def find(x):
+            while parent.setdefault(x, x) != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        for r in rows:
+            p0, p1, p2 = (find(int(x)) for x in ids[r])
+            parent[p1] = p0
+            parent[p2] = p0
+        return len({find(int(ids[r][0])) for r in rows})
+
+    solids = parts(range(len(t)))
+    down_parts = parts(members[down_key]) if down_key else 0
+    up_parts = parts(members[up_key]) if up_key else 0
+    return down, up, float(span[0]), float(span[1]), float(span[2]), solids, down_parts, up_parts
 
 
 def collect(path):
@@ -118,6 +149,9 @@ def main():
             row["rvt-rs plan box equal"] += near(uf[2] * uf[3], r["area"])
             dims = sorted(round(d, 3) for d in uf[2:])
             row["rvt-rs body a cube"] += dims[0] == dims[2]
+            one = uf[5] == 1 and uf[6] == 1 and uf[7] == 1 and near(uf[0], uf[1])
+            row["rvt-rs one part, one-piece faces agreeing"] += one
+            row["of those, lower face equal"] += one and near(uf[0], r["area"])
         if rf is not None:
             row["Revit lower face equal"] += near(rf[0], r["area"])
     for (cls, kind), row in sorted(tally.items()):
@@ -133,7 +167,8 @@ def main():
             f"covering: tag {tag} class {u['class']} type {r['type']} object {r['object']!r} source {u['source']} "
             f"Revit {fmt(r['area'])} rvt-rs {fmt(u['area'])} | rvt-rs lower {fmt(uf and uf[0])} upper {fmt(uf and uf[1])} "
             f"box {fmt(uf and uf[2] * uf[3])} span {fmt(uf and uf[2])} {fmt(uf and uf[3])} {fmt(uf and uf[4])} | "
-            f"Revit lower {fmt(rf and rf[0])} span {fmt(rf and rf[2])} {fmt(rf and rf[3])} {fmt(rf and rf[4])}"
+            f"Revit lower {fmt(rf and rf[0])} span {fmt(rf and rf[2])} {fmt(rf and rf[3])} {fmt(rf and rf[4])} | "
+            f"rvt-rs parts {uf and uf[5]} lower pieces {uf and uf[6]} upper pieces {uf and uf[7]}; Revit parts {rf and rf[5]}"
         )
     return 0
 
