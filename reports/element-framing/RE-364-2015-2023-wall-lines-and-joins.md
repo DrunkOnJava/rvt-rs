@@ -169,3 +169,25 @@ gh workflow run measure.yml --ref main -f ref=748eff38ecdeb0fc22e15259826453eea4
 python3 tools/re/save_pair_wall_quantities.py sample-2023-racadvancedsampleproject/model.ifc \
   ../measure-head-samples-2024-2099/sample-2024-racadvancedsampleproject/model.ifc
 ```
+
+## 10. Addendum, 2026-11-14: the control joins are in the graph on 2015 to 2023 (#1584)
+
+Section 5 says a 2015 to 2023 record is "read without its control joins" and section 6 that "why the graph holds none is not decoded". **The graph holds them.** `probe_1584_wall_control_joins` (Measure run 43666839412, probe at `35e4130e`, `-f samples=true`, all 59 sample models of 2015 to 2027) prints for each wall whether its record has a `VWallDriver`, whether that holds `m_controlJoinsSet`, the entries whose ElementId decodes, and its `CDJoinInfo` and `JoinEndGStep` objects. Counts and ElementIds only.
+
+- **Every wall record has the driver and the field.** In all 59 saves the wall records equal the walls with a `VWallDriver`, and none lacks `m_controlJoinsSet`.
+- **The sets are as full on 2015 to 2023 as on 2024 to 2027.** `rac_advanced` holds 179 walls with joins and 1 with an empty set on every save of 2015 to 2027; `rac_basic` 59 and 1; `rme_basic` and `rme_advanced` 151 and 15; `rst_basic` 9 and 0 on 2016 to 2027 (its 2015 save is another model with 4 walls and empty sets, RE-181); `rst_advanced` 6 and 0. A wall with a non-empty set always has an entry whose ElementId decodes, as `{"m_id":{"m_id":n}}` before 2024 and `{"m_id":{"m_id64":n}}` after (RE-280).
+- **Held to the same project's later save by ElementId**, with `tools/re/wall_control_joins_across_saves.py`: `rac_advanced` 2021, 2022 and 2023 against 2024, 180 of 180 walls hold the same sets, the same decoded entries, the same `CDJoinInfo` entries and the same `JoinEndGStep` and exposed-face entries; so do `rac_basic` 2019, 2020 and 2022 against 2023 (60 of 60), `rst_basic` 2016, 2022 and 2023 against 2024 (9 of 9), `rme_basic` 2019 against 2023 and `rme_advanced` 2019 against 2024 (166 of 166), and `rac_advanced` 2024 against 2027 (180 of 180).
+- **Where the sets differ they are the project's earlier state, as far as these files can show.** `rac_advanced` 2015 to 2020 are alike (180 of 180 between 2015, 2019 and 2020) and differ from 2021 on 33 walls; `rac_basic` 2015 differs from 2019 on 8. No set of the earlier save names a wall the later save does not: the later save holds more partners on all 33 and on 6 of the 8, and on the other 2 the same walls at other ends. That is what a project edited between saves looks like, and also what an earlier read missing entries would look like: the files cannot tell the two apart, so those saves are held to the earliest save that equals the later release's (`rac_advanced` 2021, `rac_basic` 2019), not to the later release's.
+
+**Why production reads them empty.** The native wall reader takes every ElementId through `native_json::element_id`, which reads `/m_id/m_id64` only. On 2015 to 2023 the field is `/m_id/m_id`, so `joins`, `side_joins` and `exposed` come back empty there, as do `shells` and `type_id` (section 5); `identifier_i64`, which RE-280 added, reads both. That is a reading of the source, not yet measured: the pull request that changes it measures it.
+
+**Not measured:** `Length`, the side areas, the footprint and the volumes written from these joins; the angled walls of 2015 to 2020 with their ends trimmed at the joins. Each is its own pull request held to Measure, as #1584 says.
+
+**Reproduce:**
+
+```bash
+gh workflow run measure.yml --ref main -f ref=35e4130ec3d5787c1f1dbd48af5b588d3e51aa11 -f base=none -f samples=true \
+  -f probe=probe_1584_wall_control_joins
+# then, in the run's downloaded measure-head directory (a sample-<year>-<project>/probe.txt each):
+python3 tools/re/wall_control_joins_across_saves.py measure-head
+```
