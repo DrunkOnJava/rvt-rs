@@ -4,7 +4,7 @@
 **Issue:** #1814 (wall ends at butt joins on the BIM4LCA housing); follows RE-71 (layered butt joins nest like concentric Ls), RE-70 (who runs through), RE-127 (a stop the joined-wall lists decide), RE-252 (`JoinEndGStep`), RE-447 (a non-empty `JoinEndGStep` as a clue).
 **Artefacts:** the BIM4LCA housing (concrete and timber, at building permit, Revit 2024) with Revit's own IFC4 exports, for the ends; the BIM4LCA office, Core Interior, RE1, the Revit 2025 models, the Autodesk samples of Revit 2015 to 2027 and the held-out projects (counts only) for what else moves.
 **Probe and scorer:** `probe_re252_wall_ends` and `tools/re/wall_ends_list.py`, both on `main`.
-**Status:** pending. Run 1 met its first row on 10 ends and broke one exact end (section 4); the narrowed rule's run follows.
+**Status:** positive, narrowed. 8 wall ends of the BIM4LCA concrete housing at permit, 435 or 390 mm long, become Revit's, and nothing else in 120 exports moves (run 2, section 4). Run 1's rule also broke one exact end (1550779); the narrowed rule leaves out every roof-joined wall, which gives up 12 ends Revit draws flat.
 
 ## 1. Revit draws a layered wall's end layer by layer
 
@@ -16,17 +16,19 @@ At an end the partition reader decides by the walls' join lists, it gives each l
 
 `JoinEndGStep` holds, per end, a weak index, an omitted target (`m_omittedTarget`: a wall and its end) and the exposed-face map (RE-252). `probe_re252_wall_ends` prints them beside the partition reader's `m_wall_join_*_layer_reaches`, and `wall_ends_list` gives rvt-rs's error at each end against Revit's export (Measure [43724083677](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43724083677), `main` at `156e2b25`, the eight BIM4LCA office and housing files).
 
-Every end where the wall stops (it does not run through), its layer reaches spread, the nearest of them is the partner's near face, and its `JoinEndGStep` names an omitted target: 24 ends on four files. Revit's end at each is flat at the partner's near face, where rvt-rs draws it to the furthest reach:
+Every end where the wall stops (it does not run through), its layer reaches spread, the nearest of them is the partner's near face, and its `JoinEndGStep` names an omitted target: 24 ends on four files. Revit's end is flat at the partner's near face at all of them but one, where rvt-rs draws it to the furthest reach:
 
 | file | such ends | Revit's end at the near face | rvt-rs past it by | not scored |
 |---|---:|---:|---|---:|
-| concrete housing, permit | 11 | 10 of 10 | 435, 390 or 255 mm | 1 |
+| concrete housing, permit | 11 | 10 of 11 | 435, 390 or 255 mm | 0 |
 | timber housing, as built | 5 | 5 of 5 | 28 mm | 0 |
 | timber housing, permit | 5 | 5 of 5 | 28 mm | 0 |
 | timber office, as built | 2 | 1 of 1 | 26 mm | 1 |
 | timber office, permit | 1 | - | - | 1 |
 
-The three not scored are walls `wall_ends_list` does not pair with Revit's (1550779 and 3598178). In Revit's export, wall 1566542's start is flat at its partner 1566543's near face: every layer ends there.
+The one not flat is wall 1550779's end, where Revit's end is at the furthest reach (section 4). This section first counted it as not scored: `wall_ends_list` lists only the walls with an end off, and 1550779's was not.
+
+The two not scored are wall 3598178's start on both timber office files, whose native curve the reader does not map to its line, so no rule reaches it. In Revit's export, wall 1566542's start is flat at its partner 1566543's near face: every layer ends there.
 
 The omitted target is enough for a flat end, not needed for one. On the concrete office, Revit's end is at the nearest reach at 9 ends (3 as built, 6 at permit) where the reaches spread 330 or 405 mm and `JoinEndGStep` names nothing; what puts those there is not read here, and they are left as they are. Ends with an omitted target whose reaches do not spread are left as they are: on the concrete housing at permit, wall 1567716's two ends, whose layers reach the partner's far face and which Revit ends at the joint, are off by 195 mm and stay so.
 
@@ -49,7 +51,12 @@ An end whose layers do not reach the near face (wall 1567716) is left as it is, 
 
 The rule therefore leaves out every wall whose record holds a `JoinToRoofGStep`. That is narrower than the evidence needs: of section 2's 21 ends, the 13 on roof-joined walls include 12 that Revit draws flat (1550777's start, 1567742's end, the 10 timber housing T ends and the timber office's 1). Only 1550779 is not drawn flat. What separates it from the other 12 is not read. On the eight files the rule then reaches 8 ends, all on the concrete housing at permit.
 
-**Run 2** (the narrowed rule): TBD.
+**Run 2** (Measure [43734232355](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43734232355), the narrowed rule at `653af5fb` against `main` at `156e2b25`, nordic, r2025, samples and holdout, 120 exports):
+- **Exports.** 119 of 120 are byte-identical to `main`'s, and `diagnostics.json` is identical on 102 of 102. Only the concrete housing at permit moves.
+- **Fixed.** On that file exactly the 8 ends become Revit's to 0.001 ft: 1346762's and 1437589's, 1550773's, 1566542's and 1566546's starts, and 1346792's, 1437595's and 1566548's ends. `wall_ends_list`'s walls with an end off go from 71 to 63, and its walls with both ends within 0.001 ft from 274 to 282. `wall_bodies_vs_ifc`'s axis-parallel ends within 0.001 ft go from 274 to 282.
+- **Unchanged.** 1550779 stays Revit's, and no other wall's end moves.
+- **Fits.** `frames_vs_ifc`'s fitted rotation goes from -60.5942 to -60.6123 deg, and `wall_heights_vs_ifc`'s plan turn from -60.612298 to -60.627981 deg, its median wall-middle residual from 0.0093 to 0.0131 ft. These fits are over every wall, and its per-wall tops move with the frame by under 0.002 ft. No count of values equal to, or different from, Revit's changes on any file.
+
 
 ## 5. The registered rows
 
@@ -72,12 +79,17 @@ Run 1 against these rows:
 4. **The samples.** No sample export moves, and `same-project gates` passes.
 5. **Held-out.** Counts only, unchanged or reported.
 
-Read from run 2: TBD.
+Read from run 2:
+1. **Met.** The 8 ends, and 1550779 and every other end unchanged.
+2. **Met.** 119 of 120 exports are byte-identical.
+3. **Met.** No `different` or values-Revit-does-not-write count rises; `diagnostics.json` is identical everywhere.
+4. **Met.** No sample export moves, and `same-project gates` passes.
+5. **Met.** Every held-out export is identical.
 
 ## 6. Where it rests
 
-- **Two projects, one exporter.** The ends are the BIM4LCA housing's (20) and office's (1), saves of two buildings by Revit 2024.
-- **What the omitted target means is not read.** The rule rests on the observed flat end at every such end of the two files, not on a decoded meaning of `m_omittedTarget`.
+- **One project.** The 8 ends are the BIM4LCA concrete housing's at permit, one save of one building by Revit 2024. It is listed on `docs/one-project-rules.md`.
+- **What the omitted target means is not read.** The rule rests on the observed flat end at such ends, not on a decoded meaning of `m_omittedTarget`. Nor is what separates 1550779 from the 12 roof-joined ends Revit draws flat; the roof-join condition is coarser than the evidence.
 
 ## 7. Reproduce
 
