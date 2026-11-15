@@ -52,12 +52,13 @@ def names(state, text):
 
 
 def main():
-    if len(sys.argv) != 3:
+    args = [a for a in sys.argv[1:] if a != "--list"]
+    if len(args) != 2:
         print(__doc__)
         return 2
-    revit = by_tag(sys.argv[2])
+    revit = by_tag(args[1])
     counts = collections.defaultdict(collections.Counter)
-    for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    for line in open(args[0], encoding="utf-8", errors="replace"):
         match = LINE.match(line.strip())
         if not match:
             continue
