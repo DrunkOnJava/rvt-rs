@@ -258,6 +258,14 @@ pub const COLUMN_RELEASE_FIELD: &str = "m_column_release";
 /// Classes whose type's hollow section is read (W6).
 pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
 
+/// The releases whose rectangular tube beams are drawn as their type's tube
+/// and given the six base quantities of a profile (#1698): Revit 2024, the
+/// BIM4LCA office's 8 beams of the `Putkipalkki - suorakaide` family, the only
+/// file they are measured on against Revit's export. A release's reader is a
+/// decision, so a later one is not taken until a file of it is measured
+/// (#1945).
+pub const TUBE_BEAM_REVIT_VERSIONS: &[u32] = &[2024];
+
 /// The releases whose hollow-section columns get the four base quantities of
 /// RE-247 section 8 (`CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume` and
 /// `NetVolume`): Revit 2024, the BIM4LCA office, the only file they are
