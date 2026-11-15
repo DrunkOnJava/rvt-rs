@@ -137,11 +137,11 @@ use super::{
     ELEMENT_RECORD_PROPERTY_SET, FLOOR_SHAPE_BODY_SOURCE, WALL_BASE_COVER_BODY_BASE_SOURCE,
     WALL_BASE_COVER_IN_PART_BODY_BASE_SOURCE, WALL_BASE_REFUSAL_PROPERTY,
     WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SLOPED_IN_PART_BODY_BASE_SOURCE,
-    WALL_BASE_SOURCE_PROPERTY, WALL_END_AT_JOINED_WALLS_BODY_END_SOURCE,
-    WALL_END_NOT_MARKED_PROPERTY, WALL_END_ORDER_DEPENDENT_PROPERTY, WALL_END_REFUSAL_PROPERTY,
-    WALL_END_SOURCE_PROPERTY, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
-    WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
-    WALL_TOP_STUB_INSIDE_WALL, WALL_TOP_STUB_PROPERTY,
+    WALL_BASE_SOURCE_PROPERTY, WALL_CENTRELINE_BODY_SOURCE,
+    WALL_END_AT_JOINED_WALLS_BODY_END_SOURCE, WALL_END_NOT_MARKED_PROPERTY,
+    WALL_END_ORDER_DEPENDENT_PROPERTY, WALL_END_REFUSAL_PROPERTY, WALL_END_SOURCE_PROPERTY,
+    WALL_TOP_COVER_BODY_HEIGHT_SOURCE, WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE, WALL_TOP_STUB_INSIDE_WALL, WALL_TOP_STUB_PROPERTY,
 };
 use crate::ifc::body_geometry::{
     Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
@@ -2247,6 +2247,68 @@ fn join_trims(entity: Option<&IfcEntity>) -> Option<[f64; 2]> {
     Some([read("JoinTrimStart")?, read("JoinTrimEnd")?])
 }
 
+/// The trims at the low and high end of a wall drawn along its location
+/// curve (`partition_wall_centreline`), feet, read as [`join_trims`] reads a
+/// box wall's (#1474): at an end a join decided, the body stops `-reach` short
+/// of the curve's end (RE-70, RE-73), so the end of the curve lies where a box
+/// wall's record box would end; at any other end, none. `None` for any other
+/// body, or where a body's end does not lie at its curve's end less the
+/// reach it gives.
+fn centreline_trims(
+    entity: Option<&IfcEntity>,
+    record: &PendingEnds,
+    wall: &AxisWall,
+) -> Option<[f64; 2]> {
+    let Some(IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    }) = entity
+    else {
+        return None;
+    };
+    if set.name != ELEMENT_RECORD_PROPERTY_SET {
+        return None;
+    }
+    let drawn_on_its_line = set.properties.iter().any(|property| {
+        property.name == "BodySource"
+            && matches!(&property.value, PropertyValue::Text(text) if text == WALL_CENTRELINE_BODY_SOURCE)
+    });
+    if !drawn_on_its_line {
+        return None;
+    }
+    let reach = |name: &str| {
+        set.properties
+            .iter()
+            .find_map(|property| match (&property.value, property.name == name) {
+                (PropertyValue::LengthFeet(reach), true) if reach.is_finite() => Some(*reach),
+                _ => None,
+            })
+    };
+    let reaches = [reach("JoinReachStart"), reach("JoinReachEnd")];
+    let [x0, y0, x1, y1] = wall.bounds;
+    let long = usize::from(y1 - y0 > x1 - x0);
+    let (low, high) = range(&wall.bounds, long);
+    let mut trims = [0.0, 0.0];
+    for (slot, reach) in reaches.into_iter().enumerate() {
+        let Some(reach) = reach else {
+            continue;
+        };
+        let curve_end = record.curve[slot][long];
+        let at_low = (curve_end - low).abs() <= (curve_end - high).abs();
+        let body_end = if at_low {
+            curve_end - reach
+        } else {
+            curve_end + reach
+        };
+        let end = if at_low { low } else { high };
+        if (body_end - end).abs() > END_TOLERANCE_FEET {
+            return None;
+        }
+        trims[usize::from(!at_low)] = -reach;
+    }
+    Some(trims)
+}
+
 /// A wall whose record joins others at the ends of its location curve,
 /// waiting for the pass (#1410).
 pub(super) struct PendingEnds {
@@ -2841,7 +2903,14 @@ fn decide_ends(
         .enumerate()
         .filter_map(|(index, entity)| axis_wall(index, entity))
         .filter(|wall| profiled.contains(&wall.index) && by_index.contains_key(&wall.index))
-        .filter_map(|wall| join_trims(entities.get(wall.index)).map(|trims| (wall, trims)))
+        .filter_map(|wall| {
+            let entity = entities.get(wall.index);
+            let trims = by_index
+                .get(&wall.index)
+                .and_then(|record| centreline_trims(entity, record, &wall))
+                .or_else(|| join_trims(entity))?;
+            Some((wall, trims))
+        })
         .collect();
     if candidates.is_empty() {
         return Vec::new();
