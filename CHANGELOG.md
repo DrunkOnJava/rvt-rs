@@ -3390,7 +3390,7 @@ and version strings to it):
 
   The BIM4LCA office's room 3095831 at building permit, which kept its box,
   is now 1864.737 ft² against the 1864.74 of Revit's IFC4 export, and
-  Snowdon Towers' room 830902 304.059 ft², within 0.001 ft² of Revit's area
+  Snowdon Towers' room 830902 within 0.001 ft² of Revit's area
   for it (`Vim.Room.Area` in the model's later VIM edition, local only). On
   every room of Autodesk's samples,
   the office and the Revit 2025 models that the walk or the span already
@@ -3400,10 +3400,9 @@ and version strings to it):
   It is read only where every edge's two planes give it the same ends and
   the solid holds no point between its floor and 4 ft above it except on a
   vertical edge, so that a raised floor, a step, a pocket or a low bulkhead
-  refuses it. Snowdon Towers' room 2181757 shows why: its floor is 5172.857
-  ft², its section 4 ft above the floor is 5177.493, and Revit's area for it
+  refuses it. Snowdon Towers' room 2181757 shows why: Revit's area for it
   (`Vim.Room.Area` in the model's later VIM edition) is within 0.001 ft² of
-  that section and 4.6 ft² over the floor. It keeps its box.
+  its section 4 ft above the floor and 4.6 ft² over the floor. It keeps its box.
 
 ### Changed
 
@@ -12989,8 +12988,7 @@ Release, and a multi-arch container image on ghcr.io.
   piece as another element with the element's `Tag`, named `…:2`, `…:3`,
   as Revit's own export does.
   - On Snowdon Towers the five such slabs match Revit's pieces. Four match
-    piece for piece by area (2 × 1.60, 2 × 1.99, 2 × 0.38 and 9.02 + 9.76
-    m²). The fifth has three pieces, which Revit writes as one slab with
+    piece for piece by area. The fifth has three pieces, which Revit writes as one slab with
     three tessellated bodies.
   - A sketch whose loops cross each other still gives no profile.
 
