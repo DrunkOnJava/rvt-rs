@@ -387,11 +387,31 @@ the four levels a file can reach are in the
   ceiling's piece `GrossArea` rests on one building, a multistory stair's
   copies are inferred from three groups of one building, and `[0.24.0]` in
   [`CHANGELOG.md`](CHANGELOG.md) lists what each change does not measure.
+- **0.25.0, 2026-11-15.** It fixes a way to take unbounded memory with a crafted
+  stream (the partition scanner stops at 16,777,216 candidates, #1833) and reads
+  more of what Revit's own export has: beams whose copies in several partitions
+  disagree (#1719), hollow rectangular tube beams (#1698), a wall end that a
+  joined wall's face lies inside (#1474), a door's opening in a second wall
+  (#1165), a door in a curtain wall on Revit's axes (#1494), the side areas of
+  more walls (#1046), the `GrossArea` of cut ceilings and roof equipment
+  (#1209), the types of Revit 2015 to 2023 doors and windows (#1603), and the
+  storeys of a Revit 2027 model's columns and footings (#1842). Against 0.24.0,
+  44 of the 127 measured exports differ, and 57 of the 102 `diagnostics.json`
+  files; 29 of the 44 have no Revit export on Measure, and on the other 15 no
+  count that equals Revit's falls and none that differs from Revit's rises but
+  the type objects of the spent Vitoria, which differ from Revit's in Name and
+  GlobalId (#1603). The Revit 2027 storeys rest on one reporter's model, the
+  tube beams on 8 beams of one building, a wall's `Length` before Revit 2024 on
+  Revit 2023 curtain walls held to the 2024 save (an ordinary wall's `Length` is
+  written on 8 walls of one held-out Revit 2021 project, which no quantity of
+  Revit's checks and the length of Revit's own `Axis` does, 8 of 8 within
+  1e-4 ft, #2069), and `[0.25.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists what
+  each change does not measure.
 
-### 0.25.0: IFC geometry and element data
+### 0.26.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.24.0, moved from the
-0.24.0 milestone when 0.24.0 shipped. Each
+The geometry and element-data work that continues after 0.25.0, moved from the
+0.25.0 milestone when 0.25.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall

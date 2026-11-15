@@ -1847,12 +1847,47 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.24.0** (2026-11-14) is the latest release: crates.io (`rvt` and
+- **v0.25.0** (2026-11-15) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the container
   image, each checked from its published artifacts ([`install.md`](install.md));
   docs.rs had built `rvt` when they were checked (`rvt-rs-mcp` is a binary crate
-  with no documentation there). It closes #1713: on the 42 models with a public
+  with no documentation there). It fixes a way to take unbounded memory with a
+  crafted stream (`ScanOptions::default()` stops at 16,777,216 candidates and
+  sets `PartitionScan::truncated`, #1833) and writes more of what Revit's own
+  export writes: beams whose copies in several partitions disagree get `Length`,
+  `Span`, `Slope` and `Roll` (#1719, RE-428); a hollow rectangular tube beam is
+  drawn as that tube with its six base quantities (#1698, RE-470); a wall end
+  that a joined wall's face lies inside is cut back (#1474); a door's opening in
+  a second wall is written where the two walls span the same heights (#1165,
+  RE-471); a door set in a curtain wall is placed on Revit's axes (#1494,
+  RE-474); more walls get their side areas, `GrossVolume` and `Height` (#1046);
+  a cut ceiling and a roof fitting Revit writes as a covering get `GrossArea`
+  (#1209, RE-480, RE-484); a mullion beside an overlapped one gets its
+  `NetSurfaceArea` (#1803); a door or window of Revit 2015 to 2023 that the
+  reference-list join leaves untyped is typed from its native record (#1603,
+  RE-477); a Revit 2023 curtain wall gets its `Length` and a wall record of
+  Revit 2015 to 2023 is read with its control joins (#1584, RE-364); and the
+  columns and footings of a Revit 2027 structural model reach their storeys
+  (#1842, RE-469). Against 0.24.0, 44 of the 127 measured exports differ, and 57
+  of the 102 `diagnostics.json` files; 29 of the 44 have no Revit export on
+  Measure, and on the other 15, scored against Revit's own exports, no count
+  that equals Revit's falls and none that differs from Revit's rises but the
+  type objects of the spent Vitoria, which differ from Revit's in Name and
+  GlobalId (#1603). What it does not measure: the Revit 2027 storeys rest on one
+  reporter's model (counts only); the tube beams on the 8 of the BIM4LCA
+  concrete office; a ceiling's or roof fitting's `GrossArea` on the BIM4LCA
+  office and housing; a curtain wall's `Length` before Revit 2024 is held to the
+  same project's 2024 save, and an ordinary wall's `Length` is written there on
+  8 walls of one held-out Revit 2021 project, which no quantity of its IFC2X3
+  export checks and the length of Revit's own `Axis` does (8 of 8 within
+  1e-4 ft, #2069); the types of Revit 2015 to 2023 doors and windows are
+  checked against three projects' exports, two of them IFC2X3 and counted
+  apart, and their type objects' GlobalIds are not Revit's. `[0.25.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md) gives what each change measures and what it
+  does not.
+- **v0.24.0** (2026-11-14): published on every channel, each checked from its
+  published artifacts. It closes #1713: on the 42 models with a public
   Revit export, every one of the 58,665 elements both exports hold has Revit's
   `PredefinedType` (railings, doors, proxies, ramps and geographic elements are
   new in this release), and a Revit 2024 or later file whose export parameters
@@ -2162,7 +2197,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.24.0 has, and is ahead of it by the fragments
+- `main` has everything v0.25.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
