@@ -79,7 +79,14 @@ def facts(path):
                 elif area.is_a("IfcRectangleProfileDef"):
                     pts = np.array([[-area.XDim / 2, -area.YDim / 2], [area.XDim / 2, area.YDim / 2]])
                 ext = None if pts is None else (pts.max(axis=0) - pts.min(axis=0)) * unit / FEET
-                prof = (area.is_a(), ax, ay, ext, item.Depth * unit / FEET)
+                first = None
+                if pts is not None and len(pts) >= 2 and not area.is_a("IfcRectangleProfileDef"):
+                    o4 = np.array([pts[0][0], pts[0][1], 0.0, 1.0])
+                    o5 = np.array([pts[1][0], pts[1][1], 0.0, 1.0])
+                    w = frame(np.array([(full @ o4)[:3] * unit, (full @ o5)[:3] * unit]))
+                    d = w[1] - w[0]
+                    first = (w[0], d / max(np.linalg.norm(d), 1e-12), pts[0] * unit / FEET)
+                prof = (area.is_a(), ax, ay, ext, item.Depth * unit / FEET, first)
                 break
         out[e.Tag] = {
             "class": e.is_a(),
@@ -100,6 +107,8 @@ def main(argv):
     vec = lambda v: "-" if v is None else f"{v[0]:+.3f} {v[1]:+.3f} {v[2]:+.3f}"
     num = lambda v: "-" if v is None else f"{v:.4f}"
     shown = 0
+    import collections
+    tally = collections.Counter()
     for tag, r in sorted(revit.items()):
         if r["width"] is None and r["length"] is None:
             continue
@@ -110,12 +119,21 @@ def main(argv):
               f"; rvt-rs Width {num(o and o['width'])} Length {num(o and o['length'])}")
         if p:
             print(f"  Revit profile {p[0]} x {vec(p[1])} y {vec(p[2])} extent {'-' if p[3] is None else f'{p[3][0]:.4f} {p[3][1]:.4f}'} depth {p[4]:.4f}")
+            if p[5]:
+                print(f"  Revit first point {vec(p[5][0])} (profile {p[5][2][0]:+.4f} {p[5][2][1]:+.4f}) first edge {vec(p[5][1])}")
         print(f"  Revit placement x {vec(r['x'])}")
         if o:
             q = o["profile"]
             print(f"  rvt-rs placement x {vec(o['x'])}"
                   + (f"; profile {q[0]} x {vec(q[1])} extent {'-' if q[3] is None else f'{q[3][0]:.4f} {q[3][1]:.4f}'}" if q else ""))
+            if q and q[5]:
+                print(f"  rvt-rs first point {vec(q[5][0])} first edge {vec(q[5][1])}")
+            if p and p[5] and q and q[5]:
+                same_dir = abs(float(np.dot(p[5][1], q[5][1]))) > 0.999
+                tally["first edge parallel" if same_dir else "first edge not parallel"] += 1
+                tally[f"Revit x along its first edge: {abs(float(np.dot(p[5][1], p[1]))) > 0.999}"] += 1
     print(f"trace 1208: slabs and coverings with Revit's Width or Length: {shown}")
+    print("trace 1208 tally: " + "; ".join(f"{k} {v}" for k, v in sorted(tally.items())))
     return 0
 
 
