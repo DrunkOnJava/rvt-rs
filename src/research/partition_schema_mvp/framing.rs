@@ -333,6 +333,9 @@ fn beam_column_cut(element: &DecodedElement) -> bool {
 /// leaves the box, or a box no solid along the line reproduces, is not
 /// attached. A beam a column cuts (RE-122) is skipped: its record box fields are
 /// the cut box's, a line is tested against them, and its body is the cut box's.
+/// A beam whose copies in several partitions disagree takes the line of its
+/// current partition's copy ([`crate::partition_beam_axes::scan_beam_lines`],
+/// #1719), for its properties only: its body stays the box.
 pub(super) fn attach_beam_axes(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -350,7 +353,7 @@ pub(super) fn attach_beam_axes(
     if beams.is_empty() {
         return;
     }
-    let Ok(lines) = pba::scan_first_bounded_lines(rf, revit_version, &beams) else {
+    let Ok((lines, from_current)) = pba::scan_beam_lines(rf, revit_version, &beams) else {
         return;
     };
     for element in products
@@ -383,6 +386,12 @@ pub(super) fn attach_beam_axes(
                         .push(((*name).into(), InstanceField::Float { value, size: 8 }));
                 }
             }
+        }
+        // #1719: the line of a beam whose copies disagree is its newest state's,
+        // which gives the properties above; no solid along it has been measured
+        // against Revit's, so the body stays the record box (#1698).
+        if element.id.is_some_and(|id| from_current.contains(&id)) {
+            continue;
         }
         let resolves = bbox.is_some_and(|bbox| {
             pba::beam_body(bbox, start, end).is_some()
