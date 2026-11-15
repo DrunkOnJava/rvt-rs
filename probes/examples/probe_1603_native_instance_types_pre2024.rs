@@ -102,6 +102,27 @@ fn name_lines(rf: &mut RevitFile, wanted: &BTreeSet<u64>) -> anyhow::Result<BTre
     Ok(named)
 }
 
+/// Every non-empty string under `value`, with its path, spaces as `_`.
+fn strings(value: &Fv, path: &str, out: &mut Vec<(String, String)>) {
+    match value {
+        Fv::Object(map) => {
+            for (key, child) in map.iter() {
+                strings(child, &format!("{path}.{key}"), out);
+            }
+        }
+        Fv::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                strings(child, &format!("{path}[{index}]"), out);
+            }
+        }
+        other => {
+            if let Some(text) = other.as_str().filter(|text| !text.is_empty()) {
+                out.push((path.to_string(), text.replace(' ', "_")));
+            }
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
@@ -223,6 +244,45 @@ fn main() -> anyhow::Result<()> {
     }
     for (id, text) in name_lines(&mut rf, &again)? {
         println!("ref {id} {text}");
+    }
+    // The families the symbols name: every string their records hold, to find
+    // where a family's name is.
+    let families: BTreeSet<u64> = second
+        .values()
+        .flatten()
+        .filter(|(path, _)| path.ends_with("FamilySymbol.m_familyId"))
+        .map(|(_, id)| *id)
+        .collect();
+    if !families.is_empty() {
+        extract_graphs(
+            &mut rf,
+            &Options {
+                selected_ids: families,
+                releases: NATIVE_RELEASES,
+                ..Options::default()
+            },
+            |record| {
+                let Some(graph) = record.graph.as_ref() else {
+                    return Ok(());
+                };
+                let mut found = Vec::new();
+                for object in &graph.objects {
+                    strings(&object.fields, &object.class_name, &mut found);
+                }
+                let shown: Vec<String> = found
+                    .iter()
+                    .take(40)
+                    .map(|(path, text)| format!("{path}={text}"))
+                    .collect();
+                println!(
+                    "fam {} class={} strings {}",
+                    record.identity.element_id,
+                    record.class_name.as_deref().unwrap_or("-"),
+                    shown.join(" ")
+                );
+                Ok(())
+            },
+        )?;
     }
     eprintln!(
         "{} elements, {} native records, {} ids named",
