@@ -225,6 +225,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # probe_1603_unnamed_before_2024 (#1603, RE-482): a family's forms by stored
       # Visible value, as counts beside fixed words.
       grep -E '^family visible values: release [0-9]+ forms [0-9]+ stored zero [0-9]+ stored one [0-9]+ stored other [0-9]+ stored none [0-9]+$' "$f" || true
+      # probe_1603_family_forms_pre2024 (#1603, RE-479): per release, how many
+      # families of doors and windows have a document and how many forms of each
+      # class (a schema class name) hold a material or a stored Visible, as
+      # numbers beside fixed words, never an id or a name.
+      grep -E '^family forms pre2024: (release [0-9]+ read failed|release [0-9]+ families [0-9]+ with a document [0-9]+ forms [0-9]+ nested instances [0-9]+|class [A-Za-z0-9_]+ forms [0-9]+ material in the 2015 to 2023 shape [0-9]+ in the 2024 shape [0-9]+ unset [0-9]+ none [0-9]+ cutting [0-9]+ visible stored [0-9]+ visible bound [0-9]+)$' "$f" || true
       # probe_1603_instance_types_pre2024 (#1603): per category of family
       # instance, how many instances stop at each stage of the type join, as
       # numbers beside fixed words, a category's Revit id and a placement
