@@ -12,7 +12,7 @@
 //! many name their stair (`m_stairsId`) and their type (`m_typeId`), and how
 //! many of their landing types are monolithic (`m_hasMonolithicSupport`).
 //!
-//! Counts and a family word per line, never an ElementId or a type name.
+//! Counts and a family word per line, and, for a save to be held to its project's other saves, one line per named landing with its ElementId and type (samples only).
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_2046_landing_types -- FILE.rvt
@@ -41,6 +41,7 @@ fn main() -> anyhow::Result<()> {
     let mut landings: Vec<(usize, u32)> = Vec::new();
     let (mut with_type_id, mut with_names, mut named_as_part) = (0usize, 0usize, 0usize);
     let mut families: BTreeMap<String, usize> = BTreeMap::new();
+    let mut named: Vec<(u32, String)> = Vec::new();
     for (index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
@@ -74,10 +75,18 @@ fn main() -> anyhow::Result<()> {
                     })
             })
         };
-        if let (Some(family), Some(_)) = (text(FAMILY_NAME_PROPERTY), text(TYPE_NAME_PROPERTY)) {
+        if let (Some(family), Some(type_name)) =
+            (text(FAMILY_NAME_PROPERTY), text(TYPE_NAME_PROPERTY))
+        {
             with_names += 1;
             *families.entry(family.replace(' ', "_")).or_default() += 1;
+            named.push((id, format!("{family}:{type_name}").replace(' ', "_")));
         }
+    }
+    // One line per named landing, for a save to be held to the same project's
+    // other saves by ElementId: samples only, the held-out scrub drops it.
+    for (id, name) in &named {
+        println!("{TAG} release {version} landing {id} type {name}");
     }
     println!(
         "{TAG} release {version} landings {} with an element type id {with_type_id} with a family and a type name {with_names} named as a stair part {named_as_part} typed by a type object {}",
