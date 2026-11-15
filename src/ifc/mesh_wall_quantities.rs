@@ -64,10 +64,6 @@ const HORIZONTAL_TOLERANCE: f64 = 1e-6;
 /// placed by its own record.
 const OPENING_TOLERANCE_FEET: f64 = 0.01;
 
-/// How far a wall's turn may be from a multiple of a right angle for a world
-/// box, which is axis aligned, to be that box's own extent in the wall's frame.
-const AXIS_TOLERANCE: f64 = 1e-6;
-
 /// The direction of a wall's own axes in its plan: the turn of its x axis
 /// about the vertical, radians.
 #[derive(Debug, Clone, Copy)]
@@ -75,11 +71,21 @@ pub(super) struct WallFrame {
     pub turn: f64,
 }
 
-impl WallFrame {
-    /// Whether the frame's axes lie along the model's axes or across them, the
-    /// only turns at which a world box's extent in the frame is exact.
-    fn square(&self) -> bool {
-        (2.0 * self.turn).sin().abs() <= AXIS_TOLERANCE
+/// An opening cut in a wall, as the writer emits it: the plan corners of its
+/// rectangle and the heights it spans, feet. The corners, not their world box,
+/// so that its extent in a wall's frame is exact at any turn of the wall, as
+/// long as the opening is turned with it (#1046).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct OpeningBox {
+    pub corners: [[f64; 2]; 4],
+    pub heights: [f64; 2],
+}
+
+impl OpeningBox {
+    /// Its extent along the wall, to the wall's left and up, in `frame`.
+    fn in_frame(&self, frame: &WallFrame) -> ([f64; 2], [f64; 2], [f64; 2]) {
+        let (along, left) = plan_ranges(frame, self.corners.into_iter());
+        (along, left, self.heights)
     }
 }
 
@@ -343,14 +349,14 @@ fn largest_side_areas(sides: &mut [Side]) -> Option<WallSideAreas> {
 
 /// The quantities the saved mesh of a wall gives, or none where its faces are
 /// not all planes or they are not one closed piece wound one way. `frame` is
-/// the direction of the wall's own axes, `openings` the world boxes of the
-/// openings cut in it, at least one of which the areas of a prism less its
+/// the direction of the wall's own axes, `openings` the boxes of the openings
+/// cut in it, at least one of which the areas of a prism less its
 /// openings need, and `base_attached` whether its base is joined to a roof,
 /// floor or footing, which is what those areas need (#1046).
 pub(super) fn wall_mesh_quantities(
     primitives: &[Primitive],
     frame: &WallFrame,
-    openings: &[[f64; 6]],
+    openings: &[OpeningBox],
     base_attached: bool,
 ) -> Option<WallMeshQuantities> {
     let mut every: Vec<Triangle> = Vec::new();
@@ -448,17 +454,6 @@ fn z_range(triangles: &[Triangle]) -> [f64; 2] {
     [low, high]
 }
 
-/// The plan corners of the world box `[min_x, min_y, min_z, max_x, max_y,
-/// max_z]`, feet.
-fn box_corners(world: &[f64; 6]) -> [[f64; 2]; 4] {
-    [
-        [world[0], world[1]],
-        [world[3], world[1]],
-        [world[3], world[4]],
-        [world[0], world[4]],
-    ]
-}
-
 /// Whether `inner` lies within `outer`, to [`OPENING_TOLERANCE_FEET`].
 fn covers(outer: [f64; 2], inner: [f64; 2]) -> bool {
     inner[0] >= outer[0] - OPENING_TOLERANCE_FEET && inner[1] <= outer[1] + OPENING_TOLERANCE_FEET
@@ -466,27 +461,23 @@ fn covers(outer: [f64; 2], inner: [f64; 2]) -> bool {
 
 /// Whether the wall whose mesh has the horizontal faces `horizontal`, each its
 /// height and its extent along the wall and to its left, and no sloped face is a
-/// vertical prism less `openings`, each the world box of an opening cut in it,
-/// feet: every such face strictly between `low` and `high` (the mesh's lowest
+/// vertical prism less `openings`, each an opening cut in it: every such face strictly between `low` and `high` (the mesh's lowest
 /// and highest point) is the top or the bottom of an opening that spans it along
 /// the wall and across it.
 fn prism_less_openings(
     horizontal: &[(f64, [f64; 2], [f64; 2])],
     sloped: bool,
     frame: &WallFrame,
-    openings: &[[f64; 6]],
+    openings: &[OpeningBox],
     low: f64,
     high: f64,
 ) -> bool {
-    if sloped || !frame.square() {
+    if sloped {
         return false;
     }
     let boxes: Vec<([f64; 2], [f64; 2], [f64; 2])> = openings
         .iter()
-        .map(|world| {
-            let (along, left) = plan_ranges(frame, box_corners(world).into_iter());
-            (along, left, [world[2], world[5]])
-        })
+        .map(|opening| opening.in_frame(frame))
         .collect();
     horizontal.iter().all(|(height, along, left)| {
         *height <= low + OPENING_TOLERANCE_FEET
@@ -501,24 +492,18 @@ fn prism_less_openings(
 }
 
 /// Whether every vertical face of the wall beyond the four a prism has is a
-/// jamb of one of `openings`, each the world box of an opening cut in it, feet:
+/// jamb of one of `openings`, each an opening cut in it:
 /// a face whose extent along the wall, extent to its left and height all lie
 /// within one opening's box. A wall with no opening has no such face, so it
 /// keeps the four-face gate (#1046).
 fn jambs_explain(
     vertical: &[([f64; 2], [f64; 2], [f64; 2])],
     frame: &WallFrame,
-    openings: &[[f64; 6]],
+    openings: &[OpeningBox],
 ) -> bool {
-    if !frame.square() {
-        return false;
-    }
     let boxes: Vec<([f64; 2], [f64; 2], [f64; 2])> = openings
         .iter()
-        .map(|world| {
-            let (along, left) = plan_ranges(frame, box_corners(world).into_iter());
-            (along, left, [world[2], world[5]])
-        })
+        .map(|opening| opening.in_frame(frame))
         .collect();
     let beyond = vertical
         .iter()
@@ -593,6 +578,20 @@ mod tests {
     /// tests build is in.
     fn on_the_axes() -> WallFrame {
         WallFrame { turn: 0.0 }
+    }
+
+    /// The opening of the world box `[min_x, min_y, min_z, max_x, max_y,
+    /// max_z]`, a rectangle on the model's axes.
+    fn on_axes(world: [f64; 6]) -> OpeningBox {
+        OpeningBox {
+            corners: [
+                [world[0], world[1]],
+                [world[3], world[1]],
+                [world[3], world[4]],
+                [world[0], world[4]],
+            ],
+            heights: [world[2], world[5]],
+        }
     }
 
     #[test]
@@ -731,7 +730,7 @@ mod tests {
             &[(3.0, [0.0, 4.0], [0.0, 1.0])],
             true,
             &on_the_axes(),
-            &[[0.0, 0.0, 0.0, 4.0, 1.0, 3.0]],
+            &[on_axes([0.0, 0.0, 0.0, 4.0, 1.0, 3.0])],
             0.0,
             8.0
         ));
@@ -759,7 +758,7 @@ mod tests {
             &[face],
             false,
             &on_the_axes(),
-            &[[0.0, 0.0, 0.0, 2.0, 1.0, 3.0]],
+            &[on_axes([0.0, 0.0, 0.0, 2.0, 1.0, 3.0])],
             0.0,
             8.0
         ));
@@ -768,7 +767,7 @@ mod tests {
             &[face],
             false,
             &on_the_axes(),
-            &[[0.0, 0.0, 0.0, 4.0, 1.0, 3.0]],
+            &[on_axes([0.0, 0.0, 0.0, 4.0, 1.0, 3.0])],
             0.0,
             8.0
         ));
@@ -784,7 +783,7 @@ mod tests {
 
     #[test]
     fn a_face_outside_every_opening_is_no_jamb() {
-        let opening = [[0.0, 0.0, 0.0, 4.0, 1.0, 3.0]];
+        let opening = [on_axes([0.0, 0.0, 0.0, 4.0, 1.0, 3.0])];
         // A face at the opening's edge, as tall as it and as deep as the wall.
         let jamb = ([4.0, 4.0], [0.0, 1.0], [0.0, 3.0]);
         assert!(jambs_explain(&[jamb; 5], &on_the_axes(), &opening));
@@ -793,5 +792,26 @@ mod tests {
         assert!(!jambs_explain(&[past; 5], &on_the_axes(), &opening));
         let tall = ([4.0, 4.0], [0.0, 1.0], [0.0, 8.0]);
         assert!(!jambs_explain(&[tall; 5], &on_the_axes(), &opening));
+    }
+
+    #[test]
+    fn a_turned_opening_bounds_its_jambs_by_its_own_extent() {
+        // A wall turned 30 degrees, and an opening 4 ft along it and 1 ft deep
+        // turned with it: its world box, seen in the wall's frame, runs to
+        // 4.43 ft along it, so a face 0.3 ft past the opening's end lies inside
+        // the box but outside the opening.
+        let frame = WallFrame {
+            turn: 30f64.to_radians(),
+        };
+        let (sin, cos) = frame.turn.sin_cos();
+        let at = |a: f64, l: f64| [a * cos - l * sin, a * sin + l * cos];
+        let opening = [OpeningBox {
+            corners: [at(0.0, 0.0), at(4.0, 0.0), at(4.0, 1.0), at(0.0, 1.0)],
+            heights: [0.0, 3.0],
+        }];
+        let jamb = ([4.0, 4.0], [0.0, 1.0], [0.0, 3.0]);
+        assert!(jambs_explain(&[jamb; 5], &frame, &opening));
+        let past = ([4.3, 4.3], [0.0, 1.0], [0.0, 3.0]);
+        assert!(!jambs_explain(&[past; 5], &frame, &opening));
     }
 }

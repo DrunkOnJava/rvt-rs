@@ -73,7 +73,9 @@ use super::mesh_volume::{
     beam_quantities, box_plan_width, closed_mesh_volume, column_quantities, mullion_surface_area,
     partner_ends, partners_the_boxes_missed, prism_along,
 };
-use super::mesh_wall_quantities::{WallFrame, WallMeshQuantities, wall_mesh_quantities};
+use super::mesh_wall_quantities::{
+    OpeningBox, WallFrame, WallMeshQuantities, wall_mesh_quantities,
+};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -615,7 +617,7 @@ pub fn attach_scoped_with_control(
             if let Some([index]) = walls.get(&element.identity.element_id).map(Vec::as_slice) {
                 let held = wall_openings.get(index);
                 let frame = held.map_or(WallFrame { turn: 0.0 }, |held| held.frame);
-                let boxes: &[[f64; 6]] = held.map_or(&[], |held| held.boxes.as_slice());
+                let boxes: &[OpeningBox] = held.map_or(&[], |held| held.boxes.as_slice());
                 // A mesh that decoded only in part can still hold one closed
                 // solid (another of its solids is what failed), and its
                 // quantities would be that solid's alone: refused, as a
@@ -1522,24 +1524,28 @@ const WALL_BOX_MESH_TOLERANCE: f64 = 1e-3;
 const WALL_HEIGHT_AGREE_FEET: f64 = 5e-4;
 
 /// How far, radians, an element's turn may lie off its wall's own axes for its
-/// world box, which is axis aligned, to be that element's extent in the wall's
-/// frame (#1046).
+/// rectangle's corners to give that element's extent in the wall's frame: a
+/// rectangle turned with the wall, or across it (#1046).
 const OPENING_TURN_TOLERANCE: f64 = 1e-6;
 
-/// A wall's own axes and the world boxes, feet, of the openings rvt-rs cuts in
-/// it, `[min_x, min_y, min_z, max_x, max_y, max_z]` (#1046).
+/// How far, feet, a corner of a wall opening's outline may lie off the
+/// rectangle its ranges make and the outline still be that rectangle (#1046).
+const OUTLINE_CORNER_TOLERANCE_FEET: f64 = 1e-6;
+
+/// A wall's own axes and the openings rvt-rs cuts in it (#1046).
 struct WallOpenings {
     frame: WallFrame,
-    boxes: Vec<[f64; 6]>,
+    boxes: Vec<OpeningBox>,
 }
 
 /// #1046: each wall's frame, by its index in `model.entities`, and the boxes of
 /// the openings written in it: the rectangle of every element the wall hosts,
 /// with the axis across the wall cut to the wall's thickness, placed on that
 /// element's own placement and extruded up its height, as the writer emits it
-/// (#227, RE-84). A wall whose element is not read, and an opening whose turn is
-/// not one of its wall's, is left out, so the wall gets no areas of the mesh for
-/// them.
+/// (#227, RE-84), and the rectangle of every opening rvt-rs cuts through the wall
+/// with nothing filling it (`WallCutOpening`). A wall whose element is not read,
+/// and an opening whose turn is not one of its wall's, is left out, so the wall
+/// gets no areas of the mesh for them.
 fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
     let mut out: BTreeMap<usize, WallOpenings> = BTreeMap::new();
     for (index, entity) in model.entities.iter().enumerate() {
@@ -1599,32 +1605,133 @@ fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
             .and_then(|cut| cut.z_range_feet)
             .unwrap_or([0.0, body.height_feet]);
         let (sin, cos) = rotation_radians.unwrap_or(0.0).sin_cos();
-        let mut x = [f64::INFINITY, f64::NEG_INFINITY];
-        let mut y = [f64::INFINITY, f64::NEG_INFINITY];
-        for side_x in [-1.0, 1.0] {
-            for side_y in [-1.0, 1.0] {
+        let corners =
+            [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]].map(|[side_x, side_y]| {
                 let (px, py) = (cx + side_x * x_dim / 2.0, cy + side_y * y_dim / 2.0);
-                let corner = [
+                [
                     location[0] + px * cos - py * sin,
                     location[1] + px * sin + py * cos,
-                ];
-                x = [x[0].min(corner[0]), x[1].max(corner[0])];
-                y = [y[0].min(corner[1]), y[1].max(corner[1])];
-            }
+                ]
+            });
+        let opening = OpeningBox {
+            corners,
+            heights: [location[2] + start, location[2] + start + height],
+        };
+        if opening
+            .corners
+            .iter()
+            .flatten()
+            .chain(&opening.heights)
+            .all(|value| value.is_finite())
+        {
+            hosted.boxes.push(opening);
         }
-        let world = [
-            x[0],
-            y[0],
-            location[2] + start,
-            x[1],
-            y[1],
-            location[2] + start + height,
+    }
+    // The openings rvt-rs cuts in a wall with nothing filling them (#1165,
+    // RE-321): a rectangle in the wall's vertical plane, along an axis turned
+    // with the wall's, extruded through it. A recess does not pass through, so
+    // its back face is no jamb, and an outline that is not a rectangle makes
+    // faces no box explains: both are left out.
+    for entity in &model.entities {
+        let IfcEntity::WallCutOpening {
+            host,
+            outline_feet,
+            axis_turn_radians,
+            plane_offset_feet,
+            thickness_feet,
+            recess: false,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let Some(IfcEntity::BuildingElement {
+            location_feet: Some(location),
+            rotation_radians,
+            ..
+        }) = model.entities.get(*host)
+        else {
+            continue;
+        };
+        let Some(hosted) = out.get_mut(host) else {
+            continue;
+        };
+        if (2.0 * axis_turn_radians).sin().abs() > OPENING_TURN_TOLERANCE {
+            continue;
+        }
+        let Some((along, up)) = outline_rectangle(outline_feet) else {
+            continue;
+        };
+        let left = [
+            plane_offset_feet - thickness_feet / 2.0,
+            plane_offset_feet + thickness_feet / 2.0,
         ];
-        if world.iter().all(|value| value.is_finite()) {
-            hosted.boxes.push(world);
+        let (sin, cos) = (rotation_radians.unwrap_or(0.0) + axis_turn_radians).sin_cos();
+        let corners = [
+            [along[0], left[0]],
+            [along[1], left[0]],
+            [along[1], left[1]],
+            [along[0], left[1]],
+        ]
+        .map(|[a, l]| {
+            [
+                location[0] + a * cos - l * sin,
+                location[1] + a * sin + l * cos,
+            ]
+        });
+        let opening = OpeningBox {
+            corners,
+            heights: [location[2] + up[0], location[2] + up[1]],
+        };
+        if opening
+            .corners
+            .iter()
+            .flatten()
+            .chain(&opening.heights)
+            .all(|value| value.is_finite())
+        {
+            hosted.boxes.push(opening);
         }
     }
     out
+}
+
+/// The ranges, feet, of the outline `outline` along its first axis and its
+/// second, where it is a rectangle on them: four corners, each at an end of
+/// both ranges and no two at the same. `None` for any other outline.
+fn outline_rectangle(outline: &[(f64, f64)]) -> Option<([f64; 2], [f64; 2])> {
+    let [_, _, _, _] = outline else {
+        return None;
+    };
+    let fold = |pick: fn(&(f64, f64)) -> f64| {
+        outline
+            .iter()
+            .map(pick)
+            .fold([f64::INFINITY, f64::NEG_INFINITY], |[low, high], v| {
+                [low.min(v), high.max(v)]
+            })
+    };
+    let (x, y) = (fold(|p| p.0), fold(|p| p.1));
+    let at_end = |v: f64, range: [f64; 2]| {
+        (v - range[0]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET
+            || (v - range[1]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET
+    };
+    let corners: BTreeSet<(bool, bool)> = outline
+        .iter()
+        .map(|&(px, py)| {
+            (
+                (px - x[0]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET,
+                (py - y[0]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET,
+            )
+        })
+        .collect();
+    (x[1] - x[0] > OUTLINE_CORNER_TOLERANCE_FEET
+        && y[1] - y[0] > OUTLINE_CORNER_TOLERANCE_FEET
+        && corners.len() == 4
+        && outline
+            .iter()
+            .all(|&(px, py)| at_end(px, x) && at_end(py, y)))
+    .then_some((x, y))
 }
 
 /// Give each wall of `found` (an index into the entities and what the mesh

@@ -102,3 +102,22 @@ gh workflow run measure.yml --ref <this branch> -f ref=eeaa44f35d7dd7dd8957685c5
 ```
 
 The first prints, for each wall that embeds a curtain wall, `saved tag:<id> status ...`, its volume and box (z low and high, x, y), and a `face up|down z <level> area <ft²>` line per level of horizontal faces; the second, the partners' frames, steps and (through the scorer) bodies in rvt-rs's export and Revit's.
+
+## 9. Wall 2177212: Revit's IFC body is its layers, two of them past the Axis (2026-11-15, #1407)
+
+Section 5 left wall 2177212's 1.0% open: Revit's own quantities and the saved mesh agree, and Revit's IFC body is longer. `tools/re/wall_axis_body_vs_ifc.py` (commit `11cc5777`, archived as `refs/archive/2026-11-15/cited/11cc57771649`, not on `main`) reads the wall's `Axis` and `Body` from Revit's IFC4 exports of the office. It ran in Measure [43684476177](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43684476177) with `probe_1067_native_dump`.
+
+- **The Axis is the mesh's length.** Revit's export writes the `Axis` as a two-point curve of 11.4870 ft as built and 11.4534 ft at permit. These are the saved mesh's plan extents along the wall.
+- **The Body is three layers, drawn one by one.** At permit there are three `IfcExtrudedAreaSolid`s, each a profile 3.2808 ft high. As built the same body is three `IfcPolygonalFaceSet`s.
+
+  | layer | thickness (ft) | length (ft) | past the Axis (ft) |
+  |---|---:|---:|---:|
+  | 1 | 0.0853 | 11.4534 | 0 |
+  | 2 | 0.0853 | 11.7552 | 0.302 |
+  | 3 | 0.2165 | 11.5388 | 0.085 |
+
+- **That is the whole difference.** The three layers at the Axis length make (0.0853 + 0.0853 + 0.2165) × 3.2808 × 11.4534 = 14.546 ft³: the mesh (14.5475) and Revit's `NetVolume`. The two extensions add 0.0853 × 3.2808 × 0.302 + 0.2165 × 3.2808 × 0.085 = 0.145 ft³, the gap to Revit's IFC body (14.6925).
+
+So Revit's export carries two finish layers past the wall's start, where they wrap the join with the wall beyond, layer by layer, as in RE-70 and RE-71. Its quantities, like the saved mesh, stop every layer at the Axis. The wall's native record holds `VerticalExtensionOfLayersGStep` and `WallJoinTweakGStep`, where that extension may be stored. Reading them would be a layered-body rule for walls of this kind. It is not done here.
+
+The rule of section 4 is unchanged. Wall 2177212 is drawn from its saved mesh, the body Revit's own quantities measure, and stays 1.0% under Revit's IFC body by these two layer extensions.
