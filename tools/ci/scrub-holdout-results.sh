@@ -105,7 +105,10 @@
 # numbers beside the scorer's fixed words, never a Tag, a height or the files'
 # offset), and
 # the `opening boxes:` lines of tools/re/opening_boxes_vs_ifc.py (#227: how many
-# openings are within each fixed distance of Revit's, by IFC class), and
+# openings are within each fixed distance of Revit's, by IFC class), the
+# `export parameters pre2024:` count lines of probe_1695_export_parameters_pre2024
+# (#1695: entries by IFC export key and a listed value, never an id, a byte or a
+# name), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -174,6 +177,13 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^census stages: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^previous lines: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # probe_1695_export_parameters_pre2024 (#1695): the counts of a release's
+      # IFC export parameter entries by key and by value (a value only from the
+      # probe's fixed lists of IFC entity names and predefined type words, else
+      # other-text) and of their owners, each line in its own fixed wording. The
+      # lines of raw bytes before a furniture word (`export parameters pre2024
+      # bytes:`) are not kept: those bytes can be an id, a length or an offset.
+      grep -E '^export parameters pre2024: (release [0-9]+|element data layout (u64-id|u32-id|none-measured)|data objects the 2024 reader finds [0-9]+|entries (export-as|type-export-as|predefined-type|type-predefined-type) (i64|i32) (Ifc[A-Za-z]+|[A-Z]+|other-text) [0-9]+|entries with a value in either form [0-9]+|owners: pairs [0-9]+ over [0-9]+ declared owners, set to two values [0-9]+, no element data header in range [0-9]+, undeclared owner [0-9]+|strings equal to an IfcFurnitureTypeEnum word [0-9]+ in [0-9]+ distinct 8-byte prefixes)$' "$f" || true
       # probe_1842_level_storeys (#1842): the release and Level counts, no names.
       grep -E '^levels release=[0-9]+ recovered=[0-9]+ building_story_true=[0-9]+ false=[0-9]+ unread=[0-9]+ false_below_first_storey=[0-9]+ false_above=[0-9]+ false_at_a_storey_elevation=[0-9]+$' "$f" || true
       # probe_1335_projected_graphs (#1335): counts, verdict words, schema class
