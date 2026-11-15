@@ -49,11 +49,19 @@ def main():
         return 0
     shapes = {}
 
+    faces = {}
+
+    def edges(element):
+        if element.id() not in faces:
+            verts(element)
+        return faces.get(element.id())
+
     def verts(element):
         if element.id() not in shapes:
             try:
                 shape = ifcopenshell.geom.create_shape(settings, element)
                 shapes[element.id()] = to_feet(np.array(shape.geometry.verts, dtype=float).reshape(-1, 3))
+                faces[element.id()] = np.array(shape.geometry.faces, dtype=int).reshape(-1, 3)
             except Exception:  # noqa: BLE001 - an element IfcOpenShell cannot mesh is skipped
                 shapes[element.id()] = None
         return shapes[element.id()]
@@ -65,24 +73,38 @@ def main():
         element = by_tag.get(tag)
         if element is None:
             continue
-        material = ue.get_material(element, should_skip_usage=True)
+        material = ue.get_material(element) or (ue.get_type(element) and ue.get_material(ue.get_type(element)))
+        if material is not None and material.is_a("IfcMaterialLayerSetUsage"):
+            material = material.ForLayerSet
         layers = []
         if material is not None and material.is_a("IfcMaterialLayerSet"):
             layers = [(layer.Material.Name if layer.Material else "-", round(layer.LayerThickness, 5)) for layer in material.MaterialLayers]
-        print(f"layers of {tag} ({element.ObjectType}): {layers}")
+        print(f"layers of {tag} ({element.ObjectType}): {layers} (material {material.is_a() if material is not None else None})")
+        v = verts(element)
+        if v is not None:
+            print(f"  distinct vertex heights of {tag}: {sorted(set(round(float(z), 3) for z in v[:, 2]))[:40]}")
     for height in HEIGHTS:
-        print(f"elements with a vertex at {height:.3f} ft (+-{TOL}) within {NEAR} ft of the wall in plan:")
+        print(f"elements with a horizontal edge at {height:.3f} ft (+-{TOL}) within {NEAR} ft of the wall in plan:")
         for element in f.by_type("IfcElement"):
             if element.is_a("IfcOpeningElement"):
                 continue
             v = verts(element)
             if v is None or not len(v):
                 continue
-            near = (v[:, 0] > low[0] - NEAR) & (v[:, 0] < high[0] + NEAR) & (v[:, 1] > low[1] - NEAR) & (v[:, 1] < high[1] + NEAR)
-            hit = near & (np.abs(v[:, 2] - height) <= TOL)
-            if hit.any():
-                z = v[near][:, 2]
-                print(f"  {element.is_a()} {element.Tag} {element.Name!r} z {z.min():.3f}..{z.max():.3f} ({int(hit.sum())} vertices)")
+            tri = edges(element)
+            if tri is None or not len(tri):
+                continue
+            # a horizontal edge at the height whose span passes the region in plan
+            count = 0
+            for a, b in ((0, 1), (1, 2), (2, 0)):
+                pa, pb = v[tri[:, a]], v[tri[:, b]]
+                at = (np.abs(pa[:, 2] - height) <= TOL) & (np.abs(pb[:, 2] - height) <= TOL)
+                lo = np.minimum(pa, pb)
+                hi = np.maximum(pa, pb)
+                over = at & (hi[:, 0] > low[0] - NEAR) & (lo[:, 0] < high[0] + NEAR) & (hi[:, 1] > low[1] - NEAR) & (lo[:, 1] < high[1] + NEAR)
+                count += int(over.sum())
+            if count:
+                print(f"  {element.is_a()} {element.Tag} {element.Name!r} z {v[:, 2].min():.3f}..{v[:, 2].max():.3f} ({count} horizontal edges)")
     return 0
 
 
