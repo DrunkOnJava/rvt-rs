@@ -116,6 +116,38 @@ fn einhoven_generic_scanner_matches_arcwall_find_all() {
     );
 }
 
+/// #1833, site R: a scan that reaches `max_candidates` stops there, keeps the
+/// candidates a whole scan would have listed first, and says so; the default cap
+/// leaves a real file's scan whole.
+#[test]
+fn einhoven_scan_says_when_it_reached_the_cap() {
+    let path = project_dir().join("Revit_IFC5_Einhoven.rvt");
+    if !path.exists() {
+        eprintln!("skipping: {} not present", path.display());
+        return;
+    }
+
+    let mut rf = RevitFile::open(&path).expect("open Einhoven");
+    let version = rf.basic_file_info().expect("BasicFileInfo").version;
+    let whole = scan_partitions(&mut rf, version, &ScanOptions::default()).expect("default scan");
+    assert!(
+        !whole.truncated,
+        "the default cap must leave a real file's scan whole"
+    );
+    assert!(
+        whole.candidates.len() > 10,
+        "expected more than 10 candidates on Einhoven"
+    );
+
+    let capped = ScanOptions {
+        max_candidates: Some(10),
+        ..ScanOptions::default()
+    };
+    let cut = scan_partitions(&mut rf, version, &capped).expect("capped scan");
+    assert!(cut.truncated, "a scan that reached its cap must say so");
+    assert_eq!(cut.candidates, whole.candidates[..10].to_vec());
+}
+
 #[test]
 fn einhoven_elem_table_linkage_coverage_for_arcwall_ids() {
     let path = project_dir().join("Revit_IFC5_Einhoven.rvt");

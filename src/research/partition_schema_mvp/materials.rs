@@ -9,6 +9,15 @@ pub(super) fn attach_type_materials(
     elements: &mut [DecodedElement],
 ) {
     for element in elements.iter_mut() {
+        // A type read from the element's own native record has no scanned map
+        // that is the type's (RE-477).
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_FROM_NATIVE_RECORD_FIELD)
+        {
+            continue;
+        }
         let type_id = element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
             _ => None,

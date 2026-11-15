@@ -144,8 +144,8 @@ use super::{
     WALL_TOP_STUB_INSIDE_WALL, WALL_TOP_STUB_PROPERTY,
 };
 use crate::ifc::body_geometry::{
-    Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
-    section,
+    Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, body_mesh, element_body,
+    extrusion_rings, plan_outline, section,
 };
 use crate::ifc::entities::{
     BrepTriangle, Extrusion, IfcEntity, ProfileDef, Property, PropertyValue, SolidShape,
@@ -1990,6 +1990,12 @@ const WALL_BASE_REFUSAL_UNDER_SLOPED_TOP: &str = "base_cut_left_under_a_sloped_t
 /// end would lie inside that wall (#1396).
 const WALL_END_REFUSAL_IN_THE_WAY: &str = "wall_stands_in_the_added_end";
 
+/// Why such a wall keeps its end where a wall the pass does not read (one
+/// [`followed_walls`] leaves out), and that its record does not join there,
+/// stands in the stretch the end would be drawn over, or has a body whose
+/// reach is not known and so may (#1583, RE-337).
+const WALL_END_REFUSAL_UNREAD_IN_THE_WAY: &str = "unread_wall_stands_in_the_added_end";
+
 /// A wall drawn as an upright rectangle along a model axis: its plan bounds
 /// (least x and y, then greatest x and y), its base and top, and which of its
 /// extrusion's two plan sides lies along x (#1396).
@@ -2181,6 +2187,75 @@ fn followed_walls(entities: &[IfcEntity], based: &HashSet<usize>) -> HashMap<u32
     found
 }
 
+/// A wall of `entities` that [`followed_walls`] does not read: its entity
+/// index, its ElementId where it has one, and the plan its drawn body covers in
+/// model feet with the heights it stands between. `reach` is `None` where the
+/// body cannot be bounded here (a representation map's, or one no mesh is made
+/// of), so that the wall may stand anywhere.
+struct Unread {
+    index: usize,
+    id: Option<u32>,
+    reach: Option<(Ring, f64, f64)>,
+}
+
+/// Every wall of `entities` with a body that is not one of `followed`: a wall
+/// drawn as any other solid, one whose base join names elements, and one whose
+/// ElementId more than one entity holds (#1583). A wall with no body draws
+/// nothing for an end to pass through.
+fn unread_walls(entities: &[IfcEntity], followed: &HashMap<u32, Followed>) -> Vec<Unread> {
+    let read: HashSet<usize> = followed.values().map(|wall| wall.index).collect();
+    entities
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !read.contains(index))
+        .filter_map(|(index, entity)| {
+            let IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid,
+                location_feet,
+                rotation_radians,
+                representation_map_index,
+                ..
+            } = entity
+            else {
+                return None;
+            };
+            if !matches!(ifc_type.as_str(), "IFCWALL" | "IFCWALLSTANDARDCASE") {
+                return None;
+            }
+            // A representation map's shape is not given to this pass, so a
+            // wall drawn from one is not bounded rather than not searched.
+            let reach = if representation_map_index.is_some() {
+                None
+            } else {
+                let body = element_body(entity, &[])?;
+                let placement = Placement::new(*location_feet, *rotation_radians);
+                let heights = body_mesh(body).map(|mesh| {
+                    mesh.vertices
+                        .iter()
+                        .map(|&point| placement.apply(point)[2])
+                        .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), z| {
+                            (low.min(z), high.max(z))
+                        })
+                });
+                match (plan_outline(body, &placement), heights) {
+                    (Some((plan, _)), Some((low, high)))
+                        if plan.len() >= 3 && low.is_finite() && high > low =>
+                    {
+                        Some((plan, low, high))
+                    }
+                    _ => None,
+                }
+            };
+            Some(Unread {
+                index,
+                id: type_guid.as_deref().and_then(|guid| guid.parse().ok()),
+                reach,
+            })
+        })
+        .collect()
+}
+
 /// The wall `entity` is, where its top was cut in steps by the floors that
 /// cover it in part (RE-320), as the whole of its plan to the lowest underside;
 /// the pieces that stand higher over part of the plan are items of its body,
@@ -2281,6 +2356,10 @@ struct End {
     /// The strips of the stretch it grows by, the one that reaches farthest from
     /// the end the box gives first: `gap` is its outer distance.
     strips: Vec<Strip>,
+    /// How far the end is pulled in over its full height, feet, 0 or less: where
+    /// a joined wall's face lies inside the wall's end over a stretch of height,
+    /// the wall's own plan stops there and a strip carries it out below (#1474).
+    cut_back: f64,
     /// Whether another order of the walls the record joins would draw another
     /// end (see [`ReadEnd`]).
     order_dependent: bool,
@@ -2571,7 +2650,9 @@ fn read_end(
                         }
                         continue;
                     }
-                    if gap < 0.0 {
+                    // A face inside the end pulls the end in over that stretch
+                    // (#1474), but no further than the joined wall is thick.
+                    if -gap > most - least + END_TOLERANCE_FEET {
                         return Err(Refusal {
                             reason: WALL_END_REFUSAL_FACE_INSIDE,
                             off: true,
@@ -2608,17 +2689,22 @@ fn read_end(
     })
 }
 
-/// The strips an end is drawn as from its `bands`: one for each distance the
-/// end reaches beyond the next, the farthest first, up to the top of the
-/// last band that reaches that far. The columns of the strips stand from the
-/// wall's base, so an end that reaches further at a greater height than below
-/// it is not drawn.
-fn strips_of(bands: &[Band]) -> Result<Vec<Strip>, &'static str> {
+/// The strips an end is drawn as from its `bands`, and how far it is pulled in
+/// over its full height (0 or less): the end is first pulled in to the least
+/// distance any band reaches (a face inside the end, #1474), then one strip for
+/// each distance the end reaches beyond the next, the farthest first, up to the
+/// top of the last band that reaches that far, its distances still measured from
+/// the end the box gives. The columns of the strips stand from the wall's base,
+/// so an end that reaches further at a greater height than below it is not
+/// drawn.
+fn strips_of(bands: &[Band]) -> Result<(Vec<Strip>, f64), &'static str> {
+    let cut_back = bands.iter().map(|band| band.gap).fold(0.0_f64, f64::min);
     let mut merged: Vec<(f64, f64)> = Vec::new();
     for band in bands {
+        let gap = band.gap - cut_back;
         match merged.last_mut() {
-            Some(last) if (last.0 - band.gap).abs() <= END_TOLERANCE_FEET => last.1 = band.to,
-            _ => merged.push((band.gap, band.to)),
+            Some(last) if (last.0 - gap).abs() <= END_TOLERANCE_FEET => last.1 = band.to,
+            _ => merged.push((gap, band.to)),
         }
     }
     let mut strips = Vec::new();
@@ -2629,13 +2715,13 @@ fn strips_of(bands: &[Band]) -> Result<Vec<Strip>, &'static str> {
         }
         if gap - next > END_TOLERANCE_FEET {
             strips.push(Strip {
-                inner: next,
-                outer: gap,
+                inner: next + cut_back,
+                outer: gap + cut_back,
                 top: to,
             });
         }
     }
-    Ok(strips)
+    Ok((strips, cut_back))
 }
 
 /// The rectangle that spans `along` on the axis `long` and `across` on the
@@ -2840,6 +2926,7 @@ fn decide_ends(
     // from its base.
     let based: HashSet<usize> = pending.iter().map(|base| base.index).collect();
     let followed = followed_walls(entities, &based);
+    let unread = unread_walls(entities, &followed);
     let context = BaseContext {
         entities,
         gathered: gather(entities),
@@ -2906,17 +2993,17 @@ fn decide_ends(
             let strips = read_end(&site, list, &followed).and_then(|read| {
                 strips_of(&read.bands)
                     .map_err(|reason| Refusal { reason, off: true })
-                    .map(|strips| {
+                    .map(|(strips, cut_back)| {
                         let reached = read
                             .bands
                             .iter()
-                            .filter(|band| band.gap > END_TOLERANCE_FEET)
+                            .filter(|band| band.gap.abs() > END_TOLERANCE_FEET)
                             .map(|band| band.reached)
                             .min();
-                        (strips, reached, read.order_dependent)
+                        (strips, cut_back, reached, read.order_dependent)
                     })
             });
-            let (strips, reached, order_dependent) = match strips {
+            let (strips, cut_back, reached, order_dependent) = match strips {
                 Ok(read) => read,
                 Err(refused_read) => {
                     // An end the faces read show short or past is marked on the
@@ -2930,7 +3017,7 @@ fn decide_ends(
                     continue;
                 }
             };
-            if strips.is_empty() {
+            if strips.is_empty() && cut_back >= -END_TOLERANCE_FEET {
                 continue;
             }
             // The strips lie against the faces of the walls the record joins,
@@ -2958,12 +3045,50 @@ fn decide_ends(
                     .or_insert(WALL_END_REFUSAL_IN_THE_WAY);
                 continue;
             }
+            // A wall the pass does not read is searched over the plan its body
+            // covers, not its bounds, since it may stand at any angle: the end
+            // would be drawn through it as through one it reads (#1583). The
+            // strip is drawn in by the tolerance on every side first, so that a
+            // wall must enter it by more than that, as `overlaps` asks of one
+            // the pass reads, and one against its side is not in the way.
+            let unread_in_the_way = strips.iter().any(|strip| {
+                let along = if at_low {
+                    (low - strip.outer, low - strip.inner)
+                } else {
+                    (high + strip.inner, high + strip.outer)
+                };
+                let along = (along.0 + END_TOLERANCE_FEET, along.1 - END_TOLERANCE_FEET);
+                let across = (
+                    side_low + END_TOLERANCE_FEET,
+                    side_high - END_TOLERANCE_FEET,
+                );
+                if along.1 <= along.0 || across.1 <= across.0 {
+                    return false;
+                }
+                let block = rect(long, along, across);
+                unread.iter().any(|other| {
+                    other.index != wall.index
+                        && !other.id.is_some_and(|id| list.contains(&id))
+                        && other.reach.as_ref().is_none_or(|(plan, from, to)| {
+                            to.min(strip.top) - from.max(wall.base) > END_TOLERANCE_FEET
+                                && area(&clip_convex(plan, &block)).abs()
+                                    > PIECE_ROUNDING_SQUARE_FEET
+                        })
+                })
+            });
+            if unread_in_the_way {
+                refused
+                    .entry(wall.index)
+                    .or_insert(WALL_END_REFUSAL_UNREAD_IN_THE_WAY);
+                continue;
+            }
             ends.push(End {
                 long,
                 at_low,
-                gap: strips.first().map_or(0.0, |strip| strip.outer),
+                gap: strips.first().map_or(cut_back, |strip| strip.outer),
                 reached,
                 strips,
+                cut_back,
                 order_dependent,
             });
         }
@@ -2983,7 +3108,24 @@ fn decide_ends(
             .flat_map(|end| end.strips.iter())
             .any(|strip| strip.top < wall.top - END_TOLERANCE_FEET)
             .then(|| SteppedPlan {
-                original: rect(long, (low, high), (side_low, side_high)),
+                // The wall's own plan to its top, pulled in at an end a joined
+                // wall's face cuts back (#1474).
+                original: rect(
+                    long,
+                    (
+                        low - ends
+                            .iter()
+                            .filter(|end| end.at_low)
+                            .map(|end| end.cut_back)
+                            .sum::<f64>(),
+                        high + ends
+                            .iter()
+                            .filter(|end| !end.at_low)
+                            .map(|end| end.cut_back)
+                            .sum::<f64>(),
+                    ),
+                    (side_low, side_high),
+                ),
                 blocks: ends
                     .iter()
                     .flat_map(|end| {

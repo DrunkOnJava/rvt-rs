@@ -96,6 +96,16 @@ pub const SAME_CLASS_HOST_SOURCE: &str = "partition_element_record_same_class_ho
 /// elevation (RE-68, [`elevation_band_level`]).
 pub const BASE_ELEVATION_SOURCE: &str = "partition_element_record_base_elevation";
 
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a column whose record names three
+/// or more Levels, given the highest of them at or below its record box's base
+/// ([`below_base_level`], #1842, RE-469).
+pub const COLUMN_BASE_LEVEL_SOURCE: &str = "partition_element_record_column_base_level";
+
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a footing whose record names no
+/// Level, given the highest Level of the model at or below its record box's
+/// base ([`level_at_or_below`], #1842, RE-469).
+pub const FOOTING_BASE_LEVEL_SOURCE: &str = "partition_element_record_footing_base_level";
+
 /// How far below a Level an element's base may sit and still be on that
 /// Level (RE-68). On Snowdon Towers Revit puts on the Level just above
 /// their base 5 elements whose base is 0.013 to 0.233 ft below it.
@@ -203,6 +213,37 @@ pub fn base_constraint_level(
     } else {
         low
     })
+}
+
+/// The Level of an element whose record names three or more Levels, by its
+/// base (#1842, RE-469): the highest named Level whose elevation is at or
+/// below `base_feet` (within 1e-3 ft), else the lowest named. `None` unless
+/// every named Level has an elevation, and where two named Levels share the
+/// deciding elevation.
+///
+/// Measured on one Revit 2027 structural model, where 48 of 48 columns that
+/// name three or more Levels are in the storey Revit's export has them in by
+/// it. No model of ours with Revit's export holds such a record.
+pub fn below_base_level(
+    named: &[u32],
+    elevations: &BTreeMap<u32, f64>,
+    base_feet: f64,
+) -> Option<u32> {
+    if named.len() < 3 || !base_feet.is_finite() {
+        return None;
+    }
+    let mut levels: Vec<(u32, f64)> = Vec::with_capacity(named.len());
+    for id in named {
+        levels.push((*id, *elevations.get(id)?));
+    }
+    levels.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
+    let chosen = levels
+        .iter()
+        .rev()
+        .find(|(_, at)| *at <= base_feet + 1e-3)
+        .or_else(|| levels.first())?;
+    let tied = levels.iter().filter(|(_, at)| *at == chosen.1).count() > 1;
+    (!tied).then_some(chosen.0)
 }
 
 /// The single recovered `Level` ElementId a record's counted

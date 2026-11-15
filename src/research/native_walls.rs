@@ -47,7 +47,7 @@ use crate::graph_value::Fv;
 
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
-use crate::native_json::{element_id, element_id_i64};
+use crate::native_json::{element_id_i64, identifier_u64};
 use crate::native_wall_types::{functions_of_types, type_function, wall_type_id};
 
 /// A wall's curve and the joins at its ends, from its native record.
@@ -166,6 +166,15 @@ fn line_ends(fields: &Fv) -> Option<([f64; 2], [f64; 2])> {
 /// record; a null reference (an id of 0 or less) names nothing. `None` where
 /// a step names its elements in a shape that is not read, so that no step is
 /// left out unseen.
+///
+/// Read in the 2024 shape only, with [`element_id_i64`], as a step's ids on
+/// Revit 2015 to 2023 are in the other one: the rules these ids start (the
+/// wall top at a covering floor, RE-267; the areas of a wall joined to floors,
+/// RE-270) are measured on 2024 and later, and reading the ids there moved
+/// them on `rme_basic` 2023 to a flat cover where the 2024 save steps its top
+/// on 5 of 6 walls, and took a `Height` the 2024 save writes from the sixth
+/// (Measure run 43668542421, #1584). Reading them on those releases is its own
+/// measured change.
 fn named_by_steps<'a>(
     steps: impl Iterator<Item = (&'a str, &'a Fv)>,
 ) -> Option<(BTreeSet<u64>, BTreeSet<u64>)> {
@@ -220,7 +229,7 @@ fn join_members(control: &Fv) -> Vec<(u64, u32)> {
         .into_iter()
         .flatten()
         .filter_map(|member| {
-            let id = element_id(member.get("m_elemId")?)?;
+            let id = identifier_u64(member.get("m_elemId")?)?;
             let joined = u32::try_from(member.get("m_joinedEnd")?.as_u64()?).ok()?;
             Some((id, joined))
         })
@@ -525,7 +534,7 @@ fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Optio
             .and_then(|items| {
                 items
                     .iter()
-                    .map(|item| element_id(item.get("m_elemId")?))
+                    .map(|item| identifier_u64(item.get("m_elemId")?))
                     .collect()
             });
         out[slot] = listed.map(|ids| {
@@ -1107,7 +1116,7 @@ pub fn native_walls_and_top_joins_into(
                         .and_then(Fv::as_array)
                         .into_iter()
                         .flatten()
-                        .filter_map(|face| element_id(face.pointer("/second/m_elemId")?))
+                        .filter_map(|face| identifier_u64(face.pointer("/second/m_elemId")?))
                         .collect();
                 }
             }
@@ -1123,11 +1132,14 @@ pub fn native_walls_and_top_joins_into(
                         .flatten()
                 })
                 .filter_map(|member| {
-                    let other = element_id(member.get("m_elemId")?)?;
+                    let other = identifier_u64(member.get("m_elemId")?)?;
                     let joined = u32::try_from(member.get("m_joinedEnd")?.as_u64()?).ok()?;
                     (other != id && joined < 2).then_some((other, joined))
                 })
                 .collect();
+            // Read in either shape, unlike the ids of a step's top join above:
+            // these only decide whether the cut-back length can be trusted
+            // ([`trimmed_ends`] refuses one whose partner is not read).
             let partners = graph
                 .objects
                 .iter()
@@ -1137,7 +1149,7 @@ pub fn native_walls_and_top_joins_into(
                         "WallEmbedWallGStep" => "m_instId",
                         _ => return None,
                     };
-                    Some(object.fields.get(field).and_then(element_id))
+                    Some(object.fields.get(field).and_then(identifier_u64))
                 })
                 .map(|other| other.unwrap_or(u64::MAX))
                 .collect();
@@ -1155,7 +1167,7 @@ pub fn native_walls_and_top_joins_into(
                 partners,
                 type_id: None,
             };
-            let type_id = root.and_then(|fields| element_id(fields.get("m_WallAttributesId")?));
+            let type_id = root.and_then(|fields| identifier_u64(fields.get("m_WallAttributesId")?));
             (wall, type_id)
         });
         match read {

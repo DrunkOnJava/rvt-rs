@@ -85,7 +85,7 @@ def main():
         print(__doc__.strip().split("Usage:")[1].strip(), file=sys.stderr)
         return 2
     candidate, reference = (ifcopenshell.open(path) for path in sys.argv[1:])
-    scale = ifcopenshell.util.unit.calculate_unit_scale(reference)
+    volume_scale = ifcopenshell.util.unit.calculate_unit_scale(candidate, "VOLUMEUNIT")
     settings = ifcopenshell.geom.settings()
     settings.set("disable-opening-subtractions", True)
     ours, theirs = walls(candidate), walls(reference)
@@ -128,8 +128,11 @@ def main():
                 volumes["reference body did not mesh"] += 1
                 line += f"; reference body did not mesh: {why}"
             else:
-                # The quantity is in the file's units, the mesh in metres.
-                gross *= scale ** 3
+                # The quantity is in the candidate's volume unit, the mesh in
+                # cubic metres. The reference's length unit cubed is the wrong
+                # factor wherever the two files' units differ, or a file's
+                # volume unit is not its length unit cubed (millimetres, m3).
+                gross *= volume_scale
                 same = close(gross, v, 1e-3)
                 volumes["GrossVolume equals the reference body's volume" if same else "GrossVolume differs from the reference body's volume"] += 1
                 line += f"; GrossVolume {gross:.6f} against the reference body's {v:.6f} m3 ({v - gross:+.6f})"

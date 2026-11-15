@@ -15,7 +15,9 @@
 //!   overlap at their joins;
 //! - a circle is a 24-gon around it, and a revolution turns in 24 steps per
 //!   full turn;
-//! - a profile that does not triangulate draws its bounding rectangle.
+//! - a profile that does not triangulate draws its bounding rectangle (a
+//!   solid the export writes from a plan takes no such shape: see
+//!   [`exact_section`]).
 
 use super::entities::{
     Extrusion, IfcBooleanOp, IfcEntity, ProfileDef, RepresentationMap, SolidShape,
@@ -32,7 +34,8 @@ pub type Ring = Vec<Point2>;
 pub const CIRCLE_SEGMENTS: usize = 24;
 
 /// Points a profile may have, holes included, and still be triangulated.
-/// Past it the profile draws its bounding rectangle.
+/// Past it [`section`] draws the profile's bounding rectangle and
+/// [`exact_section`] returns `None`.
 pub const MAX_TRIANGULATED_POINTS: usize = 2048;
 
 /// A triangle mesh. Triangles wind counter-clockwise seen from outside.
@@ -345,7 +348,56 @@ pub struct Section {
 /// cannot be joined drops out, and a profile that still does not
 /// triangulate (or has more than [`MAX_TRIANGULATED_POINTS`]) becomes its
 /// bounding rectangle, so the section is never smaller than the profile.
+/// That is a drawing rule for the viewer and the plan; a solid written into
+/// the IFC takes [`exact_section`].
 pub fn section(outer: &[Point2], holes: &[Ring]) -> Option<Section> {
+    build_section(outer, holes, false)
+}
+
+/// [`section`] only where it is the profile itself: `None` where a hole
+/// would drop out or the profile would become its bounding rectangle. The
+/// solids the export writes from a plan (a sloped slab, a roof drawn along
+/// its planes, a wall's base along a footing's top) take this, so where the
+/// plan does not triangulate the element keeps the body its caller falls
+/// back to, rather than a box or a slab with its holes filled (#1947).
+pub fn exact_section(outer: &[Point2], holes: &[Ring]) -> Option<Section> {
+    build_section(outer, holes, true)
+}
+
+/// Absolute slack on [`covers_plan`]'s area test, square feet; the relative
+/// slack is 1e-9 of the plan's area.
+const COVERED_AREA_TOLERANCE_SQUARE_FEET: f64 = 1e-6;
+
+/// Whether `triangles` over `points` cover the area inside `outer` less
+/// `holes`: a bridge that crosses an edge, or a hole outside the outer ring,
+/// can still ear-clip, and gives another area. The same test the wall-top
+/// pass makes of its rings (#1947).
+fn covers_plan(
+    points: &[Point2],
+    triangles: &[[u32; 3]],
+    outer: &[Point2],
+    holes: &[Ring],
+) -> bool {
+    let expected = signed_area(outer).abs()
+        - holes
+            .iter()
+            .map(|hole| signed_area(hole).abs())
+            .sum::<f64>();
+    let drawn: f64 = triangles
+        .iter()
+        .map(|&[a, b, c]| {
+            let corner = |i: u32| points.get(i as usize).copied();
+            match (corner(a), corner(b), corner(c)) {
+                (Some(a), Some(b), Some(c)) => signed_area(&[a, b, c]).abs(),
+                _ => f64::INFINITY,
+            }
+        })
+        .sum();
+    expected > 0.0
+        && (drawn - expected).abs() <= COVERED_AREA_TOLERANCE_SQUARE_FEET + 1e-9 * expected
+}
+
+fn build_section(outer: &[Point2], holes: &[Ring], exact: bool) -> Option<Section> {
     let mut outer = clean(outer)?;
     if signed_area(&outer) < 0.0 {
         outer.reverse();
@@ -362,9 +414,14 @@ pub fn section(outer: &[Point2], holes: &[Ring]) -> Option<Section> {
         .collect();
     let points = outer.len() + holes.iter().map(|h| h.len() + 2).sum::<usize>();
     if points <= MAX_TRIANGULATED_POINTS && !crosses_itself(&outer) {
+        if exact && holes.iter().any(|h| crosses_itself(h)) {
+            return None;
+        }
         let holes: Vec<Ring> = holes.into_iter().filter(|h| !crosses_itself(h)).collect();
         if let Some(poly) = bridge_holes(outer.clone(), holes.clone()) {
-            if let Some(triangles) = ear_clip(&poly) {
+            if let Some(triangles) = ear_clip(&poly)
+                .filter(|triangles| !exact || covers_plan(&poly, triangles, &outer, &holes))
+            {
                 let mut rings = vec![outer];
                 rings.extend(holes);
                 return Some(Section {
@@ -374,13 +431,21 @@ pub fn section(outer: &[Point2], holes: &[Ring]) -> Option<Section> {
                 });
             }
         }
-        if let Some(triangles) = ear_clip(&outer) {
+        if exact && !holes.is_empty() {
+            return None;
+        }
+        if let Some(triangles) = ear_clip(&outer)
+            .filter(|triangles| !exact || covers_plan(&outer, triangles, &outer, &[]))
+        {
             return Some(Section {
                 rings: vec![outer.clone()],
                 cap_points: outer,
                 cap_triangles: triangles,
             });
         }
+    }
+    if exact {
+        return None;
     }
     let rectangle = bounding_rectangle(&outer);
     Some(Section {
@@ -657,7 +722,7 @@ pub fn sloped_slab_mesh(
     if !(thickness.is_finite() && thickness > 0.0) {
         return None;
     }
-    let section = section(outer, holes)?;
+    let section = exact_section(outer, holes)?;
     let mesh = prism(&section, |p, t| [p.0, p.1, bottom(p) + t * thickness]);
     mesh.vertices
         .iter()
@@ -676,7 +741,7 @@ pub fn between_surfaces_mesh(
     bottom: impl Fn(Point2) -> f64,
     top: impl Fn(Point2) -> f64,
 ) -> Option<Mesh> {
-    let section = section(outer, holes)?;
+    let section = exact_section(outer, holes)?;
     let rises = section
         .cap_points
         .iter()
@@ -799,7 +864,7 @@ pub(super) fn envelope_slab_mesh_split(
         return None;
     }
     let bottom_domains = bottom_domains.unwrap_or(domains);
-    let section = section(outer, holes)?;
+    let section = exact_section(outer, holes)?;
     let difference = |p: PlanPlane, q: PlanPlane| [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
     let mut lines: Vec<PlanPlane> = Vec::new();
     for (i, &p) in tops.iter().enumerate() {

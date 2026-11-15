@@ -71,3 +71,14 @@ python3 tools/re/beam_lines_vs_ifc.py probe.txt <revit-export.ifc> --list
 ```
 
 The commits the runs measured, `af8bee58` and `f08181ea` (the probe and scorers), `558263ef` (the change) and `2fc89466` (the final head), are kept under `refs/archive/2026-11-11/cited/<first 12 hex>`.
+
+## 7. Addendum (2026-11-15): the 9 beams with no line are beams whose copies disagree (#1719)
+
+`probe_1719_beam_line_copies` (Measure [43663617767](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43663617767)) sorts every beam without a line into the four ways the reader can drop one: no element data, data without a line, an arc first, copies that disagree. On the ten BIM4LCA models all 9 are the last: their element data sits in two to four partitions and the copies hold different lines (`Copies::Agreeing` drops the beam). In the timber office at permit 4 of the 7 hold one segment with the same endpoints to the last digit in all four copies and different stored parameters; the others hold an older state in the earlier partitions, and the record box is the current copy's (3346643: 18.834 ft in partitions 374 and 395, 18.479 ft in 410 and 424, a box of 18.479 ft). RE-306 had found no boxed beam with disagreeing copies on its files, so nothing had closed it for beams.
+
+The rule is RE-216's: the copy of the beam's current partition (`native_document::current_partitions`). `scan_beam_lines` takes it and names the beams it did so for; `attach_beam_axes` keeps that line for the four values and does not attach it for the body.
+
+Measure [43664794789](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43664794789) (unfiltered against `0e581f05`, head `1585c625`): 4 of 120 exports move, 116 are byte-identical, and the 3 `diagnostics.json` that move differ in `parameter_value_count` alone, by 3 on each housing file and 21 on the timber office (7 beams times `Span`, `Slope`, `Roll`). `Pset_BeamCommon.Span`, `Slope` and `Roll` and `Qto_BeamBaseQuantities.Length` go from 21 to 22 equal of 22 (concrete housing as built), 40 to 41 of 41 (timber housing as built) and 64 to 71 of 71 (timber office at permit), `different` 0 and unchanged, and no value Revit does not write appears. The held-out 2021 project with a beam of this kind gains its `Span` and `Slope` (9 to 10 equal of 10, counts only; `Roll` is not scored in IFC2X3). No body moves, and `same-project gates` pass.
+
+Not claimed: a solid along these 9 lines. Its box is the current copy's, but whether Revit's beam body is that box along the line, or cut at a join as the housing's 20 are (#1698), is not measured here.
+

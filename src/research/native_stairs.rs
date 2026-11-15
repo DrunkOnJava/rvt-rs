@@ -1136,9 +1136,9 @@ fn element_id(v: &Fv, name: &str) -> Option<u64> {
     v.get(name)?.get("m_id")?.get("m_id64")?.as_u64()
 }
 
-/// The stair, type and family of each stair, run and support in `parts`,
-/// from their native records, as Revit's export names them (RE-65) on all
-/// five R2025 stair models:
+/// The stair, type and family of each stair, run, landing and support in
+/// `parts`, from their native records, as Revit's export names them (RE-65) on
+/// all five R2025 stair models:
 ///
 /// - a `StairsElement`'s type is its `m_typeId`, a `StairsType`, whose
 ///   `m_constructionMethod` names the family: 0 `Assembled Stair`, 1
@@ -1147,18 +1147,24 @@ fn element_id(v: &Fv, name: &str) -> Option<u64> {
 ///   gives (its element record's, as for [`native_runs`]), a
 ///   `StairsRunType` whose `m_hasMonolithicSupport` names the family
 ///   `Monolithic Run` or `Non-Monolithic Run`;
+/// - a `StairsLanding`'s stair and type are the ones `landings` gives (its
+///   element record's, as Revit 2024 reads them, #2046), a `StairsLandingType`
+///   whose `m_hasMonolithicSupport` is false: `Non-Monolithic Landing`, as the
+///   type byte of Revit 2024's landings gives (RE-65). A monolithic landing
+///   type's family is not measured on any release;
 /// - a `StairsSupport`'s stair is its host's (`m_hostCompId`, a run) and its
 ///   type its `m_typeId`; its family is `Stringer` where every side of its
 ///   stair's type that uses that type (`m_leftSideSupportTypeId`,
 ///   `m_rightSideSupportTypeId`) has support style 1.
 ///
 /// Each type's name is its `SymbolInfo.m_name`. Any other construction or
-/// support style, a landing, and a part whose stair or type is not read is
-/// left out: none is measured.
+/// support style, a monolithic landing, and a part whose stair or type is not
+/// read is left out: none is measured.
 pub fn native_stair_parts(
     rf: &mut RevitFile,
     parts: &BTreeSet<u64>,
     runs: &BTreeMap<u64, u64>,
+    landings: &BTreeMap<u64, (u64, u64)>,
 ) -> anyhow::Result<BTreeMap<u64, NativeStairPart>> {
     if parts.is_empty() {
         return Ok(BTreeMap::new());
@@ -1208,6 +1214,7 @@ pub fn native_stair_parts(
         .values()
         .copied()
         .chain(runs.values().copied())
+        .chain(landings.values().map(|(_, type_id)| *type_id))
         .chain(supports.values().map(|(_, type_id)| *type_id))
         .collect();
     let mut names: BTreeMap<u64, String> = BTreeMap::new();
@@ -1257,7 +1264,9 @@ pub fn native_stair_parts(
                     ],
                 );
             }
-            "StairsRunType" => {
+            // A run type and a landing type are different elements, so one
+            // map holds both.
+            "StairsRunType" | "StairsLandingType" => {
                 if let Some(flag) = flag(&root.fields, "m_hasMonolithicSupport") {
                     monolithic.insert(id, flag);
                 }
@@ -1297,6 +1306,12 @@ pub fn native_stair_parts(
             Some(false) => Some("Non-Monolithic Run"),
             None => None,
         };
+        part(id, stair, type_id, family);
+    }
+    // A monolithic landing type's family is not measured, so only a landing
+    // type that is not monolithic names its landing.
+    for (&id, &(stair, type_id)) in landings {
+        let family = (monolithic.get(&type_id) == Some(&false)).then_some("Non-Monolithic Landing");
         part(id, stair, type_id, family);
     }
     for (&id, &(host, type_id)) in &supports {

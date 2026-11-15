@@ -29,9 +29,12 @@ struct Cli {
     /// Minimum confidence (default 0.55).
     #[arg(long, default_value_t = 0.55)]
     min_confidence: f32,
-    /// Cap emitted candidates.
-    #[arg(long)]
+    /// Cap emitted candidates (the default stops at `DEFAULT_MAX_CANDIDATES`).
+    #[arg(long, conflicts_with = "no_cap")]
     max_candidates: Option<usize>,
+    /// Emit every candidate, with no cap.
+    #[arg(long)]
+    no_cap: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -45,7 +48,11 @@ fn main() -> anyhow::Result<()> {
         ScanOptions::default()
     };
     options.min_confidence = cli.min_confidence;
-    options.max_candidates = cli.max_candidates;
+    if cli.no_cap {
+        options.max_candidates = None;
+    } else if cli.max_candidates.is_some() {
+        options.max_candidates = cli.max_candidates;
+    }
 
     let scan = scan_partitions(&mut rf, version, &options)?;
     let partition_index = element_id_partition_index(&scan.candidates);
@@ -55,6 +62,7 @@ fn main() -> anyhow::Result<()> {
         "revit_version": version,
         "status": scan.status,
         "candidate_count": scan.candidates.len(),
+        "truncated": scan.truncated,
         "candidates_with_element_id": partition_index.len(),
         "candidates": scan.candidates,
     });

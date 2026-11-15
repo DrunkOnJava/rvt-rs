@@ -462,7 +462,11 @@ window's body, and the opening it fills, is where it was in world
 coordinates, as a saved mesh and as a record box, and its GlobalId, type
 GlobalId and host wall are unchanged, on Core Interior, RE1 Architecture and
 the two office files (`tools/re/placed_bodies_vs_base.py`, runs 42092391898
-and 42106731054). A door bound to none, an element with no stored transform
+and 42106731054). A door set in a curtain wall, which rvt-rs binds to no wall since Revit's export
+cuts it no opening, is placed the same way, reversed also where its curtain
+wall's `m_isFlipped` is set (RE-474, #1494): 269 of 269 equal to Revit's on
+the BIM4LCA office's four files and RE1 Architecture (Measure run
+43688985749). Another door bound to none, an element with no stored transform
 (Revit 2023 and older) and a turned instance keep the default axes, which say
 nothing of the direction they face; the origin is still the record box's
 centre, more than 0.5 ft from Revit's on all 1,061 walled doors and windows
@@ -1250,6 +1254,25 @@ entity (Measure runs 41784415396 and 41784419457). Revit 2014
 and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
+
+**RE-477 (2026-11-15)** types, on Revit 2015 to 2023, a door or window the
+reference-list join names no type for (#1603). The list holds the type's master
+symbol, not Revit's type, which is an id with no record or name entry; the
+instance's own native record names the type id (`InstanceInfo.m_symbolId`, or
+the master symbol for a member of a model group), its master symbol the type's
+name (`SymbolInfo.m_name`) and the family (`Family.m_name`). On the spent
+Revit 2018 project the 70 windows and 68 doors have Revit's Name and
+`ObjectType` (windows 0 of 70 before, doors 66 of 68), and 72 more type objects
+whose Tag is Revit's on 72 of 72; on a held-out Revit 2020 project the 4
+windows and 9 doors that differed are equal, on BIM Whale's held-out Revit 2021
+project the 115 doors that differed are equal (126 of 126), and the same two
+doors of `rac_basic`'s nine saves of 2015 to 2023 take the name its 2024 save
+gives them. On the BIM Whale project 10 of those 115 doors take a
+`Pset_DoorCommon.Reference` that Revit's IFC2X3 export does not write, so
+"values Revit does not write" goes from 13 to 23 there. The new type objects'
+GlobalIds are not Revit's, the type's material map is not read for these
+elements, and railings and stairs are unchanged
+(`reports/element-framing/RE-477-pre-2024-window-and-door-types-from-the-native-record.md`).
 
 **RE-462 (2026-11-14)** makes a wall of a curtain wall type a curtain wall on
 Revit 2024 to 2027, as it already was on 2023, and leaves a curtain wall that is

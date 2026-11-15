@@ -41,7 +41,7 @@ only identifiers that exist in `src/`.
 
 | Project the rules rest on | Rules |
 |---|---:|
-| BIM4LCA office | 46 |
+| BIM4LCA office | 47 |
 | Snowdon Towers (local only) | 38 |
 | RE1 (IFC-ECS) | 12 |
 | Core Interior | 6 |
@@ -55,7 +55,7 @@ only identifiers that exist in `src/`.
 | Einhoven | 2 |
 | flowbim.ee house (held out) | 2 |
 | synthetic fixtures | 2 |
-| a field reporter's Revit 2027 model (counts only) | 2 |
+| a field reporter's Revit 2027 model (counts only) | 4 |
 | Autodesk rst_basic sample | 1 |
 | 255ribeiro Exemplo_data | 1 |
 | named in the report | 1 |
@@ -96,6 +96,7 @@ runs, would test the largest share of the rules below.
 | [RE-417](../reports/element-framing/RE-417-export-as-values.md) | `category_map`, `lookup_export_override_for` | BIM4LCA housing | - | no, it names this model only | "The four values are proven on the housing alone; the offices carry `IfcSpace` and not `IfcSpaceType` on these discs, and no Autodesk sample carries a value on the classes the limits name." |
 | [RE-425](../reports/element-framing/RE-425-rectangle-column-quantities.md) | `column_rectangles`, `saved_meshes`, `attach_scoped_with_control`, `column_mesh_quantities`, `add_column_quantities` | BIM4LCA housing | - | no, it names this model only | "Positive on the BIM4LCA housing, where 526 values on 6 files become Revit's and none differs, the four chamfered columns among them; the offices are byte-identical." |
 | [RE-465](../reports/element-framing/RE-465-ceiling-piece-gross-area.md) | `first_drawn_piece`, `add_ceiling_quantities` | BIM4LCA office | 2024 | yes | "The four files are one building. No other model with a Revit export ... has a ceiling in pieces" |
+| [RE-480](../reports/element-framing/RE-480-ceiling-saved-face-gross-area.md) | `ceilings_without_area`, `one_piece_face_area`, `add_ceiling_areas` | BIM4LCA office | 2024 | yes | "The cut ceilings it reaches are those of the BIM4LCA office" |
 | [RE-188](../reports/element-framing/RE-188-curtain-wall-export-as.md) | `export_override_applies`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "On both BIM4LCA office files (Revit 2024), 124 curtain walls carry their own "Export to IFC As" (`IFC_EXPORT_ELEMENT_AS`) of `IfcShadingDevice`, read by RE-45 on a `Walls` record." |
 | [RE-190](../reports/element-framing/RE-190-office-export-values.md) | `EXPORT_OVERRIDE_TARGETS`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "positive on both office files: 185 elements of the as-built file and 165 of the permit file now have the class Revit gives them" |
 | [RE-192](../reports/element-framing/RE-192-wall-sweep-export-as.md) | `export_override_applies`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "On both BIM4LCA office files (Revit 2024), 9 wall sweeps each carry their own "Export to IFC As" (`IFC_EXPORT_ELEMENT_AS`) of `IfcCovering`, with predefined type `ROOFING`." |
@@ -141,6 +142,7 @@ runs, would test the largest share of the rules below.
 | [RE-446](../reports/element-framing/RE-446-type-layer-copies.md) | `choose_copy`, `scan_type_layers`, `Current`, `partition_compound_structure` | BIM4LCA office | 2024 | yes | "The rule is measured on one project (the BIM4LCA office and housing, Revit 2024) in six of its files and on no other; the held-out files of Revit 2024 to 2027 and the Autodesk samples hold no type it reaches, so they do not gate it." |
 | [RE-461](../reports/element-framing/RE-461-release-gates.md) | `CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume`, `NetVolume`, `HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS` | BIM4LCA office | 2024 | yes | "Measured on the BIM4LCA office, Revit 2024; no other file holds one a Revit export checks." |
 | [RE-461](../reports/element-framing/RE-461-release-gates.md) | `SWEEP_RAMP_NATIVE_TYPE_REVIT_VERSIONS` | BIM4LCA office | 2024 | no, it names this model only | "Measured on the BIM4LCA office, Revit 2024 (9 sweeps, 5 ramps)." |
+| [RE-470](../reports/element-framing/RE-470-tube-beam-sections.md) | `tube_beam_section`, `type_tube_section`, `TUBE_BEAM_REVIT_VERSIONS` | BIM4LCA office | 2024 | yes | "Measured on one project and one release" |
 | [RE-220](../reports/element-framing/RE-220-stored-global-ids.md) | `revit_global_ids`, `stored_global_ids` | BIMcollab Revit 2015 example (local only) | 2015 | yes | "The storeys' stored-value rule is measured on one Revit 2015 file." |
 | [RE-283](../reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md) | `IsExternal`, `attach_native_named_parameters`, `NATIVE_NAMED_PARAMETER_REVIT_VERSIONS`, `LoadBearing`, `Pset_WallCommon` | BIMcollab Revit 2015 example (local only) | 2015 | yes | "The only one measured is BIMcollab's two on the walls; the samples' named parameters rest on the copies (RE-281)." |
 | [RE-372](../reports/element-framing/RE-372-revit-2015-export-phase.md) | `PHASE_FILTER_RELEASES`, `set_export_phase` | BIMcollab Revit 2015 example (local only) | 2015 | yes | "positive, on one Revit 2015 project with an export (held out of the corpus, counts only)" |
@@ -204,6 +206,8 @@ runs, would test the largest share of the rules below.
 | [RE-434](../reports/element-framing/RE-434-pinched-plane-rings.md) | `split_pinched_rings`, `native_saved_mesh` | Snowdon Towers (local only) | 2024 | no, it names this model only | "**Status:** Positive. The area check failed on one face of one symbol, whose second loop is two lobes that touch at a point; split there, the face meshes, and all 21 elements that hold it are drawn from their saved meshes." |
 | [RE-457](../reports/element-framing/RE-457-foundation-slab-and-bracing-member.md) | `IfcSlab`, `BASESLAB`, `FOUNDATION_SLAB`, `ContFooting`, `IfcFooting`, `category_map` | a field reporter's Revit 2027 model (counts only) | 2027 | no, it names this model only | "both rules wait on the reporter's counts after a release, since no open model with a Revit export has a foundation or a bracing." |
 | [RE-457](../reports/element-framing/RE-457-foundation-slab-and-bracing-member.md) | `m_structUsage`, `IfcMember`, `IfcBeam`, `HORIZONTAL_BRACING_MEMBER`, `PredefinedType`, `category_map` | a field reporter's Revit 2027 model (counts only) | 2027 | no, it names this model only | "No open sample carries usage 8 (their values are 3 to 6), so no `IfcMember` is added and no `IfcBeam` is lost" |
+| [RE-469](../reports/element-framing/RE-469-column-and-footing-storeys-2027.md) | `below_base_level`, `COLUMN_BASE_LEVEL_SOURCE`, `resolve_base_constraint_levels` | a field reporter's Revit 2027 model (counts only) | 2027 | yes | "No model of ours with Revit's export holds a column that names three Levels." |
+| [RE-469](../reports/element-framing/RE-469-column-and-footing-storeys-2027.md) | `level_at_or_below`, `FOOTING_BASE_LEVEL_SOURCE`, `resolve_base_constraint_levels` | a field reporter's Revit 2027 model (counts only) | 2027 | yes | "No model of ours with Revit's export holds a footing that names no Level." |
 | [RE-124](../reports/element-framing/RE-124-revit-2026-element-records.md) | `partition_element_records`, `schema_bbox_marker` | flowbim.ee house (held out) | 2026 | no, it names this model only | "**Artefact:** `AA-SingleDwellingHouse-RVT-CIADD.rvt` (Revit 2026, 66.7 MB, sha256 `eeff78f3d07dc23397d276f870f42240cb453cfdd39d965531a9d0ccc7d0a654`) and Revit's own IFC4X3 export of it" … "The three blockers of section 3 are resolved, and Revit 2026 is admitted as experimental." |
 | [RE-126](../reports/element-framing/RE-126-wall-flip-flag-and-2026-joins.md) | `wall_join_count_offset` | flowbim.ee house (held out) | 2026 | no, it names this model only | "A 2026 wall's join list is laid out as on 2025: `07 · tag · 02 · 0 · count · count × (u32 · u64 ElementId · u32)`. It carries the same tag (`0x0b9f7d`) as Core Interior and Snowdon, so `wall_join_count_offset(2026)` is 16. The lists are sparse on this house: 2 of 59 walls name another." |
 | [RE-327](../reports/element-framing/RE-327-family-extrusions.md) | `m_flipZ`, `m_alwaysRefPlaneNorm` | named in the report | - | no, it names this model only | "One 2024 form, with a complete mesh, has a plane whose third column is +z, flipped, and differs from its mesh under the default convention (it matched under another one only)." |
@@ -214,6 +218,7 @@ runs, would test the largest share of the rules below.
 | [RE-322](../reports/element-framing/RE-322-wall-corner-order.md) | `corner_joins`, `m_wallJoinType`, `element_record_wall_joins` | puzzbobb's Revit 2025 models | 2025 | no, it names this model only | "It is the only mitre in the measured corpora, two ends of two walls: the rule is the geometry of a mitre, not a fit, but it is measured on that pair only." |
 | [RE-393](../reports/element-framing/RE-393-shared-family-profile-reader.md) | `sketch_curves`, `point_at`, `revolution_ids` | synthetic fixtures | 2020 | no, it names this model only | "Measured: the six standalone Revit 2020 rectangular and circular fixtures from RE-391/RE-392." |
 | [RE-394](../reports/element-framing/RE-394-analytic-family-revolutions.md) | `IfcBuildingElementProxy`, `IfcRevolvedAreaSolid`, `PlacedRevolvedArea` | synthetic fixtures | 2020 | no, it names this model only | "Export coverage is REV-A, REV-B, REV-BT and ARC-A, confirmed by Revit's own IFC; ARC-B and ARC-BT remain reader research evidence and are not exported; mixed line/arc profiles, project instances and other releases are unmeasured." |
+| [RE-477](../reports/element-framing/RE-477-pre-2024-window-and-door-types-from-the-native-record.md) | `native_instance_types`, `in_group`, `ElementGroupMembership`, `TYPE_FROM_NATIVE_RECORD_FIELD` | Vitoria spent Revit 2018 project | 2015 to 2023 | no, it names this model only | "The group rule rests on 2 doors of one project; it is listed in `docs/one-project-rules.md`." |
 
 
 ### Measured on another project, and wrong there: rules to fix or narrow

@@ -140,7 +140,8 @@ use rvt::research::partition_room_boundaries::{
 };
 use rvt::research::partition_room_parameters::{DATA_OBJECT_HEADER, verified_data_object};
 use rvt::research::partition_type_parameters::{
-    HOLLOW_SECTION_PARAMETER_NAMES, I_SECTION_PARAMETERS, VALUE_BLOCK_MARK,
+    HOLLOW_SECTION_PARAMETER_NAMES, I_SECTION_PARAMETERS, TUBE_BEAM_PARAMETER_NAMES,
+    VALUE_BLOCK_MARK,
 };
 use rvt::research::partition_type_records::{OST_MATERIALS, scan_type_records};
 use rvt::{RevitFile, elem_table};
@@ -344,6 +345,7 @@ const PROFILE_FRAME_READERS: &[&str] = &[
     "type_section",
     "room_solid_faces",
     "type_hollow_section",
+    "type_tube_section",
     "type_i_section",
     "pipe_connectors",
     "family_forms",
@@ -447,6 +449,7 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "landing_lines",
             "room_solid_faces",
             "type_hollow_section",
+            "type_tube_section",
             "pipe_connectors",
             "area_plan_topology",
             "area_levels",
@@ -679,6 +682,14 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         },
     ),
     (
+        "PlacementAxesSource",
+        "stored_axes_reversed_by_flips_and_host_wall_flip",
+        Sourced {
+            all: &["instance_transform", "native_opening", "opening_host_wall"],
+            any: &[],
+        },
+    ),
+    (
         "PlacementOriginSource",
         "stored_origin_no_opening",
         Sourced {
@@ -865,6 +876,16 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
     (
         "LevelBindSource",
         "partition_element_record_base_elevation",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_column_base_level",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_footing_base_level",
         Gap { reason: BINDING },
     ),
     (
@@ -1846,6 +1867,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
         .map(|((id, _), info)| (*id, (info.profile_source.clone(), info.profile_vertices)))
         .collect();
     let mut hollow_checks: Vec<(u32, Vec<i64>)> = Vec::new();
+    let mut tube_checks: Vec<(u32, Vec<i64>)> = Vec::new();
     // The roofs whose rafter cut is sourced, read again below; the materials the
     // layers reader needs to read a type's layers again.
     let mut rafter_roofs: BTreeSet<u32> = BTreeSet::new();
@@ -2192,7 +2214,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                         // A type's parameter entry, `f64 · ff × 8 · i64`, in
                         // the value block the type owns: the nearest block
                         // mark before it has the type's id before it.
-                        "type_hollow_section" | "type_i_section" => {
+                        "type_hollow_section" | "type_tube_section" | "type_i_section" => {
                             let parameter = i64_at(bytes, part.offset + 16);
                             let shaped = bytes.get(part.offset + 8..part.offset + 16)
                                 == Some(&[0xff; 8][..])
@@ -2424,6 +2446,10 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                         sound &= parameters.len() == HOLLOW_SECTION_PARAMETER_NAMES.len();
                         hollow_checks.push((id, parameters.clone()));
                     }
+                    "type_tube_section" => {
+                        sound &= parameters.len() == TUBE_BEAM_PARAMETER_NAMES.len();
+                        tube_checks.push((id, parameters.clone()));
+                    }
                     "area_levels" => {
                         let listed: BTreeSet<u32> =
                             source.parts.iter().map(|part| part.element_id).collect();
@@ -2596,9 +2622,11 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     }
 
     // The four parameters of a hollow section are the ones captioned b, Ht, t
-    // and kr, by the ParamElemFamily elements the parameter ids name.
+    // and kr, and the six of a tube beam's the ones captioned bf, d, tf, tw, ri
+    // and ra, by the ParamElemFamily elements the parameter ids name.
     let hollow_ids: BTreeSet<u64> = hollow_checks
         .iter()
+        .chain(tube_checks.iter())
         .flat_map(|(_, parameters)| parameters.iter())
         .filter_map(|parameter| u64::try_from(*parameter).ok())
         .collect();
@@ -2625,18 +2653,31 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             Ok(())
         })
         .expect("read the parameter captions");
-        let mut wanted: Vec<&str> = HOLLOW_SECTION_PARAMETER_NAMES.to_vec();
-        wanted.sort_unstable();
-        for (id, parameters) in &hollow_checks {
-            let mut found: Vec<&str> = parameters
-                .iter()
-                .filter_map(|parameter| captions.get(parameter).map(String::as_str))
-                .collect();
-            found.sort_unstable();
-            if found != wanted {
-                problems.push(format!(
-                    "{id}: type_hollow_section is made of the parameters {found:?}, not {wanted:?}"
-                ));
+        for (reader, checks, names) in [
+            (
+                "type_hollow_section",
+                &hollow_checks,
+                HOLLOW_SECTION_PARAMETER_NAMES.as_slice(),
+            ),
+            (
+                "type_tube_section",
+                &tube_checks,
+                TUBE_BEAM_PARAMETER_NAMES.as_slice(),
+            ),
+        ] {
+            let mut wanted: Vec<&str> = names.to_vec();
+            wanted.sort_unstable();
+            for (id, parameters) in checks {
+                let mut found: Vec<&str> = parameters
+                    .iter()
+                    .filter_map(|parameter| captions.get(parameter).map(String::as_str))
+                    .collect();
+                found.sort_unstable();
+                if found != wanted {
+                    problems.push(format!(
+                        "{id}: {reader} is made of the parameters {found:?}, not {wanted:?}"
+                    ));
+                }
             }
         }
     }
