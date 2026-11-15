@@ -518,6 +518,9 @@ pub fn attach_scoped_with_control(
             column_rectangles.entry(id).or_default().push(index);
         }
     }
+    // #1209: the ceilings with no `GrossArea`, which their saved mesh's face
+    // gives where it is one piece.
+    let ceilings = ceilings_without_area(model, &wholes, scope);
     let hosts = match embed_hosts(rf, model, &by_id) {
         Ok(hosts) => hosts,
         Err(error) => {
@@ -531,6 +534,7 @@ pub fn attach_scoped_with_control(
         && walls.is_empty()
         && beam_lines.is_empty()
         && column_rectangles.is_empty()
+        && ceilings.is_empty()
     {
         for (index, reason) in refusals {
             note_refusal(model, index, reason);
@@ -544,6 +548,7 @@ pub fn attach_scoped_with_control(
             .chain(walls.keys())
             .chain(beam_lines.keys())
             .chain(column_rectangles.keys())
+            .chain(ceilings.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
         max_graph_values: 1_000_000,
@@ -579,6 +584,8 @@ pub fn attach_scoped_with_control(
         crate::native_wall_cuts::walls_with_no_base_join(rf, &wall_ids).unwrap_or_default();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
+    // #1209: the area of each ceiling's one-piece saved face.
+    let mut ceiling_areas: Vec<(usize, f64)> = Vec::new();
     // #1645: the candidates the scene held graphics for.
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
@@ -667,6 +674,18 @@ pub fn attach_scoped_with_control(
                     } else {
                         columns.push((*index, found));
                     }
+                }
+            }
+            if let Some([index]) = ceilings
+                .get(&element.identity.element_id)
+                .map(Vec::as_slice)
+            {
+                let found = partial_refusal(&element.meshes)
+                    .is_none()
+                    .then(|| one_piece_face_area(&element.meshes.primitives))
+                    .flatten();
+                if let Some(area) = found {
+                    ceiling_areas.push((*index, area));
                 }
             }
             if let Some(&index) = hosts.get(&element.identity.element_id) {
@@ -848,6 +867,7 @@ pub fn attach_scoped_with_control(
     add_column_quantities(model, &mut columns);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
+    add_ceiling_areas(model, &ceiling_areas);
     // #1645: a candidate the scene held no graphics for keeps its box too.
     for (id, indices) in &by_id {
         if !seen.contains(id) {
@@ -1896,6 +1916,199 @@ fn add_plate_widths(model: &mut IfcModel, widths: &[(usize, f64)]) {
                 set.properties.push(Property {
                     name: "Width".into(),
                     value: PropertyValue::LengthFeet(width),
+                });
+            }
+        }
+    }
+}
+
+/// The ceilings of `model` (by ElementId) that hold no
+/// `Qto_CoveringBaseQuantities.GrossArea`: an `IfcCovering` whose `RevitClass`
+/// is `Ceiling` (#1209). They are the ceilings `add_ceiling_quantities` leaves
+/// out: those a step cuts, and the uncut ones whose sketch it does not read.
+fn ceilings_without_area(
+    model: &IfcModel,
+    wholes: &BTreeSet<usize>,
+    scope: SavedMeshScope,
+) -> BTreeMap<u64, Vec<usize>> {
+    let with_area: BTreeSet<usize> = model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            IfcEntity::ElementPropertySet { element, set }
+                if set.name == "Qto_CoveringBaseQuantities" && has_property(set, "GrossArea") =>
+            {
+                Some(*element)
+            }
+            _ => None,
+        })
+        .collect();
+    let mut out: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for (index, entity) in model.entities.iter().enumerate() {
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            property_set: Some(set),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if ifc_type != "IFCCOVERING"
+            || !scope.includes(ifc_type)
+            || wholes.contains(&index)
+            || with_area.contains(&index)
+            || !has_text_property(set, "RevitClass", "Ceiling")
+        {
+            continue;
+        }
+        if let Ok(id) = tag.parse::<u64>() {
+            out.entry(id).or_default().push(index);
+        }
+    }
+    out
+}
+
+/// The area of a ceiling's saved face where it is one piece (#1209): the
+/// largest upward and the largest downward horizontal face of `primitives`,
+/// each the triangles at one height (0.001 ft) whose outward normal is
+/// vertical, must each be one connected piece (triangles sharing a vertex
+/// 1e-6 ft apart), and the two must be the same area to 0.1%. Revit's export
+/// gives such a ceiling that area as its `GrossArea` on all 370 one-piece
+/// ceilings of the eight BIM4LCA office and housing files, cut or uncut. On a
+/// ceiling in pieces it gives one piece's, and not always the largest,
+/// so one in pieces gets none, as does a sloped ceiling, which has no
+/// horizontal face. The direction of a triangle is its winding turned outward
+/// by its saved normals, where the primitive has one per vertex.
+fn one_piece_face_area(primitives: &[Primitive]) -> Option<f64> {
+    const HORIZONTAL: f64 = 0.999;
+    const SAME_AREA: f64 = 1e-3;
+    type Level = Vec<[[f64; 3]; 3]>;
+    let mut levels: BTreeMap<(i64, bool), (f64, Level)> = BTreeMap::new();
+    for primitive in primitives {
+        let oriented = primitive.normals.len() == primitive.vertices.len();
+        for triangle in &primitive.triangles {
+            let corners = triangle.map(|i| primitive.vertices.get(i as usize).copied());
+            let [Some(a), Some(b), Some(c)] = corners else {
+                continue;
+            };
+            let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+            let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+            let mut normal = [
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0],
+            ];
+            let length =
+                (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
+            if !length.is_finite() || length < 1e-12 {
+                continue;
+            }
+            if oriented {
+                let outward = triangle.iter().fold([0.0; 3], |sum, i| {
+                    let n = primitive.normals[*i as usize];
+                    [sum[0] + n[0], sum[1] + n[1], sum[2] + n[2]]
+                });
+                if normal[0] * outward[0] + normal[1] * outward[1] + normal[2] * outward[2] < 0.0 {
+                    normal = [-normal[0], -normal[1], -normal[2]];
+                }
+            }
+            if normal[2].abs() / length < HORIZONTAL {
+                continue;
+            }
+            let key = ((a[2] * 1000.0).round() as i64, normal[2] > 0.0);
+            let level = levels.entry(key).or_insert_with(|| (0.0, Vec::new()));
+            level.0 += length / 2.0;
+            level.1.push([a, b, c]);
+        }
+    }
+    let largest = |up: bool| {
+        levels
+            .iter()
+            .filter(|((_, direction), _)| *direction == up)
+            .max_by(|x, y| x.1.0.total_cmp(&y.1.0))
+            .map(|(_, level)| level)
+    };
+    let (upper, lower) = (largest(true)?, largest(false)?);
+    if pieces(&upper.1) != 1 || pieces(&lower.1) != 1 {
+        return None;
+    }
+    ((upper.0 - lower.0).abs() <= SAME_AREA * upper.0.max(lower.0)).then_some(lower.0)
+}
+
+/// How many connected parts `triangles` make, two triangles joined where they
+/// share a vertex 1e-6 ft apart.
+fn pieces(triangles: &[[[f64; 3]; 3]]) -> usize {
+    fn root(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+    let key = |p: [f64; 3]| p.map(|v| (v * 1e6).round() as i64);
+    let mut parent: Vec<usize> = (0..triangles.len()).collect();
+    let mut seen: BTreeMap<[i64; 3], usize> = BTreeMap::new();
+    for (index, corners) in triangles.iter().enumerate() {
+        for corner in corners {
+            match seen.get(&key(*corner)) {
+                Some(&other) => {
+                    let (a, b) = (root(&mut parent, index), root(&mut parent, other));
+                    if a != b {
+                        parent[a] = b;
+                    }
+                }
+                None => {
+                    seen.insert(key(*corner), index);
+                }
+            }
+        }
+    }
+    (0..triangles.len())
+        .map(|index| root(&mut parent, index))
+        .collect::<BTreeSet<usize>>()
+        .len()
+}
+
+/// Give each ceiling of `found` (an index into the entities and its one-piece
+/// face's area) the `GrossArea` of its `Qto_CoveringBaseQuantities` (#1209),
+/// in the set it holds or a new one. A value a ceiling holds is never
+/// replaced.
+fn add_ceiling_areas(model: &mut IfcModel, found: &[(usize, f64)]) {
+    if found.is_empty() {
+        return;
+    }
+    let mut held: BTreeMap<usize, usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_CoveringBaseQuantities" {
+                held.entry(*element).or_insert(position);
+            }
+        }
+    }
+    for &(index, area) in found {
+        let gross = Property {
+            name: "GrossArea".into(),
+            value: PropertyValue::AreaSquareFeet(area),
+        };
+        match held.get(&index) {
+            Some(&position) => {
+                if let Some(IfcEntity::ElementPropertySet { set, .. }) =
+                    model.entities.get_mut(position)
+                {
+                    if !has_property(set, "GrossArea") {
+                        set.properties.push(gross);
+                    }
+                }
+            }
+            None => {
+                held.insert(index, model.entities.len());
+                model.entities.push(IfcEntity::ElementPropertySet {
+                    element: index,
+                    set: PropertySet {
+                        name: "Qto_CoveringBaseQuantities".into(),
+                        properties: vec![gross],
+                    },
                 });
             }
         }
