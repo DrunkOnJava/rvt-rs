@@ -241,7 +241,52 @@ def main(argv):
                 f" placement {origin[a]:.4f} xdir {xdir[0]:+.3f} {xdir[1]:+.3f} ydir {ydir[0]:+.3f} {ydir[1]:+.3f}"
                 f" hits {' / '.join(k for k, v in hits.items() if v) or 'none'}"
             )
+        # The rule as rvt-rs would apply it: from rvt-rs's own export, the door's
+        # placement and the opening its door fills, a box as wide and as tall
+        # as that opening and 10 ft deep across the door's wall, centred on the
+        # opening's face on the side the door's local Y points away from.
+        g = ifcopenshell.open(args[0])
+        gframe = site_frame(g)
+        gunit = ifcopenshell.util.unit.calculate_unit_scale(g)
+        gsettings = ifcopenshell.geom.settings()
+        gsettings.set("use-world-coords", True)
+        our_doors = {d.Tag: d for d in g.by_type("IfcDoor") if d.Tag}
+        rule = collections.Counter()
+        for (tag, host), box in sorted(missing_doors):
+            door = our_doors.get(tag)
+            if door is None:
+                rule["door not in rvt-rs's export"] += 1
+                continue
+            own = None
+            for rel in door.FillsVoids or []:
+                try:
+                    shape = ifcopenshell.geom.create_shape(gsettings, rel.RelatingOpeningElement)
+                    verts = gframe(np.array(shape.geometry.verts, dtype=float).reshape(-1, 3))
+                    own = (verts.min(axis=0), verts.max(axis=0))
+                except Exception:
+                    pass
+            if own is None:
+                rule["no own opening in rvt-rs's export"] += 1
+                continue
+            mat = np.array(ifcopenshell.util.placement.get_local_placement(door.ObjectPlacement), dtype=float)
+            o = mat[:3, 3] * gunit
+            pts = gframe(np.array([o, o + mat[:3, 1]]))
+            ydir = (pts[1] - pts[0]) / np.linalg.norm(pts[1] - pts[0])
+            ext = own[1] - own[0]
+            a = 0 if ext[0] < ext[1] else 1
+            if abs(ydir[a]) < 0.99:
+                rule["door's Y not across its wall"] += 1
+                continue
+            face = own[0][a] if ydir[a] > 0 else own[1][a]
+            lo, hi = own[0].copy(), own[1].copy()
+            lo[a], hi[a] = face - 5.0, face + 5.0
+            ok = all(abs(lo[i] - box[0][i]) <= BOX_TOLERANCE_FEET and abs(hi[i] - box[1][i]) <= BOX_TOLERANCE_FEET for i in range(3))
+            deep = abs((box[1] - box[0])[a] - 10.0) < 0.01
+            rule[("10 ft deep: " if deep else "not 10 ft deep: ") + ("box equal" if ok else "box differs")] += 1
+            if deep and not ok:
+                print(f"trace rvt-rs rule {tag} in {host}: predicted {fmt((lo, hi))} Revit {fmt(box)}")
         print("trace rule tally: " + "; ".join(f"{k} {v}" for k, v in sorted(tally.items())))
+        print("trace rvt-rs rule tally: " + "; ".join(f"{k} {v}" for k, v in sorted(rule.items())))
     for kind, row in sorted(rows.items()):
         print(f"{kind}:")
         for label, count in row.items():
