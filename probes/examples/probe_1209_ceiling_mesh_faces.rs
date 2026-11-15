@@ -11,10 +11,12 @@
 //!
 //! Output, in feet and the document frame:
 //!   ceiling <id> cut <true|false> status <status> diagnostics <n> unbounded <n> triangles <n>
-//!   face <id> <up|down> z <z> area <ft2>
+//!   face <id> <up|down> z <z> area <ft2> pieces <n>
+//!   piece <id> <up|down> z <z> area <ft2>
 //! one `face` line for each height at which horizontal faces of one direction
 //! lie (0.001 ft), the direction from the triangles' winding made outward by
-//! the saved normals.
+//! the saved normals, and one `piece` line for each connected part of that
+//! face (triangles sharing a vertex, 1e-6 ft), largest first.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1209_ceiling_mesh_faces -- MODEL.rvt
@@ -45,6 +47,43 @@ fn cross(a: Vec3, b: Vec3) -> Vec3 {
 
 fn dot(a: Vec3, b: Vec3) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// The areas of the connected parts of `triangles` (sharing a vertex 1e-6 ft
+/// apart), largest first.
+fn pieces(triangles: &[([Vec3; 3], f64)]) -> Vec<f64> {
+    let key = |p: Vec3| p.map(|v| (v * 1e6).round() as i64);
+    let mut parent: Vec<usize> = (0..triangles.len()).collect();
+    fn root(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+    let mut seen: BTreeMap<[i64; 3], usize> = BTreeMap::new();
+    for (index, (corners, _)) in triangles.iter().enumerate() {
+        for corner in corners {
+            match seen.get(&key(*corner)) {
+                Some(&other) => {
+                    let (a, b) = (root(&mut parent, index), root(&mut parent, other));
+                    if a != b {
+                        parent[a] = b;
+                    }
+                }
+                None => {
+                    seen.insert(key(*corner), index);
+                }
+            }
+        }
+    }
+    let mut areas: BTreeMap<usize, f64> = BTreeMap::new();
+    for (index, (_, area)) in triangles.iter().enumerate() {
+        *areas.entry(root(&mut parent, index)).or_insert(0.0) += area;
+    }
+    let mut out: Vec<f64> = areas.into_values().collect();
+    out.sort_by(|a, b| b.total_cmp(a));
+    out
 }
 
 fn main() -> Result<()> {
@@ -91,7 +130,7 @@ fn main() -> Result<()> {
             meshes.diagnostics.len(),
             meshes.unbounded_faces
         );
-        let mut levels: BTreeMap<(i64, u8), f64> = BTreeMap::new();
+        let mut levels: BTreeMap<(i64, u8), Vec<([Vec3; 3], f64)>> = BTreeMap::new();
         for primitive in &meshes.primitives {
             let oriented = primitive.normals.len() == primitive.vertices.len();
             for triangle in &primitive.triangles {
@@ -118,15 +157,24 @@ fn main() -> Result<()> {
                     continue;
                 }
                 let key = ((a[2] * 1000.0).round() as i64, u8::from(normal[2] > 0.0));
-                *levels.entry(key).or_insert(0.0) += length / 2.0;
+                levels
+                    .entry(key)
+                    .or_default()
+                    .push(([a, b, c], length / 2.0));
             }
         }
-        for ((z, up), area) in &levels {
+        for ((z, up), triangles) in &levels {
             let direction = if *up == 1 { "up" } else { "down" };
+            let pieces = pieces(triangles);
+            let area: f64 = pieces.iter().sum();
+            let z = *z as f64 / 1000.0;
             println!(
-                "face {id} {direction} z {:.3} area {area:.4}",
-                *z as f64 / 1000.0
+                "face {id} {direction} z {z:.3} area {area:.4} pieces {}",
+                pieces.len()
             );
+            for piece in &pieces {
+                println!("piece {id} {direction} z {z:.3} area {piece:.4}");
+            }
         }
     }
     Ok(())

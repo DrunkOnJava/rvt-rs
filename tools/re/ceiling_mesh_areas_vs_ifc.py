@@ -31,13 +31,20 @@ def main(argv):
     probe, theirs = positional
     ceilings = {}
     faces = collections.defaultdict(lambda: {"up": 0.0, "down": 0.0})
+    # the pieces of the largest face of each direction, and how many
+    pieces = collections.defaultdict(lambda: {"up": [], "down": []})
+    level_pieces = collections.defaultdict(list)
     for line in open(probe):
         p = line.split()
         if p and p[0] == "ceiling":
             ceilings[p[1]] = {"cut": p[3] == "true", "status": p[5], "unbounded": int(p[9]), "triangles": int(p[11])}
         elif p and p[0] == "face":
             tag, direction, area = p[1], p[2], float(p[6])
-            faces[tag][direction] = max(faces[tag][direction], area)
+            if area > faces[tag][direction]:
+                faces[tag][direction] = area
+                pieces[tag][direction] = level_pieces[(tag, direction, p[4])]
+        elif p and p[0] == "piece":
+            level_pieces[(p[1], p[2], p[4])].append(float(p[6]))
     f = ifcopenshell.open(theirs)
     # The file's own area unit: the length unit squared is wrong where they differ (mm and m2).
     scale = ifcopenshell.util.unit.calculate_unit_scale(f, "AREAUNIT")
@@ -64,14 +71,24 @@ def main(argv):
         counts[f"{kind}, upper face equal"] += hit_up
         counts[f"{kind}, lower face equal"] += hit_down
         counts[f"{kind}, either equal"] += hit_up or hit_down
-        rows.append((tag, kind, c["status"], c["unbounded"], want, up, down, hit_up or hit_down))
+        parts = pieces[tag]["down"] or pieces[tag]["up"]
+        shape = "one piece" if len(parts) == 1 else f"{'several' if parts else 'no'} pieces"
+        counts[f"{kind}, {shape}"] += 1
+        counts[f"{kind}, {shape}, face equal"] += hit_up or hit_down
+        counts[f"{kind}, {shape}, decoded whole"] += c["status"] == "decoded_saved_graphics" and c["unbounded"] == 0
+        if len(parts) > 1:
+            rank = next((i + 1 for i, a in enumerate(parts) if want > 0 and abs(a - want) <= TOLERANCE * want), None)
+            counts[f"{kind}, several pieces, one piece equal"] += rank is not None
+            counts[f"{kind}, several pieces, the largest piece equal"] += rank == 1
+        rows.append((tag, kind, c["status"], c["unbounded"], want, up, down, hit_up or hit_down, parts))
     print(f"ceiling mesh areas: ceilings in the probe {len(ceilings)}, with Revit's GrossArea {len(revit)}")
     for key in sorted(counts):
         print(f"ceiling mesh areas: {key} {counts[key]}")
     if listing:
-        for tag, kind, status, unbounded, want, up, down, hit in rows:
+        for tag, kind, status, unbounded, want, up, down, hit, parts in rows:
             if kind == "cut" or not hit:
-                print(f"  ceiling {tag} {kind} {status} unbounded {unbounded}: Revit {want:.3f} ft2, mesh up {up:.3f}, down {down:.3f}, {'equal' if hit else 'not'}")
+                shown = ", ".join(f"{a:.3f}" for a in parts[:6]) + (" ..." if len(parts) > 6 else "")
+                print(f"  ceiling {tag} {kind} {status} unbounded {unbounded}: Revit {want:.3f} ft2, mesh up {up:.3f}, down {down:.3f}, {'equal' if hit else 'not'}; pieces {len(parts)}: {shown}")
     return 0
 
 
