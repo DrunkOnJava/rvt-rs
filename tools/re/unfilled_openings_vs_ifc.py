@@ -123,6 +123,7 @@ def main(argv):
     both = [key for key in revit if key in ours]
     print(f"unfilled openings in Revit's export: {len(revit)}; in rvt-rs's: {len(ours)}; both: {len(both)}")
     rows = collections.defaultdict(collections.Counter)
+    missing_doors = []
     worst = []
     volume_worst = []
     for key, theirs in revit.items():
@@ -131,6 +132,8 @@ def main(argv):
         row["revit"] += 1
         mine = ours.get(key)
         if mine is None:
+            if kind == "IfcDoor in IfcWall" and theirs["box"] is not None:
+                missing_doors.append((key, theirs["box"]))
             continue
         row["written"] += 1
         if theirs["box"] is not None and mine["box"] is not None:
@@ -165,6 +168,33 @@ def main(argv):
             row["Depth in Revit's"] += 1
             if mine["depth"] is not None and abs(mine["depth"] - theirs["depth"]) <= 1e-5 * max(1.0, theirs["depth"]):
                 row["Depth equal"] += 1
+    # Research trace for #1165 (not to land): each door opening in a wall that
+    # Revit writes and rvt-rs does not, beside the door's own body box and its
+    # own (filled) opening's box in Revit's export, internal feet.
+    if missing_doors:
+        f = ifcopenshell.open(args[1])
+        frame = site_frame(f)
+        settings = ifcopenshell.geom.settings()
+        settings.set("use-world-coords", True)
+        def box_of(element):
+            try:
+                shape = ifcopenshell.geom.create_shape(settings, element)
+                verts = frame(np.array(shape.geometry.verts, dtype=float).reshape(-1, 3))
+                return verts.min(axis=0), verts.max(axis=0)
+            except Exception:
+                return None
+        doors = {d.Tag: d for d in f.by_type("IfcDoor") if d.Tag}
+        fmt = lambda b: "-" if b is None else " ".join(f"{v:.4f}" for v in (*b[0], *b[1]))
+        for (tag, host), box in sorted(missing_doors):
+            door = doors.get(tag)
+            own = None
+            if door is not None:
+                for rel in door.FillsVoids or []:
+                    own = box_of(rel.RelatingOpeningElement)
+            ext = box[1] - box[0]
+            print(f"trace door {tag} in wall {host}: opening {fmt(box)} extent {ext[0]:.4f} {ext[1]:.4f} {ext[2]:.4f}")
+            print(f"  door body {fmt(None if door is None else box_of(door))}")
+            print(f"  door own opening {fmt(own)}")
     for kind, row in sorted(rows.items()):
         print(f"{kind}:")
         for label, count in row.items():
