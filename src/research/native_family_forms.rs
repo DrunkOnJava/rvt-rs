@@ -118,6 +118,17 @@ fn element_id(value: Option<&crate::graph_value::Fv>) -> Option<i64> {
         .and_then(crate::graph_value::Fv::as_i64)
 }
 
+/// [`element_id`], or the shape a save before Revit 2024 holds,
+/// `{"m_id":{"m_id":n}}` (RE-280). A file holds one of the two (RE-479).
+fn element_id_any(value: Option<&crate::graph_value::Fv>) -> Option<i64> {
+    value
+        .and_then(|v| {
+            v.pointer("/m_id/m_id64")
+                .or_else(|| v.pointer("/m_id/m_id"))
+        })
+        .and_then(crate::graph_value::Fv::as_i64)
+}
+
 /// A graph's `FamilyParams` values: parameter ElementId and `m_int`.
 fn family_params(graph: &ObjectGraph) -> Vec<(u64, i64)> {
     graph
@@ -127,7 +138,7 @@ fn family_params(graph: &ObjectGraph) -> Vec<(u64, i64)> {
         .filter_map(|object| object.fields.get("m_params")?.as_array())
         .flatten()
         .filter_map(|entry| {
-            let id = u64::try_from(element_id(entry.get("m_paramId"))?).ok()?;
+            let id = u64::try_from(element_id_any(entry.get("m_paramId"))?).ok()?;
             Some((id, entry.get("m_int")?.as_i64()?))
         })
         .collect()
@@ -141,7 +152,7 @@ fn stored_visible(graph: &ObjectGraph) -> Option<i64> {
         .filter(|object| object.class_name == "ParamValueSetInt")
         .filter_map(|object| object.fields.get("m_paramSet")?.as_array())
         .flatten()
-        .find(|entry| element_id(entry.get("m_paramId")) == Some(VISIBLE_PARAMETER))
+        .find(|entry| element_id_any(entry.get("m_paramId")) == Some(VISIBLE_PARAMETER))
         .and_then(|entry| entry.get("m_value")?.as_i64())
 }
 
@@ -211,12 +222,12 @@ fn read_documents(
                             .filter_map(|object| object.fields.get("m_paramDrivenData")?.as_array())
                             .flatten()
                             .find(|entry| {
-                                element_id(entry.get("m_elemPropId")) == Some(VISIBLE_PARAMETER)
+                                element_id_any(entry.get("m_elemPropId")) == Some(VISIBLE_PARAMETER)
                             })
-                            .and_then(|entry| element_id(entry.get("m_famParamId")))
+                            .and_then(|entry| element_id_any(entry.get("m_famParamId")))
                             .and_then(|id| u64::try_from(id).ok());
                         document.forms.push(Form {
-                            material: element_id(root.fields.get("m_materialId")),
+                            material: element_id_any(root.fields.get("m_materialId")),
                             cutting: root
                                 .fields
                                 .get("m_cutting")
@@ -229,7 +240,7 @@ fn read_documents(
                     }
                     match root.class_name.as_str() {
                         "FamilyInstance" => {
-                            let Some(symbol) = element_id(root.fields.get("m_masterSymbolId"))
+                            let Some(symbol) = element_id_any(root.fields.get("m_masterSymbolId"))
                                 .and_then(|id| u64::try_from(id).ok())
                             else {
                                 document.unread = true;
@@ -242,7 +253,7 @@ fn read_documents(
                             });
                         }
                         "FamilySymbol" => {
-                            if let Some(family) = element_id(root.fields.get("m_familyId"))
+                            if let Some(family) = element_id_any(root.fields.get("m_familyId"))
                                 .and_then(|id| u64::try_from(id).ok())
                             {
                                 document.symbols.insert(id, (family, family_params(&graph)));
@@ -401,6 +412,18 @@ pub fn family_forms(
     rf: &mut RevitFile,
     families: &BTreeSet<u64>,
 ) -> anyhow::Result<BTreeMap<u64, FamilyForms>> {
+    family_forms_in(rf, families, &native_document::Options::default().releases)
+}
+
+/// [`family_forms`] on any of `releases` (the caller's reader is measured on
+/// them: [`native_document::NATIVE_RELEASES`] is every release the native
+/// framing holds on, RE-280). A save before Revit 2024 holds its documents'
+/// ids in the older shape, which is read as the 2024 one is (RE-479).
+pub fn family_forms_in(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+    releases: &std::ops::RangeInclusive<u32>,
+) -> anyhow::Result<BTreeMap<u64, FamilyForms>> {
     let mut out = BTreeMap::new();
     let Some(Loaded {
         registry,
@@ -409,7 +432,7 @@ pub fn family_forms(
         keys,
         documents,
         ..
-    }) = load(rf, families, &native_document::Options::default().releases)?
+    }) = load(rf, families, releases)?
     else {
         return Ok(out);
     };
