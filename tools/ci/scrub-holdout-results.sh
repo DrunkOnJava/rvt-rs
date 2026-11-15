@@ -104,6 +104,8 @@
 # Revit's base and top, and how many floors, roofs and footings cut them, as
 # numbers beside the scorer's fixed words, never a Tag, a height or the files'
 # offset), and
+# the `opening boxes:` lines of tools/re/opening_boxes_vs_ifc.py (#227: how many
+# openings are within each fixed distance of Revit's, by IFC class), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -232,6 +234,13 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # the general form allows no capital before a colon, and dropped
       # "layer sets whose count differs from Revit's" until #1805.
       grep -E "^( +[0-9]+  [a-z][a-z ]*(: [A-Za-z',: ]+| = Revit's Family:Type)?| +[0-9]+  (layer sets whose count differs from Revit's|layer count: (Revit's export names no layers|rvt-rs fewer than Revit's|rvt-rs more than Revit's|every name rvt-rs writes is one of Revit's|Revit's names in order once its 0 thick layers are left out))|  [a-z ]+ within [0-9.]+ ft of Revit's: [0-9]+ of [0-9]+)$" "$f" | sed 's/^/layer sets: /' || true
+    done
+    # How close each door's and window's opening is to Revit's (#227, RE-93), as counts
+    # beside the scorer's fixed titles, an IFC class and a fixed distance band, never a
+    # Tag or a distance (its `--list` lines are not kept).
+    for f in "$dir"opening_boxes_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^((unfilled )?openings in Revit's export: [0-9]+; in rvt-rs's: [0-9]+; both: [0-9]+|  Ifc[A-Za-z]+ (within [0-9.]+ ft|over 1 ft): [0-9]+)$" "$f" | sed 's/^/opening boxes: /' || true
     done
     for f in "$dir"class_sets_vs_ifc.txt; do
       [ -f "$f" ] || continue
