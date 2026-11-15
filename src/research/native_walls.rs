@@ -84,6 +84,9 @@ pub struct NativeWall {
     /// The wall the `JoinEndGStep.m_omittedTarget` of the curve's start and
     /// of its end names, `None` where it names none (RE-488).
     pub omitted: [Option<u64>; 2],
+    /// Whether the record holds a `JoinToRoofGStep`: a roof or floor joined
+    /// to the wall's top or base (RE-488).
+    pub roof_joined: bool,
     /// The walls whose end meets this wall's middle, from its `CDJoinInfo`
     /// objects, each with that end (0 or 1).
     pub side_joins: Vec<(u64, u32)>,
@@ -1172,6 +1175,10 @@ pub fn native_walls_and_top_joins_into(
                 faces: face_offsets(&planes, start, direction),
                 exposed,
                 omitted,
+                roof_joined: graph
+                    .objects
+                    .iter()
+                    .any(|object| object.class_name == "JoinToRoofGStep"),
                 side_joins,
                 partners,
                 type_id: None,

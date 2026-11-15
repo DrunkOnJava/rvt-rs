@@ -366,7 +366,10 @@ pub struct WallLine {
     pub shells: Option<[f64; 2]>,
     /// Whether the `JoinEndGStep` of the line's start and of its end names
     /// an omitted target (`m_omittedTarget`, RE-488), where its native
-    /// record's curve is this line either way round; false otherwise.
+    /// record's curve is this line either way round and the record joins no
+    /// roof or floor to the wall (`NativeWall::roof_joined`); false
+    /// otherwise. Revit can clean a roof-joined wall's end layer by layer
+    /// over the height the join shapes, so it is not read as flat.
     pub omitted: [bool; 2],
 }
 

@@ -322,6 +322,7 @@ fn wall_lines(
             // The record's join steps are indexed by its curve's ends.
             let omitted = native
                 .get(&u64::from(wall.id?))
+                .filter(|curve| !curve.roof_joined)
                 .and_then(|curve| {
                     let [start, end] = curve.omitted.map(|target| target.is_some());
                     if near(curve.start, axis.start) && near(curve.end, axis.end) {
