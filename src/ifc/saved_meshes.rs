@@ -150,6 +150,19 @@ fn leaves_partial(diagnostic: &str) -> bool {
         && !diagnostic.ends_with(crate::native_graphics_traversal::VIEW_COMPONENT_DIAGNOSTIC)
 }
 
+/// Whether a wall's saved mesh failed to decode in a way that can leave out part
+/// of the wall, so its quantities are not read from it (#1947): any diagnostic
+/// [`leaves_partial`] counts but a view-resolved instance, which on every
+/// measured wall leaves the wall's own solid whole (#2020). Bodies, beams and
+/// columns keep [`partial_refusal`]'s wider test.
+fn wall_mesh_partial(meshes: &GraphicsMeshes) -> bool {
+    meshes.diagnostics.iter().any(|diagnostic| {
+        leaves_partial(diagnostic)
+            && !diagnostic
+                .ends_with(crate::native_graphics_traversal::VIEW_RESOLVED_INSTANCE_DIAGNOSTIC)
+    })
+}
+
 /// A decoder diagnostic as [`SAVED_MESH_REFUSAL_PROPERTY`] says it: without the
 /// object it names (the text before its first `: `) and with its digits written
 /// as `#`, so that two elements with the same fault say it alike.
@@ -604,9 +617,9 @@ pub fn attach_scoped_with_control(
                 // A mesh that decoded only in part can still hold one closed
                 // solid (another of its solids is what failed), and its
                 // quantities would be that solid's alone: refused, as a
-                // beam's and a column's are (#1947).
-                let found = partial_refusal(&element.meshes)
-                    .is_none()
+                // beam's and a column's are (#1947), unless all that failed is
+                // a view-resolved instance (#2020).
+                let found = (!wall_mesh_partial(&element.meshes))
                     .then(|| {
                         wall_mesh_quantities(
                             &element.meshes.primitives,
