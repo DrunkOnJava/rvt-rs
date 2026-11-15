@@ -9,7 +9,11 @@
 //!
 //! Output, one record per line:
 //!   level <id> <class> object <n> <object class> <fields json>
+//!   room <id> <class> object <n> <object class> <fields json>
 //!   param <id> <parameter id> <value json> <source element id> <name>
+//!
+//! A `room` line is each object of the records of [`ROOMS`], RE-374's four
+//! stepped rooms of Snowdon Towers Architectural, for their Level and base.
 //!
 //! Every object of every `Level` record is printed, each with its own fields: a
 //! history table as its length under `<name>#`, a pointer member left out. Then
@@ -28,6 +32,9 @@ use rvt::research::native_element_parameters;
 use serde_json::{Map, Value};
 
 const CLIP: usize = 8000;
+
+/// RE-374's stepped rooms of Snowdon Towers Architectural (#1589).
+const ROOMS: [u64; 4] = [828537, 828548, 2181757, 2181762];
 
 fn trimmed(fields: &Value) -> String {
     let text = match fields.as_object() {
@@ -73,7 +80,28 @@ fn main() -> Result<()> {
         }
         Ok(())
     })?;
-    let saved = native_element_parameters::read(&mut rf, &levels)?;
+    let rooms = Options {
+        selected_ids: ROOMS.into_iter().collect(),
+        ..Options::default()
+    };
+    extract_graphs(&mut rf, &rooms, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        for (index, object) in graph.objects.iter().enumerate().take(4) {
+            println!(
+                "room {id} {class} object {index} {} {}",
+                object.class_name,
+                trimmed(&object.fields.to_json())
+            );
+        }
+        Ok(())
+    })?;
+    let mut with_rooms = levels.clone();
+    with_rooms.extend(ROOMS);
+    let saved = native_element_parameters::read(&mut rf, &with_rooms)?;
     for (id, parameters) in &saved.elements {
         for parameter in parameters {
             println!(
