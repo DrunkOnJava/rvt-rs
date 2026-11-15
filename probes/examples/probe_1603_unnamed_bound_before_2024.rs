@@ -43,6 +43,7 @@ use rvt::ifc::entities::IfcEntity;
 use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_family_forms::family_records_in;
+use rvt::research::native_parameters::ObjectGraph;
 
 const CLASSES: [&str; 2] = ["IFCWINDOW", "IFCDOOR"];
 
@@ -74,7 +75,7 @@ fn id_in_either(value: Option<&Fv>) -> Option<i64> {
 }
 
 /// A graph's `FamilyParams` values: parameter ElementId and `m_int`.
-fn family_params(graph: &rvt::research::graph_value::ObjectGraph) -> Vec<(u64, i64)> {
+fn family_params(graph: &ObjectGraph) -> Vec<(u64, i64)> {
     graph
         .objects
         .iter()
