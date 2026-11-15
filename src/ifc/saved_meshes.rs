@@ -590,6 +590,7 @@ pub fn attach_scoped_with_control(
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
     // #1209: the area of each covering's one-piece saved face.
     let mut covering_areas: Vec<(usize, f64)> = Vec::new();
+    let mut ceiling_seen: BTreeSet<u64> = BTreeSet::new();
     // #1645: the candidates the scene held graphics for.
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
@@ -680,20 +681,29 @@ pub fn attach_scoped_with_control(
                     }
                 }
             }
-            if let Some([index]) = ceilings
-                .get(&element.identity.element_id)
-                .map(Vec::as_slice)
-            {
+            if let Some(indices) = ceilings.get(&element.identity.element_id) {
+                // research/1209-first-piece-why: not to land.
+                ceiling_seen.insert(element.identity.element_id);
                 let primitives = &element.meshes.primitives;
-                let found = partial_refusal(&element.meshes)
-                    .is_none()
-                    .then(|| {
-                        one_piece_face_area(primitives)
-                            .or_else(|| first_piece_face_area(primitives))
-                    })
-                    .flatten();
-                if let Some(area) = found {
-                    covering_areas.push((*index, area));
+                let refusal = partial_refusal(&element.meshes);
+                let one = one_piece_face_area(primitives);
+                eprintln!(
+                    "re486 ceiling {} indices {} primitives {} refusal {} one {} first {}",
+                    element.identity.element_id,
+                    indices.len(),
+                    primitives.len(),
+                    refusal.as_deref().unwrap_or("none"),
+                    one.map_or_else(|| "none".to_string(), |a| format!("{a:.6}")),
+                    first_piece_why(primitives),
+                );
+                if let [index] = indices.as_slice() {
+                    let found = refusal
+                        .is_none()
+                        .then(|| one.or_else(|| first_piece_face_area(primitives)))
+                        .flatten();
+                    if let Some(area) = found {
+                        covering_areas.push((*index, area));
+                    }
                 }
             }
             if let Some([index]) = instances
@@ -887,6 +897,11 @@ pub fn attach_scoped_with_control(
     add_column_quantities(model, &mut columns);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
+    for (id, indices) in &ceilings {
+        if !ceiling_seen.contains(id) {
+            eprintln!("re486 ceiling {id} indices {} not visited", indices.len());
+        }
+    }
     add_covering_areas(model, &covering_areas);
     // #1645: a candidate the scene held no graphics for keeps its box too.
     for (id, indices) in &by_id {
@@ -2138,6 +2153,82 @@ fn first_piece_face_area(primitives: &[Primitive]) -> Option<f64> {
             .any(|part| (part - area).abs() <= SAME_AREA * part.max(area))
     });
     matched.then_some(area)
+}
+
+/// research/1209-first-piece-why: where [`first_piece_face_area`] refuses.
+fn first_piece_why(primitives: &[Primitive]) -> String {
+    const SAME_AREA: f64 = 1e-3;
+    let Some(first) = primitives.first() else {
+        return "refused: no primitive".to_string();
+    };
+    let all = horizontal_triangles(first);
+    let (mut missing, mut degenerate, mut steep) = (0usize, 0usize, 0usize);
+    for triangle in &first.triangles {
+        let corners = triangle.map(|i| first.vertices.get(i as usize).copied());
+        let [Some(a), Some(b), Some(c)] = corners else {
+            missing += 1;
+            continue;
+        };
+        let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+        let n = [
+            u[1] * v[2] - u[2] * v[1],
+            u[2] * v[0] - u[0] * v[2],
+            u[0] * v[1] - u[1] * v[0],
+        ];
+        let length = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        if !length.is_finite() || length < 1e-12 {
+            degenerate += 1;
+            continue;
+        }
+        if n[2].abs() / length < 0.999 {
+            steep += 1;
+        }
+    }
+    let face: Vec<&Horizontal> = all.iter().flatten().collect();
+    let keys: BTreeSet<(i64, bool)> = face.iter().map(|t| (t.height, t.up)).collect();
+    let corners: Vec<[[f64; 3]; 3]> = face.iter().map(|t| t.corners).collect();
+    let roots = part_roots(&corners);
+    let parts = roots.iter().collect::<BTreeSet<_>>().len();
+    let head = format!(
+        "triangles {} missing {missing} degenerate {degenerate} steep {steep} keys {} parts {parts}",
+        all.len(),
+        keys.len()
+    );
+    if missing + degenerate + steep > 0 || keys.len() != 1 || parts < 2 {
+        return format!("refused: {head}");
+    }
+    let area: f64 = face
+        .iter()
+        .zip(&roots)
+        .filter(|(_, root)| **root == roots[0])
+        .map(|(t, _)| t.area)
+        .sum();
+    let up = face[0].up;
+    let mut opposite: BTreeMap<i64, Vec<Horizontal>> = BTreeMap::new();
+    for primitive in &primitives[1..] {
+        for triangle in horizontal_triangles(primitive).into_iter().flatten() {
+            if triangle.up != up {
+                opposite.entry(triangle.height).or_default().push(triangle);
+            }
+        }
+    }
+    let mut best = f64::INFINITY;
+    for level in opposite.values() {
+        let corners: Vec<[[f64; 3]; 3]> = level.iter().map(|t| t.corners).collect();
+        let mut parts: BTreeMap<usize, f64> = BTreeMap::new();
+        for (triangle, root) in level.iter().zip(part_roots(&corners)) {
+            *parts.entry(root).or_insert(0.0) += triangle.area;
+        }
+        for part in parts.values() {
+            best = best.min((part - area).abs() / part.max(area));
+        }
+    }
+    format!(
+        "{} {head} area {area:.6} opposite levels {} best {best:.2e}",
+        if best <= SAME_AREA { "ok" } else { "refused" },
+        opposite.len()
+    )
 }
 
 /// Whether `primitives` make one connected part (#1209). A family instance
