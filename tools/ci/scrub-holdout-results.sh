@@ -108,7 +108,10 @@
 # openings are within each fixed distance of Revit's, by IFC class), the
 # `export parameters pre2024:` count lines of probe_1695_export_parameters_pre2024
 # (#1695: entries by IFC export key and a listed value, never an id, a byte or a
-# name), and
+# name), the `beam lines:` count lines of probe_1719_beam_line_copies (#1719:
+# how many structural-framing elements read a location line, and how many of the
+# rest fall under each of the four reasons the reader gives none, never an id, a
+# length or a partition), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -184,6 +187,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # lines of raw bytes before a furniture word (`export parameters pre2024
       # bytes:`) are not kept: those bytes can be an id, a length or an offset.
       grep -E '^export parameters pre2024: (release [0-9]+|element data layout (u64-id|u32-id|none-measured)|data objects the 2024 reader finds [0-9]+|entries (export-as|type-export-as|predefined-type|type-predefined-type) (i64|i32) (Ifc[A-Za-z]+|[A-Z]+|other-text) [0-9]+|entries with a value in either form [0-9]+|owners: pairs [0-9]+ over [0-9]+ declared owners, set to two values [0-9]+, no element data header in range [0-9]+, undeclared owner [0-9]+|strings equal to an IfcFurnitureTypeEnum word [0-9]+ in [0-9]+ distinct 8-byte prefixes)$' "$f" || true
+      # probe_1719_beam_line_copies (#1719): the release, how many beams read a
+      # line, and the four reasons' counts for the rest; its `beam` and `copy`
+      # lines, which carry ElementIds, lengths and partitions, are dropped.
+      grep -E '^release [0-9]+: [0-9]+ structural-framing elements, [0-9]+ with a line$' "$f" | sed 's/^/beam lines: /' || true
+      grep -E '^summary no_data [0-9]+ data_without_line [0-9]+ arc_first [0-9]+ copies_disagree [0-9]+ other [0-9]+$' "$f" | sed 's/^/beam lines: /' || true
       # probe_1842_level_storeys (#1842): the release and Level counts, no names.
       grep -E '^levels release=[0-9]+ recovered=[0-9]+ building_story_true=[0-9]+ false=[0-9]+ unread=[0-9]+ false_below_first_storey=[0-9]+ false_above=[0-9]+ false_at_a_storey_elevation=[0-9]+$' "$f" || true
       # probe_1335_projected_graphs (#1335): counts, verdict words, schema class
