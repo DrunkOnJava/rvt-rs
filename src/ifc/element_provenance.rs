@@ -924,6 +924,7 @@ const PROFILE_FRAME_READERS: &[&str] = &[
     "type_section",
     "room_solid_faces",
     "type_hollow_section",
+    "type_tube_section",
     "type_i_section",
     "pipe_connectors",
     "family_forms",
@@ -1197,11 +1198,17 @@ pub(crate) fn attach_value_sources(
         let mut profile_source = None;
         let mut profile_resolved = false;
         let mut i_section = false;
+        let mut tube_section = false;
         let mut property_list: Vec<&'static str> = Vec::new();
         for property in property_set.iter().flat_map(|set| &set.properties) {
             match (property.name.as_str(), &property.value) {
                 ("BodySource", PropertyValue::Text(text)) => body = Some(text.as_str()),
                 ("SectionShape", PropertyValue::Text(text)) if text == "I" => i_section = true,
+                ("SectionShape", PropertyValue::Text(text))
+                    if text == super::export_content::TUBE_SECTION_SHAPE =>
+                {
+                    tube_section = true
+                }
                 ("ProfileSource", PropertyValue::Text(text)) => {
                     profile_source = Some(text.as_str())
                 }
@@ -1273,10 +1280,13 @@ pub(crate) fn attach_value_sources(
             // A beam or column whose body is its type's I section (`SectionShape`
             // is written only then) is drawn from the type's parameters.
             let drawn_i_section = i_section && reader == "type_i_section";
+            // A beam whose body is its type's rectangular tube (#1698), likewise.
+            let drawn_tube = tube_section && reader == "type_tube_section";
             if !(body_list.contains(&reader)
                 || profile_list.contains(&reader)
                 || property_list.contains(&reader)
-                || drawn_i_section)
+                || drawn_i_section
+                || drawn_tube)
                 || entry
                     .value_sources
                     .iter()
