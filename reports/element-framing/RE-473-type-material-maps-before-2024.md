@@ -1,10 +1,10 @@
-# RE-473: a Revit 2015 to 2023 family type holds its geometry-material map in the older id shape, and the 70 windows of #1603 name no type for it to be read from
+# RE-473: a Revit 2015 to 2023 family type holds its geometry-material map in the older id shape, and the 70 windows of #1603 name no type for it to be read from because their types' records are not found
 
 **Date:** 2026-11-15
 **Issues:** #1603 (Revit 2015 to 2023: family instances' materials, 70 windows and 14 railings lack Revit's on the spent Revit 2018 project); follows RE-203 (`FamilySymbol.m_geomTag2MaterialId`), RE-113 (the 32-bit type material scan), RE-280 and RE-364 section 11 (the id shape before 2024).
 **Artefacts:** every sample project of Revit 2015 to 2027 that Measure fetches with `samples` (59 files), the reference models, the spent Revit 2018 project, and the four held-out Revit 2018 to 2021 projects as counts only; never stored.
-**Probe:** `probe_1603_type_maps_pre2024` (full run at `650584d8244e`, focused run at `73b75d0d2a7b`, both archived under `refs/archive/2026-11-15/cited/`); `tools/re/type_maps_across_saves.py` pairs a save with the same project's later one.
-**Status:** positive for the map, negative for the issue's windows and railings. The map is on every Revit 2015 to 2023 save, in a shape the reader does not take, and where the same project is saved in 2024 it names the same materials for 1,326 of 1,350 types. It does not reach the issue's 70 windows and 14 railings: the decode gives those instances no type. Nothing in the output changes.
+**Probes:** `probe_1603_type_maps_pre2024` (full run at `650584d8244e`, focused run at `73b75d0d2a7b`) and `probe_1603_instance_types_pre2024` (run at `af1b6805d012`), all three archived under `refs/archive/2026-11-15/cited/`; `tools/re/type_maps_across_saves.py` pairs a save with the same project's later one.
+**Status:** positive for the map, negative for the issue's windows and railings. The map is on every Revit 2015 to 2023 save, in a shape the reader does not take, and where the same project is saved in 2024 it names the same materials for 1,326 of 1,350 types. It does not reach the issue's 70 windows and 14 railings: the decode gives those instances no type, because the windows' type records are not found in that file and railings' and stairs' types have no such record on any release before 2024. Nothing in the output changes.
 
 ## 1. The question
 
@@ -77,7 +77,25 @@ The share before 2024 (1,370 of 1,476 types) is above the share from 2024 (1,496
 
 The scan also names materials for types whose map entries are all unset or absent: 36 of `DuctFitting`'s 50 types (all 50 unset), 37 of `PipeFitting`'s 55, 27 of `DuctTerminal`'s 35, 29 of `ElectricalEquipment`'s 54, and 41 ceiling and 29 roof types that hold no map. The 2024 saves show the same (`DuctFitting` 20 of 93 types named by the scan, all 93 unset). The scan has to stay for those types, as it does on 2024 and later; in all, 19 classes have a type only the scan names.
 
-**The issue's windows and railings (row 3).** Not met. The spent Revit 2018 project has no Window and no Railing row: its decode holds 70 windows and 14 railings and none carries a type id (`instances class Window total 70 naming a type 0`, `Railing total 14 naming a type 0`; doors 66 of 68, stairs and stair runs 0 of 6 each). The held-out Revit 2018 save of the same project prints the same 70 and 14. Two other held-out projects name a type for every window (21 of 21, 110 of 110), a third for 25 of 29, and the 12 sample projects with windows (22 saves of 2018 to 2023) for all of theirs (24 or 17 each). Railings name no type on any pre-2024 save, sample or not; on the 2024 saves their types hold no map either (44 types, none read), so the railings of the issue do not come from this field at all.
+**The issue's windows and railings (row 3).** Not met. The spent Revit 2018 project has no Window and no Railing row: its decode holds 70 windows and 14 railings and none carries a type id (`instances class Window total 70 naming a type 0`, `Railing total 14 naming a type 0`; doors 66 of 68, stairs and stair runs 0 of 6 each). The held-out Revit 2018 save of the same project prints the same 70 and 14. Two other held-out projects name a type for every window (21 of 21, 110 of 110), a third for 25 of 29, and the 12 sample projects with windows (22 saves of 2018 to 2023) for all of theirs (24 or 17 each). Railings name no type on any pre-2024 file of the run, sample or not; on the 2024 saves their types hold no map either (44 types, none read), so the railings of the issue do not come from this field at all.
+
+**Where the type join stops (`probe_1603_instance_types_pre2024`, run 43681309215).** A Revit 2015 to 2023 instance gets a type when exactly one id in its reference list is a symbol record of its own category with a name entry (RE-109) and that symbol's family resolves (`type_and_family_names_2023`). The probe repeats those stages and counts where each instance stops:
+
+| File | Category | Instances | Symbol records (named) | Joined | No candidate | Stop at the family |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Spent Revit 2018 project | Windows | 70 | 1 (1) | 0 | 68 | 2 |
+| Spent Revit 2018 project | Doors | 68 | 4 (4) | 66 | 0 | 2 |
+| Spent Revit 2018 project | Railings, Stairs | 14, 6 | 0 | 0 | 14, 6 | 0 |
+| Its held-out Revit 2018 save | Windows | 72 | 1 (1) | 0 | 68 | 4 |
+| A held-out Revit 2020 project | Windows | 29 | 46 (19) | 25 | 4 | 0 |
+| A held-out Revit 2020 project | Doors | 27 | 35 (10) | 18 | 9 | 0 |
+| Two other held-out projects | Windows | 21, 110 | 27 (13), 26 (9) | 21, 110 | 0 | 0 |
+| 22 sample saves, 12 with windows | Windows | 246 | 108 (66) | 246 | 0 | 0 |
+| 22 sample saves, 21 with doors | Doors | 1,080 | 570 (300) | 1,068 | 0 | 12 |
+
+- **The Revit 2018 project's windows.** The file holds one symbol record of the window category, and 68 of its 70 windows never name it. All 68 name a named id that has no record of its own, so their types are named in the file but their type records are not among the records the scan finds. The two others name the one record and stop at its family.
+- **Another cause, on a held-out Revit 2020 project.** 4 of 29 windows and 9 of 27 doors name a symbol record of their category that has no name entry; their types are found and have no name.
+- **Railings and stairs.** Their types are system types with no symbol record, so no join candidate exists: none of the 248 railings and 84 stairs of the 22 sample saves and the spent project joins, nor do the held-out files' (7 to 14 railings and 3 to 6 stairs on the files that have them). A 2024 save names them through `railing_type_picks`, which the 32-bit branch does not call.
 
 ## 4. The registered rows
 
@@ -91,18 +109,19 @@ The scan also names materials for types whose map entries are all unset or absen
 
 - **Decided.** A reader that took both id shapes would read the same map entries a Revit 2024 save holds for the same types, on the classes where there are Revit 2024 saves to hold it to. The 64-bit refinement reads none of them on a release before 2024 today.
 - **Not decided.** Whether Revit's export writes those materials. The map was not scored against any export: `element_materials_vs_ifc.py` on a reader's own run is the measure.
-- **The issue's windows and railings are another cause.** Their instances carry no type id, so no map or scan could be applied. The next row is why the type join (`attach_type_picks`, which sets `TYPE_ID_FIELD` only for a type with one agreed name) finds none for windows on this Revit 2018 project while it finds 66 of 68 doors.
+- **The issue's windows and railings are another cause.** Their instances carry no type id, so no map or scan could be applied. For the windows the join stops because the type records are not found (68 of 70 name a named id with no record); for the railings and stairs because their types have no symbol record on any release before 2024. Whether a window's type can be recovered from such a list by another rule (the one named id without a record that other windows of the file share, with the family told apart from the type) is not measured: it is the next row.
 - **The default material on 72 elements Revit gives none** (the issue's second item) is untouched here.
 
 ## 6. What would decide it
 
-A reader change of its own: `native_type_materials` and `native_family_forms` take either id shape (`native_json::identifier_u64`), the map is read for the 32-bit branch, and the result is scored against Revit's exports with `holdout=true` and the same-project 2024 saves. Separately, a probe of the windows' type references on the spent Revit 2018 project.
+A reader change of its own: `native_type_materials` and `native_family_forms` take either id shape (`native_json::identifier_u64`), the map is read for the 32-bit branch, and the result is scored against Revit's exports with `holdout=true` and the same-project 2024 saves. Separately, a probe of the 68 windows' lists on the spent Revit 2018 project: how many named ids without a record each holds, how many windows share each, and which of them the file's other windows join as family or as type.
 
 ## 7. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref research/1603-type-maps-pre2024 -f ref=73b75d0d2a7be8667500509a892d955cfc88157b -f base=none \
+gh workflow run measure.yml --ref research/1603-type-maps-pre2024 -f ref=af1b6805d0122c1285c7b241c1cff370a2c4c48b -f base=none \
   -f samples=true -f holdout=true -f scorers=none -f probe=probe_1603_type_maps_pre2024
-# each model's probe.txt (counts.txt for a held-out model) holds its `type maps pre2024:` lines
+# the same with -f probe=probe_1603_instance_types_pre2024 for the join
+# each model's probe.txt (counts.txt for a held-out model) holds its `type maps pre2024:` and `type join pre2024:` lines
 python3 tools/re/type_maps_across_saves.py DIR   # DIR holds the sample-*/probe.txt directories of a full run
 ```
