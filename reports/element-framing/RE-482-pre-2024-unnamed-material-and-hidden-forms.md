@@ -1,4 +1,4 @@
-# RE-482: before Revit 2024 no fact of a door or window's family forms separates the doors and windows whose set holds `<Unnamed>` from those whose set does not: it is written on none of 363 outside the spent Revit 2018 project, and on 52 of its 68 windows by no category
+# RE-482: before Revit 2024 none of the facts read here of a door or window's family forms (shown, hidden, void and nested) separates the doors and windows whose set holds `<Unnamed>` from those whose set does not: it is written on none of 363 outside the spent Revit 2018 project, and on 52 of its 68 windows by no category
 
 **Date:** 2026-11-15
 **Issues:** #1603 (Revit 2015 to 2023: the 70 windows of the spent Revit 2018 project lack Revit's materials); follows RE-481 (the Revit 2024 rule for `<Unnamed>` is wrong before 2024), RE-479 (the family forms decode before 2024), RE-204 to RE-206 (when Revit writes `<Unnamed>`), RE-149 (geometry mapped to no material is `<Unnamed>`).
@@ -48,7 +48,7 @@ Registered on #1603 before the run (2026-11-15, comment 6893137303), read from M
 
 ## 5. What this decides and does not
 
-- **Decided.** No fact of the host family's own forms decides `<Unnamed>` before 2024. `<Unnamed>` before 2024 stays as the scan gives it; no reader writes a rule for it.
+- **Decided.** None of the facts read here of the host family's own forms (each form's material, whether it is a void, its stored and bound `Visible`, and the nested instances) decides `<Unnamed>` before 2024; the forms' subcategory or object-style materials were not read, and RE-481 names the object-style material as a candidate. `<Unnamed>` before 2024 stays as the scan gives it; no reader writes a rule for it.
 - **Decided.** A form hidden by a stored `Visible` of 0 is found on saves before 2024 as on the 2024 saves of the same projects, so RE-481's control now exercises it (the architectural basic sample's two forms). RE-481's hidden-form result stands on that: the 69 "drawn more" are not materials only hidden forms hold, as read.
 - **Not decided: what writes `<Unnamed>` before 2024.** Revit 2020 and 2021 exports of three projects (one IFC2X3, two not known to be) write it on none of 363 elements whose families show a form with no material or nest an instance; the Revit 2018 IFC2X3 export of the spent project writes it on 52 of 68. The IFC schema and exporter release of each reference, which these counts do not carry, is the next fact; and every window of the spent project and of BIM Whale nests an instance whose own forms are not in these facts.
 - **Not decided: the 2024 rule for a void.** On Revit 2024 to 2027, 12 of 12 doors and windows whose only form with no material is a void have `<Unnamed>` written; `native_family_forms` does not count a void. The export keeps the raw map there (RE-481: 287 of 289 equal before and after the rules), so nothing is wrong today; it is not measured whether a rule that counted voids would be better.
