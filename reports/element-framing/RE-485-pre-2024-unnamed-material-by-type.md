@@ -1,10 +1,10 @@
-# RE-485: before Revit 2024 `<Unnamed>` in a door or window's material set is constant within a family on every project: the spent Revit 2018 project's 7 window families write it on all of their windows (3 families, 52 windows) or on none (4 families, 16), and no fact read says which
+# RE-485: before Revit 2024 `<Unnamed>` is constant within each of the spent Revit 2018 project's 7 window families (3 write it on all of their windows, 52 in all, and 4 on none, 16 in all), the one project where any family writes it, and no fact read says which; the other projects' 9 families all write none
 
 **Date:** 2026-11-15
 **Issues:** #1603 (Revit 2015 to 2023: the 70 windows of the spent Revit 2018 project lack Revit's materials); follows RE-483 (a form's bound `Visible` read from its parameter does not decide `<Unnamed>`: 15 of the spent project's 68 windows share every fact read and 8 have it written), RE-482, RE-481.
 **Artefacts:** the spent Revit 2018 project (the held-out save of it carries the same lines and is counted once), Frigento (Revit 2020), Warmond (Revit 2021) and BIM Whale (Revit 2021), 431 doors and windows whose type map holds geometry mapped to no material and to which Revit gives materials. The spent project's and BIM Whale's references are IFC2X3 exports and Warmond's is an IFC4 export passed through BIMServer.center's preprocessor, all counted apart and never removing a value; Frigento's 22 doors are the only ones measured against an unmodified Revit IFC4 export.
 **Probe and scorer:** `probe_1603_unnamed_by_type_before_2024` and `tools/re/window_door_unnamed_by_type_vs_ifc.py` at `fa38cbf51a8c` (Measure [43714791546](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43714791546)), archived under `refs/archive/2026-11-15/cited/`. No `src/` change.
-**Status:** positive for the unit, negative for a rule. On every pre-2024 project `<Unnamed>` is all-or-none within a drawn symbol and within a family (none of 119 symbols and none of 16 families is mixed). On the spent project's 68 windows it is a property of the 7 families: written on every window of 3 of them (36, 8 and 8 windows) and on none of 4 (7, 4, 4 and 1); it is not constant within an unset tag count, and no count of unset tags, no state of the nested instances and none of RE-483's facts separates the families. The 15 windows RE-483 found with identical facts are two families: 8 windows of one write it and 7 of another do not. Why one family writes it is not read.
+**Status:** positive for the unit on one project, negative for a rule. No drawn symbol (of 119) and no family (of 16) is mixed on any pre-2024 project, but outside the spent project that says little: its 63 symbols and 9 families write `<Unnamed>` on none of their elements. The evidence that the family decides it is the spent project's 7 window families alone: written on every window of 3 of them (36, 8 and 8 windows) and on none of 4 (7, 4, 4 and 1), six of the seven holding several windows. Within them it is not constant within an unset tag count, and no count of unset tags, no state of the nested instances and none of RE-483's facts separates the families. The 15 windows RE-483 found with identical facts are two families: 8 windows of one write it and 7 of another do not. Why one family writes it is not read.
 
 ## 1. The question
 
@@ -29,7 +29,7 @@ Measure 43714791546, 84 models, the spent project listed per element.
 | BIM Whale (Revit 2021, IFC2X3, counted apart) | windows | 263 | 0 / 35 / 0 of 35 | 0 / 1 / 0 of 1 |
 | BIM Whale (counted apart) | doors | 10 | 0 / 3 / 0 of 3 | 0 / 1 / 0 of 1 |
 
-The 43 written symbols of the spent project hold its 52 windows with `<Unnamed>` and the 13 others its 16 without. Only the spent project has a family that writes it. Most symbols hold one window (56 symbols for 68 windows), so the symbol column says little by itself; the family column is the one that groups.
+The 43 written symbols of the spent project hold its 52 windows with `<Unnamed>` and the 13 others its 16 without. Only the spent project has a family that writes it. On the other projects every symbol and family is "none", so their rows add no evidence of constancy. Most symbols hold one window (56 symbols for 68 windows), so the symbol column says little by itself; the family column is the one that groups.
 
 **Row 3: the 15.** The 15 windows of the spent project that share every fact of RE-483's probe (an unset form that is shown and unbound, one void, one nested instance) are two families:
 
@@ -63,8 +63,8 @@ No count separates: two unset tags is written on 41 of 42 spent windows and on n
 
 Registered on #1603 before the run (2026-11-15, comment 6894163538), read from Measure 43714791546.
 
-1. **Type.** Reported (table above): no drawn symbol is mixed on any project, with 43 symbols of the spent project written on all of their elements and 13 on none. Every symbol is all-or-none; most hold one window, so this alone does not rule out an instance-level fact, and the family row does.
-2. **Family.** Reported: no family is mixed, 3 of the spent project's 7 write it on all of their windows and 4 on none. The families hold several windows each (36 in the largest) and none is mixed, so within a family the instance does not decide it; a family mixed where its symbols are not would have said the type is the unit, and none is.
+1. **Type.** Reported (table above): no drawn symbol is mixed on any project, with 43 symbols of the spent project written on all of their elements and 13 on none; the other projects' 63 symbols are all "none", which says nothing about constancy. Most spent symbols hold one window, so this alone does not rule out an instance-level fact, and the family row does.
+2. **Family.** Reported: no family is mixed; on the spent project 3 of its 7 write it on all of their windows and 4 on none, and the other projects' 9 families write it on none. Six of the spent project's seven families hold several windows (36, 8 and 8 written; 7, 4 and 4 not written) and none is mixed, so on that project the instance does not decide it within a family; a family mixed where its symbols are not would have said the type is the unit, and none is.
 3. **The 15.** Reported: two families, 8 written of one and 7 not written of the other.
 4. **Nested instances.** Reported: no separation (above).
 5. **Unset tags.** Reported: no count is right on every element of every pre-2024 project, so no rule is proposed.
@@ -72,7 +72,7 @@ Registered on #1603 before the run (2026-11-15, comment 6894163538), read from M
 
 ## 5. What this decides and does not
 
-- **Decided.** `<Unnamed>` before 2024 is a property of the family of the door or window, not of the instance and not of the number of unset tags: every pre-2024 family is all-or-none, and the 15 windows with identical host-form facts differ by family.
+- **Decided.** On the one project where any family writes `<Unnamed>` before 2024, the spent Revit 2018 project, it is constant within each of its 7 window families, not within an unset tag count, and the 15 windows with identical host-form facts differ by family. The other projects' 9 families all write none, so they say nothing about which families do: that the family decides it rests on 7 families of one project, and is not shown on any other.
 - **Decided.** No fact read so far says which families: not the host family's forms (RE-482, RE-483), not the nested instances' stored or bound `Visible`, not the unset tag count. The next read is of what a family holds that these do not: the nested families' own forms and materials (every window of the spent project and of BIM Whale nests an instance, and three for 4 of the spent project's), and the family's category and subcategory settings.
 - **Not decided.** Whether the exporter's release or the IFC schema decides it: the reference of each project is from the save's own release, and the spent project is the only one with a family that writes it (RE-483, Row 4).
 - **A lead, not a rule.** The map's total geometry tags (13, 21, 33) follow the written families except one window. The scorer does not count it on the other projects, so the next run does (it can be refuted by any other project's families with 21 or more tags and none written).
