@@ -30,6 +30,14 @@ diagnostics are the `diagnostics.json` beside the rvt-rs IFC, as Measure
 writes them, or the file `--diagnostics` names; without one, no wall is
 counted apart.
 
+A wall's `Length` rvt-rs writes where Revit's export writes none (#2069), as
+on a model whose Revit export carries no base quantities, is checked against
+the length of the wall's own `Axis` in Revit's export: rvt-rs gives a wall a
+`Length` only where its curve cut back at its joins is as long as the curve,
+and the cut-back curve is what Revit's `Axis` draws (RE-252), so the two agree
+to 1e-4 ft. One line counts the walls where they do, where they differ and
+where Revit's export draws no straight `Axis` for the wall.
+
 It prints the totals, a line per (set, quantity): how many values Revit
 writes on objects rvt-rs also writes, how many are equal, how many differ
 and how many are missing; the entities each missing quantity is on; the
@@ -474,6 +482,21 @@ def main(argv):
     setting_off = collections.Counter() if their_base else extra
     if not their_base:
         extra = collections.Counter()
+    # A wall's Length rvt-rs writes where Revit's export writes none (#2069): the
+    # wall's own Axis in that export checks it, without any quantity.
+    axis_checks = collections.Counter()
+    for (key, qset, name), (_, value) in ours.items():
+        if (qset, name) != WALL_LENGTH or value is None or key not in their_objects or key in repeated:
+            continue
+        if (key, qset, name) in theirs:
+            continue
+        axis = their_axes.get(key)
+        if axis is None:
+            axis_checks["none"] += 1
+        elif abs(axis - value) <= TWO_LENGTHS_TOLERANCE_M:
+            axis_checks["equal"] += 1
+        else:
+            axis_checks["differ"] += 1
     print(
         f"Revit quantities on objects rvt-rs writes: {totals[0]}; equal: {totals[1]}; "
         f"different: {totals[2]}; missing: {totals[3]}; rvt-rs quantities Revit does not write: {sum(extra.values())}"
@@ -501,6 +524,10 @@ def main(argv):
     print(
         f"walls whose Length is rvt-rs's curve's: {curve_checks['curve']}; Revit's Axis's: {curve_checks['axis']}; "
         f"neither: {curve_checks['neither']}{'' if trust_curves else ' (none counted apart)'}"
+    )
+    print(
+        "walls rvt-rs gives a Length and Revit's export does not, against the length of Revit's Axis "
+        f"(within 1e-4 ft): equal {axis_checks['equal']}; differ {axis_checks['differ']}; no Axis {axis_checks['none']}"
     )
     print(f"walls the two exports give different types, their differing Width counted apart (RE-253): {other_types}")
     print(f"walls the two exports give different types, their other differing wall quantities counted apart (RE-253, RE-388): {other_types_body}")
