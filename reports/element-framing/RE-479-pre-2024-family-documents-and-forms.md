@@ -8,7 +8,7 @@
 
 ## 1. The question
 
-RE-478 found that the drawn symbol's type map is Revit's material set on 558 of 992 doors and windows, and that the rules which bring the other 389 in line are the ones `native_family_forms` reads on Revit 2023 to 2027 (RE-204 to RE-206) and `attach_partly_unset_materials` applies. `native_family_forms` takes an ElementId in the 2024 shape only. Does a save before 2024 hold the families' own documents, do their forms decode, and in which id shape do they hold their materials and their `Visible`?
+RE-478 found that the drawn symbol's type map is Revit's material set on 414 of the 846 doors and windows of Revit 2015 to 2023 (as RE-478 counts them now; it first counted 558 of 992, which included 146 of Revit 2024 to 2027), and that the rules which would bring the other 387 in line are the ones `native_family_forms` reads on Revit 2023 to 2027 (RE-204 to RE-206) and `attach_partly_unset_materials` applies. `native_family_forms` takes an ElementId in the 2024 shape only. Does a save before 2024 hold the families' own documents, do their forms decode, and in which id shape do they hold their materials and their `Visible`?
 
 ## 2. What the probe counts
 
@@ -73,8 +73,8 @@ Registered on #1603 before the run (2026-11-15, comment 6892618844), read from M
 
 ## 5. What this decides and does not
 
-- **Decided.** Where a family gives a decode, its forms on 2015 to 2023 saves are in the structure the 2024 reader takes, and differ from it in the id shape of `m_materialId` (measured), and presumably in the ids around it (the `Visible` lookups took either shape). `native_family_forms` reading either shape on those releases is the next change: where a family's forms decode it gives the unset-geometry and hidden-form rules, and where none decodes it gives nothing (the type map stands as RE-478 measured it).
-- **Not decided: whether the rules bring the 389 elements in line.** That the forms are readable does not say that RE-204 to RE-206 decide the 299 windows and doors that differ only in whether `<Unnamed>` is written, or the 81 whose map holds names Revit's set does not (RE-478 section 5). The change that reads them is scored by `element_materials_vs_ifc` on the spent and held-out projects against RE-478's counts, with the 2023 samples held to their 2024 saves.
+- **Decided.** Where a family gives a decode, its forms on 2015 to 2023 saves are in the structure the 2024 reader takes, and differ from it in the id shape of `m_materialId` (measured), and presumably in the ids around it (the `Visible` lookups took either shape). `native_family_forms` reading either shape on those releases was the next change: where a family's forms decode it would give the unset-geometry and hidden-form rules, and where none decodes it would give nothing. RE-481 scored those rules on the older releases and they do not carry over, so no export reads the forms before 2024.
+- **Not decided: whether the rules bring the 387 elements in line.** That the forms are readable does not say that RE-204 to RE-206 decide the 299 windows and doors that differ only in whether `<Unnamed>` is written, or the 79 whose map holds names Revit's set does not (RE-478 section 5). RE-481 answered it: they do not.
 - **Not decided: the families that give no decode.** Which families of the structural samples and the four Snowdon samples they are, and whether their document is absent from the file (a system or in-place family, or a document under another key) or present with no solid form, is not measured; the same number of families give none on every save of the same project, from 2015 to 2027, so it is not a property of an older release.
 - **Not decided: two saves of the structural basic project:** the 2015 save lists 8 families where its later saves list 20, and the 2016 save reads one form as a sweep where the later saves read an extrusion.
 - **Not decided: the nine windows' `LKS_VEN_MADERA`** (RE-478), in no record the probe reads.
