@@ -30,7 +30,11 @@
 //! and `nested` the nested family instances. And one line per model, the
 //! counts the held-out scrub keeps:
 //!   bound visible values: release R unset forms U bound B resolved C unresolved D ambiguous E
-//! summed over the doors and windows whose type map holds a -1.
+//! summed over the doors and windows whose type map holds a -1. A record of a
+//! family's document held in several partitions is read once, from its last
+//! copy; one more line per model counts the records read, those held more
+//! than once and those whose copies differ in what is read:
+//!   family record copies: release R records N held more than once C copies differing D
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1603_unnamed_bound_before_2024 -- MODEL.rvt
@@ -130,6 +134,61 @@ struct Type {
     unset: bool,
     family: Option<u64>,
     params: Vec<(u64, i64)>,
+}
+
+/// What the probe reads of one record of a family's document; two copies of a
+/// record are equal where they agree on all of it.
+#[derive(PartialEq)]
+enum Record {
+    Nested,
+    Param(Option<String>),
+    Form {
+        material: Option<i64>,
+        cutting: bool,
+        stored: Option<i64>,
+        bound: Option<Option<u64>>,
+    },
+}
+
+fn read_record(graph: &ObjectGraph) -> Option<Record> {
+    let root = graph.objects.first()?;
+    match root.class_name.as_str() {
+        "FamilyInstance" => return Some(Record::Nested),
+        "ParamElemFamily" => {
+            let caption = graph
+                .objects
+                .iter()
+                .find_map(|object| object.fields.get("m_caption")?.as_str());
+            return Some(Record::Param(caption.map(str::to_string)));
+        }
+        _ => {}
+    }
+    let stored = graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "ParamValueSetInt")
+        .filter_map(|object| object.fields.get("m_paramSet")?.as_array())
+        .flatten()
+        .find(|entry| id_in_either(entry.get("m_paramId")) == Some(VISIBLE_PARAMETER))
+        .and_then(|entry| entry.get("m_value")?.as_i64());
+    let bound = graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "FamilyParametrizedElemParamsCell")
+        .filter_map(|object| object.fields.get("m_paramDrivenData")?.as_array())
+        .flatten()
+        .find(|entry| id_in_either(entry.get("m_elemPropId")) == Some(VISIBLE_PARAMETER))
+        .map(|entry| id_in_either(entry.get("m_famParamId")).and_then(|id| u64::try_from(id).ok()));
+    Some(Record::Form {
+        material: id_in_either(root.fields.get("m_materialId")),
+        cutting: root
+            .fields
+            .get("m_cutting")
+            .and_then(Fv::as_bool)
+            .unwrap_or(false),
+        stored,
+        bound,
+    })
 }
 
 fn main() -> anyhow::Result<()> {
@@ -279,63 +338,52 @@ fn main() -> anyhow::Result<()> {
     let documents =
         family_records_in(&mut rf, &families, &classes, &NATIVE_RELEASES, None).unwrap_or_default();
     let mut facts: BTreeMap<u64, Facts> = BTreeMap::new();
+    // A record held in several partitions is read once, from its last copy (the
+    // newest, as `FormDocument` keeps it); how many records are held more than
+    // once, and in how many the copies differ in what is read, is counted.
+    let (mut records_read, mut copied, mut differing) = (0usize, 0usize, 0usize);
     for (family, records) in &documents {
         let here = facts.entry(*family).or_default();
+        let mut latest: BTreeMap<u64, Record> = BTreeMap::new();
+        let mut copies: BTreeMap<u64, bool> = BTreeMap::new();
         for (id, graph) in records {
-            let Some(root) = graph.objects.first() else {
+            let Some(record) = read_record(graph) else {
                 continue;
             };
-            match root.class_name.as_str() {
-                "FamilyInstance" => {
-                    here.nested += 1;
-                    continue;
+            if let Some(previous) = latest.get(id) {
+                *copies.entry(*id).or_insert(false) |= *previous != record;
+            }
+            latest.insert(*id, record);
+        }
+        records_read += latest.len();
+        copied += copies.len();
+        differing += copies.values().filter(|differs| **differs).count();
+        for (id, record) in latest {
+            match record {
+                Record::Nested => here.nested += 1,
+                Record::Param(Some(caption)) => {
+                    here.captions.insert(id, caption);
                 }
-                "ParamElemFamily" => {
-                    let caption = graph
-                        .objects
-                        .iter()
-                        .find_map(|object| object.fields.get("m_caption")?.as_str());
-                    if let Some(caption) = caption {
-                        here.captions.insert(*id, caption.to_string());
+                Record::Param(None) => {}
+                Record::Form {
+                    material,
+                    cutting,
+                    stored,
+                    bound,
+                } => {
+                    if material != Some(-1) {
+                        continue;
                     }
-                    continue;
+                    if cutting {
+                        here.voids += 1;
+                        continue;
+                    }
+                    here.unset.push(UnsetForm {
+                        stored_shown: stored != Some(0),
+                        bound,
+                    });
                 }
-                _ => {}
             }
-            if id_in_either(root.fields.get("m_materialId")) != Some(-1) {
-                continue;
-            }
-            let cutting = root
-                .fields
-                .get("m_cutting")
-                .and_then(Fv::as_bool)
-                .unwrap_or(false);
-            if cutting {
-                here.voids += 1;
-                continue;
-            }
-            let stored = graph
-                .objects
-                .iter()
-                .filter(|object| object.class_name == "ParamValueSetInt")
-                .filter_map(|object| object.fields.get("m_paramSet")?.as_array())
-                .flatten()
-                .find(|entry| id_in_either(entry.get("m_paramId")) == Some(VISIBLE_PARAMETER))
-                .and_then(|entry| entry.get("m_value")?.as_i64());
-            let bound = graph
-                .objects
-                .iter()
-                .filter(|object| object.class_name == "FamilyParametrizedElemParamsCell")
-                .filter_map(|object| object.fields.get("m_paramDrivenData")?.as_array())
-                .flatten()
-                .find(|entry| id_in_either(entry.get("m_elemPropId")) == Some(VISIBLE_PARAMETER))
-                .map(|entry| {
-                    id_in_either(entry.get("m_famParamId")).and_then(|id| u64::try_from(id).ok())
-                });
-            here.unset.push(UnsetForm {
-                stored_shown: stored != Some(0),
-                bound,
-            });
         }
     }
 
@@ -419,6 +467,9 @@ fn main() -> anyhow::Result<()> {
     }
     println!(
         "bound visible values: release {version} unset forms {unset_forms} bound {bound_forms} resolved {resolved_forms} unresolved {unresolved_forms} ambiguous {ambiguous_forms}"
+    );
+    println!(
+        "family record copies: release {version} records {records_read} held more than once {copied} copies differing {differing}"
     );
     eprintln!(
         "{} doors and windows, {} symbol maps read, {} families with a document, {} parameter captions",
