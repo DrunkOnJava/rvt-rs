@@ -14,10 +14,14 @@
 //! ElementId Tag), in the wording `tools/re/window_door_type_maps_vs_ifc.py`
 //! reads:
 //!   wmap <tag> <IFC class> grouped=<0|1> drawn=<id|-> master=<id|-> \
-//!        drawn_map=<read|absent> <names> master_map=<read|absent> <names>
-//! with a map's names `a|b` (spaces as `_`), `-` for none, and `+unset` when
-//! some geometry maps to no material (-1). Ids and names: the held-out scrub
-//! drops these lines, and keeps only the scorer's counts.
+//!        drawn_map=<read|absent> <names> master_map=<read|absent> <names> \
+//!        drawn_other=<names>
+//! with a map's names `a|b` (each percent-encoded, so a space is `%20` and a
+//! `|` or `+` in a name cannot be taken for a separator), `-` for none, and
+//! `+unset` when some geometry maps to no material (-1); `drawn_other` is the names of the
+//! file's materials that the drawn symbol's record names anywhere but in that
+//! map. Ids and names: the held-out scrub drops these lines, and keeps only
+//! the scorer's counts.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1603_window_door_type_maps_pre2024 -- MODEL.rvt
@@ -42,6 +46,19 @@ fn element_id(value: &Fv) -> Option<u64> {
         .filter(|id| *id != 0)
 }
 
+/// `name` with every byte but a letter, digit, `_`, `-`, `.` or `~` as `%XX`.
+fn encode(name: &str) -> String {
+    name.bytes()
+        .map(|byte| {
+            if byte.is_ascii_alphanumeric() || b"_-.~".contains(&byte) {
+                char::from(byte).to_string()
+            } else {
+                format!("%{byte:02X}")
+            }
+        })
+        .collect()
+}
+
 /// What one instance's record names.
 #[derive(Default)]
 struct Instance {
@@ -56,6 +73,29 @@ struct Instance {
 struct Map {
     materials: BTreeSet<u32>,
     unset: bool,
+    /// Materials of the file named in the record outside the map.
+    other: BTreeSet<u32>,
+}
+
+/// Every ElementId under `value`.
+fn all_ids(value: &Fv, out: &mut BTreeSet<u64>) {
+    match value {
+        Fv::Object(map) => {
+            if let Some(id) = element_id(value) {
+                out.insert(id);
+                return;
+            }
+            for child in map.values() {
+                all_ids(child, out);
+            }
+        }
+        Fv::Array(items) => {
+            for child in items.iter() {
+                all_ids(child, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn main() -> anyhow::Result<()> {
@@ -139,16 +179,33 @@ fn main() -> anyhow::Result<()> {
             ..Options::default()
         },
         |record| {
-            let Some(entries) = record
-                .graph
-                .as_ref()
-                .and_then(|graph| graph.objects.first())
+            let Some(graph) = record.graph.as_ref() else {
+                return Ok(());
+            };
+            let Some(entries) = graph
+                .objects
+                .first()
                 .and_then(|root| root.fields.get("m_geomTag2MaterialId"))
                 .and_then(Fv::as_array)
             else {
                 return Ok(());
             };
             let mut here = Map::default();
+            let mut elsewhere = BTreeSet::new();
+            for object in &graph.objects {
+                if let Fv::Object(fields) = &object.fields {
+                    for (key, child) in fields.iter() {
+                        if key != "m_geomTag2MaterialId" {
+                            all_ids(child, &mut elsewhere);
+                        }
+                    }
+                }
+            }
+            here.other = elsewhere
+                .into_iter()
+                .filter_map(|id| u32::try_from(id).ok())
+                .filter(|id| names.contains_key(id))
+                .collect();
             for entry in entries {
                 let id = entry
                     .pointer("/second/m_id/m_id64")
@@ -178,7 +235,7 @@ fn main() -> anyhow::Result<()> {
             .materials
             .iter()
             .filter_map(|id| names.get(id))
-            .map(|name| name.replace(' ', "_"))
+            .map(|name| encode(name))
             .collect();
         list.sort();
         let mut text = if list.is_empty() {
@@ -191,17 +248,33 @@ fn main() -> anyhow::Result<()> {
         }
         format!("read {text}")
     };
+    let other = |symbol: Option<u64>| -> String {
+        let mut list: Vec<String> = symbol
+            .and_then(|id| maps.get(&id))
+            .into_iter()
+            .flat_map(|map| map.other.iter())
+            .filter_map(|id| names.get(id))
+            .map(|name| encode(name))
+            .collect();
+        list.sort();
+        if list.is_empty() {
+            "-".into()
+        } else {
+            list.join("|")
+        }
+    };
     for (tag, class) in &elements {
         let instance = instances.get(tag);
         let drawn = instance.and_then(|i| i.drawn);
         let master = instance.and_then(|i| i.master);
         println!(
-            "wmap {tag} {class} grouped={} drawn={} master={} drawn_map={} master_map={}",
+            "wmap {tag} {class} grouped={} drawn={} master={} drawn_map={} master_map={} drawn_other={}",
             u8::from(instance.is_some_and(|i| i.grouped)),
             drawn.map_or("-".into(), |id| id.to_string()),
             master.map_or("-".into(), |id| id.to_string()),
             show(drawn),
             show(master),
+            other(drawn),
         );
     }
     eprintln!(
