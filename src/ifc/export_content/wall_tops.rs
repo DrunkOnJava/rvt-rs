@@ -2281,6 +2281,10 @@ struct End {
     /// The strips of the stretch it grows by, the one that reaches farthest from
     /// the end the box gives first: `gap` is its outer distance.
     strips: Vec<Strip>,
+    /// How far the end is pulled in over its full height, feet, 0 or less: where
+    /// a joined wall's face lies inside the wall's end over a stretch of height,
+    /// the wall's own plan stops there and a strip carries it out below (#1474).
+    cut_back: f64,
     /// Whether another order of the walls the record joins would draw another
     /// end (see [`ReadEnd`]).
     order_dependent: bool,
@@ -2571,7 +2575,9 @@ fn read_end(
                         }
                         continue;
                     }
-                    if gap < 0.0 {
+                    // A face inside the end pulls the end in over that stretch
+                    // (#1474), but no further than the joined wall is thick.
+                    if -gap > most - least + END_TOLERANCE_FEET {
                         return Err(Refusal {
                             reason: WALL_END_REFUSAL_FACE_INSIDE,
                             off: true,
@@ -2608,17 +2614,22 @@ fn read_end(
     })
 }
 
-/// The strips an end is drawn as from its `bands`: one for each distance the
-/// end reaches beyond the next, the farthest first, up to the top of the
-/// last band that reaches that far. The columns of the strips stand from the
-/// wall's base, so an end that reaches further at a greater height than below
-/// it is not drawn.
-fn strips_of(bands: &[Band]) -> Result<Vec<Strip>, &'static str> {
+/// The strips an end is drawn as from its `bands`, and how far it is pulled in
+/// over its full height (0 or less): the end is first pulled in to the least
+/// distance any band reaches (a face inside the end, #1474), then one strip for
+/// each distance the end reaches beyond the next, the farthest first, up to the
+/// top of the last band that reaches that far, its distances still measured from
+/// the end the box gives. The columns of the strips stand from the wall's base,
+/// so an end that reaches further at a greater height than below it is not
+/// drawn.
+fn strips_of(bands: &[Band]) -> Result<(Vec<Strip>, f64), &'static str> {
+    let cut_back = bands.iter().map(|band| band.gap).fold(0.0_f64, f64::min);
     let mut merged: Vec<(f64, f64)> = Vec::new();
     for band in bands {
+        let gap = band.gap - cut_back;
         match merged.last_mut() {
-            Some(last) if (last.0 - band.gap).abs() <= END_TOLERANCE_FEET => last.1 = band.to,
-            _ => merged.push((band.gap, band.to)),
+            Some(last) if (last.0 - gap).abs() <= END_TOLERANCE_FEET => last.1 = band.to,
+            _ => merged.push((gap, band.to)),
         }
     }
     let mut strips = Vec::new();
@@ -2629,13 +2640,13 @@ fn strips_of(bands: &[Band]) -> Result<Vec<Strip>, &'static str> {
         }
         if gap - next > END_TOLERANCE_FEET {
             strips.push(Strip {
-                inner: next,
-                outer: gap,
+                inner: next + cut_back,
+                outer: gap + cut_back,
                 top: to,
             });
         }
     }
-    Ok(strips)
+    Ok((strips, cut_back))
 }
 
 /// The rectangle that spans `along` on the axis `long` and `across` on the
@@ -2906,17 +2917,17 @@ fn decide_ends(
             let strips = read_end(&site, list, &followed).and_then(|read| {
                 strips_of(&read.bands)
                     .map_err(|reason| Refusal { reason, off: true })
-                    .map(|strips| {
+                    .map(|(strips, cut_back)| {
                         let reached = read
                             .bands
                             .iter()
-                            .filter(|band| band.gap > END_TOLERANCE_FEET)
+                            .filter(|band| band.gap.abs() > END_TOLERANCE_FEET)
                             .map(|band| band.reached)
                             .min();
-                        (strips, reached, read.order_dependent)
+                        (strips, cut_back, reached, read.order_dependent)
                     })
             });
-            let (strips, reached, order_dependent) = match strips {
+            let (strips, cut_back, reached, order_dependent) = match strips {
                 Ok(read) => read,
                 Err(refused_read) => {
                     // An end the faces read show short or past is marked on the
@@ -2930,7 +2941,7 @@ fn decide_ends(
                     continue;
                 }
             };
-            if strips.is_empty() {
+            if strips.is_empty() && cut_back >= -END_TOLERANCE_FEET {
                 continue;
             }
             // The strips lie against the faces of the walls the record joins,
@@ -2961,9 +2972,10 @@ fn decide_ends(
             ends.push(End {
                 long,
                 at_low,
-                gap: strips.first().map_or(0.0, |strip| strip.outer),
+                gap: strips.first().map_or(cut_back, |strip| strip.outer),
                 reached,
                 strips,
+                cut_back,
                 order_dependent,
             });
         }
@@ -2983,7 +2995,24 @@ fn decide_ends(
             .flat_map(|end| end.strips.iter())
             .any(|strip| strip.top < wall.top - END_TOLERANCE_FEET)
             .then(|| SteppedPlan {
-                original: rect(long, (low, high), (side_low, side_high)),
+                // The wall's own plan to its top, pulled in at an end a joined
+                // wall's face cuts back (#1474).
+                original: rect(
+                    long,
+                    (
+                        low - ends
+                            .iter()
+                            .filter(|end| end.at_low)
+                            .map(|end| end.cut_back)
+                            .sum::<f64>(),
+                        high + ends
+                            .iter()
+                            .filter(|end| !end.at_low)
+                            .map(|end| end.cut_back)
+                            .sum::<f64>(),
+                    ),
+                    (side_low, side_high),
+                ),
                 blocks: ends
                     .iter()
                     .flat_map(|end| {
