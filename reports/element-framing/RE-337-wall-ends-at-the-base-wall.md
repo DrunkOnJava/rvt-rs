@@ -151,4 +151,9 @@ A wall whose body cannot be bounded here is taken to stand in every strip, and t
 
 The end is kept and marked with `unread_wall_stands_in_the_added_end`. It is counted in `exported.wall_end_refusals` and logged as `wall_end_extension_refused`, as `wall_stands_in_the_added_end` is for a wall the pass reads. Where both kinds of wall stand in a strip, the reason is the older one.
 
-**Measured.** Pending: the full Measure run of this change against `main`.
+**Measured.** No export reaches the refusal. Measure [43680522537](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43680522537) ran this change (`95bb555d`) against its merge base (`f99403c7`), unfiltered, with the BIM4LCA models, the Revit 2025 models, the samples and the held-out pairs:
+- all 120 exports and all 102 `diagnostics.json` are byte-identical, so no wall carries `unread_wall_stands_in_the_added_end`;
+- the office files still draw their 4 ends each;
+- the same-project gates pass.
+
+No synthetic fixture can reach the refusal either, for the reason section 6 gives. So it stays unexercised against a Revit export until a Revit 2024 model has a wall the pass does not read standing where an end would be drawn.
