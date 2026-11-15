@@ -63,6 +63,45 @@ fn ids(value: &Fv, path: &str, out: &mut Vec<(String, u64)>) {
     }
 }
 
+/// `class=<native class> name=<SymbolInfo.m_name> family=<SymbolInfo.m_familyName>`
+/// for each of `wanted` whose native record is read, spaces as `_`.
+fn name_lines(rf: &mut RevitFile, wanted: &BTreeSet<u64>) -> anyhow::Result<BTreeMap<u64, String>> {
+    let text = |graph: &rvt::research::native_parameters::ObjectGraph, field: &str| {
+        graph
+            .objects
+            .iter()
+            .find(|o| o.class_name == "SymbolInfo")
+            .and_then(|o| o.fields.get(field))
+            .and_then(Fv::as_str)
+            .map(|s| s.replace(' ', "_"))
+            .unwrap_or_else(|| "-".into())
+    };
+    let mut named: BTreeMap<u64, String> = BTreeMap::new();
+    extract_graphs(
+        rf,
+        &Options {
+            selected_ids: wanted.clone(),
+            releases: NATIVE_RELEASES,
+            ..Options::default()
+        },
+        |record| {
+            let (name, family) = match record.graph.as_ref() {
+                Some(graph) => (text(graph, "m_name"), text(graph, "m_familyName")),
+                None => ("-".into(), "-".into()),
+            };
+            named.insert(
+                record.identity.element_id,
+                format!(
+                    "class={} name={name} family={family}",
+                    record.class_name.as_deref().unwrap_or("-")
+                ),
+            );
+            Ok(())
+        },
+    )?;
+    Ok(named)
+}
+
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
@@ -131,47 +170,59 @@ fn main() -> anyhow::Result<()> {
             shown.join(" ")
         );
     }
-    let text = |graph: &rvt::research::native_parameters::ObjectGraph, field: &str| {
-        graph
-            .objects
-            .iter()
-            .find(|o| o.class_name == "SymbolInfo")
-            .and_then(|o| o.fields.get(field))
-            .and_then(Fv::as_str)
-            .map(|s| s.replace(' ', "_"))
-            .unwrap_or_else(|| "-".into())
-    };
-    let mut named: BTreeMap<u64, String> = BTreeMap::new();
-    extract_graphs(
-        &mut rf,
-        &Options {
-            selected_ids: wanted.clone(),
-            releases: NATIVE_RELEASES,
-            ..Options::default()
-        },
-        |record| {
-            let (name, family) = match record.graph.as_ref() {
-                Some(graph) => (text(graph, "m_name"), text(graph, "m_familyName")),
-                None => ("-".into(), "-".into()),
-            };
-            named.insert(
-                record.identity.element_id,
-                format!(
-                    "class={} name={name} family={family}",
-                    record.class_name.as_deref().unwrap_or("-")
-                ),
-            );
-            Ok(())
-        },
-    )?;
+    let named = name_lines(&mut rf, &wanted)?;
     for id in &wanted {
         println!(
             "ref {id} {}",
             named
                 .get(id)
-                .map(String::as_str)
-                .unwrap_or("class=- name=- family=-")
+                .map_or("class=- name=- family=-", String::as_str)
         );
+    }
+    // The symbols' own records: what they name (the family, the master).
+    let symbols: BTreeSet<u64> = named
+        .iter()
+        .filter(|(_, text)| text.starts_with("class=FamilySymbol "))
+        .map(|(id, _)| *id)
+        .collect();
+    let mut second: BTreeMap<u64, Vec<(String, u64)>> = BTreeMap::new();
+    if !symbols.is_empty() {
+        extract_graphs(
+            &mut rf,
+            &Options {
+                selected_ids: symbols,
+                releases: NATIVE_RELEASES,
+                ..Options::default()
+            },
+            |record| {
+                let Some(graph) = record.graph.as_ref() else {
+                    return Ok(());
+                };
+                let mut refs = Vec::new();
+                for object in &graph.objects {
+                    ids(&object.fields, &object.class_name, &mut refs);
+                }
+                second.insert(record.identity.element_id, refs);
+                Ok(())
+            },
+        )?;
+    }
+    let mut again: BTreeSet<u64> = BTreeSet::new();
+    for (id, refs) in &second {
+        let shown: Vec<String> = refs
+            .iter()
+            .filter(|(_, r)| r != id)
+            .map(|(p, r)| {
+                if !wanted.contains(r) {
+                    again.insert(*r);
+                }
+                format!("{r}@{p}")
+            })
+            .collect();
+        println!("sym {id} refs={}", shown.join(" "));
+    }
+    for (id, text) in name_lines(&mut rf, &again)? {
+        println!("ref {id} {text}");
     }
     eprintln!(
         "{} elements, {} native records, {} ids named",
