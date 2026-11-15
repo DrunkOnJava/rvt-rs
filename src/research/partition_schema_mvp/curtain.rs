@@ -174,13 +174,21 @@ pub(super) fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [Dec
         .filter_map(|element| Some(u64::from(element.id?)))
         .collect();
     // RE-418: the pass that draws a mullion from its saved mesh takes its length
-    // along the axis its record runs it along, whatever its host.
+    // along the axis its record runs it along, whatever its host. A mullion
+    // turned about its own axis so far that its record box does not give its
+    // extents along its axes (`oriented_box` refuses it) still runs along its own
+    // Z, the third axis its transform records (#1193: 12 mullions of the BIM4LCA
+    // office as built had no `Span` for want of it).
     let axes: BTreeMap<u32, [f64; 3]> = products
         .iter()
         .filter(|element| element.class == "CurtainWallMullion")
         .filter_map(|element| {
             let mullion = mullion_box(element, 0)?;
-            Some((mullion.id, mullion.axes[mullion.along?]))
+            let axis = match mullion.along {
+                Some(along) => mullion.axes[along],
+                None => curtain_axes_from_fields(&element.fields)?[2],
+            };
+            Some((mullion.id, axis))
         })
         .collect();
     rf.remember_mullion_axes(axes);
