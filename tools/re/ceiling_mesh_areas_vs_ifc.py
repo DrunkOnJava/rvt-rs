@@ -39,7 +39,8 @@ def main(argv):
             tag, direction, area = p[1], p[2], float(p[6])
             faces[tag][direction] = max(faces[tag][direction], area)
     f = ifcopenshell.open(theirs)
-    scale = ifcopenshell.util.unit.calculate_unit_scale(f) ** 2
+    # The file's own area unit: the length unit squared is wrong where they differ (mm and m2).
+    scale = ifcopenshell.util.unit.calculate_unit_scale(f, "AREAUNIT")
     revit = {}
     for covering in f.by_type("IfcCovering"):
         q = ifcopenshell.util.element.get_psets(covering, qtos_only=True).get("Qto_CoveringBaseQuantities", {})
