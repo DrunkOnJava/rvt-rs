@@ -1203,7 +1203,9 @@ pub(crate) fn attach_value_sources(
             match (property.name.as_str(), &property.value) {
                 ("BodySource", PropertyValue::Text(text)) => body = Some(text.as_str()),
                 ("SectionShape", PropertyValue::Text(text)) if text == "I" => i_section = true,
-                ("SectionShape", PropertyValue::Text(text)) if text == ec::TUBE_SECTION_SHAPE => {
+                ("SectionShape", PropertyValue::Text(text))
+                    if text == super::export_content::TUBE_SECTION_SHAPE =>
+                {
                     tube_section = true
                 }
                 ("ProfileSource", PropertyValue::Text(text)) => {
