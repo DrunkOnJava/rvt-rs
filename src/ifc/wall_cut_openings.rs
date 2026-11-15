@@ -438,12 +438,38 @@ fn door_box(door: &IfcEntity, cut: &OpeningCut) -> Option<[f64; 6]> {
     world.iter().all(|value| value.is_finite()).then_some(world)
 }
 
-/// A door that also cuts a second wall: its own opening box, where the
-/// wall runs across the door's wall and the box reaches it. The door's wall runs along the long
-/// side of the box; a second wall along it is not written, for the opening
-/// then reaches five feet either side of the plane its symbol cuts in,
-/// which is not read.
-fn door_cut(host: &Host, world: &[f64; 6], door: usize) -> Result<Cut, &'static str> {
+/// How deep across a door's wall Revit's export cuts the opening the door
+/// makes in a second wall that runs along its own (#1165, RE-471): 10 ft on
+/// every one of the 82 such openings of the BIM4LCA models and the 24 of
+/// Snowdon Towers Architectural.
+const DOOR_PARALLEL_DEPTH_FEET: f64 = 10.0;
+
+/// A door's local Y axis in plan, as its placement turns it: the writer's
+/// `IfcAxis2Placement3D` takes its X from the rotation about Z, so its Y is
+/// that turned a quarter turn further.
+fn door_y_axis(door: &IfcEntity) -> [f64; 2] {
+    let angle = match door {
+        IfcEntity::BuildingElement {
+            rotation_radians, ..
+        } => rotation_radians.unwrap_or(0.0),
+        _ => 0.0,
+    };
+    [-angle.sin(), angle.cos()]
+}
+
+/// A door that also cuts a second wall: its own opening box, where the wall
+/// runs across the door's wall and the box reaches it. The door's wall runs
+/// along the long side of the box. Where the second wall runs along it too,
+/// the opening is as wide and as tall as the box and
+/// [`DOOR_PARALLEL_DEPTH_FEET`] deep across the walls, centred on the box's
+/// face on the side the door's local Y (`y_axis`, in plan) points away from
+/// (RE-471); a door whose Y lies along its wall is not written.
+fn door_cut(
+    host: &Host,
+    world: &[f64; 6],
+    y_axis: [f64; 2],
+    door: usize,
+) -> Result<Cut, &'static str> {
     let (dx, dy) = (world[3] - world[0], world[4] - world[1]);
     let (long, thin) = if dx >= dy { (dx, dy) } else { (dy, dx) };
     if !(thin > MIN_EXTENT_FEET && long >= DOOR_SLENDERNESS * thin) {
@@ -451,10 +477,22 @@ fn door_cut(host: &Host, world: &[f64; 6], door: usize) -> Result<Cut, &'static 
     }
     let wall_runs_along_x = host.axis[0].abs() > 0.5;
     let door_wall_runs_along_x = dx >= dy;
+    let mut world = *world;
     if wall_runs_along_x == door_wall_runs_along_x {
-        return Err(reason::DOOR_WALL_PARALLEL);
+        let across = usize::from(door_wall_runs_along_x);
+        let toward = y_axis[across];
+        if toward.abs() < 0.5 {
+            return Err(reason::DOOR_WALL_PARALLEL);
+        }
+        let face = if toward > 0.0 {
+            world[across]
+        } else {
+            world[across + 3]
+        };
+        world[across] = face - DOOR_PARALLEL_DEPTH_FEET / 2.0;
+        world[across + 3] = face + DOOR_PARALLEL_DEPTH_FEET / 2.0;
     }
-    let (along, left, up) = host.ranges(world);
+    let (along, left, up) = host.ranges(&world);
     if overlap(left, host.band) < -DOOR_REACH_FEET || overlap(along, host.along) < -DOOR_REACH_FEET
     {
         return Err(reason::DOOR_NOT_IN_WALL);
@@ -674,7 +712,9 @@ pub(super) fn attach_wall_cut_openings(
                                     .get(door)
                                     .and_then(|cut| door_box(&entities[*door], cut));
                                 match world {
-                                    Some(world) => door_cut(host, &world, *door),
+                                    Some(world) => {
+                                        door_cut(host, &world, door_y_axis(&entities[*door]), *door)
+                                    }
                                     None => Err(reason::DOOR_OPENING_NOT_READ),
                                 }
                             }
