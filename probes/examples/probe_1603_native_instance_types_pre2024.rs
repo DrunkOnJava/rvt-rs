@@ -27,7 +27,7 @@ use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
 use rvt::research::graph_value::Fv;
-use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 
 const CLASSES: [&str; 5] = [
     "IFCWINDOW",
@@ -91,6 +91,7 @@ fn main() -> anyhow::Result<()> {
         &mut rf,
         &Options {
             selected_ids: elements.keys().copied().collect(),
+            releases: NATIVE_RELEASES,
             ..Options::default()
         },
         |record| {
@@ -145,6 +146,7 @@ fn main() -> anyhow::Result<()> {
         &mut rf,
         &Options {
             selected_ids: wanted.clone(),
+            releases: NATIVE_RELEASES,
             ..Options::default()
         },
         |record| {
