@@ -17,6 +17,10 @@
 //! and through the scan, and how many only through the map or only through the
 //! scan.
 //!
+//! The probe also counts, per class, the instances of the decode and how many
+//! of them name a type at all: a class with instances and none naming a type
+//! has no row above, and the reader could not give its instances a map either.
+//!
 //! The release is not changed: `Options::releases` is widened to the native
 //! releases here, as a reader measured on 2015 to 2022 would name them.
 //!
@@ -52,8 +56,10 @@ fn main() -> anyhow::Result<()> {
     let version = rf.basic_file_info()?.version;
     let decoded = recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())?;
 
-    // Each type the family instances name, with the classes that name it.
+    // Each type the family instances name, with the classes that name it, and
+    // per class how many instances there are and how many name a type at all.
     let mut classes: BTreeMap<u64, BTreeSet<String>> = BTreeMap::new();
+    let mut instances: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     for element in decoded
         .columns
         .iter()
@@ -65,7 +71,10 @@ fn main() -> anyhow::Result<()> {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(u64::from(*id)),
             _ => None,
         });
+        let counts = instances.entry(element.class.clone()).or_default();
+        counts.0 += 1;
         if let Some(type_id) = type_id {
+            counts.1 += 1;
             classes
                 .entry(type_id)
                 .or_default()
@@ -197,6 +206,10 @@ fn main() -> anyhow::Result<()> {
                     .is_some_and(|found| found.named.is_empty() && found.unset))
                 .count(),
         );
+    }
+
+    for (class, (total, typed)) in &instances {
+        println!("{TAG} instances class {class} total {total} naming a type {typed}");
     }
 
     // One line per type that holds a map, for the pairing script (ElementIds).
