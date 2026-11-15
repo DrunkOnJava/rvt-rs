@@ -136,6 +136,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # entity name, never a Tag or a material name.
       grep -E '^window door type maps: class Ifc[A-Za-z0-9]+( grouped)? elements [0-9]+ revit materials [0-9]+ drawn read [0-9]+ drawn equal [0-9]+ master read [0-9]+ master equal [0-9]+ either equal [0-9]+ both equal [0-9]+$' "$f" || true
       grep -E '^window door type maps: class Ifc[A-Za-z0-9]+( grouped)? drawn symbol: equal [0-9]+, equal with the unset material spelled apart [0-9]+, unset material only [0-9]+, Revit more found in the drawn symbol'"'"'s record [0-9]+, Revit more found in the master symbol'"'"'s record [0-9]+, Revit more found in the family'"'"'s record [0-9]+, Revit more found in the instance'"'"'s record [0-9]+, Revit more not found [0-9]+, drawn more [0-9]+, apart [0-9]+; Revit spells the unset material apart on [0-9]+$' "$f" || true
+      # tools/re/window_door_unnamed_vs_ifc.py (#1603, RE-482): per IFC class, how many
+      # doors and windows whose map holds geometry mapped to no material have Revit's
+      # `<Unnamed>`, by what the family's forms show: numbers beside fixed words and an
+      # IFC entity name, never a Tag or a material name; its `--list` lines are dropped.
+      grep -E '^unnamed before 2024: class Ifc[A-Za-z0-9]+( grouped)? map unset [0-9]+; unset form shown: written [0-9]+, not written [0-9]+; unset form hidden: written [0-9]+, not written [0-9]+; unset voids only: written [0-9]+, not written [0-9]+; no unset form, nested instance: written [0-9]+, not written [0-9]+; no unset form: written [0-9]+, not written [0-9]+; family not read: written [0-9]+, not written [0-9]+$' "$f" || true
       # tools/re/beam_lines_vs_ifc.py (#1697): counts beside fixed words and the
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
@@ -217,6 +222,9 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # wording, never an id or a name. The `type map:` lines name ElementIds
       # and are not kept.
       grep -E '^type maps pre2024: (release [0-9]+ native read failed|release [0-9]+ types [0-9]+ records [0-9]+ read [0-9]+ entries in the 2024 shape [0-9]+ in the 2015 to 2023 shape [0-9]+|class [A-Za-z0-9_]+ types [0-9]+ read [0-9]+ named by the map [0-9]+ named by the scan [0-9]+ only by the map [0-9]+ only by the scan [0-9]+ unset only [0-9]+|instances class [A-Za-z0-9_]+ total [0-9]+ naming a type [0-9]+)$' "$f" || true
+      # probe_1603_unnamed_before_2024 (#1603, RE-482): a family's forms by stored
+      # Visible value, as counts beside fixed words.
+      grep -E '^family visible values: release [0-9]+ forms [0-9]+ stored zero [0-9]+ stored one [0-9]+ stored other [0-9]+ stored none [0-9]+$' "$f" || true
       # probe_1603_instance_types_pre2024 (#1603): per category of family
       # instance, how many instances stop at each stage of the type join, as
       # numbers beside fixed words, a category's Revit id and a placement
