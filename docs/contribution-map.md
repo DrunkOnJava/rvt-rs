@@ -126,7 +126,7 @@ earlier year as a supported release.
 | [#1982](https://github.com/DrunkOnJava/rvt-rs/issues/1982) | A 2015 to 2023 wall's IsExternal from its type's Function, and parameters named for a property, each rest on one file (RE-283) |
 | [#1981](https://github.com/DrunkOnJava/rvt-rs/issues/1981) | Beams cut at the column their list names, on Revit 2023, rest on one file (RE-122) |
 | [#1980](https://github.com/DrunkOnJava/rvt-rs/issues/1980) | A framing element's top Level on Revit 2015 to 2023 rests on eight beams of one file (RE-119, RE-461) |
-| [#1695](https://github.com/DrunkOnJava/rvt-rs/issues/1695) | Revit 2022 and earlier: the export parameters are not read, so a furniture element carries no PredefinedType where Revit's export writes NOTDEFINED |
+| [#1695](https://github.com/DrunkOnJava/rvt-rs/issues/1695) | Revit 2022 and earlier: the export parameters are not read, so a furniture element carries no PredefinedType where Revit's export writes NOTDEFINED; none of the corpus's 45 files of 2015 to 2023 sets one, so where those releases keep them is not decided (RE-472) |
 | [#1603](https://github.com/DrunkOnJava/rvt-rs/issues/1603) | Revit 2015 to 2023: family instances' materials: 70 windows and 14 railings lack Revit's, the default material is written on 72 elements Revit gives none (Vitoria) |
 | [#1584](https://github.com/DrunkOnJava/rvt-rs/issues/1584) | Revit 2015 to 2023 walls: the control joins are read since RE-364 section 11 and a Revit 2023 curtain wall gets its Length; an ordinary wall's Length, the side areas, footprint, volumes and angled walls' line bodies stay out |
 | [#1335](https://github.com/DrunkOnJava/rvt-rs/issues/1335) | Revit 2015–2023 exports: the remaining time against 0.11.0 after #1237 |
