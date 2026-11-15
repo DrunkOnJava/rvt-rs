@@ -32,7 +32,7 @@ starts a bounded line:
 | +4 | f64, feet | start parameter |
 | +12 | f64, feet | end parameter |
 | +20 | f64 × 3, model feet | origin |
-| +44 | f64 × 3 | unit direction (0.130526, −0.991445, 0) |
+| +44 | f64 × 3 | unit direction |
 
 - The line's ends are `origin + parameter · direction`. For 627866 they lie at the top of the steel (the record box's top), 22.610 ft apart.
 - The data holds a second line with the same parameters, origin and direction at the section's mid-depth, 0.754 ft lower.
