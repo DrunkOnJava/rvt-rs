@@ -680,9 +680,9 @@ pub fn attach_scoped_with_control(
                     }
                 }
             }
-            if let Some([index]) = ceilings
+            if let Some(&index) = ceilings
                 .get(&element.identity.element_id)
-                .map(Vec::as_slice)
+                .and_then(|indices| indices.first())
             {
                 let primitives = &element.meshes.primitives;
                 let found = partial_refusal(&element.meshes)
@@ -693,7 +693,7 @@ pub fn attach_scoped_with_control(
                     })
                     .flatten();
                 if let Some(area) = found {
-                    covering_areas.push((*index, area));
+                    covering_areas.push((index, area));
                 }
             }
             if let Some([index]) = instances
@@ -1949,6 +1949,10 @@ fn add_plate_widths(model: &mut IfcModel, widths: &[(usize, f64)]) {
 /// whose sketch it does not read. Of `FamilyInstance`, they are the family
 /// instances Revit writes as `IfcCovering` `ROOFING` (ventilation units, snow
 /// guards, downpipes and their casings on the BIM4LCA office and housing).
+/// rvt-rs writes a ceiling sketched in pieces as one covering per piece, all
+/// with its ElementId (#331), where Revit's export writes one covering: such a
+/// ceiling is listed only where none of its coverings holds `GrossArea`, its
+/// own covering first and its pieces after it, in the order they were written.
 fn coverings_without_area(
     model: &IfcModel,
     wholes: &BTreeSet<usize>,
@@ -1968,6 +1972,7 @@ fn coverings_without_area(
         })
         .collect();
     let mut out: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    let mut ids_with_area: BTreeSet<u64> = BTreeSet::new();
     for (index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
@@ -1981,15 +1986,20 @@ fn coverings_without_area(
         if ifc_type != "IFCCOVERING"
             || !scope.includes(ifc_type)
             || wholes.contains(&index)
-            || with_area.contains(&index)
             || !has_text_property(set, "RevitClass", class)
         {
             continue;
         }
-        if let Ok(id) = tag.parse::<u64>() {
+        let Ok(id) = tag.parse::<u64>() else {
+            continue;
+        };
+        if with_area.contains(&index) {
+            ids_with_area.insert(id);
+        } else {
             out.entry(id).or_default().push(index);
         }
     }
+    out.retain(|id, _| !ids_with_area.contains(id));
     out
 }
 
@@ -2092,9 +2102,9 @@ fn horizontal_triangles(primitive: &Primitive) -> Vec<Option<Horizontal>> {
 /// `GrossArea`. The saved mesh stores the slab one face per primitive, the
 /// pieces as connected parts of each face (triangles sharing a vertex 1e-6 ft
 /// apart). The part of the first primitive that holds its first triangle is
-/// Revit's piece on all 83 ceilings in pieces of the four BIM4LCA office
-/// files, cut or uncut, where the largest piece is Revit's on 45 of the 78
-/// uncut. The first primitive must be one horizontal face, every triangle at
+/// Revit's piece on all 78 ceilings in pieces of the four BIM4LCA office
+/// files (73 uncut, 5 cut), where the largest piece is Revit's on 45. The
+/// first primitive must be one horizontal face, every triangle at
 /// one height facing one way, in more than one part. A horizontal face facing
 /// the other way must hold a part of the same area to 0.1%. Anything else
 /// gets none.
