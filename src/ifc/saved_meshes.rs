@@ -1528,6 +1528,10 @@ const WALL_HEIGHT_AGREE_FEET: f64 = 5e-4;
 /// rectangle turned with the wall, or across it (#1046).
 const OPENING_TURN_TOLERANCE: f64 = 1e-6;
 
+/// How far, feet, a corner of a wall opening's outline may lie off the
+/// rectangle its ranges make and the outline still be that rectangle (#1046).
+const OUTLINE_CORNER_TOLERANCE_FEET: f64 = 1e-6;
+
 /// A wall's own axes and the openings rvt-rs cuts in it (#1046).
 struct WallOpenings {
     frame: WallFrame,
@@ -1538,9 +1542,10 @@ struct WallOpenings {
 /// the openings written in it: the rectangle of every element the wall hosts,
 /// with the axis across the wall cut to the wall's thickness, placed on that
 /// element's own placement and extruded up its height, as the writer emits it
-/// (#227, RE-84). A wall whose element is not read, and an opening whose turn is
-/// not one of its wall's, is left out, so the wall gets no areas of the mesh for
-/// them.
+/// (#227, RE-84), and the rectangle of every opening rvt-rs cuts through the wall
+/// with nothing filling it (`WallCutOpening`). A wall whose element is not read,
+/// and an opening whose turn is not one of its wall's, is left out, so the wall
+/// gets no areas of the mesh for them.
 fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
     let mut out: BTreeMap<usize, WallOpenings> = BTreeMap::new();
     for (index, entity) in model.entities.iter().enumerate() {
@@ -1622,7 +1627,111 @@ fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
             hosted.boxes.push(opening);
         }
     }
+    // The openings rvt-rs cuts in a wall with nothing filling them (#1165,
+    // RE-321): a rectangle in the wall's vertical plane, along an axis turned
+    // with the wall's, extruded through it. A recess does not pass through, so
+    // its back face is no jamb, and an outline that is not a rectangle makes
+    // faces no box explains: both are left out.
+    for entity in &model.entities {
+        let IfcEntity::WallCutOpening {
+            host,
+            outline_feet,
+            axis_turn_radians,
+            plane_offset_feet,
+            thickness_feet,
+            recess: false,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let Some(IfcEntity::BuildingElement {
+            location_feet: Some(location),
+            rotation_radians,
+            ..
+        }) = model.entities.get(*host)
+        else {
+            continue;
+        };
+        let Some(hosted) = out.get_mut(host) else {
+            continue;
+        };
+        if (2.0 * axis_turn_radians).sin().abs() > OPENING_TURN_TOLERANCE {
+            continue;
+        }
+        let Some((along, up)) = outline_rectangle(outline_feet) else {
+            continue;
+        };
+        let left = [
+            plane_offset_feet - thickness_feet / 2.0,
+            plane_offset_feet + thickness_feet / 2.0,
+        ];
+        let (sin, cos) = (rotation_radians.unwrap_or(0.0) + axis_turn_radians).sin_cos();
+        let corners = [
+            [along[0], left[0]],
+            [along[1], left[0]],
+            [along[1], left[1]],
+            [along[0], left[1]],
+        ]
+        .map(|[a, l]| {
+            [
+                location[0] + a * cos - l * sin,
+                location[1] + a * sin + l * cos,
+            ]
+        });
+        let opening = OpeningBox {
+            corners,
+            heights: [location[2] + up[0], location[2] + up[1]],
+        };
+        if opening
+            .corners
+            .iter()
+            .flatten()
+            .chain(&opening.heights)
+            .all(|value| value.is_finite())
+        {
+            hosted.boxes.push(opening);
+        }
+    }
     out
+}
+
+/// The ranges, feet, of the outline `outline` along its first axis and its
+/// second, where it is a rectangle on them: four corners, each at an end of
+/// both ranges and no two at the same. `None` for any other outline.
+fn outline_rectangle(outline: &[(f64, f64)]) -> Option<([f64; 2], [f64; 2])> {
+    let [_, _, _, _] = outline else {
+        return None;
+    };
+    let fold = |pick: fn(&(f64, f64)) -> f64| {
+        outline
+            .iter()
+            .map(pick)
+            .fold([f64::INFINITY, f64::NEG_INFINITY], |[low, high], v| {
+                [low.min(v), high.max(v)]
+            })
+    };
+    let (x, y) = (fold(|p| p.0), fold(|p| p.1));
+    let at_end = |v: f64, range: [f64; 2]| {
+        (v - range[0]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET
+            || (v - range[1]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET
+    };
+    let corners: BTreeSet<(bool, bool)> = outline
+        .iter()
+        .map(|&(px, py)| {
+            (
+                (px - x[0]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET,
+                (py - y[0]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET,
+            )
+        })
+        .collect();
+    (x[1] - x[0] > OUTLINE_CORNER_TOLERANCE_FEET
+        && y[1] - y[0] > OUTLINE_CORNER_TOLERANCE_FEET
+        && corners.len() == 4
+        && outline
+            .iter()
+            .all(|&(px, py)| at_end(px, x) && at_end(py, y)))
+    .then_some((x, y))
 }
 
 /// Give each wall of `found` (an index into the entities and what the mesh
