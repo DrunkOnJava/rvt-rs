@@ -504,6 +504,11 @@ fn door_cut(
     let (along, left, up) = host.ranges(&world);
     if overlap(left, host.band) < -DOOR_REACH_FEET || overlap(along, host.along) < -DOOR_REACH_FEET
     {
+        // Research trace for #1165 (not to land).
+        eprintln!(
+            "trace 1165 not in wall: door {door} wall {} parallel {parallel} y {y_axis:?} world {world:?} along {along:?} left {left:?} band {:?} wall along {:?} axis {:?} location {:?}",
+            host.name, host.band, host.along, host.axis, host.location
+        );
         return Err(reason::DOOR_NOT_IN_WALL);
     }
     Ok(Cut {
