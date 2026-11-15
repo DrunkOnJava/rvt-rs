@@ -6,5 +6,6 @@
   first triangle, on all 78 ceilings in pieces of the BIM4LCA office. A ceiling
   in pieces with no `GrossArea` now takes that part's area, on its own
   covering: 16 values on the office, 5 cut ceilings among them, all equal to
-  Revit's, with nothing else moving. The rule rests on one building
-  (`docs/one-project-rules.md`).
+  Revit's, and one ceiling of Autodesk's 2024 Snowdon Towers sample, which no
+  Revit export in CI checks, with nothing else moving. The rule rests on one
+  building (`docs/one-project-rules.md`).

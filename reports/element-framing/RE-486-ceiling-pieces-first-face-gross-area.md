@@ -5,7 +5,7 @@
 **Artefacts:** the BIM4LCA office (concrete and timber, as built and at building permit, Revit 2024) with Revit's own IFC4 exports; the BIM4LCA housing, the Revit 2025 models, Core Interior, RE1, the Autodesk samples of Revit 2015 to 2027 and the held-out projects (counts only) for what else moves.
 **Scorer and probe:** `tools/re/ceiling_piece_order_vs_ifc.py` at `0049be011b22` and `probe_1209_ceiling_mesh_order` with `tools/re/ceiling_mesh_order_vs_ifc.py` at `31bca2a89c12`, both archived under `refs/archive/2026-11-15/cited/`. Neither lands.
 **Commits:** the rule at `a2833a069bd5` (the first version, `21eb0ea8a883`, wrote nothing: section 3); the diagnostic build `052bc6e9db00`, archived under `refs/archive/2026-11-15/cited/`.
-**Status:** positive on the four BIM4LCA office files: the 16 ceilings in pieces that had no `GrossArea` now have Revit's, 16 of 16 equal and nothing else moving (Measure [43721768570](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43721768570), section 4). The unfiltered Measure, which reads every other model, follows: rows 2 to 4 of section 5 wait on it.
+**Status:** positive. On the four BIM4LCA office files, the 16 ceilings in pieces that had no `GrossArea` now have Revit's: 16 of 16 equal, and nothing else moves. One ceiling of Autodesk's 2024 Snowdon sample gains one too, and nothing else in the 120 exports moves (Measure [43733137320](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43733137320), section 4). All five registered rows are met (section 5).
 
 ## 1. Which piece Revit's export names
 
@@ -52,7 +52,9 @@ rvt-rs writes a ceiling sketched in pieces as one `IfcCovering` per piece, all w
 
 ## 4. Measured
 
-**The office.** Measure [43721768570](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43721768570) exports the four office files at `a2833a06` and at main `156e2b25` and scores both sides with `psets_vs_ifc` and `qtos_vs_ifc`:
+Measure [43733137320](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43733137320) exports 120 models at `b000d8ab` and at its merge base, `main` at `156e2b25`, with nordic, r2025, samples and holdout, and runs every scorer. The filtered run [43721768570](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43721768570) (`a2833a06`, the office files, `psets_vs_ifc` and `qtos_vs_ifc`) gave the same office counts.
+
+**The office.**
 
 | file | `GrossArea` equal, before | after | different | missing, after |
 |---|---:|---:|---:|---:|
@@ -61,19 +63,25 @@ rvt-rs writes a ceiling sketched in pieces as one `IfcCovering` per piece, all w
 | timber office, as built | 84 of 88 | 88 of 88 | 0 | 0 |
 | timber office, permit | 70 of 74 | 74 of 74 | 0 | 0 |
 
-The 16 new values are the 16 ceilings RE-480 left without one (its section 5): the 5 cut ceilings whose face is in pieces (1, 3, 0 and 1) and the 11 uncut ones RE-465's rule leaves out (3, 1, 4 and 3), of 2 to 9 pieces each. Every covering rvt-rs writes on the four files that Revit gives a `GrossArea` now has Revit's. Each file's totals move by these 4 alone: equal +4 and missing −4, with `different` at 1 and the values Revit does not write at 0, 0, 3 and 3, as before. `psets_vs_ifc` is identical on all four files, and `diagnostics.json` moves only in `exported.total_entities`, by +4 on each file (one quantity per ceiling, in a set its covering already holds).
+- **Which ceilings.** The 16 new values are the 16 ceilings RE-480 left without one (its section 5): the 5 cut ceilings whose face is in pieces (1, 3, 0 and 1) and the 11 uncut ones RE-465's rule leaves out (3, 1, 4 and 3), of 2 to 9 pieces each. Every covering rvt-rs writes on the four files that Revit gives a `GrossArea` now has Revit's.
+- **Totals.** Each file's totals move by these 4 alone: equal +4 and missing −4. `different` stays at 1, and the values Revit does not write stay at 0, 0, 3 and 3.
+- **Other scorers.** `psets_vs_ifc` is identical. The MCP answers check one more element and find one more quantity equal to Revit's on each file.
+- **Diagnostics.** `diagnostics.json` moves only in `exported.total_entities`, +4 on each file: one quantity per ceiling, in a set its covering already holds.
 
-**The other models.** The unfiltered Measure (`base=main`, nordic, r2025, samples and held-out) has not run yet.
+**The other models.**
+- **Byte-identical.** 115 of the 120 exports are: the BIM4LCA housing, the Revit 2025 models, Core Interior, RE1, every held-out export and every sample save but one.
+- **Snowdon.** The one that moves is Autodesk's Snowdon Towers Architectural sample of Revit 2024: one ceiling gains a `GrossArea` (`exported.total_entities` +1). No Revit export in CI checks it, and Revit's own IFC4 export of that file (local only, no licence) was made without base quantities, so it holds no `GrossArea`. Read against that export's body instead, by plain STEP outside Measure (the two exports kept by Measure [43735582243](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43735582243)): the area rvt-rs writes equals, to 8e-9 relative, the profile area of the piece that Revit's export creates last, the body item with the highest STEP id (6 items, 3 pieces). Section 1 shows that is the piece whose area Revit's `GrossArea` takes. That piece is also the largest of the three, so this one ceiling does not tell RE-486's rule from the largest piece's.
+- **Gates.** `same-project gates` passes on `b000d8ab`.
 
 ## 5. The registered rows
 
-Registered on #1209 before the run (2026-11-15, comment 6894478486):
+Registered on #1209 before the run (2026-11-15, comment 6894478486), read from Measure 43733137320:
 
-1. **The office.** Every ceiling the rule gives a `GrossArea` equals Revit's; `different` and the values Revit does not write are unchanged. **Met** (section 4): 16 of 16, the 5 cut ones among them, as expected.
-2. **The other files with a Revit export.** Waiting on the unfiltered Measure.
-3. **The samples.** Waiting on the unfiltered Measure.
-4. **Held-out.** Waiting on the unfiltered Measure.
-5. **No value is replaced.** **Met on the office:** equal rises by exactly as much as missing falls, so no value RE-465 or RE-480 wrote moved. The other files wait on the unfiltered Measure.
+1. **The office.** Every ceiling the rule gives a `GrossArea` equals Revit's, and `different` and the values Revit does not write are unchanged. **Met:** 16 of 16, the 5 cut ones among them.
+2. **The other files with a Revit export.** No value moves, or each new one equals Revit's. **Met:** none of their exports moves.
+3. **The samples.** Ceilings that gain a value are counted per release, with the same value on every save of one project, and `same-project gates` passes. **Met:** one ceiling of the 2024 Snowdon sample, a project of one save in the corpus. No other sample save moves, and the gates pass.
+4. **Held-out.** Counts only. **Met:** every held-out export is identical.
+5. **No value is replaced.** RE-465's and RE-480's values are unchanged. **Met:** equal rises by exactly as much as missing falls on every office file, and the semantic diff shows `GrossArea` going from absent to a value, with no changed value.
 
 ## 6. Where it rests
 
@@ -93,6 +101,7 @@ gh workflow run measure.yml --ref main -f ref=31bca2a89c12c6dae29af21f23d4e1551e
 # the change, on the four office files
 gh workflow run measure.yml --ref main -f ref=a2833a069bd5df015a153f9abddbfe21562a1d8b -f base=main -f nordic=true \
   -f models="nordic-office-as-built nordic-office-permit nordic-office-timber-as-built nordic-office-timber-permit" -f scorers="psets_vs_ifc qtos_vs_ifc"
-# the change, on every model
-gh workflow run measure.yml --ref main -f ref=a2833a069bd5df015a153f9abddbfe21562a1d8b -f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true
+# the change, on every model (b000d8ab is a2833a06 with main 156e2b25 merged in and the docs)
+gh workflow run measure.yml --ref main -f ref=b000d8ab232ed9cc30be030acd4074e98385626f \
+  -f base=156e2b257f610c8c57c82828571a892b687ebb77 -f nordic=true -f r2025=true -f samples=true -f holdout=true
 ```
