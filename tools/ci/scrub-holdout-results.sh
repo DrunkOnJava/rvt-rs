@@ -187,6 +187,10 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^file (left|right) entities=[0-9]+ duplicates=[0-9]+$' "$f" || true
       grep -E '^class IFC[A-Z0-9]+ both=[0-9]+ left_only=[0-9]+ right_only=[0-9]+$' "$f" || true
       grep -E '^projects shared=[0-9]+( IFC[A-Z0-9]+=[0-9]+)*$' "$f" || true
+      # probe_1603_type_maps_pre2024 (#1603): per release and class of family
+      # instance, the counts of types a geometry-material map or the scan names
+      # a material for, beside a schema class name; never an id or a name.
+      grep -E '^type maps pre2024: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^exit [0-9]+$' "$f" | sed 's/^/probe: /' || true
       grep -E '^void rule: [A-Za-z0-9 ,]+$' "$f" || true
     done
