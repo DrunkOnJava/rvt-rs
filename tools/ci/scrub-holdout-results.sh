@@ -156,6 +156,12 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^unnamed by facts before 2024: class Ifc[A-Za-z0-9]+ fact groups [0-9]+ with both outcomes [0-9]+: constant within a symbol [0-9]+, within a family [0-9]+, within an unset tag count [0-9]+$' "$f" || true
       grep -E '^unnamed by unset tags before 2024: class Ifc[A-Za-z0-9]+ unset tags 1: written [0-9]+, not written [0-9]+; unset tags 2: written [0-9]+, not written [0-9]+; unset tags 3 or more: written [0-9]+, not written [0-9]+$' "$f" || true
       grep -E '^unnamed by nested before 2024: class Ifc[A-Za-z0-9]+ no nested instance: written [0-9]+, not written [0-9]+; nested instances all shown, none bound: written [0-9]+, not written [0-9]+; a nested instance hidden: written [0-9]+, not written [0-9]+; a nested instance bound to a parameter: written [0-9]+, not written [0-9]+$' "$f" || true
+      # tools/re/window_door_unnamed_nested_types_vs_ifc.py (#1603, RE-487): the same doors
+      # and windows by the symbol's total geometry tags and by what the types of the
+      # family's nested instances hold: numbers beside fixed words and an IFC entity name,
+      # never an id, a Tag or a name; its `--list` lines are dropped.
+      grep -E '^unnamed by total tags before 2024: class Ifc[A-Za-z0-9]+ total tags [0-9]+: written [0-9]+, not written [0-9]+(; total tags [0-9]+: written [0-9]+, not written [0-9]+)*$' "$f" || true
+      grep -E '^unnamed by nested types before 2024: class Ifc[A-Za-z0-9]+ no nested instance: written [0-9]+, not written [0-9]+; nested types read, none holds an unset tag: written [0-9]+, not written [0-9]+; a nested type holds an unset tag: written [0-9]+, not written [0-9]+; a nested type not read: written [0-9]+, not written [0-9]+$' "$f" || true
       # tools/re/window_door_family_rules_vs_ifc.py (#1603, RE-481): the same counts
       # before and after the family rules, as numbers beside fixed words and an IFC
       # entity name, never a Tag or a material name; its `--list` lines are dropped.
@@ -252,6 +258,10 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # counts beside fixed words.
       grep -E '^bound visible values: release [0-9]+ unset forms [0-9]+ bound [0-9]+ resolved [0-9]+ unresolved [0-9]+ ambiguous [0-9]+$' "$f" || true
       grep -E '^family record copies: release [0-9]+ records [0-9]+ held more than once [0-9]+ copies differing [0-9]+$' "$f" || true
+      # probe_1603_unnamed_nested_types_before_2024 (#1603, RE-487): the nested family
+      # instances of the doors' and windows' families and how many of their types' maps
+      # were read, as counts beside fixed words.
+      grep -E '^nested types read: release [0-9]+ families [0-9]+ nested instances [0-9]+ map read [0-9]+ map with an unset tag [0-9]+$' "$f" || true
       # probe_1603_family_forms_pre2024 (#1603, RE-479): per release, how many
       # families of doors and windows have a document and how many forms of each
       # class (a schema class name) hold a material or a stored Visible, as
