@@ -732,7 +732,25 @@ const OVERRIDE_CLASS_LIMITS: &[(&str, &[&str])] = &[
 /// around them, and Revit's IFC4 export of each of its six files writes both
 /// as `IfcFlowSegment`, as it does the third, which carries no value (#1989).
 /// As for a wall sweep's, a curtain wall's ([`export_override_applies`]).
-const OVERRIDE_CLASS_EXCLUSIONS: &[(&str, &[&str])] = &[("IfcCovering", &["Gutter"])];
+///
+/// The BIM4LCA timber housing's ceiling type `AK-4.EI60` carries "Export Type
+/// to IFC As" `IfcSlabType` with `USERDEFINED`, and Revit's export of the file
+/// as built writes its one ceiling as `IfcCovering` `CEILING`, typed by an
+/// `IfcCoveringType` `CEILING`: neither the entity nor the predefined type is
+/// acted on (#2074, [`export_value_ignored`]).
+const OVERRIDE_CLASS_EXCLUSIONS: &[(&str, &[&str])] =
+    &[("IfcCovering", &["Gutter"]), ("IfcSlab", &["Ceiling"])];
+
+/// Whether an element of `revit_class` carries an "Export to IFC As" value
+/// that Revit's export is measured to ignore for that class
+/// (`OVERRIDE_CLASS_EXCLUSIONS`). Its "IFC Predefined Type" goes with it: the
+/// predefined type the value comes with is not acted on either (#2074).
+pub fn export_value_ignored(value: &str, revit_class: &str) -> bool {
+    lookup_export_override(value).is_some()
+        && OVERRIDE_CLASS_EXCLUSIONS.iter().any(|(name, classes)| {
+            name.eq_ignore_ascii_case(value.trim()) && classes.contains(&revit_class)
+        })
+}
 
 /// [`lookup_export_override`] for an element of `revit_class`: `None` where
 /// the value is limited to other classes (`OVERRIDE_CLASS_LIMITS`) or
