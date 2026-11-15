@@ -86,3 +86,10 @@ gh workflow run measure.yml --ref re-471-trace -f ref=afbaabb5326c5f5ce56e519755
   -f nordic=true -f models="nordic-office-* nordic-housing-*" -f scorers=unfilled_openings_vs_ifc
 # each model's unfilled_openings_vs_ifc.txt: the `trace` lines, `trace rule tally` and `trace rvt-rs rule tally`
 ```
+
+The change (section 5), with the commit archived as `refs/archive/2026-11-15/cited/5862892f32fd` because the pull request is squashed:
+
+```bash
+gh workflow run measure.yml --ref main -f ref=5862892f32fdcbd26a86c40d421ecf67ac5ec73e -f base=f961f2aa7f69e75d59576f8827a27b4af320b5fe \
+  -f nordic=true -f r2025=true -f samples=true -f holdout=true
+```
