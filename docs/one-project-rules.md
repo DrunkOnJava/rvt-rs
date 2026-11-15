@@ -41,7 +41,7 @@ only identifiers that exist in `src/`.
 
 | Project the rules rest on | Rules |
 |---|---:|
-| BIM4LCA office | 46 |
+| BIM4LCA office | 47 |
 | Snowdon Towers (local only) | 38 |
 | RE1 (IFC-ECS) | 12 |
 | Core Interior | 6 |
@@ -141,6 +141,7 @@ runs, would test the largest share of the rules below.
 | [RE-446](../reports/element-framing/RE-446-type-layer-copies.md) | `choose_copy`, `scan_type_layers`, `Current`, `partition_compound_structure` | BIM4LCA office | 2024 | yes | "The rule is measured on one project (the BIM4LCA office and housing, Revit 2024) in six of its files and on no other; the held-out files of Revit 2024 to 2027 and the Autodesk samples hold no type it reaches, so they do not gate it." |
 | [RE-461](../reports/element-framing/RE-461-release-gates.md) | `CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume`, `NetVolume`, `HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS` | BIM4LCA office | 2024 | yes | "Measured on the BIM4LCA office, Revit 2024; no other file holds one a Revit export checks." |
 | [RE-461](../reports/element-framing/RE-461-release-gates.md) | `SWEEP_RAMP_NATIVE_TYPE_REVIT_VERSIONS` | BIM4LCA office | 2024 | no, it names this model only | "Measured on the BIM4LCA office, Revit 2024 (9 sweeps, 5 ramps)." |
+| [RE-470](../reports/element-framing/RE-470-tube-beam-sections.md) | `tube_beam_section`, `type_tube_section`, `TUBE_BEAM_REVIT_VERSIONS` | BIM4LCA office | 2024 | yes | "Measured on one project and one release" |
 | [RE-220](../reports/element-framing/RE-220-stored-global-ids.md) | `revit_global_ids`, `stored_global_ids` | BIMcollab Revit 2015 example (local only) | 2015 | yes | "The storeys' stored-value rule is measured on one Revit 2015 file." |
 | [RE-283](../reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md) | `IsExternal`, `attach_native_named_parameters`, `NATIVE_NAMED_PARAMETER_REVIT_VERSIONS`, `LoadBearing`, `Pset_WallCommon` | BIMcollab Revit 2015 example (local only) | 2015 | yes | "The only one measured is BIMcollab's two on the walls; the samples' named parameters rest on the copies (RE-281)." |
 | [RE-372](../reports/element-framing/RE-372-revit-2015-export-phase.md) | `PHASE_FILTER_RELEASES`, `set_export_phase` | BIMcollab Revit 2015 example (local only) | 2015 | yes | "positive, on one Revit 2015 project with an export (held out of the corpus, counts only)" |

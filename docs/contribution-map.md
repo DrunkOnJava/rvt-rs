@@ -48,7 +48,7 @@ milestone is for.
 | [#1719](https://github.com/DrunkOnJava/rvt-rs/issues/1719) | Beams with no bounded line in their element data: Revit writes Length, Span, Slope and Roll on 9 BIM4LCA beams that rvt-rs cannot give them (RE-428 residual) |
 | [#1712](https://github.com/DrunkOnJava/rvt-rs/issues/1712) | volume_readings: a round bar cut at a slant has elliptical end faces, which the shell reading leaves as another reason |
 | [#1706](https://github.com/DrunkOnJava/rvt-rs/issues/1706) | Snowdon Towers Architectural: roofs 1916596 and 964559 stay level blocks (a plane edge across a curved face that is not isoparametric; a cylinder face with several trim loops) |
-| [#1698](https://github.com/DrunkOnJava/rvt-rs/issues/1698) | Beams: a body that is not Revit's solid (the office's 8 hollow tubes, 20 of the concrete housing's 22 beams, 10 of the timber housing's 41) |
+| [#1698](https://github.com/DrunkOnJava/rvt-rs/issues/1698) | Beams: a body that is not Revit's solid (the office's 8 hollow tubes are Revit's since RE-470; 20 of the concrete housing's 22 beams, 10 of the timber housing's 41 remain) |
 | [#1635](https://github.com/DrunkOnJava/rvt-rs/issues/1635) | Railings are written as record boxes, about a thousand times Revit's volume, and now sit inside their stairs |
 | [#1589](https://github.com/DrunkOnJava/rvt-rs/issues/1589) | research(rooms): read the height a room's area is taken at, so stepped rooms get their section's outline (follow-up of #90, RE-374) |
 | [#1583](https://github.com/DrunkOnJava/rvt-rs/issues/1583) | Wall-end rule: a wall in a strip that the pass does not read is found by nothing, so the end is drawn through it with no count (RE-337 section 6) |

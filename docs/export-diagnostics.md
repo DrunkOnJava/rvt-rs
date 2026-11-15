@@ -128,6 +128,7 @@ drawn from that reader, or one of its other `*Source` property values
 | `family_type_hollow_section` | `type_hollow_section` | `agreeing` | `parts`: the entries of the column type's parameters `b`, `Ht`, `t` and `kr` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block; the first copy of each, every copy holding the same value. A parameter whose value block holds two different values, or whose copies in two partitions differ, is skipped (the type then has no section): that is not counted as a disagreement among copies. The element's `selected_frame` names the frame whose box the section is held to. |
 | `family_type_i_section` | `type_i_section` | `agreeing` | `parts`: the six entries of the type's I section (width, height, web and flange thickness, the centroid both ways), as for the hollow section. `instance_transform` (as below) gives the plan angle of the column's X axis. On Core Interior, the BIM4LCA office and the RE1 models no element has this body (Measure run 41887789579), so no model of the CI gate reads it; Measure run 42118489328 read it on 557 elements of 5 Autodesk models. |
 | Any body drawn as its type's I section: a beam along its line (`partition_beam_axis`) or a column (`SectionShape` `I` is written exactly then) | `type_i_section` | `agreeing` | As for the column above: `parts`: the six entries of the type's I section. A beam of an I-section type whose body along its line does not hold the section has no `SectionShape` and no such source. No model of the CI gate has one (Measure run 42118489328 at ee449c3b: 557 elements on 5 models, Autodesk's `rstbasicsampleproject` of 2024 to 2027 with 35 each and the Snowdon Towers structural sample with 417), so the test reads none of them. |
+| A beam drawn as its type's rectangular tube (`SectionShape` `RectangleHollow`, `partition_beam_axis`; #1698, RE-470) | `type_tube_section` | `agreeing` | `parts`: the six entries of the beam type's parameters `bf`, `d`, `tf`, `tw`, `ri` and `ra` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block, as for the hollow section above; the wall is the same on both sides (`tf` = `tw`) and the outside radius is the inside radius plus the wall (`ri` = `ra` + `tf`), or the type has no section. Revit 2024 only (`TUBE_BEAM_REVIT_VERSIONS`). The BIM4LCA office's 8 beams of both files are the only elements that have it (Measure run 43667655898: no other export moves), so the test reads them on the office files. |
 | `partition_pipe_axis` | `pipe_connectors` | `agreeing` | `parts`: the two connector entries (`u64` element, `u32` index, `u32` 1, the point) whose points are the pipe's ends, in the partition of its record. An entry is found by where its point falls, never by whose it is (RE-131): at a connected end it is keyed by the element connected there, so a part's `element_id` may be a neighbour of the pipe (a fitting), not the pipe. The radius is the record box's, held in the element's `selected_frame`. Where the pipe's body came from two partitions they agree. |
 | `native_duct_line` | `native_duct` | `native` | The header of the duct's current native record, which gives its line, section and the direction its height lies along (RE-371). |
 | `native_duct_line` | `native_duct_type` | `native` | `parts`: the header of the duct type's current native record, whose sweep profile gives the section's shape, read once for the type and noted for each duct of it. |
@@ -235,7 +236,7 @@ them one, so each has a stated reason and no source:
   `partition_beam_box_along_axis`). Its Cross-Section Rotation (`m_rotation` of
   the beam's `FamilyInstance` record, W7) is a property no `*Source` marks.
 - The numbers of a section's dimensions (an Autodesk I section's among them, and
-  the hollow sections' `b`, `Ht`, `t` and `kr`, whose captions the test checks)
+  the hollow sections' `b`, `Ht`, `t` and `kr` and the tube beams' `bf`, `d`, `tf`, `tw`, `ri` and `ra`, whose captions the test checks)
   are not compared with the export, as below.
 
 An element whose box is the body but whose profile has no source has
@@ -279,7 +280,7 @@ the vertex count the room holds; a type's parameter entry is `f64`, `ff` x 8 and
 an `i64`, in the value block whose owner (declared, as the reader's blocks
 are) is the type, and a section's parts are distinct entries of the expected
 parameters (an I section's six; a hollow section's four, whose captions the
-`ParamElemFamily` elements name `b`, `Ht`, `t` and `kr`); a roof's slope block
+`ParamElemFamily` elements name `b`, `Ht`, `t` and `kr`; a tube beam's six, `bf`, `d`, `tf`, `tw`, `ri` and `ra`); a roof's slope block
 decodes to a slope or a slope arrow, and its sketch line to a line, an arc or a
 spline; a pipe's connector
 entry is the keyed element's `u64`, an index of at most 255, the `u32` 1 and a
