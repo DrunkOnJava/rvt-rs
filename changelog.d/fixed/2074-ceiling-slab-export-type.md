@@ -4,5 +4,6 @@
   and rvt-rs wrote its one ceiling as `IfcSlab` `USERDEFINED` with an
   `IfcSlabType`. Revit's export ignores both values for a ceiling and writes
   `IfcCovering` `CEILING`. The ceiling now ignores them too and is written as
-  Revit writes it, with its covering quantities. The rule rests on that one
-  ceiling, the only one in the corpus whose type carries such a value.
+  Revit writes it, with its covering properties and `GrossArea`, all equal to
+  Revit's. Of the 120 exports measured, held-out ones included, it is the only
+  element that moves, so the rule rests on that one ceiling.
