@@ -924,6 +924,7 @@ const PROFILE_FRAME_READERS: &[&str] = &[
     "type_section",
     "room_solid_faces",
     "type_hollow_section",
+    "type_tube_section",
     "type_i_section",
     "pipe_connectors",
     "family_forms",
@@ -1280,7 +1281,7 @@ pub(crate) fn attach_value_sources(
             // is written only then) is drawn from the type's parameters.
             let drawn_i_section = i_section && reader == "type_i_section";
             // A beam whose body is its type's rectangular tube (#1698), likewise.
-            let drawn_tube = tube_section && reader == "type_hollow_section";
+            let drawn_tube = tube_section && reader == "type_tube_section";
             if !(body_list.contains(&reader)
                 || profile_list.contains(&reader)
                 || property_list.contains(&reader)

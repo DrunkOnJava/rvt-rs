@@ -155,14 +155,20 @@ pub(super) fn attach_column_sections(
                     .push(((*name).into(), InstanceField::Float { value, size: 8 }));
             }
             if let (true, Some(id), Some(type_id)) = (recording, element.id, type_of(element)) {
-                let captions: &[&str] = if beam {
-                    &crate::partition_type_parameters::TUBE_BEAM_PARAMETER_NAMES
+                let (reader, captions): (&str, &[&str]) = if beam {
+                    (
+                        "type_tube_section",
+                        &crate::partition_type_parameters::TUBE_BEAM_PARAMETER_NAMES,
+                    )
                 } else {
-                    &crate::partition_type_parameters::HOLLOW_SECTION_PARAMETER_NAMES
+                    (
+                        "type_hollow_section",
+                        &crate::partition_type_parameters::HOLLOW_SECTION_PARAMETER_NAMES,
+                    )
                 };
                 crate::partition_type_parameters::note_parameter_source(
                     rf,
-                    "type_hollow_section",
+                    reader,
                     (id, type_id),
                     captions.iter().map(|caption| caption.to_string()),
                     &places,
