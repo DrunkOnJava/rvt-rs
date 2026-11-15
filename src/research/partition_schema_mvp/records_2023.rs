@@ -128,6 +128,10 @@ pub(super) fn recover_2023_records(
                 FAMILY_NAME_FIELD.into(),
                 InstanceField::String(native.family_name.clone()),
             ));
+            decoded.fields.push((
+                TYPE_FROM_NATIVE_RECORD_FIELD.into(),
+                InstanceField::Bool(true),
+            ));
         } else if let Some((type_id, type_name)) = system_types.get(&record.element_id) {
             decoded.fields.push((
                 TYPE_ID_FIELD.into(),

@@ -44,6 +44,14 @@ pub const FAMILY_NAME_FIELD: &str = "m_family_name";
 /// Field carrying the type's ElementId (RE-38).
 pub const TYPE_ID_FIELD: &str = "m_type_id";
 
+/// Field set (true) on a Revit 2015 to 2023 door or window whose
+/// [`TYPE_ID_FIELD`], [`TYPE_NAME_FIELD`] and [`FAMILY_NAME_FIELD`] come from its
+/// own native record because the reference-list join found no type
+/// ([`crate::native_instance_types`], RE-475). The scanned material map of that
+/// type id is not the type's: on the spent Revit 2018 project it names a set
+/// apart from Revit's for 53 of 55 windows, so the element takes none.
+pub const TYPE_FROM_NATIVE_RECORD_FIELD: &str = "m_type_from_native_record";
+
 /// Give each element-record element its family and type names (RE-38).
 ///
 /// The record's reference list is read again at its source offset. Its type

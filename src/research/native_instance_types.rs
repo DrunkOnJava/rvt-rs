@@ -8,7 +8,10 @@
 //! Revit's own type id is in the list as an id with neither a record nor a
 //! name. The native record names all of it by member name:
 //! - Revit's type id is the `m_symbolId` of the instance's `InstanceInfo` (the
-//!   Tag of the type in Revit's export, 70 of 70 windows);
+//!   Tag of the type in Revit's export, 70 of 70 windows), or the master symbol
+//!   where the instance is a member of a model group (`ElementGroupMembership`),
+//!   whose symbol is then a copy of the master made for that group's instance
+//!   (the Tag of the type in Revit's export, 2 of 2 doors);
 //! - the type's name is the `SymbolInfo.m_name` of the symbol the instance's
 //!   `m_masterSymbolId` names (equal to Revit's on 70 of 70; the `SymbolInfo` of
 //!   the symbol at `m_symbolId` holds none);
@@ -28,7 +31,8 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceType {
     /// Revit's ElementId for the type: the `m_symbolId` of the instance's
-    /// `InstanceInfo`.
+    /// `InstanceInfo`, or its master symbol's where the instance is a member
+    /// of a model group.
     pub type_id: u64,
     /// The type's name: the `SymbolInfo.m_name` of the instance's master symbol.
     pub type_name: String,
@@ -46,6 +50,18 @@ fn text(graph: &ObjectGraph, class: &str, field: &str) -> Option<String> {
         .and_then(Fv::as_str)
         .filter(|text| !text.is_empty())
         .map(str::to_string)
+}
+
+/// Whether `graph` is the record of a member of a model group: its
+/// `ElementGroupMembership` names a nonzero `m_groupId`.
+fn in_group(graph: &ObjectGraph) -> bool {
+    graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "ElementGroupMembership")
+        .filter_map(|object| object.fields.get("m_groupId"))
+        .filter_map(identifier_u64)
+        .any(|group| group != 0)
 }
 
 /// The nonzero ElementId in `field` of the root object of `graph`.
@@ -74,6 +90,7 @@ pub fn instance_types(
         return Ok(BTreeMap::new());
     }
     let mut drawn_by: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut grouped: BTreeSet<u64> = BTreeSet::new();
     let mut masters: BTreeMap<u64, u64> = BTreeMap::new();
     let mut symbol_names: BTreeMap<u64, String> = BTreeMap::new();
     let mut symbol_families: BTreeMap<u64, u64> = BTreeMap::new();
@@ -115,6 +132,9 @@ pub fn instance_types(
                 if let Some((symbol, master)) = symbol.zip(root_id(graph, "m_masterSymbolId")) {
                     drawn_by.insert(id, symbol);
                     masters.insert(id, master);
+                    if in_group(graph) {
+                        grouped.insert(id);
+                    }
                 }
             }
             _ => {}
@@ -124,7 +144,11 @@ pub fn instance_types(
     Ok(masters
         .iter()
         .filter_map(|(&instance, master)| {
-            let type_id = *drawn_by.get(&instance)?;
+            let type_id = if grouped.contains(&instance) {
+                *master
+            } else {
+                *drawn_by.get(&instance)?
+            };
             let type_name = symbol_names.get(master)?.clone();
             let family_name = family_names.get(symbol_families.get(master)?)?.clone();
             Some((
