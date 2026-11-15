@@ -23,6 +23,15 @@
 //! Scores are clamped to `[0.0, 1.0]`. Callers may raise
 //! [`ScanOptions::min_confidence`] to drop low-signal hits.
 //!
+//! # Budget
+//!
+//! The baseline score is the default minimum, so every tag followed by two
+//! zero bytes is a candidate, and a stream holds at most one for every four
+//! of its bytes. Real files keep millions (see [`DEFAULT_MAX_CANDIDATES`]).
+//! [`ScanOptions::default`] therefore stops at [`DEFAULT_MAX_CANDIDATES`]
+//! candidates in stream order and says so in [`PartitionScan::truncated`];
+//! a file known to hold more sets [`ScanOptions::max_candidates`] to `None`.
+//!
 //! # ElemTable linkage
 //!
 //! When a candidate recovers an ElementId (today: ArcWall singleton
@@ -55,6 +64,22 @@ pub const ENVELOPE_MIN_SIZE: usize = 0x12;
 
 /// Default raw excerpt length hashed into [`PartitionRecordCandidate::excerpt_hash`].
 pub const DEFAULT_EXCERPT_LEN: usize = 64;
+
+/// The most candidates [`ScanOptions::default`] keeps, 2^24 (#1833, site R).
+///
+/// A candidate is a schema tag and two zero bytes, so a stream holds at most
+/// one for every four of its bytes, and each keeps about 250 bytes (160
+/// inline, and three short strings). Real files keep far fewer than that
+/// maximum but still millions: Measure run 43663157788 counted, on the 28
+/// files of Revit 2023 and 2024 it read, at most 9,675,757 candidates in a file
+/// (the BIM4LCA timber office at building permit, 696 MB inflated), 6,531,651
+/// in one stream (Autodesk's Snowdon Towers architectural sample) and, in any
+/// stream, 14.7% of the one-in-four-bytes maximum. The cap leaves 1.7 times
+/// the most any of them keeps. A stream that repeats one tag and two zero bytes
+/// is cut there, after about 4 GB of candidates, where one inflated to the
+/// reader's default limit of 1 GiB (`compression::DEFAULT_MAX_INFLATED_STREAM_BYTES`)
+/// could hold 268 million and fill about 67 GB.
+pub const DEFAULT_MAX_CANDIDATES: usize = 1 << 24;
 
 /// Whether the generic scanner may run for a Revit release.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -154,6 +179,10 @@ impl PartitionRecordCandidate {
 pub struct PartitionScan {
     pub status: PartitionScanStatus,
     pub candidates: Vec<PartitionRecordCandidate>,
+    /// Whether the scan reached [`ScanOptions::max_candidates`] and stopped, so
+    /// the candidates after the cap, if there were any, are not in the list.
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 /// Tunables for [`scan_partitions`] / [`scan_partition_buffer`].
@@ -164,7 +193,9 @@ pub struct ScanOptions {
     pub tag_allowlist: Option<BTreeSet<u16>>,
     /// Drop candidates below this confidence (inclusive lower bound).
     pub min_confidence: f32,
-    /// Hard cap on emitted candidates (stable scan order).
+    /// Hard cap on emitted candidates (stable scan order). The defaults set
+    /// [`DEFAULT_MAX_CANDIDATES`]; `None` removes the cap, for a file known to
+    /// hold more. A scan that reaches it says so in [`PartitionScan::truncated`].
     pub max_candidates: Option<usize>,
     /// Raw excerpt length hashed into `excerpt_hash`.
     pub excerpt_len: usize,
@@ -175,7 +206,7 @@ impl Default for ScanOptions {
         Self {
             tag_allowlist: None,
             min_confidence: 0.55,
-            max_candidates: None,
+            max_candidates: Some(DEFAULT_MAX_CANDIDATES),
             excerpt_len: DEFAULT_EXCERPT_LEN,
         }
     }
@@ -187,7 +218,7 @@ impl ScanOptions {
         Self {
             tag_allowlist: Some(BTreeSet::from([ARC_WALL_TAG])),
             min_confidence: 0.55,
-            max_candidates: None,
+            max_candidates: Some(DEFAULT_MAX_CANDIDATES),
             excerpt_len: DEFAULT_EXCERPT_LEN,
         }
     }
@@ -306,6 +337,7 @@ pub fn scan_partitions_with_control(
         return Ok(PartitionScan {
             status,
             candidates: Vec::new(),
+            truncated: false,
         });
     }
 
@@ -313,6 +345,7 @@ pub fn scan_partitions_with_control(
     let partition_streams = rf.partition_stream_names();
 
     let mut candidates = Vec::new();
+    let mut truncated = false;
     let stream_count = partition_streams.len() as u64;
     for (index, stream) in partition_streams.into_iter().enumerate() {
         control.check()?;
@@ -342,6 +375,7 @@ pub fn scan_partitions_with_control(
         if let Some(max) = options.max_candidates {
             if candidates.len() >= max {
                 candidates.truncate(max);
+                truncated = true;
                 break;
             }
         }
@@ -349,7 +383,11 @@ pub fn scan_partitions_with_control(
 
     control.check()?;
     control.report(Stage::PartitionScan, stream_count, Some(stream_count));
-    Ok(PartitionScan { status, candidates })
+    Ok(PartitionScan {
+        status,
+        candidates,
+        truncated,
+    })
 }
 
 /// Convenience: read BasicFileInfo version, then scan with defaults.
