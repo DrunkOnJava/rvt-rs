@@ -15,12 +15,14 @@
 //! reads:
 //!   wmap <tag> <IFC class> grouped=<0|1> drawn=<id|-> master=<id|-> \
 //!        drawn_map=<read|absent> <names> master_map=<read|absent> <names> \
-//!        drawn_other=<names>
+//!        drawn_other=<names> master_other=<names> family_other=<names> \
+//!        instance_other=<names>
 //! with a map's names `a|b` (each percent-encoded, so a space is `%20` and a
 //! `|` or `+` in a name cannot be taken for a separator), `-` for none, and
-//! `+unset` when some geometry maps to no material (-1); `drawn_other` is the names of the
-//! file's materials that the drawn symbol's record names anywhere but in that
-//! map. Ids and names: the held-out scrub drops these lines, and keeps only
+//! `+unset` when some geometry maps to no material (-1); `*_other` is the names of the
+//! file's materials that the drawn symbol's record, the master symbol's, the
+//! family's (the master's `m_familyId`) and the instance's name anywhere but in
+//! that map. Ids and names: the held-out scrub drops these lines, and keeps only
 //! the scorer's counts.
 //!
 //! Usage:
@@ -46,6 +48,29 @@ fn element_id(value: &Fv) -> Option<u64> {
         .filter(|id| *id != 0)
 }
 
+/// The ids among `ids` that are materials of the file.
+fn materials_among(ids: &BTreeSet<u64>, names: &BTreeMap<u32, String>) -> BTreeSet<u32> {
+    ids.iter()
+        .filter_map(|id| u32::try_from(*id).ok())
+        .filter(|id| names.contains_key(id))
+        .collect()
+}
+
+/// The names of `ids`, encoded and sorted, joined with `|`; `-` for none.
+fn list_names(ids: &BTreeSet<u32>, names: &BTreeMap<u32, String>) -> String {
+    let mut list: Vec<String> = ids
+        .iter()
+        .filter_map(|id| names.get(id))
+        .map(|name| encode(name))
+        .collect();
+    list.sort();
+    if list.is_empty() {
+        "-".into()
+    } else {
+        list.join("|")
+    }
+}
+
 /// `name` with every byte but a letter, digit, `_`, `-`, `.` or `~` as `%XX`.
 fn encode(name: &str) -> String {
     name.bytes()
@@ -65,6 +90,8 @@ struct Instance {
     drawn: Option<u64>,
     master: Option<u64>,
     grouped: bool,
+    /// Every ElementId the record names.
+    named: BTreeSet<u64>,
 }
 
 /// A symbol's `m_geomTag2MaterialId`: the material ids it names, and whether
@@ -75,6 +102,7 @@ struct Map {
     unset: bool,
     /// Materials of the file named in the record outside the map.
     other: BTreeSet<u32>,
+    family: Option<u64>,
 }
 
 /// Every ElementId under `value`.
@@ -134,6 +162,7 @@ fn main() -> anyhow::Result<()> {
             };
             let mut here = Instance::default();
             for object in &graph.objects {
+                all_ids(&object.fields, &mut here.named);
                 match object.class_name.as_str() {
                     "InstanceInfo" => {
                         here.drawn = object.fields.get("m_symbolId").and_then(element_id);
@@ -201,11 +230,12 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-            here.other = elsewhere
-                .into_iter()
-                .filter_map(|id| u32::try_from(id).ok())
-                .filter(|id| names.contains_key(id))
-                .collect();
+            here.other = materials_among(&elsewhere, &names);
+            here.family = graph
+                .objects
+                .first()
+                .and_then(|root| root.fields.get("m_familyId"))
+                .and_then(element_id);
             for entry in entries {
                 let id = entry
                     .pointer("/second/m_id/m_id64")
@@ -248,33 +278,63 @@ fn main() -> anyhow::Result<()> {
         }
         format!("read {text}")
     };
+    // The families the two symbols name, and the materials their records name.
+    let families: BTreeSet<u64> = instances
+        .values()
+        .flat_map(|i| [i.drawn, i.master])
+        .flatten()
+        .filter_map(|id| maps.get(&id).and_then(|map| map.family))
+        .collect();
+    let mut family_materials: BTreeMap<u64, BTreeSet<u32>> = BTreeMap::new();
+    if !families.is_empty() {
+        extract_graphs(
+            &mut rf,
+            &Options {
+                selected_ids: families,
+                releases: NATIVE_RELEASES,
+                ..Options::default()
+            },
+            |record| {
+                let Some(graph) = record.graph.as_ref() else {
+                    return Ok(());
+                };
+                let mut named = BTreeSet::new();
+                for object in &graph.objects {
+                    all_ids(&object.fields, &mut named);
+                }
+                family_materials
+                    .insert(record.identity.element_id, materials_among(&named, &names));
+                Ok(())
+            },
+        )?;
+    }
     let other = |symbol: Option<u64>| -> String {
-        let mut list: Vec<String> = symbol
+        symbol
             .and_then(|id| maps.get(&id))
-            .into_iter()
-            .flat_map(|map| map.other.iter())
-            .filter_map(|id| names.get(id))
-            .map(|name| encode(name))
-            .collect();
-        list.sort();
-        if list.is_empty() {
-            "-".into()
-        } else {
-            list.join("|")
-        }
+            .map_or("-".into(), |map| list_names(&map.other, &names))
     };
     for (tag, class) in &elements {
         let instance = instances.get(tag);
         let drawn = instance.and_then(|i| i.drawn);
         let master = instance.and_then(|i| i.master);
+        let family = drawn
+            .and_then(|id| maps.get(&id))
+            .or_else(|| master.and_then(|id| maps.get(&id)))
+            .and_then(|map| map.family)
+            .and_then(|id| family_materials.get(&id))
+            .map_or("-".into(), |ids| list_names(ids, &names));
+        let instance_other = instance.map_or("-".into(), |i| {
+            list_names(&materials_among(&i.named, &names), &names)
+        });
         println!(
-            "wmap {tag} {class} grouped={} drawn={} master={} drawn_map={} master_map={} drawn_other={}",
+            "wmap {tag} {class} grouped={} drawn={} master={} drawn_map={} master_map={} drawn_other={} master_other={} family_other={family} instance_other={instance_other}",
             u8::from(instance.is_some_and(|i| i.grouped)),
             drawn.map_or("-".into(), |id| id.to_string()),
             master.map_or("-".into(), |id| id.to_string()),
             show(drawn),
             show(master),
             other(drawn),
+            other(master),
         );
     }
     eprintln!(

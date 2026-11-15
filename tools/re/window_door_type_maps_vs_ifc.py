@@ -22,16 +22,18 @@ first of these that holds:
 
     window door type maps: class IfcWindow drawn symbol: equal G, equal with
         the unset material spelled apart H, unset material only I, Revit more
-        found elsewhere in the record J, Revit more not found K, drawn more L,
-        apart M
+        found in the drawn symbol's record J, in the master symbol's K, in the
+        family's L, in the instance's M, Revit more not found N, drawn more O,
+        apart P; Revit spells the unset material apart on Q
 
 - *equal*: the same names.
 - *spelled apart*: the same once the white space around each of Revit's names is
   dropped (Revit 2018's IFC2X3 export names the unset material " <Unnamed>").
 - *unset material only*: the same but for whether `<Unnamed>` is in the set
   (RE-204 and RE-206 decide where Revit writes it).
-- *Revit more*: Revit's set holds names the map does not; *found elsewhere*
-  where every such name is one the drawn symbol's record names outside the map.
+- *Revit more*: Revit's set holds names the map does not; *found in* the first
+  of the drawn symbol's record (outside its map), the master symbol's, the
+  family's and the instance's that names every such name.
 - *drawn more*: the map holds names Revit's set does not.
 - *apart*: anything else.
 
@@ -58,7 +60,8 @@ from element_materials_vs_ifc import by_tag
 UNNAMED = "<Unnamed>"
 LINE = re.compile(
     r"^wmap (\d+) (IFC[A-Z]+) grouped=([01]) drawn=\S+ master=\S+ "
-    r"drawn_map=(read|absent) (\S+) master_map=(read|absent) (\S+) drawn_other=(\S+)$"
+    r"drawn_map=(read|absent) (\S+) master_map=(read|absent) (\S+) "
+    r"drawn_other=(\S+) master_other=(\S+) family_other=(\S+) instance_other=(\S+)$"
 )
 
 
@@ -81,7 +84,9 @@ def other_names(text):
 
 def kind(drawn, revit, elsewhere):
     """How the drawn symbol's set stands against Revit's, in the order of the
-    docstring; `drawn` may be None."""
+    docstring; `drawn` may be None, `elsewhere` the sets the drawn symbol's
+    record, the master symbol's, the family's and the instance's name outside
+    the map, in that order."""
     if drawn == revit:
         return "equal"
     drawn = drawn or set()
@@ -92,21 +97,22 @@ def kind(drawn, revit, elsewhere):
     if plain_drawn == plain_revit:
         return "unset material only"
     if plain_drawn < plain_revit:
-        return (
-            "Revit more found elsewhere in the record"
-            if plain_revit - plain_drawn <= {n.strip() for n in elsewhere}
-            else "Revit more not found"
-        )
+        missing = plain_revit - plain_drawn
+        for label, found in zip(WHERE, elsewhere):
+            if missing <= {n.strip() for n in found}:
+                return f"Revit more found in the {label} record"
+        return "Revit more not found"
     if plain_drawn > plain_revit:
         return "drawn more"
     return "apart"
 
 
+WHERE = ["drawn symbol's", "master symbol's", "family's", "instance's"]
 KINDS = [
     "equal",
     "equal with the unset material spelled apart",
     "unset material only",
-    "Revit more found elsewhere in the record",
+    *[f"Revit more found in the {label} record" for label in WHERE],
     "Revit more not found",
     "drawn more",
     "apart",
@@ -127,20 +133,20 @@ def main():
         match = LINE.match(line.strip())
         if not match:
             continue
-        tag, ifc_class, grouped, d_state, d_text, m_state, m_text, o_text = match.groups()
+        tag, ifc_class, grouped, d_state, d_text, m_state, m_text, *others = match.groups()
         if tag not in revit:
             continue
         entity, theirs = revit[tag]
         if not theirs:
             continue
         drawn, master = names(d_state, d_text), names(m_state, m_text)
-        how = kind(drawn, theirs, other_names(o_text))
+        how = kind(drawn, theirs, [other_names(text) for text in others])
         if listing and how != "equal":
             # Tags and names: the held-out scrub keeps only the count lines.
             shown = lambda found: "|".join(urllib.parse.quote(n, safe="") for n in sorted(found)) if found else "-"
             print(
                 f"differs {tag} {entity} {how.replace(' ', '_')} drawn={shown(drawn)} "
-                f"master={shown(master)} revit={shown(theirs)} other={o_text}"
+                f"master={shown(master)} revit={shown(theirs)} other={' '.join(others)}"
             )
         for key in ((entity, False), (entity, True)) if grouped == "1" else ((entity, False),):
             row = counts[key]
