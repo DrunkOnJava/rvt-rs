@@ -241,29 +241,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       # C3: wait for CI on this commit. A commit whose every file CI's push
-      # filter ignores runs no CI, and deploys at once.
+      # filter ignores runs no CI, and deploys at once. The wait is the composite
+      # action the release preflight uses, which retries an API call and then
+      # fails the step. The inline copy it replaces had no pipefail, so a failed
+      # call looked like a commit CI skips and the deploy went ahead.
       - name: Wait for CI on the commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          if ! gh api "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename' \
-               | grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)'; then
-            echo "CI's push filter skips this commit; deploying it"
-            exit 0
-          fi
-          for _ in $(seq 1 80); do
-            conclusion=$(gh api "repos/${GH_REPO}/commits/${SHA}/check-runs?check_name=CI%20passed" \
-              --jq '[.check_runs[] | select(.status == "completed") | .conclusion] | first // ""')
-            case "$conclusion" in
-              success) echo "CI passed on ${SHA}"; exit 0 ;;
-              "") sleep 60 ;;
-              *) echo "::error::CI concluded ${conclusion} on ${SHA}; not publishing it"; exit 1 ;;
-            esac
-          done
-          echo "::error::CI did not finish on ${SHA} within 80 minutes"
-          exit 1
+        uses: $/.github/actions/wait-for-check
+        with:
+          sha: ${{ github.sha }}
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1
