@@ -107,10 +107,12 @@ concurrency:
 jobs:
   # What the header lists: refused in seconds, before a wheel builds, unless
   # the tag, its signature, its branch, the version files and CI on the tagged
-  # commit are all right. The decisions are tools/ci/release_preflight.py's
-  # (failure-first tests beside it); waiting for CI is the same composite
-  # action Deploy viewer uses. The full history is fetched so the branch check
-  # can ask whether origin/main or an origin/hotfix/* branch holds the commit.
+  # commit are all right. The decisions are tools/ci/release_preflight.py's;
+  # the failure-first tests for them are on main, not on this line, so a
+  # dispatch here rehearses the decisions instead (RELEASE.md, "Hotfix
+  # process"). Waiting for CI is the same composite action Deploy viewer uses.
+  # The full history is fetched so the branch check can ask whether origin/main
+  # or an origin/hotfix/* branch holds the commit.
   preflight:
     name: Preflight (tag, signature, branch, versions, CI)
     runs-on: ubuntu-24.04

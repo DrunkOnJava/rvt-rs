@@ -266,7 +266,9 @@ jobs:
   # need `!failure()` to run) kept running, and `image`, `attest` and `upload`
   # were skipped behind it in a pull request run (run 42134335447), which a
   # release would have done too, publishing nothing.
-  # tools/ci/check-workflows.py fails a job-level `if` on any job above `attest`.
+  # A job-level `if` on a job above `attest` is what skipped them. On main,
+  # tools/ci/check-workflows.py fails one; that check is not on the 0.14 line,
+  # so the rule is kept by hand here.
   python:
     name: Python wheel and sdist (rehearsal only)
     runs-on: ubuntu-24.04
@@ -346,10 +348,11 @@ jobs:
         env:
           UPLOAD: ${{ inputs.upload }}
           WITH_PYTHON: ${{ inputs.upload || inputs.python }}
-          # One wheel for each entry of publish.yml's `build-wheels` matrix, which
-          # tools/ci/check-workflows.py compares this with. Nothing else counts
-          # them: release-binaries does not wait for the PyPI job, whose own count
-          # gates only PyPI. A rehearsal builds one.
+          # One wheel for each entry of publish.yml's `build-wheels` matrix. On
+          # main, tools/ci/check-workflows.py compares the two; that check is not
+          # on the 0.14 line, so the matrix and this number move together by hand
+          # here. Nothing else counts them: release-binaries does not wait for the
+          # PyPI job, whose own count gates only PyPI. A rehearsal builds one.
           RELEASE_WHEELS: "7"
         run: |
           set -euo pipefail
@@ -670,8 +673,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
-          # Counted against the `build` matrix and publish.yml's `build-wheels`
-          # matrix by tools/ci/check-workflows.py.
+          # The counts of this file's `build` matrix and publish.yml's
+          # `build-wheels` matrix. tools/ci/check-workflows.py compares them on
+          # main, not on the 0.14 line, so a leg added to either matrix must move
+          # these numbers, and the one in `checksums` above, in the same change.
           RELEASE_ARCHIVES: "5"
           RELEASE_WHEELS: "7"
         run: |
