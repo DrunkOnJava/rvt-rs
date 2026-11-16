@@ -6,8 +6,12 @@ branch, whose version files all say the tag's version. Pushing the tag is the
 release decision and nobody approves the run, so this refuses before the first
 wheel builds. Everything that decides is a pure function of data already
 fetched (tag_version, check_versions, tag_problems, branch_problems,
-crate_state), so what must never publish is tested with no network, git or
-clock (test_release_preflight.py); the I/O around them only fetches.
+crate_state), so what must never publish can be tested with no network, git or
+clock. Those tests (tools/ci/test_release_preflight.py, run by ci.yml) are on
+`main`, not on the 0.14 line. Here the decisions are covered by a rehearsed
+dispatch of publish.yml on this branch (RELEASE.md, "Hotfix process"), and a
+change to one of them needs that rehearsal again. The I/O around them only
+fetches.
 
 Usage:
   release_preflight.py check --event push|workflow_dispatch --ref-type tag|branch
