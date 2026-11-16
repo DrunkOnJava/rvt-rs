@@ -133,6 +133,12 @@ corpus/**/.DS_Store
 !tests/fixtures/families/**
 !tests/fixtures/families/**/*.rfa
 !tests/fixtures/families/**/*.license.json
+# The saved-graphics batching check needs a project, not a family: this one is
+# 913 KiB, MIT, and carries the licence sidecar the rule above does too.
+!tests/fixtures/saved-batches/
+!tests/fixtures/saved-batches/**
+!tests/fixtures/saved-batches/**/*.rvt
+!tests/fixtures/saved-batches/**/*.license.json
 
 # wasm-pack output (built in CI, not committed)
 pkg/

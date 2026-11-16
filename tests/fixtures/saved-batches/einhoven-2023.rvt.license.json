@@ -1,0 +1,14 @@
+{
+  "source_url": "https://github.com/magnetar-io/revit-test-datasets/blob/main/Revit/Revit_IFC5_Einhoven.rvt",
+  "source_repo": "magnetar-io/revit-test-datasets",
+  "source_path": "Revit/Revit_IFC5_Einhoven.rvt",
+  "source_commit": "fd755e18cec40ed016d06b082f420d796571fef1",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2021 magnetar-io",
+  "sha256": "d3a0c6d37d3f47a1726bc5aa7fe3880ed3c13bbe819b5e64680f6710b15aa948",
+  "bytes": 913408,
+  "revit_release": "2023",
+  "file_type": ".rvt",
+  "redistribution": "public",
+  "notes": "Unmodified Revit 2023 project with the saved display graphics of 2,615 owners, including an owner that names another owner and a symbol that names one. tests/saved_batches.rs reads it both ways and compares the elements and progress events (#1075, #1429, #1808). 913 KiB, small enough to commit, so the check runs without the corpus."
+}
