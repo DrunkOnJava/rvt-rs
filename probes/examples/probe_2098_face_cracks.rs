@@ -14,7 +14,9 @@
 //! other of its triangles has) is set against every other face of the body. It prints:
 //!   body owner=<ElementId> crossing=<n> faces=<n> triangles=<n> boundary=<n>
 //!     over_0.0001=<n> over_0.001=<n> largest=<ft> refused=<why|->
-//!   - `crossing`: the plane-to-parametric edges whose curved side changes both parameters;
+//!   - `crossing`: the plane-to-parametric edges whose curved side changes both parameters,
+//!     then `crossing_by=RuledSurf:<n>,SurfRev:<n>,ConeSurf:<n>`, the same by the curved
+//!     side's class;
 //!   - `over_*` and `largest`: boundary vertices farther than that from every other face.
 //!
 //! then, for a meshed body, a line per pair of surface classes holding a vertex over 0.001 ft:
@@ -39,6 +41,8 @@ use rvt::research::native_saved_mesh::{graphics_with_resolver, pointer};
 type V3 = [f64; 3];
 /// A mesh edge by its two ends, rounded to a millionth of a foot, the lower first.
 type EdgeKey = ([i64; 3], [i64; 3]);
+/// Counts by the curved side's surface class, in the order of `CURVED`.
+type ByClass = [usize; 3];
 /// Vertices far from every other face, by their face's and the nearest face's surface class.
 type Far = BTreeMap<(String, String), (usize, f64)>;
 
@@ -83,9 +87,10 @@ fn surface_class(g: &ObjectGraph, ei: usize, side: usize) -> Option<&str> {
     Some(g.objects[si].class_name.as_str())
 }
 
-/// The plane-to-parametric edges of `g` whose curved side changes both parameters.
-fn crossing_edges(g: &ObjectGraph) -> usize {
-    let mut n = 0;
+/// The plane-to-parametric edges of `g` whose curved side changes both parameters, by the
+/// curved side's class in the order of `CURVED`.
+fn crossing_edges(g: &ObjectGraph) -> ByClass {
+    let mut n = [0; 3];
     for (ei, object) in g.objects.iter().enumerate() {
         if object.class_name != "Edge" {
             continue;
@@ -96,7 +101,10 @@ fn crossing_edges(g: &ObjectGraph) -> usize {
             else {
                 continue;
             };
-            if !CURVED.contains(&own) || other != "Plane" {
+            let Some(class) = CURVED.iter().position(|c| *c == own) else {
+                continue;
+            };
+            if other != "Plane" {
                 continue;
             }
             let mut points = Vec::new();
@@ -123,7 +131,7 @@ fn crossing_edges(g: &ObjectGraph) -> usize {
             }
             let fixed = |k: usize| points.iter().all(|p| (p[k] - points[0][k]).abs() < 1e-7);
             if points.len() >= 2 && !fixed(0) && !fixed(1) {
-                n += 1;
+                n[class] += 1;
             }
         }
     }
@@ -323,11 +331,11 @@ fn main() -> Result<()> {
         ..Default::default()
     };
     // Pass one: each graph's own crossing edges and the symbols it names, keeping no graph.
-    let mut crossing_of: BTreeMap<u64, usize> = BTreeMap::new();
+    let mut crossing_of: BTreeMap<u64, ByClass> = BTreeMap::new();
     let mut symbols_of: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut owners: BTreeSet<u64> = BTreeSet::new();
     let note = |r: &Record,
-                crossing_of: &mut BTreeMap<u64, usize>,
+                crossing_of: &mut BTreeMap<u64, ByClass>,
                 symbols_of: &mut BTreeMap<u64, Vec<u64>>| {
         if let Some(graph) = &r.graph {
             crossing_of.insert(r.identity.element_id, crossing_edges(graph));
@@ -368,15 +376,23 @@ fn main() -> Result<()> {
         }
         seen
     };
-    let mut crossing_total: BTreeMap<u64, usize> = BTreeMap::new();
+    let mut crossing_total: BTreeMap<u64, ByClass> = BTreeMap::new();
     let mut wanted: BTreeSet<u64> = BTreeSet::new();
     for owner in &owners {
         let reach = closure(*owner);
-        let crossing: usize = reach
-            .iter()
-            .map(|id| crossing_of.get(id).copied().unwrap_or(0))
-            .sum();
-        if crossing > 0 {
+        let mut crossing: ByClass = [0; 3];
+        for id in &reach {
+            for (k, n) in crossing_of
+                .get(id)
+                .copied()
+                .unwrap_or([0; 3])
+                .iter()
+                .enumerate()
+            {
+                crossing[k] += n;
+            }
+        }
+        if crossing.iter().sum::<usize>() > 0 {
             crossing_total.insert(*owner, crossing);
             wanted.extend(reach);
         }
@@ -394,10 +410,17 @@ fn main() -> Result<()> {
     }
     let (mut bodies, mut refused, mut triangles, mut over_total) = (0, 0, 0usize, 0);
     let mut largest_total = 0.0_f64;
-    for (owner, crossing) in &crossing_total {
+    for (owner, by_class) in &crossing_total {
         let Some(graph) = kept.get(owner) else {
             continue;
         };
+        let crossing = format!(
+            "{} crossing_by=RuledSurf:{},SurfRev:{},ConeSurf:{}",
+            by_class.iter().sum::<usize>(),
+            by_class[0],
+            by_class[1],
+            by_class[2]
+        );
         bodies += 1;
         match body(graph, &kept) {
             Ok(b) => {
