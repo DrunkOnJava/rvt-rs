@@ -8,14 +8,14 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
-## [0.14.1] — 2026-11-12
+## [0.14.1] — 2026-11-19
 
 0.14.1 is a patch release of 0.14 for users who compare rvt-rs's output
 exactly and so cannot move to 0.15 or later, whose exports differ (#1808). It
 lowers the peak memory of the saved-mesh pass and changes no export: each
 file it writes equals 0.14.0's except for the rvt-rs version it records,
-`0.14.1`, in the header's `FILE_NAME` and in `IfcApplication`. 0.19.0 stays
-the latest release.
+`0.14.1`, in the header's `FILE_NAME` and in `IfcApplication`. It does not
+become the latest release: 0.25.0 is.
 
 ### Fixed
 
@@ -50,6 +50,10 @@ default export) and 43315354501 (`--saved-meshes`, timed). Both measured
 - #1808's reporter measured their own earlier port of #1691, not this
   release's code: 6.8 GB down to 1.8 GB on their model, with an identical
   output. 0.14.1 itself has not been run on that model.
+- #1808's reporter reviewed this release's changes (#1827) and contributed a
+  check that CI runs on every push (#2081): on the Einhoven project (Revit
+  2023, 2,615 owners with saved graphics), the read in batches gives the same
+  elements and the same progress events as the read in one pass.
 
 ## [0.14.0] — 2026-11-04
 
