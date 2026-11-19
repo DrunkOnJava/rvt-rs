@@ -34,7 +34,8 @@
 //! all, one tread of its runs' type thick ([`native_tread_landings`]).
 //!
 //! A run's treads all give one `m_runType`, which names the flight's
-//! predefined type in Revit's export ([`native_run_shapes`], #323). A spiral
+//! predefined type in Revit's export ([`native_run_shapes`], #323), 2 only
+//! where the treads also lie about one centre (#2046). A spiral
 //! run's treads give the spiral's centre and each tread's radii and angles
 //! ([`native_spiral_runs`], #357).
 //!
@@ -228,7 +229,8 @@ pub const NATIVE_RUN_SHAPE_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The `IfcStairFlightTypeEnum` value Revit's export writes for a run whose
 /// treads' `m_runType` is `run_type`: `STRAIGHT` for 0 and `SPIRAL` for 2,
-/// the two values measured (#323).
+/// the two values measured (#323). [`native_run_shapes`] gives 2 only for a
+/// run whose treads lie about one centre (#2046).
 pub fn flight_predefined_type(run_type: i64) -> Option<&'static str> {
     match run_type {
         0 => Some("STRAIGHT"),
@@ -241,14 +243,16 @@ pub fn flight_predefined_type(run_type: i64) -> Option<&'static str> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RunShape {
     /// The `m_runType` every one of its treads gives: 0 on a straight run,
-    /// 2 on a spiral one.
+    /// 2 on a spiral one, whose treads lie about one centre (#2046).
     pub run_type: i64,
     /// The plan direction it climbs in, its first tread's `m_runDirProj`.
     pub direction: Option<[f64; 2]>,
 }
 
 /// Each run in `runs` whose native `StairsTreadInfo` records all give one
-/// `m_runType`, with that value and its climb direction (#323).
+/// `m_runType`, with that value and its climb direction (#323). A run whose
+/// treads all give 2 is left out unless they lie about one centre as a spiral
+/// run's do (#2046).
 pub fn native_run_shapes(
     rf: &mut RevitFile,
     runs: &BTreeSet<u64>,
@@ -279,6 +283,36 @@ pub fn native_run_shapes(
             .map(|t| t.get("m_runType").and_then(Fv::as_i64))
             .collect();
         if let [Some(run_type)] = shapes.into_iter().collect::<Vec<_>>().as_slice() {
+            // Treads that all give 2 do not make a spiral run (#2046): on a
+            // Revit 2027 model with no spiral run, Revit's export writes three
+            // such runs `NOTDEFINED`, as revit-ifc's
+            // `StairsExporter.GetValidatedStairFlightType` does for a run whose
+            // style is not Straight, Spiral or Winder (CLEANROOM.md source 5).
+            // Such a run is a spiral only where its treads lie about one centre
+            // as a spiral run's do ([`spiral`]), and its shape is left out
+            // otherwise.
+            if *run_type == 2 {
+                let mut ordered: Vec<(i64, Fv)> = graph
+                    .objects
+                    .iter()
+                    .filter(|o| o.class_name == "StairsTreadInfo")
+                    .map(|o| {
+                        let index = o.fields["m_startRiser"]["m_specifiedIdx"]
+                            .as_i64()
+                            .unwrap_or(i64::MAX);
+                        (index, o.fields.clone())
+                    })
+                    .collect();
+                ordered.sort_by_key(|(index, _)| *index);
+                let ordered: Vec<Fv> = ordered.into_iter().map(|(_, tread)| tread).collect();
+                let spiral_run = graph
+                    .objects
+                    .first()
+                    .and_then(|root| spiral(&root.fields, &ordered));
+                if spiral_run.is_none() {
+                    return Ok(());
+                }
+            }
             out.insert(
                 record.identity.element_id,
                 RunShape {
