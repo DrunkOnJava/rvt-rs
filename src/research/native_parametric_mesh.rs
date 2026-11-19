@@ -61,13 +61,11 @@ pub struct FaceGrid {
 /// with a spline profile (#2094). There Revit's export of the BIM4LCA timber office's
 /// flights puts the plane's vertices on those lines, and the curved face's side, drawn
 /// straight in its parameters between them, bows off the plane by up to 0.0027 ft.
-fn keeps_saved_chords(surface: &ParametricSurface) -> bool {
-    use crate::native_parametric_surface::Curve;
-    matches!(
-        surface,
-        ParametricSurface::RuledSurf { profile1, profile2, .. }
-            if matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. })
-    )
+///
+/// Experiment (#2098): every parametric face does, so that no plane-to-parametric edge
+/// that crosses both parameters leaves a crack between the two faces' sides of it.
+fn keeps_saved_chords(_surface: &ParametricSurface) -> bool {
+    true
 }
 
 // A face whose trim is the complete rectangle of its parameters (including analytic
