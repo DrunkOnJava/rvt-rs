@@ -85,6 +85,12 @@ through Revit's column, by where the outline is from, and where the line and Rev
 It also repeats the probe's `outlines` and `turncheck` lines: the probe turns the model by 4 degrees itself
 and says on how many ends the line fields come out the same. A probe output without the fields prints none
 of this, and every other line is as before.
+
+S6 offsets ask, for each end whose line extent comes from the column's saved mesh and is off the chord by more
+than 1 per cent, whether the extent is the chord of Revit's column along another line parallel to Revit's beam
+line, offset across the column in plan (41 lines over the column's plan diagonal). Where it is, the column's
+outline is right and the two lines cross the column at different places; the offset of the nearest such line
+is binned. Where it is not, the outline itself differs from Revit's column at the beam.
 """
 
 import collections
@@ -619,6 +625,31 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_degre
 LINE_SOURCES = {"m": "column's saved mesh", "s": "column's section", "b": "column's record box"}
 
 
+OFFSET_BINS = (("under 0.05 ft", 0.05), ("0.05 to 0.2 ft", 0.2), ("0.2 to 0.5 ft", 0.5), ("over 0.5 ft", math.inf))
+OFFSET_STEPS = 20
+
+
+def parallel_chords(triangles, origin, axis, half_width):
+    """The chords of a mesh along lines parallel to `axis`, offset from `origin` across it in plan by up to
+    `half_width` either way in OFFSET_STEPS steps a side: (offset, chord length) for each line that crosses it."""
+    across = numpy.array([-axis[1], axis[0], 0.0])
+    norm = numpy.linalg.norm(across)
+    if norm == 0:
+        return []
+    across = across / norm
+    out = []
+    for i in range(-OFFSET_STEPS, OFFSET_STEPS + 1):
+        offset = half_width * i / OFFSET_STEPS
+        crossing = chord(triangles, origin + offset * across, axis)
+        if crossing is not None:
+            out.append((offset, crossing[1] - crossing[0]))
+    return out
+
+
+def offset_bin(feet):
+    return next(name for name, bound in OFFSET_BINS if abs(feet) < bound)
+
+
 def line_columns(fields):
     """The probe's `line_low` and `line_high` of a beam (S6): end -> (column Tag, t, extent in feet, source),
     read along the beam's own line by the column's own outline."""
@@ -640,6 +671,7 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
     if not any("line_low" in fields or "line_high" in fields for fields in beams.values()):
         return
     ratios = collections.Counter()
+    offsets = collections.Counter()
     joint = collections.defaultdict(collections.Counter)
     seen = collections.Counter()
     for tag, fields in beams.items():
@@ -680,6 +712,20 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
             ratio = ratio_bin(extent, (high - low) * factor)
             ratios[(kind, "all", ratio)] += 1
             ratios[(kind, where, ratio)] += 1
+            if source == "m" and ratio != "within 1 per cent" and ratio != CHORD_NONE:
+                offsets[(kind, "ends off the chord by more than 1 per cent")] += 1
+                box_low, box_high = meshes[column][4]
+                half = float(numpy.linalg.norm((box_high - box_low)[:2])) / 2
+                matches = [
+                    offset
+                    for offset, length in parallel_chords(meshes[column][2], caps[0], axis, half)
+                    if length * factor > 0 and abs(extent / (length * factor) - 1) <= 0.01
+                ]
+                if matches:
+                    nearest = min(matches, key=abs) * factor
+                    offsets[(kind, f"within 1 per cent of a parallel line's chord, offset {offset_bin(nearest)}")] += 1
+                else:
+                    offsets[(kind, "within 1 per cent of no parallel line's chord")] += 1
             near, far = (low, high) if abs(low - middle) < abs(high - middle) else (high, low)
             if far == near:
                 continue
@@ -698,6 +744,19 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
             if parts:
                 label = "" if where == "all" else f", outline from the {where}"
                 print(f"beam ends:   S6, beams {kind}, the line's extent over the chord{label}: {'; '.join(parts)}")
+    for kind in ("in line with a plan axis", "oblique to the plan axes", "of unknown direction"):
+        total = offsets[(kind, "ends off the chord by more than 1 per cent")]
+        if not total:
+            continue
+        parts = [
+            f"{what} {n}"
+            for (k, what), n in sorted(offsets.items())
+            if k == kind and what != "ends off the chord by more than 1 per cent"
+        ]
+        print(
+            f"beam ends:   S6 offsets, beams {kind}, outline from the column's saved mesh, {total} ends off "
+            f"the chord by more than 1 per cent: {'; '.join(parts)}"
+        )
     order = {name: i for i, name in enumerate(FRACTION_BINS)}
     for stands in ("shorter", "same", "longer"):
         for where in LINE_SOURCES.values():
