@@ -284,10 +284,12 @@ pub fn native_run_shapes(
             .collect();
         if let [Some(run_type)] = shapes.into_iter().collect::<Vec<_>>().as_slice() {
             // Treads that all give 2 do not make a spiral run (#2046): on a
-            // Revit 2027 model with no spiral run, Revit's export writes three
-            // such runs `NOTDEFINED`, as revit-ifc's
-            // `StairsExporter.GetValidatedStairFlightType` does for a run whose
-            // style is not Straight, Spiral or Winder (CLEANROOM.md source 5).
+            // Revit 2027 model with no spiral run, Revit's export does not call
+            // three such runs spiral (their flights' types are `USERDEFINED`
+            // with an `ElementType` of `NOTDEFINED`), as revit-ifc's
+            // `StairsExporter.GetValidatedStairFlightType` gives `NOTDEFINED`
+            // for a run whose style is not Straight, Spiral or Winder
+            // (CLEANROOM.md source 5).
             // Such a run is a spiral only where its treads lie about one centre
             // as a spiral run's do ([`spiral`]), and its shape is left out
             // otherwise.
