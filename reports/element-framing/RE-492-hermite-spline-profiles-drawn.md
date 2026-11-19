@@ -48,8 +48,8 @@ Measure [44536807887](https://github.com/DrunkOnJava/rvt-rs/actions/runs/4453680
 **Nothing else scored moves.**
 - No other `mesh_bodies_vs_ifc`, `saved_meshes_vs_ifc`, `roof_bodies_vs_ifc` or `stair_bodies_vs_ifc` count changes, and no `psets_vs_ifc` or `qtos_vs_ifc` line.
 - Against the reader alone, 4 exports change and 8 bodies move, every one among the bodies the reader newly drew.
-- No held-out export changes against the reader alone. Against `main`, one does: the held-out single-dwelling house, whose kept counts do not move. Its export is not kept, so what moved there is not read.
-- The same-project gates pass.
+- No held-out export changes against the reader alone. Against `main`, one does: the held-out single-dwelling house, whose kept counts do not move (19 bodies drawn from saved graphics scored, 28 record boxes), so no body is newly drawn there that a scorer sees. Its export is not kept, so what moved is not read, and row 3's figures leave it out.
+- The same-project gates pass. Against `main` they are exercised by one beam, newly drawn on each `rac_advanced` save of 2025 to 2027 and held to its 2024 save; on the `rac_basic` saves only a refusal's text changes.
 
 **Counted, not scored.** Bodies drawn from saved graphics against `main`, from `diagnostics.json` on the 102 models that keep one: 25 more on 10 files.
 
@@ -70,7 +70,7 @@ Other bodies that held a Hermite profile stay boxes, now refused for the next pa
 ## 4. Not claimed
 
 - **Any body the samples hold.** The 17 newly drawn bodies on `rac_advanced` and Snowdon Towers have no Revit export to score them.
-- **A fallback that leaves no trace.** Where putting a ruled face's vertices on the saved points' lines would leave a triangle with no area, the face keeps its points on the surface and the plane still takes the saved points. The two then part as they did with the plane alone moved. No diagnostic says so: this is not a work stop, and the saved meshes are meshed on worker threads, whose budget notes are dropped (`budget`), so a note would have to travel back in each face's mesh. On the two flights the probe shows that none fell back. On the ramps the body moved, which a fallback alone would not have done, since the plane's side does not move there. Elsewhere it is not measured.
+- **A fallback that leaves no trace.** Where putting a ruled face's vertices on the saved points' lines would leave a triangle with no area, the face keeps its points on the surface and the plane still takes the saved points. The two then part as they did with the plane alone moved. No diagnostic says so: this is not a work stop, and the saved meshes are meshed on worker threads, whose budget notes are dropped (`budget`), so a note would have to travel back in each face's mesh. On the two flights the probe shows that none fell back. On the ramps the body moved, which a fallback alone would not have done, since the plane's side does not move there: so the placement ran on at least one of their faces, and whether any other fell back is not measured. Elsewhere it is not measured either.
 - **Any other edge.** This change touches only edges between a plane and a spline ruled face whose samples cross both of its parameters. Faces that part along other edges are #2098's.
 - **Why two scorers disagreed on the flights' volume** before this change (`stair_bodies_vs_ifc` 0.2% under Revit's, `mesh_bodies_vs_ifc` within 0.01%). They agree now, and the cause was not measured.
 - **`GNurbSpline` profiles**, which stay unread.
