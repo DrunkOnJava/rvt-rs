@@ -2105,7 +2105,7 @@ fn band_mesh(
             }
         }
         ensure!(
-            crossings.len() % 2 == 0,
+            crossings.len().is_multiple_of(2),
             "cylinder trim rings cross a strip an odd number of times"
         );
         crossings.sort_by(|a, b| (a[0] + a[1]).total_cmp(&(b[0] + b[1])));
