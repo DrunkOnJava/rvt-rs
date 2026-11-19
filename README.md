@@ -108,6 +108,14 @@ Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`
 
 `rvt-analyze --redact path/to/your.rfa` prints a file report: identity, upgrade history, format anchors, the schema table, the schema-to-data link histogram, content metadata and a disclosure scan. Every command with an example, the Rust library's modules and the research probes are in [`docs/library.md`](docs/library.md).
 
+## Built on rvt-rs
+
+Projects by other people that use rvt-rs as their reader. Each is its own project, with its own claims and measurements; rvt-rs does not measure them.
+
+- [rvt-prt](https://github.com/puzzbobb/rvt-prt) (Apache-2.0, by puzzbobb) prints a project's sheets to vector PDF without Revit, and also writes DWFx and DXF. It builds on the `rvt` crate's reader, its IFC model and its element meshes, and measures itself against Revit's own PDF, DWFx and DXF exports.
+
+Built something on rvt-rs? Open a [discussion](https://github.com/DrunkOnJava/rvt-rs/discussions) and it will be listed here.
+
 ## For contributors
 
 Use the [Codespaces development environment](docs/codespaces.md) for remote

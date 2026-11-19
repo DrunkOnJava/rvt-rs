@@ -1,0 +1,16 @@
+# Five standalone Revit families that CI's Corpus health job fetches for real-file targets of the
+# family form readers: three Revit 2014 families with extrusions, read through RVT_FAMILY_2014_DIR, and
+# two Revit 2020 families with blends, read through RVT_FAMILY_BLEND_DIR.
+# Fetched by tools/ci/fetch-family-files.sh into one directory, which both variables name, and never
+# committed. Four are test files of DynamoDS/DynamoRevit (Apache-2.0), pinned to a commit and saved under
+# the names the targets read (the path under the repository's root, its separators written as two
+# underscores). The fifth is from magnetar-io/revit-test-datasets (MIT), at the commit
+# .github/actions/fetch-corpus pins for the project corpus; it is a Git LFS object, so it is read from
+# the media host.
+# Each row: `file`, the URL, the name it is saved under, its sha256 and its byte count. Sizes and
+# hashes measured 2026-11-19.
+file	https://raw.githubusercontent.com/DynamoDS/DynamoRevit/a8d3f454793ddf3bab3dcdf2587bf10f0e90efd8/test/System/DividedCurve/DividedCurve.rfa	test__System__DividedCurve__DividedCurve.rfa	0fd3541da74d9b4bb4280fef48e072efd70d90cef78f7743f0a92e0086267404	405504
+file	https://raw.githubusercontent.com/DynamoDS/DynamoRevit/a8d3f454793ddf3bab3dcdf2587bf10f0e90efd8/test/System/Selection/Selection.0001.rfa	test__System__Selection__Selection.0001.rfa	c1c5009b2d2566b0c92ea541d5eab42939ca889c128aa72f51580569db7a7a2a	782336
+file	https://raw.githubusercontent.com/DynamoDS/DynamoRevit/a8d3f454793ddf3bab3dcdf2587bf10f0e90efd8/test/System/Selection/Selection.0002.rfa	test__System__Selection__Selection.0002.rfa	6090879c55499d899587253cd2dbe1ca1bfaac300fbb47be3bbbf9ccb9037e6a	860160
+file	https://raw.githubusercontent.com/DynamoDS/DynamoRevit/a8d3f454793ddf3bab3dcdf2587bf10f0e90efd8/test/System/FamilyDocument/familyDocumentTests.rfa	test__System__FamilyDocument__familyDocumentTests.rfa	43396c7fd86788643326f0b7bc24978554ac484ff263f612231bd253fd40eafb	720896
+file	https://media.githubusercontent.com/media/magnetar-io/revit-test-datasets/fd755e18cec40ed016d06b082f420d796571fef1/Revit/Families/Structural%20Columns/Column_Square_Tollerance.rfa	Column_Square_Tollerance.rfa	7fc2c31851d25c6611418cbb50c3e6a0cfaecdf345f012ecde7058fe596d512f	372736
