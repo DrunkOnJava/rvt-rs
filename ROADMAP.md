@@ -407,6 +407,12 @@ the four levels a file can reach are in the
   Revit's checks and the length of Revit's own `Axis` does, 8 of 8 within
   1e-4 ft, #2069), and `[0.25.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists what
   each change does not measure.
+- **0.14.1, 2026-11-19.** A patch to the 0.14 line, for users who compare
+  rvt-rs's output exactly and so cannot take a later release's changed exports
+  (#1808). It lowers the peak memory of the saved-mesh pass and changes no
+  export: on the 112 models measured, each file equals 0.14.0's but for the
+  version it records. It is not the latest release, which stays 0.25.0, and it
+  was not run on the reporter's own model before it shipped.
 
 ### 0.26.0: IFC geometry and element data
 
