@@ -33,12 +33,14 @@
 //!     classes in the family's document (`absent` where it has none) and what its graphics
 //!     draw (`-` where it has none);
 //!   nested_family family=<ElementId> instances=<n> documents=<n> extrusions=<n> voids=<n>
-//!     others=<n> rebuilt=<yes:solids|why not>: for a family with no form the rebuild knows
-//!     that nests instances, their families' own documents found and what those hold; where
-//!     every nested family's extrusions rebuild by the same rules, they are placed in the
-//!     family by the transform each nested instance's saved graphics hold, and a boxed
-//!     instance is drawn from them placed by its own (`rebuilt=from_nested_family`, and
-//!     `nested=` on its line says how its family's nested families went);
+//!     revolutions=<n> forms=<class:n,...> rebuilt=<yes:solids+triangles|why not>: for a
+//!     family with no form the rebuild knows that nests instances, their families' own
+//!     documents found and what those hold (`forms`: every model form but extrusions, nested
+//!     instances included); where every nested family's extrusions rebuild by the same rules
+//!     and its revolutions mesh by the shared revolution reader, with no other form, they are
+//!     placed in the family by the transform each nested instance's saved graphics hold, and
+//!     a boxed instance is drawn from them placed by its own (`rebuilt=from_nested_family`,
+//!     and `nested=` on its line says how its family's nested families went);
 //!   formless family=<ElementId> records=<n> drawing=<class:n,...> classes=<class:n,...>: for
 //!     each family with no
 //!     extrusion and no other form the rebuild knows, every record class its document holds,
@@ -295,17 +297,93 @@ fn nested_transform(graph: &ObjectGraph) -> Option<([V3; 3], V3)> {
     Some((matrix, triple(trf.get("m_or")?)?))
 }
 
-/// The extrusions of a formless family's nested families, each rebuilt by the rules of
-/// [`family`] from its own document and placed in the formless family's coordinates by
-/// its nested instance's saved transform, where every nested instance's are; else why
-/// not. With a summary line's fields: nested instances, their families' documents found,
-/// and those documents' extrusions, voids and other forms.
+/// What a formless family's nested families draw, in the formless family's coordinates:
+/// their extrusions as solids and their revolutions as meshes.
+#[derive(Default)]
+struct NestedBodies {
+    solids: Vec<ExtrusionSolid>,
+    vertices: Vec<V3>,
+    triangles: Vec<[usize; 3]>,
+}
+
+/// What one nested family's own document draws, in its own coordinates, or why not:
+/// its extrusions by the rules of [`family`] and its revolutions by the shared revolution
+/// reader (`FormDocument::revolution`, the one `--family-revolutions` uses). A sweep, blend
+/// or swept blend refuses it, as the rebuild draws none of them.
+struct NestedFamily {
+    extrusions: usize,
+    voids: usize,
+    revolutions: usize,
+    /// Every model form class its document holds but extrusions, counted.
+    forms: BTreeMap<String, usize>,
+    bodies: Result<NestedBodies, String>,
+}
+
+fn nested_family(records: Vec<(u64, ObjectGraph)>) -> NestedFamily {
+    let mut forms: BTreeMap<String, usize> = BTreeMap::new();
+    for (_, graph) in &records {
+        if let Some(root) = graph.objects.first().filter(|root| {
+            OTHER_FORMS.contains(&root.class_name.as_str())
+                || ["FreeFormElement", "ImportInstance", "FamilyInstance"]
+                    .contains(&root.class_name.as_str())
+        }) {
+            *forms.entry(root.class_name.clone()).or_default() += 1;
+        }
+    }
+    let mut document = FormDocument::default();
+    for (record, graph) in records {
+        document.insert(record, graph);
+    }
+    let own = family(&document, 0);
+    let revolution_ids = document.revolution_ids();
+    let undrawn: Vec<&String> = forms
+        .keys()
+        .filter(|class| class.as_str() != "RevolutionElem")
+        .collect();
+    let bodies = (|| -> Result<NestedBodies, String> {
+        if let Some(class) = undrawn.first() {
+            return Err(format!("{class} not drawn"));
+        }
+        let mut bodies = NestedBodies::default();
+        if own.extrusions > 0 {
+            bodies.solids = own.solids.clone()?;
+        }
+        for id in &revolution_ids {
+            let mesh = document
+                .revolution(*id)
+                .and_then(|r| r.mesh())
+                .map_err(|why| format!("revolution {why}"))?;
+            let base = bodies.vertices.len();
+            bodies.vertices.extend(mesh.vertices);
+            bodies
+                .triangles
+                .extend(mesh.triangles.iter().map(|t| t.map(|i| base + i)));
+        }
+        if bodies.solids.is_empty() && bodies.triangles.is_empty() {
+            return Err("no form drawn".to_string());
+        }
+        Ok(bodies)
+    })();
+    NestedFamily {
+        extrusions: own.extrusions,
+        voids: own.voids,
+        revolutions: revolution_ids.len(),
+        forms,
+        bodies,
+    }
+}
+
+/// What a formless family's nested families draw, each rebuilt from its own document by
+/// [`nested_family`] and placed in the formless family's coordinates by its nested
+/// instance's saved transform, where every nested instance's are; else why not. With a
+/// summary line's fields: nested instances, their families' documents found, and those
+/// documents' extrusions, voids, revolutions and other forms.
 fn nested_family_solids(
     nested: &[u64],
     items: &[(u64, ObjectGraph)],
     graphics: &BTreeMap<u64, &ObjectGraph>,
     documents: FamilyRecords,
-) -> (String, Result<Vec<ExtrusionSolid>, String>) {
+) -> (String, Result<NestedBodies, String>) {
     let root = |id: u64, class: &str| {
         items
             .iter()
@@ -313,25 +391,13 @@ fn nested_family_solids(
             .filter_map(|(_, graph)| graph.objects.first())
             .find(|root| root.class_name == class)
     };
-    let mut read: BTreeMap<u64, Family> = BTreeMap::new();
-    for (family_id, records) in documents {
-        let others = records
-            .iter()
-            .filter(|(_, graph)| {
-                graph
-                    .objects
-                    .first()
-                    .is_some_and(|root| OTHER_FORMS.contains(&root.class_name.as_str()))
-            })
-            .count();
-        let mut document = FormDocument::default();
-        for (record, graph) in records {
-            document.insert(record, graph);
-        }
-        read.insert(family_id, family(&document, others));
-    }
-    let (mut found, mut extrusions, mut voids, mut others) = (0, 0, 0, 0);
-    let mut solids = Vec::new();
+    let read: BTreeMap<u64, NestedFamily> = documents
+        .into_iter()
+        .map(|(family_id, records)| (family_id, nested_family(records)))
+        .collect();
+    let (mut found, mut extrusions, mut voids, mut revolutions) = (0, 0, 0, 0);
+    let mut forms: BTreeMap<String, usize> = BTreeMap::new();
+    let mut placed = NestedBodies::default();
     let mut refused: Option<String> = None;
     for instance in nested {
         let family_id = root(*instance, "FamilyInstance")
@@ -347,45 +413,96 @@ fn nested_family_solids(
         found += 1;
         extrusions += nested_family.extrusions;
         voids += nested_family.voids;
-        others += nested_family.others;
+        revolutions += nested_family.revolutions;
+        for (class, n) in &nested_family.forms {
+            *forms.entry(class.clone()).or_default() += n;
+        }
         let Some((matrix, origin)) = graphics.get(instance).copied().and_then(nested_transform)
         else {
             refused.get_or_insert("no nested transform".to_string());
             continue;
         };
-        match &nested_family.solids {
+        let carry =
+            |v: V3| [0usize, 1, 2].map(|i| (0..3).map(|j| matrix[i][j] * v[j]).sum::<f64>());
+        let place = |v: V3| {
+            let moved = carry(v);
+            [0usize, 1, 2].map(|i| origin[i] + moved[i])
+        };
+        match &nested_family.bodies {
             Ok(own) => {
-                let carry = |v: V3| {
-                    [0usize, 1, 2].map(|i| (0..3).map(|j| matrix[i][j] * v[j]).sum::<f64>())
-                };
-                for solid in own {
-                    let moved = carry(solid.frame.origin);
-                    solids.push(ExtrusionSolid {
+                for solid in &own.solids {
+                    placed.solids.push(ExtrusionSolid {
                         profile: solid.profile.clone(),
                         frame: Frame {
-                            origin: [0usize, 1, 2].map(|i| origin[i] + moved[i]),
+                            origin: place(solid.frame.origin),
                             axes: solid.frame.axes.map(carry),
                         },
                         low: solid.low,
                         high: solid.high,
                     });
                 }
+                let base = placed.vertices.len();
+                placed
+                    .vertices
+                    .extend(own.vertices.iter().map(|v| place(*v)));
+                placed
+                    .triangles
+                    .extend(own.triangles.iter().map(|t| t.map(|i| base + i)));
             }
             Err(why) => {
                 refused.get_or_insert(format!("nested {why}"));
             }
         }
     }
+    let listed: Vec<String> = forms.iter().map(|(c, n)| format!("{c}:{n}")).collect();
     let summary = format!(
-        "instances={} documents={found} extrusions={extrusions} voids={voids} others={others}",
-        nested.len()
+        "instances={} documents={found} extrusions={extrusions} voids={voids} revolutions={revolutions} forms={}",
+        nested.len(),
+        if listed.is_empty() {
+            "-".to_string()
+        } else {
+            listed.join(",")
+        }
     );
     let result = match refused {
         Some(why) => Err(why),
-        None if solids.is_empty() => Err("nested no extrusion".to_string()),
-        None => Ok(solids),
+        None if placed.solids.is_empty() && placed.triangles.is_empty() => {
+            Err("nested no form drawn".to_string())
+        }
+        None => Ok(placed),
     };
     (summary, result)
+}
+
+/// The enclosed volume of a closed mesh about its own centre, and its box.
+fn mesh_volume_box(vertices: &[V3], triangles: &[[usize; 3]]) -> (f64, V3, V3) {
+    let mut low = [f64::INFINITY; 3];
+    let mut high = [f64::NEG_INFINITY; 3];
+    for v in vertices {
+        for k in 0..3 {
+            low[k] = low[k].min(v[k]);
+            high[k] = high[k].max(v[k]);
+        }
+    }
+    let n = vertices.len().max(1) as f64;
+    let centre: V3 = [0usize, 1, 2].map(|k| vertices.iter().map(|v| v[k]).sum::<f64>() / n);
+    let volume = triangles
+        .iter()
+        .map(|t| {
+            let [a, b, c] = t.map(|i| {
+                let v = vertices[i];
+                [v[0] - centre[0], v[1] - centre[1], v[2] - centre[2]]
+            });
+            let cross = [
+                b[1] * c[2] - b[2] * c[1],
+                b[2] * c[0] - b[0] * c[2],
+                b[0] * c[1] - b[1] * c[0],
+            ];
+            (a[0] * cross[0] + a[1] * cross[1] + a[2] * cross[2]) / 6.0
+        })
+        .sum::<f64>()
+        .abs();
+    (volume, low, high)
 }
 
 /// A why-not with its digits written as `#`, so that reasons that differ only in a number are
@@ -493,7 +610,7 @@ fn main() -> Result<()> {
     // document and placed by its nested instance's saved transform.
     let mut nested_records =
         nested_family_records_in(&mut rf, &formless, &classes, &Options::default().releases)?;
-    let mut nested_solids: BTreeMap<u64, Result<Vec<ExtrusionSolid>, String>> = BTreeMap::new();
+    let mut nested_solids: BTreeMap<u64, Result<NestedBodies, String>> = BTreeMap::new();
     for (id, items) in &everything {
         let graphics: BTreeMap<u64, &ObjectGraph> = items
             .iter()
@@ -611,7 +728,7 @@ fn main() -> Result<()> {
             println!(
                 "nested_family family={id} {summary} rebuilt={}",
                 match &result {
-                    Ok(solids) => format!("yes:{}", solids.len()),
+                    Ok(bodies) => format!("yes:{}+{}", bodies.solids.len(), bodies.triangles.len()),
                     Err(why) => reason(why),
                 }
             );
@@ -715,8 +832,8 @@ fn main() -> Result<()> {
         if nested_mesh.is_some() {
             rebuilt = "from_nested_graphics".to_string();
         }
-        // A formless family whose nested families' extrusions all rebuild: those,
-        // placed by the project instance's transform.
+        // A formless family whose nested families' extrusions and revolutions all rebuild:
+        // those, placed by the project instance's transform.
         let nested_state = family_id.and_then(|f| nested_solids.get(&f));
         let from_nested = nested_state
             .filter(|_| solids.is_none() && nested_mesh.is_none())
@@ -728,7 +845,7 @@ fn main() -> Result<()> {
             .entry(format!("{class} rebuilt {rebuilt}"))
             .or_default() += 1;
         let placed_solids: Option<Vec<ExtrusionSolid>> = solids
-            .or(from_nested)
+            .or(from_nested.map(|bodies| &bodies.solids))
             .zip(transform)
             .map(|(solids, transform)| solids.iter().map(|s| placed(s, transform)).collect());
         if solids.is_some() {
@@ -739,56 +856,43 @@ fn main() -> Result<()> {
             };
             *tally.entry(key.to_string()).or_default() += 1;
         }
-        let (volume, low, high) = match &placed_solids {
-            Some(solids) => {
-                let mut low = [f64::INFINITY; 3];
-                let mut high = [f64::NEG_INFINITY; 3];
-                for solid in solids {
-                    let (a, b) = solid.bounding_box();
-                    for k in 0..3 {
-                        low[k] = low[k].min(a[k]);
-                        high[k] = high[k].max(b[k]);
-                    }
+        // The nested families' revolution meshes, placed by the project instance's transform.
+        let nested_family_mesh = from_nested
+            .filter(|bodies| !bodies.triangles.is_empty())
+            .zip(transform)
+            .map(|(bodies, transform)| {
+                let carry = |v: V3| {
+                    [0usize, 1, 2].map(|i| {
+                        transform.origin[i]
+                            + (0..3).map(|j| transform.axes[j][i] * v[j]).sum::<f64>()
+                    })
+                };
+                let placed: Vec<V3> = bodies.vertices.iter().map(|v| carry(*v)).collect();
+                (placed, &bodies.triangles)
+            });
+        // Every part drawn (solids, then meshes): its volume and box, summed and joined.
+        let mut parts: Vec<(f64, V3, V3)> = Vec::new();
+        for solid in placed_solids.iter().flatten() {
+            let (a, b) = solid.bounding_box();
+            parts.push((solid.volume(), a, b));
+        }
+        for (vertices, triangles) in nested_mesh.iter().chain(nested_family_mesh.iter()) {
+            parts.push(mesh_volume_box(vertices, triangles));
+        }
+        let (volume, low, high) = if parts.is_empty() {
+            ("-".to_string(), "-".to_string(), "-".to_string())
+        } else {
+            let mut low = [f64::INFINITY; 3];
+            let mut high = [f64::NEG_INFINITY; 3];
+            for (_, a, b) in &parts {
+                for k in 0..3 {
+                    low[k] = low[k].min(a[k]);
+                    high[k] = high[k].max(b[k]);
                 }
-                let volume: f64 = solids.iter().map(ExtrusionSolid::volume).sum();
-                let point = |p: V3| format!("{:.6},{:.6},{:.6}", p[0], p[1], p[2]);
-                (format!("{volume:.6}"), point(low), point(high))
             }
-            None => match &nested_mesh {
-                Some((vertices, triangles)) => {
-                    let mut low = [f64::INFINITY; 3];
-                    let mut high = [f64::NEG_INFINITY; 3];
-                    for v in vertices {
-                        for k in 0..3 {
-                            low[k] = low[k].min(v[k]);
-                            high[k] = high[k].max(v[k]);
-                        }
-                    }
-                    // The enclosed volume about the mesh's own centre, as the scorers take it.
-                    let n = vertices.len() as f64;
-                    let centre: V3 =
-                        [0usize, 1, 2].map(|k| vertices.iter().map(|v| v[k]).sum::<f64>() / n);
-                    let volume = triangles
-                        .iter()
-                        .map(|t| {
-                            let [a, b, c] = t.map(|i| {
-                                let v = vertices[i];
-                                [v[0] - centre[0], v[1] - centre[1], v[2] - centre[2]]
-                            });
-                            let cross = [
-                                b[1] * c[2] - b[2] * c[1],
-                                b[2] * c[0] - b[0] * c[2],
-                                b[0] * c[1] - b[1] * c[0],
-                            ];
-                            (a[0] * cross[0] + a[1] * cross[1] + a[2] * cross[2]) / 6.0
-                        })
-                        .sum::<f64>()
-                        .abs();
-                    let point = |p: V3| format!("{:.6},{:.6},{:.6}", p[0], p[1], p[2]);
-                    (format!("{volume:.6}"), point(low), point(high))
-                }
-                None => ("-".to_string(), "-".to_string(), "-".to_string()),
-            },
+            let volume: f64 = parts.iter().map(|(v, _, _)| v).sum();
+            let point = |p: V3| format!("{:.6},{:.6},{:.6}", p[0], p[1], p[2]);
+            (format!("{volume:.6}"), point(low), point(high))
         };
         println!(
             "instance tag={id} class={class} refusal={refusal} family={} extrusions={} voids={} others={} rebuilt={rebuilt} transform={} nested={} volume={volume} low={low} high={high}",
@@ -799,7 +903,8 @@ fn main() -> Result<()> {
             if transform.is_some() { "yes" } else { "no" },
             match nested_state {
                 None => "-".to_string(),
-                Some(Ok(solids)) => format!("yes:{}", solids.len()),
+                Some(Ok(bodies)) =>
+                    format!("yes:{}+{}", bodies.solids.len(), bodies.triangles.len()),
                 Some(Err(why)) => reason(why),
             },
         );
