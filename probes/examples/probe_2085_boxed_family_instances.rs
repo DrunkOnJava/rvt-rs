@@ -25,6 +25,13 @@
 //!     graphics for, and those whose graphics mesh whole. Where every one does, a boxed
 //!     instance of the family is drawn from those meshes placed by its transform
 //!     (`rebuilt=from_nested_graphics`), and its `volume`, `low` and `high` are that mesh's;
+//!   nested_empty family=<ElementId> instance=<ElementId> objects=<class:n,...> detail1=<n>
+//!     detail2=<n> master=<id:classes:triangles> referenced=<id:classes:triangles,...>: for a
+//!     nested instance whose graphics mesh whole but draw no triangle, where its solids are:
+//!     what its graphics hold, what they draw at the coarse and medium detail levels, and for
+//!     its symbol and each symbol its graphics' instance records name, that id's record
+//!     classes in the family's document (`absent` where it has none) and what its graphics
+//!     draw (`-` where it has none);
 //!   formless family=<ElementId> records=<n> drawing=<class:n,...> classes=<class:n,...>: for
 //!     each family with no
 //!     extrusion and no other form the rebuild knows, every record class its document holds,
@@ -42,11 +49,14 @@ use anyhow::Result;
 use rvt::RevitFile;
 use rvt::ifc::entities::{IfcEntity, PropertyValue};
 use rvt::ifc::{ExportOptions, run_export};
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Options};
 use rvt::research::native_family_forms::family_records_in;
 use rvt::research::native_form_geometry::{ExtrusionSolid, FormDocument, Frame};
 use rvt::research::native_parameters::ObjectGraph;
-use rvt::research::native_saved_mesh::{graphics_including_filtered, graphics_with_resolver};
+use rvt::research::native_saved_mesh::{
+    graphics_including_filtered, graphics_with_resolver, graphics_with_resolver_at_detail,
+};
 use rvt::research::partition_instance_transforms::{InstanceTransform, scan_instance_transforms};
 
 /// The refusals of a body the file holds nothing to draw from.
@@ -151,6 +161,104 @@ fn placed(solid: &ExtrusionSolid, transform: &InstanceTransform) -> ExtrusionSol
         low: solid.low,
         high: solid.high,
     }
+}
+
+/// An ElementId field's value, in either saved shape (`m_id` or `m_id64`).
+fn element_id(value: &Fv) -> Option<u64> {
+    if let Some(n) = value.as_i64() {
+        return u64::try_from(n).ok();
+    }
+    ["m_id", "m_id64"]
+        .iter()
+        .find_map(|key| value.get(*key))
+        .and_then(element_id)
+}
+
+/// Triangles `graph` meshes to, drawn and not hidden or filtered, at `detail`.
+fn drawn_triangles<'a>(
+    graph: &'a ObjectGraph,
+    graphics: &BTreeMap<u64, &'a ObjectGraph>,
+    detail: i64,
+) -> String {
+    let meshes =
+        graphics_with_resolver_at_detail(graph, &|other| graphics.get(&other).copied(), detail);
+    if !meshes.diagnostics.is_empty() {
+        return "refused".to_string();
+    }
+    meshes
+        .primitives
+        .iter()
+        .filter(|p| !p.hidden && !p.filtered)
+        .map(|p| p.triangles.len())
+        .sum::<usize>()
+        .to_string()
+}
+
+/// Where the solids of a nested instance whose saved graphics mesh whole but draw no
+/// triangle are: its graphics' object classes, what it draws at the coarse and medium
+/// detail levels, and, for its symbol (`m_masterSymbolId`) and every symbol its graphics'
+/// instance records name (`InstanceInfo.m_symbolId`), the classes of that id's records in
+/// the family's document and the triangles of its graphics there, at fine detail.
+fn empty_nested<'a>(
+    family: u64,
+    instance: u64,
+    graph: &'a ObjectGraph,
+    items: &'a [(u64, ObjectGraph)],
+    graphics: &BTreeMap<u64, &'a ObjectGraph>,
+) -> String {
+    let mut classes: BTreeMap<&str, usize> = BTreeMap::new();
+    for object in &graph.objects {
+        *classes.entry(object.class_name.as_str()).or_default() += 1;
+    }
+    let listed: Vec<String> = classes.iter().map(|(c, n)| format!("{c}:{n}")).collect();
+    let record_classes = |id: u64| -> String {
+        let found: Vec<&str> = items
+            .iter()
+            .filter(|(record, _)| *record == id)
+            .filter_map(|(_, g)| g.objects.first().map(|o| o.class_name.as_str()))
+            .collect();
+        if found.is_empty() {
+            "absent".to_string()
+        } else {
+            found.join("+")
+        }
+    };
+    let describe = |id: u64| -> String {
+        let triangles = graphics
+            .get(&id)
+            .copied()
+            .map(|g| drawn_triangles(g, graphics, 3))
+            .unwrap_or_else(|| "-".to_string());
+        format!("{id}:{}:{triangles}", record_classes(id))
+    };
+    let master = items
+        .iter()
+        .filter(|(record, _)| *record == instance)
+        .filter_map(|(_, g)| g.objects.first())
+        .find(|root| root.class_name == "FamilyInstance")
+        .and_then(|root| root.fields.get("m_masterSymbolId"))
+        .and_then(element_id);
+    let referenced: Vec<String> = graph
+        .objects
+        .iter()
+        .filter(|o| o.class_name == "InstanceInfo")
+        .map(|o| match o.fields.get("m_symbolId").and_then(element_id) {
+            Some(id) => describe(id),
+            None => "unread".to_string(),
+        })
+        .collect();
+    format!(
+        "nested_empty family={family} instance={instance} objects={} detail1={} detail2={} master={} referenced={}",
+        listed.join(","),
+        drawn_triangles(graph, graphics, 1),
+        drawn_triangles(graph, graphics, 2),
+        master.map_or_else(|| "unread".to_string(), describe),
+        if referenced.is_empty() {
+            "-".to_string()
+        } else {
+            referenced.join(",")
+        }
+    )
 }
 
 /// A why-not with its digits written as `#`, so that reasons that differ only in a number are
@@ -300,6 +408,15 @@ fn main() -> Result<()> {
                 continue;
             }
             whole += 1;
+            let own: usize = meshes
+                .primitives
+                .iter()
+                .filter(|p| !p.hidden && !p.filtered)
+                .map(|p| p.triangles.len())
+                .sum();
+            if own == 0 {
+                println!("{}", empty_nested(*id, *instance, graph, items, &graphics));
+            }
             visibility += meshes.excluded_visibility_branches;
             filters += meshes.rejected_filters;
             non_surface += meshes.excluded_non_surface_branches;
