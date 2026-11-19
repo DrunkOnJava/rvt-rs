@@ -811,6 +811,7 @@ fn ring(
         li,
         EdgeSide::Cylinder,
         CYLINDER_RING_POINT_BUDGET,
+        true,
     )
 }
 /// The edges' points a ring holds once an edge of `edge` points joins its `held`:
@@ -826,6 +827,9 @@ fn ring_points_with(held: usize, edge: usize, limit: usize) -> Option<usize> {
 /// any of its refinement is made, so that the refusal does not wait for the ring to
 /// be built (#1770, #1815). A planar face's rings are refused past it as
 /// [`PLANAR_BUDGET_EXCEEDED`], a cylinder's trim ring as [`CYLINDER_BUDGET_EXCEEDED`].
+/// A `closed` ring must come back to its start and hold an area; an open one is its
+/// edges joined end to end, as a circle at one height on a tube is in its
+/// parameters ([`tube_trim`]).
 fn ring_impl(
     g: &ObjectGraph,
     index: &PointerIndex<'_>,
@@ -833,6 +837,7 @@ fn ring_impl(
     li: usize,
     refine: EdgeSide,
     limit: usize,
+    closed: bool,
 ) -> Result<Vec<[f64; 2]>> {
     let l = &g.objects[li];
     ensure!(
@@ -907,8 +912,10 @@ fn ring_impl(
     }
     // Saved circular loops can be represented by two connected arc edges
     // (typically two semicircles). A third edge is not a topology invariant;
-    // closure, nonzero area, and connected ordering below remain mandatory.
-    ensure!(segments.len() >= 2, "too few boundary edges");
+    // for a closed ring, closure, nonzero area, and connected ordering below
+    // remain mandatory. An open ring may be one edge, a whole circle, and needs
+    // only the connected ordering.
+    ensure!(segments.len() >= 2 || !closed, "too few boundary edges");
     ensure!(
         segments.iter().all(|s: &Vec<_>| !s.is_empty()),
         "empty boundary edge"
@@ -931,6 +938,10 @@ fn ring_impl(
                 break;
             }
         }
+        if valid && !closed {
+            output = Some(out);
+            break;
+        }
         if valid && close(out[0], *out.last().unwrap()) {
             out.pop();
             output = Some(out);
@@ -939,11 +950,70 @@ fn ring_impl(
     }
     let mut out = output.context("disconnected UV boundary")?;
     out.dedup_by(|a, b| close(*a, *b));
-    ensure!(
-        out.len() >= 3 && area(&out).abs() > 1e-12,
-        "degenerate boundary"
-    );
+    if closed {
+        ensure!(
+            out.len() >= 3 && area(&out).abs() > 1e-12,
+            "degenerate boundary"
+        );
+    }
     Ok(out)
+}
+
+/// The trim of a cylinder face bounded by two loops, each a full turn at one height: a
+/// tube between two circles, with no seam edge. Joined as the one loop a tube with a
+/// seam edge has, the lower circle forward and the upper back, the
+/// face is meshed as the whole rectangle of its parameters, on the circles' own points
+/// so that it meets the faces it shares them with. Any other pair of loops is refused,
+/// by what it is not.
+fn tube_trim(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    loops: [usize; 2],
+    u_range: [f64; 2],
+) -> Result<Vec<[f64; 2]>> {
+    const TOL: f64 = 1e-7;
+    ensure!(
+        (u_range[1] - u_range[0] - std::f64::consts::TAU).abs() <= TOL,
+        "two cylinder trim loops on part of a turn"
+    );
+    let mut ends: Vec<(f64, Vec<[f64; 2]>)> = Vec::with_capacity(2);
+    for li in loops {
+        let mut points = ring_impl(
+            g,
+            index,
+            face,
+            li,
+            EdgeSide::Cylinder,
+            CYLINDER_RING_POINT_BUDGET / 2,
+            false,
+        )?;
+        let height = points[0][1];
+        ensure!(
+            points.iter().all(|p| (p[1] - height).abs() <= TOL),
+            "two cylinder trim loops, one not at one height"
+        );
+        let (lo, hi) = points
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), p| {
+                (lo.min(p[0]), hi.max(p[0]))
+            });
+        ensure!(
+            (lo - u_range[0]).abs() <= TOL && (hi - u_range[1]).abs() <= TOL,
+            "two cylinder trim loops, one not a full turn"
+        );
+        points.sort_by(|a, b| a[0].total_cmp(&b[0]));
+        ends.push((height, points));
+    }
+    ends.sort_by(|a, b| a.0.total_cmp(&b.0));
+    ensure!(
+        ends[1].0 - ends[0].0 > TOL,
+        "two cylinder trim loops at one height"
+    );
+    let upper = ends.pop().map(|(_, points)| points).unwrap_or_default();
+    let mut trim = ends.pop().map(|(_, points)| points).unwrap_or_default();
+    trim.extend(upper.into_iter().rev());
+    Ok(trim)
 }
 
 fn tessellation_axis(
@@ -1168,7 +1238,7 @@ fn plane_regions_tile(
                 .is_none(),
             FACE_REGIONS
         );
-        let ring = ring_impl(g, index, face, li, EdgeSide::Cylinder, left)?;
+        let ring = ring_impl(g, index, face, li, EdgeSide::Cylinder, left, true)?;
         left = left.saturating_sub(ring.len());
         Ok(ring)
     };
@@ -1282,6 +1352,7 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             li,
             EdgeSide::Plane,
             PLANAR_FACE_POINT_BUDGET - points,
+            true,
         )?;
         points = planar_points_with(points, ring.len()).context(PLANAR_BUDGET_EXCEEDED)?;
         loops.push(ring);
@@ -1629,13 +1700,18 @@ pub fn cylinder_face(
     let loop_index = index
         .resolve(fi, &face.fields["m_pFirstLoop"])?
         .context("cylinder trim loop")?;
-    ensure!(
-        index
-            .resolve(loop_index, &g.objects[loop_index].fields["m_nextLoop"])?
-            .is_none(),
-        "multiple cylinder trim loops unsupported"
-    );
-    let trim_uv = ring(g, &index, fi, loop_index)?;
+    let trim_uv = match index.resolve(loop_index, &g.objects[loop_index].fields["m_nextLoop"])? {
+        None => ring(g, &index, fi, loop_index)?,
+        Some(second) => {
+            ensure!(
+                index
+                    .resolve(second, &g.objects[second].fields["m_nextLoop"])?
+                    .is_none(),
+                "multiple cylinder trim loops unsupported"
+            );
+            tube_trim(g, &index, fi, [loop_index, second], u_range)?
+        }
+    };
     ensure!(!trim_uv.is_empty(), "empty cylinder trim");
     let mut trim_min = [f64::INFINITY; 2];
     let mut trim_max = [f64::NEG_INFINITY; 2];
