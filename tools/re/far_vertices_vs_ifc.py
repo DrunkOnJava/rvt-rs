@@ -11,6 +11,8 @@ For every `IfcStairFlight`, `IfcRamp` and `IfcRampFlight` both exports hold (sam
 
 - Revit's vertices more than 0.001 ft from rvt-rs's surface, and rvt-rs's more than
   0.01 ft from Revit's (the bars `mesh_bodies_vs_ifc.py` scores), the 12 farthest of each;
+- how many of rvt-rs's vertices are more than 0.001 ft from Revit's surface, and where by
+  facing and crease, so that a move of rvt-rs's faces under 0.01 ft shows;
 - for each: its distance, where it sits in the flight's box (each axis as a fraction from
   the low face, 0, to the high one, 1), the facing of the nearest triangle of the other
   body (`up`, `down`, `side`, or `slope` with its angle from the vertical), and whether it
@@ -135,13 +137,21 @@ def report(cls, ours, ref):
         low = [min(v[k] for v in everything) for k in range(3)]
         high = [max(v[k] for v in everything) for k in range(3)]
         revit = listed(ref_vertices, ref_triangles, our_triangles, REVIT_BAR, low, high)
-        mine = listed(our_vertices, our_triangles, ref_triangles, OURS_BAR, low, high)
-        if not revit and not mine:
+        mine_fine = listed(our_vertices, our_triangles, ref_triangles, REVIT_BAR, low, high)
+        mine = [row for row in mine_fine if row[0] > OURS_BAR]
+        if not revit and not mine_fine:
             continue
         print(
             f"far vertices: {tag}: Revit's beyond {REVIT_BAR} ft of ours {len(revit)} of {len(ref_vertices)}; "
-            f"ours beyond {OURS_BAR} ft of Revit's {len(mine)} of {len(our_vertices)}"
+            f"ours beyond {OURS_BAR} ft of Revit's {len(mine)} of {len(our_vertices)}; "
+            f"ours beyond {REVIT_BAR} ft of Revit's {len(mine_fine)}"
         )
+        fine = {}
+        for _, _, face, kind, _ in mine_fine:
+            fine[(face, kind)] = fine.get((face, kind), 0) + 1
+        if fine:
+            summary = "; ".join(f"{face} {kind} {n}" for (face, kind), n in sorted(fine.items()))
+            print(f"far vertices:   rvt-rs's beyond {REVIT_BAR} ft, by the other's facing and own crease: {summary}")
         for who, rows in (("Revit", revit), ("rvt-rs", mine)):
             kinds = {}
             for _, _, face, kind, _ in rows:
