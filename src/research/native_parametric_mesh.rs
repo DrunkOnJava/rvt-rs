@@ -5,6 +5,7 @@ use crate::native_parametric_surface::ParametricSurface;
 use crate::native_saved_mesh::FaceMesh;
 use crate::vector_math::distance;
 use anyhow::{Context, Result, ensure};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct ParametricMesh {
@@ -1053,6 +1054,16 @@ const TRIANGLE_BUDGET: usize = 4_000_000;
 
 /// The points of a trimmed face in (u, v) and its triangles, by their indices.
 type Cells = (Vec<[f64; 2]>, Vec<[u32; 3]>);
+/// A trim loop's edge between two of its points: the loop, and the edge's first point.
+type Span = (usize, usize);
+/// [`Cells`], and beside each point the span of [`trimmed_cells_on`]'s `spans` it lies on.
+type TaggedCells = (Vec<[f64; 2]>, Vec<[u32; 3]>, Vec<Option<Span>>);
+/// A span's two ends in the surface's parameters, as `FaceGrid::chords` holds them.
+type Chord = [[f64; 2]; 2];
+/// A span along a strip's edge: the lower and upper `v` of its ends, and which span.
+type Side = (f64, f64, Span);
+/// Two points by their parameters rounded to the knot tolerance.
+type EndKeys = ([i64; 2], [i64; 2]);
 
 /// One trim segment, oriented so that `u0 < u1`.
 #[derive(Clone, Copy)]
@@ -1061,6 +1072,8 @@ struct Segment {
     v0: f64,
     u1: f64,
     v1: f64,
+    /// The loop edge it is, where that edge is one of the spans asked about.
+    span: Option<Span>,
 }
 
 impl Segment {
@@ -1190,6 +1203,22 @@ fn point_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
 /// triangles must cover the area the loops enclose, or the loops cross each other
 /// or themselves. Returns the points in (u, v) and the triangles (#1706).
 fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> Result<Cells> {
+    let (points, triangles, _) =
+        trimmed_cells_on(loops, u_knots, v_knots, &std::collections::BTreeSet::new())?;
+    Ok((points, triangles))
+}
+
+/// [`trimmed_cells`], and beside each point the span of `spans` it lies on, strictly
+/// between the span's ends: each point is made on the trapezoid edges of the segments
+/// that bound its cells, so the segment it lies on is known when it is made, and no
+/// search is run (#2094). A span along a strip's edge (its two ends at one `u`) holds
+/// the points made on the trapezoid sides at that `u` between its ends.
+fn trimmed_cells_on(
+    loops: &[Vec<[f64; 2]>],
+    u_knots: &[f64],
+    v_knots: &[f64],
+    spans: &std::collections::BTreeSet<Span>,
+) -> Result<TaggedCells> {
     ensure!(
         !loops.is_empty() && loops.iter().all(|ring| ring.len() >= 3),
         "a trim loop needs three points"
@@ -1204,11 +1233,15 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
         "knots must be finite and strictly increasing"
     );
     let mut segments = Vec::new();
-    for ring in loops {
-        for (&a, &b) in ring
+    // The spans along a strip's edge, by their `u` to the knot tolerance: their `v`
+    // range and which span.
+    let mut sides: BTreeMap<i64, Vec<Side>> = BTreeMap::new();
+    for (r, ring) in loops.iter().enumerate() {
+        for (i, (&a, &b)) in ring
             .iter()
             .zip(ring.iter().cycle().skip(1))
             .take(ring.len())
+            .enumerate()
         {
             ensure!(
                 a.iter().chain(&b).all(|x| x.is_finite()),
@@ -1218,8 +1251,16 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                 on_knots(u_knots, a[0]),
                 "a trim point's u is not on the grid's knots"
             );
+            let span = spans.contains(&(r, i)).then_some((r, i));
             // A segment along a strip's edge bounds no strip.
             if (b[0] - a[0]).abs() <= KNOT_TOLERANCE {
+                if let Some(span) = span {
+                    sides.entry(knot_key(a[0])).or_default().push((
+                        a[1].min(b[1]),
+                        a[1].max(b[1]),
+                        span,
+                    ));
+                }
                 continue;
             }
             let (p, q) = if a[0] < b[0] { (a, b) } else { (b, a) };
@@ -1228,9 +1269,20 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                 v0: p[1],
                 u1: q[0],
                 v1: q[1],
+                span,
             });
         }
     }
+    // The span a side point at `u` lies on, strictly between the span's ends.
+    let side_span = |p: [f64; 2]| -> Option<Span> {
+        let key = knot_key(p[0]);
+        sides
+            .range(key.saturating_sub(1)..=key.saturating_add(1))
+            .flat_map(|(_, list)| list.iter())
+            .find(|(lo, hi, _)| p[1] > lo + KNOT_TOLERANCE && p[1] < hi - KNOT_TOLERANCE)
+            .map(|(_, _, span)| *span)
+    };
+    let mut tags: Vec<Option<Span>> = Vec::new();
     let enclosed = enclosed_area(loops);
     ensure!(
         (u_knots.len() - 1).saturating_mul(segments.len()) <= STRIP_BUDGET,
@@ -1239,13 +1291,22 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
     let mut points: Vec<[f64; 2]> = Vec::new();
     let mut triangles: Vec<[u32; 3]> = Vec::new();
     let mut index: std::collections::HashMap<(i64, i64), u32> = std::collections::HashMap::new();
-    let mut vertex = |p: [f64; 2], points: &mut Vec<[f64; 2]>| -> Result<u32> {
-        let key = ((p[0] * 1e9).round() as i64, (p[1] * 1e9).round() as i64);
+    let mut vertex = |p: [f64; 2],
+                      tag: Option<Span>,
+                      points: &mut Vec<[f64; 2]>,
+                      tags: &mut Vec<Option<Span>>|
+     -> Result<u32> {
+        let key = (knot_key(p[0]), knot_key(p[1]));
         if let Some(&i) = index.get(&key) {
+            let held = &mut tags[i as usize];
+            if held.is_none() {
+                *held = tag;
+            }
             return Ok(i);
         }
         let i = u32::try_from(points.len()).context("trim vertex count overflow")?;
         points.push(p);
+        tags.push(tag);
         index.insert(key, i);
         Ok(i)
     };
@@ -1282,6 +1343,20 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
             if high_left - low_left <= KNOT_TOLERANCE && high_right - low_right <= KNOT_TOLERANCE {
                 continue;
             }
+            // A point made on the trapezoid's lower or upper edge lies on that segment.
+            let (bottom, top) = (*pair[0], *pair[1]);
+            let on = |s: &Segment, p: [f64; 2]| {
+                s.span.filter(|_| {
+                    p[0] > s.u0 + KNOT_TOLERANCE
+                        && p[0] < s.u1 - KNOT_TOLERANCE
+                        && (p[1] - s.at(p[0])).abs() <= KNOT_TOLERANCE
+                })
+            };
+            let tag_of = |p: [f64; 2]| {
+                on(&bottom, p)
+                    .or_else(|| on(&top, p))
+                    .or_else(|| side_span(p))
+            };
             let trapezoid = [
                 [left, low_left],
                 [right, low_right],
@@ -1313,7 +1388,7 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                 if piece.len() < 3 {
                     continue;
                 }
-                let first = vertex(piece[0], &mut points)?;
+                let first = vertex(piece[0], tag_of(piece[0]), &mut points, &mut tags)?;
                 for pair in piece[1..].windows(2) {
                     let area = ((pair[0][0] - piece[0][0]) * (pair[1][1] - piece[0][1])
                         - (pair[1][0] - piece[0][0]) * (pair[0][1] - piece[0][1]))
@@ -1322,8 +1397,8 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                         continue;
                     }
                     covered += area;
-                    let b = vertex(pair[0], &mut points)?;
-                    let c = vertex(pair[1], &mut points)?;
+                    let b = vertex(pair[0], tag_of(pair[0]), &mut points, &mut tags)?;
+                    let c = vertex(pair[1], tag_of(pair[1]), &mut points, &mut tags)?;
                     triangles.push([first, b, c]);
                 }
                 ensure!(
@@ -1337,60 +1412,58 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
         !triangles.is_empty() && (covered - enclosed).abs() <= 1e-9 * enclosed.abs().max(1e-9),
         "the trim loops cross each other or themselves"
     );
-    Ok((points, triangles))
+    Ok((points, triangles, tags))
 }
 
-/// The tests of a point against a span that [`on_chords`] may make for one face before
-/// it leaves the face's points on the surface.
-const CHORD_BUDGET: usize = 250_000_000;
+/// A parameter rounded to the knot tolerance, as `trimmed_cells` numbers its points.
+fn knot_key(x: f64) -> i64 {
+    (x * 1e9).round() as i64
+}
 
-/// `vertices`, the model points of a trimmed face's `points`, with every point that lies
-/// on a span of `chords` (to [`KNOT_TOLERANCE`] in the parameters, and not at either
-/// end) moved onto the straight line between the span's ends on the surface, at the
-/// same fraction of the span (#2094). `None` where no point moves, or where the tests
-/// would pass [`CHORD_BUDGET`].
+/// `vertices`, the model points of a trimmed face's `points`, with every point tagged
+/// with a span of `spans` (`trimmed_cells_on`) moved onto the straight line between
+/// the span's ends on the surface, at the same fraction of the span (#2094). `None`
+/// where no point moves. Each point is read once, so the work is the face's points.
 fn on_chords(
     surface: &ParametricSurface,
     points: &[[f64; 2]],
     vertices: &[[f64; 3]],
-    chords: &[[[f64; 2]; 2]],
+    tags: &[Option<Span>],
+    spans: &BTreeMap<Span, Chord>,
 ) -> Result<Option<Vec<[f64; 3]>>> {
-    if chords.is_empty() {
+    if spans.is_empty() {
         return Ok(None);
     }
-    let mut order: Vec<usize> = (0..points.len()).collect();
-    order.sort_by(|a, b| points[*a][0].total_cmp(&points[*b][0]));
+    let mut ends: BTreeMap<Span, ([f64; 3], [f64; 3])> = BTreeMap::new();
     let mut placed = vertices.to_vec();
     let mut moved = false;
-    let mut work = 0usize;
-    for &[a, b] in chords {
+    for (i, tag) in tags.iter().enumerate() {
+        let Some(span) = tag else {
+            continue;
+        };
+        let Some(&[a, b]) = spans.get(span) else {
+            continue;
+        };
         let d = [b[0] - a[0], b[1] - a[1]];
         let length = d[0] * d[0] + d[1] * d[1];
         if length.is_nan() || length <= 0. {
             continue;
         }
-        let lo = a[0].min(b[0]) - KNOT_TOLERANCE;
-        let hi = a[0].max(b[0]) + KNOT_TOLERANCE;
-        let start = order.partition_point(|i| points[*i][0] < lo);
-        let end = order.partition_point(|i| points[*i][0] <= hi);
-        work = work.saturating_add(end - start);
-        if work > CHORD_BUDGET {
-            return Ok(None);
-        }
-        let (from, to) = (surface.evaluate(a[0], a[1])?, surface.evaluate(b[0], b[1])?);
-        let apart = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]);
-        for &i in &order[start..end] {
-            let p = points[i];
-            if apart(p, a) <= KNOT_TOLERANCE || apart(p, b) <= KNOT_TOLERANCE {
-                continue;
+        let (from, to) = match ends.get(span) {
+            Some(known) => *known,
+            None => {
+                let found = (surface.evaluate(a[0], a[1])?, surface.evaluate(b[0], b[1])?);
+                ends.insert(*span, found);
+                found
             }
-            let t = ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / length;
-            if t <= 0. || t >= 1. || apart(p, [a[0] + t * d[0], a[1] + t * d[1]]) > KNOT_TOLERANCE {
-                continue;
-            }
-            placed[i] = std::array::from_fn(|k| from[k] + t * (to[k] - from[k]));
-            moved = true;
+        };
+        let p = points[i];
+        let t = ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / length;
+        if t <= 0. || t >= 1. {
+            continue;
         }
+        placed[i] = std::array::from_fn(|k| from[k] + t * (to[k] - from[k]));
+        moved = true;
     }
     Ok(moved.then_some(placed))
 }
@@ -1407,7 +1480,27 @@ fn tessellate_trimmed(
     orient: bool,
     max_vertices: usize,
 ) -> Result<ParametricMesh> {
-    let (points, cells) = trimmed_cells(loops, u_knots, v_knots)?;
+    // Each chord is the span of the loop edge between the same two points, either way
+    // round: the loops' points are the samples the chords were taken from.
+    let mut by_ends: BTreeMap<EndKeys, Chord> = BTreeMap::new();
+    let key = |p: [f64; 2]| [knot_key(p[0]), knot_key(p[1])];
+    for &[a, b] in chords {
+        by_ends.insert((key(a), key(b)), [a, b]);
+        by_ends.insert((key(b), key(a)), [a, b]);
+    }
+    let mut spans: BTreeMap<Span, Chord> = BTreeMap::new();
+    if !by_ends.is_empty() {
+        for (r, ring) in loops.iter().enumerate() {
+            for i in 0..ring.len() {
+                let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+                if let Some(chord) = by_ends.get(&(key(a), key(b))) {
+                    spans.insert((r, i), *chord);
+                }
+            }
+        }
+    }
+    let wanted: std::collections::BTreeSet<Span> = spans.keys().copied().collect();
+    let (points, cells, tags) = trimmed_cells_on(loops, u_knots, v_knots, &wanted)?;
     ensure!(
         points.len() <= max_vertices && points.len() <= u32::MAX as usize,
         "parametric mesh vertex budget exceeded"
@@ -1442,7 +1535,7 @@ fn tessellate_trimmed(
     // Points moved onto their spans (`on_chords`) are kept only where every triangle
     // still has area; anything else in that step leaves the face's points on the
     // surface, as they were before it, so that it never refuses a face.
-    let placed = on_chords(surface, &points, &vertices, chords)
+    let placed = on_chords(surface, &points, &vertices, &tags, &spans)
         .ok()
         .flatten()
         .and_then(|placed| triangulate(&placed).map(|triangles| (placed, triangles)));
