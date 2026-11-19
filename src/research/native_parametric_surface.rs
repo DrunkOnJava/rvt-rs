@@ -108,7 +108,7 @@ pub struct SplineNode {
 }
 
 /// The most equal steps a spline profile is cut into to hold a chord error.
-const SPLINE_STEP_CAP: usize = 128;
+const SPLINE_STEP_CAP: usize = 1024;
 
 /// The two nodes of `nodes` the parameter `t` lies between, the last pair
 /// from the last node on. `nodes` holds at least two.
