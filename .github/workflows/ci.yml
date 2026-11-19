@@ -366,7 +366,12 @@ jobs:
       # Each apt call is bounded and retried: on 2026-11-01 an Ubuntu mirror
       # stopped answering mid `apt-get update` and the hang used the whole job
       # timeout, a cancelled job that failed `CI passed` with no test run.
-      # Three failed attempts still fail the job.
+      # After a failed attempt the runner's mirror list is cut to Ubuntu's own
+      # archive: on 2026-11-19 the regional mirror the list puts first served
+      # the index and then stalled on the packages, each one timing out before
+      # apt moved to the next mirror, and three runs of this job in a row
+      # failed with no test run while the archive itself answered. Three
+      # failed attempts still fail the job.
       - name: Install gcc-multilib
         timeout-minutes: 15
         run: |
@@ -376,7 +381,10 @@ jobs:
               && timeout 180 "${apt[@]}" install -y --no-install-recommends gcc-multilib; then
               exit 0
             fi
-            echo "::warning::apt attempt $attempt did not finish; retrying"
+            echo "::warning::apt attempt $attempt did not finish; retrying from archive.ubuntu.com"
+            if [ -f /etc/apt/apt-mirrors.txt ]; then
+              echo "https://archive.ubuntu.com/ubuntu/" | sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+            fi
             sleep 15
           done
           exit 1
