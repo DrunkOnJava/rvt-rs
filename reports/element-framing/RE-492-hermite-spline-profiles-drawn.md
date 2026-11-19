@@ -48,7 +48,7 @@ Measure [44536807887](https://github.com/DrunkOnJava/rvt-rs/actions/runs/4453680
 **Nothing else scored moves.**
 - No other `mesh_bodies_vs_ifc`, `saved_meshes_vs_ifc`, `roof_bodies_vs_ifc` or `stair_bodies_vs_ifc` count changes, and no `psets_vs_ifc` or `qtos_vs_ifc` line.
 - Against the reader alone, 4 exports change and 8 bodies move, every one among the bodies the reader newly drew.
-- No held-out export changes against the reader alone. Against `main`, one does: the held-out single-dwelling house, whose kept counts do not move (19 bodies drawn from saved graphics scored, 28 record boxes), so no body is newly drawn there that a scorer sees. Its export is not kept, so what moved is not read, and row 3's figures leave it out.
+- No held-out export changes against the reader alone. Against `main`, one does: the held-out single-dwelling house, whose kept counts do not move (19 bodies drawn from saved graphics scored, 28 record boxes), so no body is newly drawn there that a scorer sees. Its export is not kept, so what moved is not read, and the count of bodies newly drawn below leaves it out.
 - The same-project gates pass. Against `main` they are exercised by one beam, newly drawn on each `rac_advanced` save of 2025 to 2027 and held to its 2024 save; on the `rac_basic` saves only a refusal's text changes.
 
 **Counted, not scored.** Bodies drawn from saved graphics against `main`, from `diagnostics.json` on the 102 models that keep one: 25 more on 10 files.
