@@ -386,7 +386,7 @@ fn near_face(
 
 /// The beam's plan angle from its bounded line, in degrees from the nearest plan axis, within
 /// (-45, 45]: 0 for a beam along X or Y. `None` for a line with no length in plan.
-fn plan_angle(line: &rvt::research::partition_beam_axes::BoundedLine) -> Option<f64> {
+fn plan_angle(line: &BoundedLine) -> Option<f64> {
     let (start, end) = (line.start(), line.end());
     let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
     let length = dx.hypot(dy);
