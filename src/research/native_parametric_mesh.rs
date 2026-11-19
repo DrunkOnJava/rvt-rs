@@ -50,25 +50,12 @@ pub struct FaceGrid {
     /// repeated; the face is the part of the grid inside them (#1706).
     pub loops: Vec<Vec<[f64; 2]>>,
     /// The edges, by object index, that this face and the plane beside it both draw
-    /// straight between the edge's saved points (`keeps_saved_chords`, #2094).
+    /// straight between the edge's saved points (#2094, #2098): those whose samples
+    /// cross both of the face's parameters.
     pub chord_edges: std::collections::BTreeSet<usize>,
     /// Each span between two saved points of those edges, in the surface's parameters:
     /// a trimmed face's vertices along one lie on the line between its ends.
     pub chords: Vec<[[f64; 2]; 2]>,
-}
-
-/// Whether a face on `surface` and a plane draw an edge they share that crosses both
-/// of the surface's parameters straight between the edge's saved points: a ruled face
-/// with a spline profile (#2094). There Revit's export of the BIM4LCA timber office's
-/// flights puts the plane's vertices on those lines, and the curved face's side, drawn
-/// straight in its parameters between them, bows off the plane by up to 0.0027 ft.
-fn keeps_saved_chords(surface: &ParametricSurface) -> bool {
-    use crate::native_parametric_surface::Curve;
-    matches!(
-        surface,
-        ParametricSurface::RuledSurf { profile1, profile2, .. }
-            if matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. })
-    )
 }
 
 // A face whose trim is the complete rectangle of its parameters (including analytic
@@ -175,18 +162,20 @@ type LoopSegments = (Vec<Vec<[f64; 2]>>, Vec<Option<usize>>);
 
 /// The samples of each edge of the loop at `li` of the face `fi`, edge by edge, in the
 /// face's parameters and clamped to the surface's envelope `env`. A loop has at least
-/// `least` edges. Beside each, where `saved_chords` (the face's surface
-/// `keeps_saved_chords`), the edge's object index if it is one the face draws straight
-/// between its saved points: its other face's surface is a plane, and its samples,
-/// before they are clamped, change both parameters (as the plane's side reads them,
-/// `native_saved_mesh::isoparametric_axis`).
+/// `least` edges. Beside each, the edge's object index if it is one the face and the
+/// plane beside it draw straight between its saved points: its other face's surface is
+/// a plane, and its samples, before they are clamped, change both parameters (as the
+/// plane's side reads them, `native_saved_mesh::isoparametric_axis`). Where both faces
+/// draw such an edge their own way, they part by its bow: on a ruled face with a
+/// spline profile Revit's export of the BIM4LCA timber office's flights puts the
+/// plane's vertices on those lines (#2094), and on surfaces of revolution and cones
+/// the faces parted by up to 0.006 ft (#2098).
 fn loop_segments(
     g: &ObjectGraph,
     fi: usize,
     li: usize,
     env: [[f64; 2]; 2],
     least: usize,
-    saved_chords: bool,
 ) -> Result<LoopSegments> {
     use crate::native_saved_mesh::pointer;
     let l = &g.objects[li];
@@ -231,8 +220,7 @@ fn loop_segments(
         points.push(uv_point(&ends[1]["uv"][side])?);
         // An edge whose other face does not resolve to a plane is not one: nothing
         // here refuses a face that is drawn without it.
-        let chord = saved_chords
-            && crate::native_saved_mesh::isoparametric_axis(&points).is_none()
+        let chord = crate::native_saved_mesh::isoparametric_axis(&points).is_none()
             && pointer(g, cur, &faces[1 - side])
                 .ok()
                 .flatten()
@@ -505,7 +493,6 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     // surface's parameters.
     let mut loops: Vec<Vec<Vec<[f64; 2]>>> = Vec::new();
     let mut seen_loops = std::collections::BTreeSet::new();
-    let saved_chords = keeps_saved_chords(&surface);
     let mut chord_edges = std::collections::BTreeSet::new();
     let mut chords = Vec::new();
     let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
@@ -513,7 +500,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         ensure!(seen_loops.insert(li), "trim loop cycle");
         ensure!(loops.len() < MAX_TRIM_LOOPS, "too many trim loops");
         let least = if loops.is_empty() { 2 } else { 1 };
-        let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
+        let (segments, edges) = loop_segments(g, fi, li, env, least)?;
         ensure!(
             loop_closes(&surface, &segments)?,
             "disconnected parametric trim in model coordinates"
