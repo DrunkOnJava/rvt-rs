@@ -140,6 +140,11 @@ impl PartitionSchemaMvp {
     }
 }
 
+/// The sections of [`recover_partition_schema_mvp`] that report their start
+/// as progress (#1195): one for each `// --- ` heading in its body. A section
+/// added without moving this number reports past it, which is clamped.
+const RECOVERY_SECTIONS: u64 = 86;
+
 /// Recover partition MVP elements for a file (version-gated, fail-closed).
 pub fn recover_partition_schema_mvp(
     rf: &mut RevitFile,
@@ -149,6 +154,7 @@ pub fn recover_partition_schema_mvp(
     let mut out = PartitionSchemaMvp::default();
     let mut wall_reads = crate::native_walls::WallReads::default();
 
+    rf.report_recovery_section(0, RECOVERY_SECTIONS);
     // --- Levels + Materials from partition strings / ArcWall elev ---
     let strings = rf.partition_string_records().unwrap_or_default();
     let string_values: Vec<&str> = strings.iter().map(|r| r.value.as_str()).collect();
@@ -172,6 +178,7 @@ pub fn recover_partition_schema_mvp(
     // exports hold none, and no 2023 plan loop (mostly triangles) came
     // within 10% of the plan area of a slab in two paired exports.
 
+    rf.report_recovery_section(1, RECOVERY_SECTIONS);
     // --- Revit 2015 to 2023 element records (RE-81, RE-180, RE-181, #421):
     // identity, category, box and the readers called here; nothing else 2024
     // decodes on top of records is read. ---
@@ -370,6 +377,7 @@ pub fn recover_partition_schema_mvp(
         return Ok(out);
     }
 
+    rf.report_recovery_section(2, RECOVERY_SECTIONS);
     // --- 2024 partition element records (#204 columns, #211 the rest) ---
     //
     // The `Level` ElementId set costs one partition sweep and is read
@@ -416,12 +424,14 @@ pub fn recover_partition_schema_mvp(
         &level_ids,
     )?;
 
+    rf.report_recovery_section(3, RECOVERY_SECTIONS);
     // --- Slab instances from element records (#212, RE-22) ---
     //
     // Record-backed slabs carry an ElementId, a model bounding box,
     // a measured thickness and a storey.
     out.slabs = slabs_from_partition_category_records(rf, revit_version, &level_ids)?;
 
+    rf.report_recovery_section(4, RECOVERY_SECTIONS);
     // --- Room instances from element records (#90, RE-29) ---
     //
     // A record-backed room carries an ElementId, a model bounding box
@@ -433,6 +443,7 @@ pub fn recover_partition_schema_mvp(
     attach_room_outlines(rf, revit_version, &mut out.rooms);
     // Their heights from their native records (RE-255).
     attach_room_heights(rf, revit_version, &mut out.rooms);
+    rf.report_recovery_section(5, RECOVERY_SECTIONS);
     // --- Areas, which carry no record box (#763), and the bodies their
     // boundary lines give them (RE-317) ---
     let levels = crate::partition_level_records::recover_partition_levels(rf, revit_version)
@@ -444,10 +455,13 @@ pub fn recover_partition_schema_mvp(
         &levels,
     );
 
+    rf.report_recovery_section(6, RECOVERY_SECTIONS);
     // --- Other product categories from element records (RE-33) ---
     out.products = product_instances_from_partition_records(rf, revit_version, &level_ids)?;
+    rf.report_recovery_section(7, RECOVERY_SECTIONS);
     // --- Which floors, ceilings and roofs nothing cuts (RE-295) ---
     attach_slab_uncut(rf, &mut [&mut out.slabs, &mut out.products]);
+    rf.report_recovery_section(8, RECOVERY_SECTIONS);
     // --- The sloped floors whose Depth and GrossVolume are measured (#1208) ---
     if SLOPED_FLOOR_QUANTITIES_REVIT_VERSIONS.contains(&revit_version) {
         for element in out
@@ -462,6 +476,7 @@ pub fn recover_partition_schema_mvp(
             ));
         }
     }
+    rf.report_recovery_section(9, RECOVERY_SECTIONS);
     // --- Base constraints of elements naming two Levels (RE-59), then
     // railings by their host and elements by the Level objects they name
     // (RE-60) ---
@@ -482,8 +497,10 @@ pub fn recover_partition_schema_mvp(
     resolve_base_at_level(&level_elevations, &mut record_backed);
     resolve_hosted_levels(rf, &level_elevations, &mut record_backed);
     resolve_remaining_levels(&level_elevations, &mut record_backed);
+    rf.report_recovery_section(10, RECOVERY_SECTIONS);
     // --- Stair parts under their stairs (#323) ---
     attach_aggregate_wholes(rf, &mut out.products);
+    rf.report_recovery_section(11, RECOVERY_SECTIONS);
     // --- Curtain walls and their panels and mullions (RE-46) ---
     attach_curtain_walls(
         rf,
@@ -494,33 +511,45 @@ pub fn recover_partition_schema_mvp(
         None,
         &mut wall_reads,
     );
+    rf.report_recovery_section(12, RECOVERY_SECTIONS);
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
     bind_opening_hosts(&out.walls, &mut out.windows);
+    rf.report_recovery_section(13, RECOVERY_SECTIONS);
     // --- Stair and flight riser and tread dimensions (RE-47) ---
     attach_stair_dimensions(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(14, RECOVERY_SECTIONS);
     // --- Stair runs' treads and risers, and their run type (RE-52) ---
     attach_stair_run_bodies(rf, revit_version, &mut out.products);
     attach_stair_nosing_lengths(&mut out.products);
+    rf.report_recovery_section(15, RECOVERY_SECTIONS);
     // --- Spiral runs as their treads (#357) ---
     attach_spiral_run_bodies(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(16, RECOVERY_SECTIONS);
     // --- Monolithic landings as their slabs (#824) ---
     attach_landing_slabs(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(17, RECOVERY_SECTIONS);
     // --- Beams' Cross-Section Rotation, from their native records (RE-276),
     // before the axes, which RE-328's level beams longer than their lines
     // need it for ---
     attach_beam_rotations(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(18, RECOVERY_SECTIONS);
     // --- Beams along their location lines (RE-49, RE-328) ---
     attach_beam_axes(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(19, RECOVERY_SECTIONS);
     // --- Pipes as cylinders along their ends (RE-131) ---
     attach_pipe_axes(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(20, RECOVERY_SECTIONS);
     // --- Which element each end of a duct or pipe is joined to (RE-138) ---
     attach_connector_pairs(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(21, RECOVERY_SECTIONS);
     // --- Roof outlines from their sketch lines (RE-50) ---
     attach_roof_profiles(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(22, RECOVERY_SECTIONS);
     // --- Shaft openings cut the outlines within their height (RE-99; 2024 only, RE-345) ---
     attach_shaft_voids(rf, revit_version, [&mut out.slabs, &mut out.products]);
 
+    rf.report_recovery_section(23, RECOVERY_SECTIONS);
     // --- The Revit class each record names at +0x4a (RE-76, #154) ---
     if let Ok(classes) = rf.memoised_schema_classes() {
         for elements in [
@@ -536,17 +565,21 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    rf.report_recovery_section(24, RECOVERY_SECTIONS);
     // --- A turned family instance's plan axis (RE-87) ---
     attach_instance_axes(
         rf,
         revit_version,
         [&mut out.doors, &mut out.windows, &mut out.products],
     );
+    rf.report_recovery_section(25, RECOVERY_SECTIONS);
     // --- Curtain mullions and panels turned or tilted off the model's axes,
     // with their three axes (RE-106) ---
     attach_curtain_axes(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(26, RECOVERY_SECTIONS);
     // --- Each door's and window's facing, for its type's flip (B72) ---
     attach_opening_facings(rf, revit_version, [&mut out.doors, &mut out.windows]);
+    rf.report_recovery_section(27, RECOVERY_SECTIONS);
     // --- Each family instance's original symbol, whose GlobalId Revit's
     // export gives its type (RE-167, B60) ---
     attach_original_symbols(
@@ -560,6 +593,7 @@ pub fn recover_partition_schema_mvp(
         ],
     );
 
+    rf.report_recovery_section(28, RECOVERY_SECTIONS);
     // --- Family and type names (RE-38) ---
     for elements in [
         &mut out.walls,
@@ -571,6 +605,7 @@ pub fn recover_partition_schema_mvp(
     ] {
         attach_family_and_type_names(rf, elements);
     }
+    rf.report_recovery_section(29, RECOVERY_SECTIONS);
     // --- The phase each element was created in (spike 257) ---
     attach_phases_created(
         rf,
@@ -583,17 +618,23 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    rf.report_recovery_section(30, RECOVERY_SECTIONS);
     // --- Pipes' types, which have no name entry (RE-130) ---
     attach_pipe_type_names(rf, &mut out.products);
+    rf.report_recovery_section(31, RECOVERY_SECTIONS);
     // --- Ducts' types, lines and sections, from their own native record,
     // before RE-134's scan (RE-371) ---
     attach_native_ducts(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(32, RECOVERY_SECTIONS);
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
     attach_curve_fields(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(33, RECOVERY_SECTIONS);
     // --- Which connector each end of a duct is (#847) ---
     attach_duct_end_keys(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(34, RECOVERY_SECTIONS);
     // --- Pipe fittings' nominal sizes, from their connectors (RE-165) ---
     attach_fitting_nominal_diameters(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(35, RECOVERY_SECTIONS);
     // --- The shared parameter Serial Number (RE-156) ---
     attach_serial_numbers(
         rf,
@@ -607,6 +648,7 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    rf.report_recovery_section(36, RECOVERY_SECTIONS);
     // --- The MEP systems each element is a member of (RE-162) ---
     attach_mep_systems(
         rf,
@@ -620,6 +662,7 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    rf.report_recovery_section(37, RECOVERY_SECTIONS);
     // --- System-family type names (#322) ---
     let mut unnamed: Vec<&mut DecodedElement> = [&mut out.walls, &mut out.slabs, &mut out.products]
         .into_iter()
@@ -632,10 +675,13 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_system_type_names(rf, revit_version, &mut unnamed);
+    rf.report_recovery_section(38, RECOVERY_SECTIONS);
     // --- Railings' heights (RE-231) ---
     attach_railing_heights(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(39, RECOVERY_SECTIONS);
     // --- Stair railings' Length (RE-254) ---
     attach_railing_lengths(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(40, RECOVERY_SECTIONS);
     // --- Each element's type Function (RE-158) ---
     attach_type_functions(
         rf,
@@ -649,6 +695,7 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    rf.report_recovery_section(41, RECOVERY_SECTIONS);
     // --- Curtain panels that are walls (RE-64) ---
     let mut unnamed_panels: Vec<&mut DecodedElement> = out
         .products
@@ -662,22 +709,31 @@ pub fn recover_partition_schema_mvp(
         })
         .collect();
     attach_panel_wall_types(rf, revit_version, &mut unnamed_panels);
+    rf.report_recovery_section(42, RECOVERY_SECTIONS);
     // --- Model text (RE-67) ---
     attach_model_text_types(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(43, RECOVERY_SECTIONS);
     // --- Wall sweeps (RE-69) ---
     attach_wall_sweep_types(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(44, RECOVERY_SECTIONS);
     // --- Pipes, wall sweeps and ramps typed in their own record (RE-240) ---
     attach_native_type_names(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(45, RECOVERY_SECTIONS);
     // --- Curtain mullions drawn as an extrusion of their section (RE-243) ---
     attach_mullion_plain_hosts(rf, &mut out.products);
+    rf.report_recovery_section(46, RECOVERY_SECTIONS);
     // --- Walls' layers and exterior side (RE-53) ---
     attach_wall_layers(rf, revit_version, &mut out.walls, &mut wall_reads);
+    rf.report_recovery_section(47, RECOVERY_SECTIONS);
     // --- The openings a wall's edited elevation profile cuts (B55) ---
     attach_wall_profile_openings(rf, revit_version, &mut out.walls);
+    rf.report_recovery_section(48, RECOVERY_SECTIONS);
     // --- A shed roof's slope (RE-56) ---
     attach_roof_slopes(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(49, RECOVERY_SECTIONS);
     // --- A roof by extrusion's section (RE-211) ---
     attach_extrusion_roofs(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(50, RECOVERY_SECTIONS);
     // --- Floors', roofs' and ceilings' layers (RE-57) ---
     attach_slab_layers(
         rf,
@@ -687,18 +743,22 @@ pub fn recover_partition_schema_mvp(
             .chain(out.products.iter_mut())
             .collect(),
     );
+    rf.report_recovery_section(51, RECOVERY_SECTIONS);
     // --- System families' names (RE-63) ---
     attach_system_family_names(
         rf,
         revit_version,
         &mut [&mut out.walls, &mut out.slabs, &mut out.products],
     );
+    rf.report_recovery_section(52, RECOVERY_SECTIONS);
     // --- Stairs and their parts named as Revit names them (RE-65) ---
     attach_stair_names(rf, revit_version, &mut out.products);
     attach_native_stair_names(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(53, RECOVERY_SECTIONS);
     // --- Stair runs' shape, from their treads, and each stair's type from
     // its runs and landings, once every part names its stair (#323) ---
     attach_stair_run_shapes(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(54, RECOVERY_SECTIONS);
     // --- IFC export overrides, the element's own or its type's (RE-45) ---
     attach_ifc_export_overrides(
         rf,
@@ -712,18 +772,23 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    rf.report_recovery_section(55, RECOVERY_SECTIONS);
     // --- Family instances written as spaces that have no 3D body are left
     // out, as Revit leaves them out (RE-312, #1262) ---
     without_bodiless_family_spaces(rf, &mut out.products);
+    rf.report_recovery_section(56, RECOVERY_SECTIONS);
     // --- Empty curtain panels are left out, as Revit leaves them out (#309) ---
     out.products
         .retain(|product| !is_empty_curtain_panel(product));
+    rf.report_recovery_section(57, RECOVERY_SECTIONS);
     // --- Curtain panels that are the host panel of another curtain wall's
     // grid are left out, as Revit leaves them out (#1975) ---
     without_host_panels(rf, revit_version, &mut out.products, &mut wall_reads);
+    rf.report_recovery_section(58, RECOVERY_SECTIONS);
     // --- Plumbing fixtures whose type draws nothing visible are left out, as
     // Revit leaves them out (RE-363, #1496) ---
     without_invisible_plumbing_fixture_types(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(59, RECOVERY_SECTIONS);
     // --- Curtain panels that are walls export as curtain walls (RE-72) ---
     // Last, so every step above still sees them as panels.
     for product in &mut out.products {
@@ -736,12 +801,14 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    rf.report_recovery_section(60, RECOVERY_SECTIONS);
     // --- Column bottoms from the geometry node (RE-173) ---
     if revit_version == 2024 {
         apply_column_node_bottoms(rf, [&mut out.columns, &mut out.products]);
         apply_column_cut_bodies(rf, [&mut out.columns, &mut out.products]);
     }
 
+    rf.report_recovery_section(61, RECOVERY_SECTIONS);
     // --- Type text parameters (RE-77, #35) ---
     let type_parameters = crate::partition_type_parameters::type_text_parameters(rf, revit_version);
     if !type_parameters.is_empty() {
@@ -756,6 +823,7 @@ pub fn recover_partition_schema_mvp(
             attach_type_text_parameters(&type_parameters, elements);
         }
     }
+    rf.report_recovery_section(62, RECOVERY_SECTIONS);
     // --- Roofs whose underside the walls under them are cut along (#1478) ---
     if SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS.contains(&revit_version) {
         for roof in out
@@ -768,9 +836,11 @@ pub fn recover_partition_schema_mvp(
                 .push((ROOF_CUTS_WALL_TOPS_FIELD.into(), InstanceField::Bool(true)));
         }
     }
+    rf.report_recovery_section(63, RECOVERY_SECTIONS);
     // --- A door's or window's Fire Rating from its saved parameters (#1507) ---
     attach_saved_fire_ratings(rf, revit_version, [&mut out.doors, &mut out.windows]);
 
+    rf.report_recovery_section(64, RECOVERY_SECTIONS);
     // --- Level parameters from the per-element association record (RE-172),
     // stairs' Base and Top Level from the same record and the Level named in
     // the element record's id lists where the field holds none (RE-174) ---
@@ -798,6 +868,7 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    rf.report_recovery_section(65, RECOVERY_SECTIONS);
     // --- The materials each family type's geometry uses (RE-82, #355) ---
     let mut type_materials =
         crate::partition_type_materials::type_material_names(rf, revit_version);
@@ -842,6 +913,7 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    rf.report_recovery_section(66, RECOVERY_SECTIONS);
     // --- Every column's joins, in one native pass (RE-202, RE-247) ---
     let column_ids: BTreeSet<u64> = out
         .columns
@@ -852,6 +924,7 @@ pub fn recover_partition_schema_mvp(
         .collect();
     let column_joins = crate::native_column_joins::joins(rf, &column_ids).ok();
 
+    rf.report_recovery_section(67, RECOVERY_SECTIONS);
     // --- Family instances whose type draws with no material (RE-149, #355) ---
     // An instance whose own material parameters name its materials takes
     // them instead (RE-200).
@@ -872,6 +945,7 @@ pub fn recover_partition_schema_mvp(
         );
         attach_joined_wall_materials(&mut out.columns, &out.walls);
     }
+    rf.report_recovery_section(68, RECOVERY_SECTIONS);
     // --- Columns no `CleanPairGStep` joins, which Revit's export draws as
     // an extrusion (RE-247) ---
     if let Some(joins) = &column_joins {
@@ -936,19 +1010,25 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
+    rf.report_recovery_section(69, RECOVERY_SECTIONS);
     // --- Curtain mullions' and panels' materials, from their types (RE-166, B66) ---
     attach_curtain_materials(rf, revit_version, &mut out.products);
 
+    rf.report_recovery_section(70, RECOVERY_SECTIONS);
     // --- Rendered content (RPC, planting) is `<Unnamed>` (RE-202, #355) ---
     attach_rendered_content_materials(rf, &mut out.products);
 
+    rf.report_recovery_section(71, RECOVERY_SECTIONS);
     // --- Each window's opening from its type and transform (RE-93, #227) ---
     attach_window_openings(rf, revit_version, &mut out.windows);
+    rf.report_recovery_section(72, RECOVERY_SECTIONS);
     // --- Each door's rough opening from its type (RE-94, #227), after RE-84
     // marks the doors that are openings alone ---
     attach_door_openings(rf, revit_version, &mut out.doors);
+    rf.report_recovery_section(73, RECOVERY_SECTIONS);
     // --- Each door's Width and Height from its type (RE-187, #759) ---
     attach_door_sizes(rf, revit_version, &mut out.doors);
+    rf.report_recovery_section(74, RECOVERY_SECTIONS);
     // --- Each door's and window's size from the outline its symbol cuts
     // (RE-215, #844) ---
     let walls: BTreeSet<u32> = out.walls.iter().filter_map(|wall| wall.id).collect();
@@ -965,6 +1045,7 @@ pub fn recover_partition_schema_mvp(
         &walls,
         &plain_walls,
     );
+    rf.report_recovery_section(75, RECOVERY_SECTIONS);
     // --- The X axis of the placement Revit gives a door or window set in a
     // plain wall (RE-347), after the flips and the host are final ---
     attach_opening_placement_axes(
@@ -973,13 +1054,17 @@ pub fn recover_partition_schema_mvp(
         &out.walls,
         [&mut out.doors, &mut out.windows],
     );
+    rf.report_recovery_section(76, RECOVERY_SECTIONS);
     // --- The origin of the placement Revit gives a door set in no wall
     // (RE-361), after the host is final ---
     attach_opening_placement_origins(rf, revit_version, &mut out.doors);
+    rf.report_recovery_section(77, RECOVERY_SECTIONS);
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
+    rf.report_recovery_section(78, RECOVERY_SECTIONS);
     // --- Hollow structural sections from their type's family parameters (W6) ---
     attach_column_sections(rf, revit_version, [&mut out.columns, &mut out.products]);
+    rf.report_recovery_section(79, RECOVERY_SECTIONS);
     // --- A wall's and a curtain panel wall's type Function, from its native
     // type record (RE-185), after RE-72 has relabelled the panels ---
     attach_wall_type_functions(
@@ -992,6 +1077,7 @@ pub fn recover_partition_schema_mvp(
         ),
         &mut wall_reads,
     );
+    rf.report_recovery_section(80, RECOVERY_SECTIONS);
     // --- IsExternal: the parameters named for it, and Revit's calculation (RE-193) ---
     attach_is_external(
         rf,
@@ -1007,8 +1093,10 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    rf.report_recovery_section(81, RECOVERY_SECTIONS);
     // --- A curtain mullion's or panel's IsExternal: its curtain wall's (RE-193, RE-269) ---
     attach_curtain_member_is_external(&out.walls, &mut out.products);
+    rf.report_recovery_section(82, RECOVERY_SECTIONS);
     // --- The parameters named for a standard set's other properties (RE-194) ---
     attach_named_parameters(
         rf,
@@ -1024,9 +1112,11 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ],
     );
+    rf.report_recovery_section(83, RECOVERY_SECTIONS);
     // --- A structural beam's or column's LoadBearing is its category's
     // (RE-285), unless a parameter named for it says otherwise ---
     attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
+    rf.report_recovery_section(84, RECOVERY_SECTIONS);
     // --- A wall's LoadBearing: its Structural box set and its usage
     // Bearing, from its native record, curtain panel walls included (RE-429) ---
     attach_wall_load_bearing(
@@ -1039,6 +1129,7 @@ pub fn recover_partition_schema_mvp(
         ),
         &mut wall_reads,
     );
+    rf.report_recovery_section(85, RECOVERY_SECTIONS);
     // --- A floor's or stair's LoadBearing from its Structural check box
     // (RE-429), where no category or parameter named for it gives one ---
     attach_structural_load_bearing(
@@ -1046,6 +1137,7 @@ pub fn recover_partition_schema_mvp(
         revit_version,
         out.slabs.iter_mut().chain(out.products.iter_mut()),
     );
+    rf.report_recovery_section(RECOVERY_SECTIONS, RECOVERY_SECTIONS);
     Ok(out)
 }
 

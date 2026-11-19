@@ -592,6 +592,10 @@ const DECODE_STAGES: Record<string, { label: string; count: (done: number, total
     label: 'Reading partition streams',
     count: (done, total) => `${done} of ${total} streams`,
   },
+  'partition-recovery': {
+    label: 'Reading element records',
+    count: (done, total) => `${done} of ${total} steps`,
+  },
   'saved-graphics': { label: 'Reading saved graphics', count: () => '' },
   'saved-meshes': {
     label: 'Drawing family instances from saved meshes',
@@ -606,6 +610,7 @@ const DECODE_STAGES: Record<string, { label: string; count: (done: number, total
  */
 const AFTER_STAGE: Record<string, string> = {
   'partition-scan': 'Building the model',
+  'partition-recovery': 'Building the model',
   'saved-meshes': 'Finishing the model',
 };
 
