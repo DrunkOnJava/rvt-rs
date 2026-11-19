@@ -467,10 +467,13 @@ impl Walker<'_, '_> {
             }
             "GInstance" => {
                 let has_scale = obj.fields["m_bHasScale"].as_bool();
+                // Experiment (#2085, RE-414's rule): a set flag whose instance's 3x3
+                // matrix is a rotation is walked on every route.
                 if has_scale != Some(false)
                     && !(self.pre2023
                         && has_scale == Some(true)
                         && self.unscaled_legacy_instance(index, obj))
+                    && !(has_scale == Some(true) && self.rigid_instance(index, obj))
                 {
                     return Err("scaled instance mode is not qualified".into());
                 }
@@ -561,6 +564,17 @@ impl Walker<'_, '_> {
         info.class_name == "InstanceInfo"
             && info.fields.get("m_GRepId").is_none()
             && default_representation(&info.fields, self.pre2023)
+            && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rotation(&t))
+    }
+    /// Whether a `GInstance` whose `m_bHasScale` is set names an `InstanceInfo`
+    /// of either schema whose 3x3 matrix is a rotation, the identity included
+    /// (RE-414's rule, an experiment for #2085).
+    fn rigid_instance(&self, index: usize, obj: &crate::native_parameters::GraphObject) -> bool {
+        let Ok(info) = self.target(index, &obj.fields["m_instanceInfo"]) else {
+            return false;
+        };
+        let info = &self.graph.objects[info];
+        info.class_name == "InstanceInfo"
             && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rotation(&t))
     }
     fn only_curves(&self, index: usize, walk: &mut CurveWalk) -> bool {
