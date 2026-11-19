@@ -242,9 +242,10 @@ pub struct RevitFile {
     )>,
     /// The partition recovery's section in progress, plus one, and its number
     /// of sections; 0 while no recovery runs ([`Self::report_recovery_section`]).
-    /// Atomic so that a `&self` method can move it and the handle stays `Sync`.
-    recovery_section: std::sync::atomic::AtomicU64,
-    recovery_sections: std::sync::atomic::AtomicU64,
+    /// Plain integers, not atomics: interior mutability would take `Freeze` off
+    /// the handle, a change to its public traits.
+    recovery_section: u64,
+    recovery_sections: u64,
     /// Memoised data objects (RE-153) of each partition stream: the
     /// original symbols, railing types and MEP systems each scanned every
     /// partition for them.
@@ -566,8 +567,8 @@ impl RevitFile {
             walk: None,
             arc_wall_scan: None,
             partition_progress: None,
-            recovery_section: std::sync::atomic::AtomicU64::new(0),
-            recovery_sections: std::sync::atomic::AtomicU64::new(0),
+            recovery_section: 0,
+            recovery_sections: 0,
             data_objects: std::collections::HashMap::new(),
             header_hits: std::collections::HashMap::new(),
             header_hits_bytes: 0,
@@ -1015,20 +1016,14 @@ impl RevitFile {
         }
         if let Some((control, total)) = &self.partition_progress {
             let done = self.partitions_inflated.len() as u64;
-            let section = self
-                .recovery_section
-                .load(std::sync::atomic::Ordering::Relaxed);
-            if done >= *total && section > 0 {
+            if done >= *total && self.recovery_section > 0 {
                 // The last stream, inflated by the recovery: its section takes
                 // over at once, so the card goes from the streams straight to
                 // the recovery's count (#1195).
-                let sections = self
-                    .recovery_sections
-                    .load(std::sync::atomic::Ordering::Relaxed);
                 control.report(
                     crate::control::Stage::PartitionRecovery,
-                    (section - 1).min(sections),
-                    Some(sections),
+                    (self.recovery_section - 1).min(self.recovery_sections),
+                    Some(self.recovery_sections),
                 );
             } else {
                 control.report(
@@ -1068,11 +1063,9 @@ impl RevitFile {
     /// stage at the section in progress rather than the stream count at its
     /// end, so the card does not say for an instant what comes after the
     /// streams. The section `total` of `total` ends the recovery.
-    pub(crate) fn report_recovery_section(&self, done: u64, total: u64) {
-        use std::sync::atomic::Ordering::Relaxed;
-        self.recovery_sections.store(total, Relaxed);
-        self.recovery_section
-            .store(if done < total { done + 1 } else { 0 }, Relaxed);
+    pub(crate) fn report_recovery_section(&mut self, done: u64, total: u64) {
+        self.recovery_sections = total;
+        self.recovery_section = if done < total { done + 1 } else { 0 };
         if let Some((control, streams)) = &self.partition_progress {
             if self.partitions_inflated.len() as u64 >= *streams {
                 control.report(
