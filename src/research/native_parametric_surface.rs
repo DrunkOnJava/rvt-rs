@@ -111,12 +111,15 @@ pub struct SplineNode {
 const SPLINE_STEP_CAP: usize = 128;
 
 /// The two nodes of `nodes` the parameter `t` lies between, the last pair
-/// from the last node on. `nodes` holds at least two.
+/// from the last node on. `nodes` holds at least two, in rising order of their
+/// parameter, so the pair is found by halving: a face's grid evaluates its
+/// profile at every one of its points, and a scan of the nodes at each would
+/// cost the points times the nodes the file saves.
 fn spline_segment(nodes: &[SplineNode], t: f64) -> (SplineNode, SplineNode) {
-    let mut i = 0;
-    while i + 2 < nodes.len() && t >= nodes[i + 1].t {
-        i += 1;
-    }
+    let i = nodes
+        .partition_point(|node| node.t <= t)
+        .saturating_sub(1)
+        .min(nodes.len() - 2);
     (nodes[i], nodes[i + 1])
 }
 
