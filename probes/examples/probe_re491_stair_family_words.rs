@@ -14,10 +14,12 @@
 //! the streams it is found in, in the stream as stored and in each gzip member
 //! of it, with the count and the string each hit sits in (80 characters at
 //! most, the first 12 distinct strings of a word), then the word's total. A
-//! word found nowhere has the total 0. `Monolithic Landing` is also counted
+//! word found nowhere has the total 0. `Monolithic Landing` is also found
 //! inside `Non-Monolithic Landing`, and `Monolithic Run` inside
-//! `Non-Monolithic Run`. Words and counts only: no coordinate of the model is
-//! read.
+//! `Non-Monolithic Run`, so each total is followed by `alone`, the hits that do
+//! not follow `Non-`. Words and counts only: no coordinate of the model is
+//! read. An argument that starts with `--` is not a word (Measure passes its
+//! own to every probe).
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re491_stair_family_words -- MODEL.rvt [WORD...]
@@ -90,7 +92,7 @@ fn ascii_around(bytes: &[u8], at: usize, len: usize) -> String {
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
     let path = PathBuf::from(args.next().context("usage: MODEL.rvt [WORD...]")?);
-    let mut words: Vec<String> = args.collect();
+    let mut words: Vec<String> = args.filter(|arg| !arg.starts_with("--")).collect();
     if words.is_empty() {
         words = FAMILY_WORDS.iter().map(|word| word.to_string()).collect();
     }
@@ -103,7 +105,10 @@ fn main() -> Result<()> {
     // (word, stream, encoding, string) -> hits.
     type Hit = (String, String, &'static str, String);
     let mut found: BTreeMap<Hit, usize> = BTreeMap::new();
-    let mut totals: BTreeMap<String, usize> = words.iter().map(|w| (w.clone(), 0)).collect();
+    // word -> (hits, hits that do not follow `Non-`).
+    let mut totals: BTreeMap<String, (usize, usize)> =
+        words.iter().map(|w| (w.clone(), (0, 0))).collect();
+    let (non_wide, non_ascii) = (utf16("Non-"), b"Non-");
     let (mut streams, mut members) = (0usize, 0usize);
     for name in rf.stream_names() {
         let Ok(stored) = rf.read_stream(&name) else {
@@ -122,14 +127,22 @@ fn main() -> Result<()> {
                     *found
                         .entry((word.clone(), name.clone(), "utf16", around))
                         .or_default() += 1;
-                    *totals.entry(word.clone()).or_default() += 1;
+                    let total = totals.entry(word.clone()).or_default();
+                    total.0 += 1;
+                    if !bytes[..at].ends_with(&non_wide) {
+                        total.1 += 1;
+                    }
                 }
                 for at in memmem::find_iter(bytes, word.as_bytes()) {
                     let around = ascii_around(bytes, at, word.len());
                     *found
                         .entry((word.clone(), name.clone(), "ascii", around))
                         .or_default() += 1;
-                    *totals.entry(word.clone()).or_default() += 1;
+                    let total = totals.entry(word.clone()).or_default();
+                    total.0 += 1;
+                    if !bytes[..at].ends_with(non_ascii) {
+                        total.1 += 1;
+                    }
                 }
             }
         }
@@ -151,8 +164,8 @@ fn main() -> Result<()> {
             );
         }
     }
-    for (word, hits) in &totals {
-        println!("total {hits} word {word:?}");
+    for (word, (hits, alone)) in &totals {
+        println!("total {hits} alone {alone} word {word:?}");
     }
     Ok(())
 }
