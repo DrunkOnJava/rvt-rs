@@ -52,7 +52,7 @@ use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Record};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_parametric_surface::{Curve, ParametricSurface};
-use rvt::research::native_saved_mesh::pointer;
+use rvt::research::native_saved_mesh::{Primitive, pointer};
 
 type V3 = [f64; 3];
 
@@ -192,6 +192,8 @@ struct Bow {
     axes: String,
     /// How many face regions each of its two faces holds (`m_faceRegions`).
     regions: String,
+    /// Its two faces' tags (`m_GInfo.m_tag`), which the meshed primitives carry.
+    tags: [i64; 2],
 }
 
 /// A face's surface, as far as the probe evaluates one: a plane by its origin and two axes
@@ -258,6 +260,8 @@ struct EdgeRead {
     axes: String,
     /// How many face regions each of its two faces holds (`m_faceRegions`).
     regions: String,
+    /// Its two faces' tags (`m_GInfo.m_tag`), which the meshed primitives carry.
+    tags: [i64; 2],
 }
 
 fn edge_bow(g: &ObjectGraph, ei: usize) -> Result<Option<EdgeRead>> {
@@ -346,6 +350,15 @@ fn edge_bow(g: &ObjectGraph, ei: usize) -> Result<Option<EdgeRead>> {
             .map_or(0, <[Fv]>::len)
     };
     let regions = format!("{}/{}", region_count(f0), region_count(f1));
+    let tag = |f: usize| {
+        g.objects[f]
+            .fields
+            .get("m_GInfo")
+            .and_then(|i| i.get("m_tag"))
+            .and_then(Fv::as_i64)
+            .unwrap_or(-1)
+    };
+    let tags = [tag(f0), tag(f1)];
     let axes = format!(
         "{}:{}/{}:{}",
         c0,
@@ -372,6 +385,7 @@ fn edge_bow(g: &ObjectGraph, ei: usize) -> Result<Option<EdgeRead>> {
         lines,
         axes,
         regions,
+        tags,
     }))
 }
 
@@ -396,6 +410,7 @@ fn scan(owner: u64, record: &Record, bows: &mut Vec<Bow>, refused: &mut BTreeMap
                 lines: read.lines,
                 axes: read.axes,
                 regions: read.regions,
+                tags: read.tags,
             }),
             Ok(None) => {}
             Err(error) => {
@@ -533,7 +548,7 @@ fn main() -> Result<()> {
         };
         let meshes =
             rvt::research::native_saved_mesh::graphics_with_resolver(graph, &|id| kept.get(&id));
-        let faces: Vec<&rvt::research::native_saved_mesh::Primitive> = meshes
+        let faces: Vec<&Primitive> = meshes
             .primitives
             .iter()
             .filter(|p| !p.hidden && !p.filtered)
@@ -615,6 +630,47 @@ fn main() -> Result<()> {
         for (key, (n, largest)) in &by_edge {
             println!(
                 "mesh owner={owner} gaps_over_0.001={n} largest={largest:.6} nearest_edge={key}"
+            );
+        }
+        // For each read edge of this owner whose bow is over 0.001 ft: each of its two faces'
+        // meshed vertices within 0.01 ft of the edge, how many, and how far the farthest of
+        // them lies from the other face's triangles.
+        for b in bows.iter().filter(|b| b.owner == owner && b.gap > 1e-3) {
+            let face_of = |tag: i64| faces.iter().find(|f| f.face_tag == tag);
+            let (Some(a), Some(c)) = (face_of(b.tags[0]), face_of(b.tags[1])) else {
+                println!(
+                    "pair owner={owner} object={} faces_meshed=no tags={:?}",
+                    b.object, b.tags
+                );
+                continue;
+            };
+            let near_edge = |p: V3| {
+                polyline_distance(p, &b.lines[0]).min(polyline_distance(p, &b.lines[1])) < 0.01
+            };
+            let side = |from: &Primitive, to: &Primitive| -> (usize, f64) {
+                let mut seen: BTreeSet<[i64; 3]> = BTreeSet::new();
+                let mut worst = 0.0_f64;
+                for v in &from.vertices {
+                    if !near_edge(*v) || !seen.insert(v.map(|x| (x * 1e6).round() as i64)) {
+                        continue;
+                    }
+                    let d = to
+                        .triangles
+                        .iter()
+                        .map(|t| {
+                            let [p, q, r] = t.map(|i| to.vertices[i as usize]);
+                            triangle_distance(*v, p, q, r)
+                        })
+                        .fold(f64::INFINITY, f64::min);
+                    worst = worst.max(d);
+                }
+                (seen.len(), worst)
+            };
+            let (na, wa) = side(a, c);
+            let (nc, wc) = side(c, a);
+            println!(
+                "pair owner={owner} object={} sides={} bow={:.6} side0_vertices={na} side0_to_side1={wa:.6} side1_vertices={nc} side1_to_side0={wc:.6}",
+                b.object, b.axes, b.gap
             );
         }
     }
