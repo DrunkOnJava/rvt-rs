@@ -6,7 +6,7 @@
 Needs IfcOpenShell and numpy. A temporary diagnostic for #2094, run by Measure as an IFC
 scorer: not part of any scorer list.
 
-For every `IfcStairFlight` both exports hold (same `Tag`), meshed as
+For every `IfcStairFlight`, `IfcRamp` and `IfcRampFlight` both exports hold (same `Tag`), meshed as
 `stair_bodies_vs_ifc.py` meshes it (each file's own site frame), this lists:
 
 - Revit's vertices more than 0.001 ft from rvt-rs's surface, and rvt-rs's more than
@@ -119,10 +119,14 @@ def main():
     if len(args) != 2:
         print(__doc__)
         return 2
-    ours = bodies(args[0], "IfcStairFlight")
-    ref = bodies(args[1], "IfcStairFlight")
+    for cls in ("IfcStairFlight", "IfcRamp", "IfcRampFlight"):
+        report(cls, bodies(args[0], cls), bodies(args[1], cls))
+    return 0
+
+
+def report(cls, ours, ref):
     both = sorted(set(ours) & set(ref), key=lambda t: (len(t), t))
-    print(f"far vertices: {len(both)} flights in both exports")
+    print(f"far vertices: {len(both)} {cls} in both exports")
     for tag in both:
         (our_vertices, _, our_triangles), (ref_vertices, _, ref_triangles) = ours[tag], ref[tag]
         if not our_triangles or not ref_triangles:
