@@ -33,14 +33,18 @@
 //!     classes in the family's document (`absent` where it has none) and what its graphics
 //!     draw (`-` where it has none);
 //!   nested_family family=<ElementId> instances=<n> documents=<n> extrusions=<n> voids=<n>
-//!     revolutions=<n> forms=<class:n,...> rebuilt=<yes:solids+triangles|why not>: for a
-//!     family with no form the rebuild knows that nests instances, their families' own
-//!     documents found and what those hold (`forms`: every model form but extrusions, nested
-//!     instances included); where every nested family's extrusions rebuild by the same rules
-//!     and its revolutions mesh by the shared revolution reader, with no other form, they are
-//!     placed in the family by the transform each nested instance's saved graphics hold, and
-//!     a boxed instance is drawn from them placed by its own (`rebuilt=from_nested_family`,
-//!     and `nested=` on its line says how its family's nested families went);
+//!     revolutions=<n> forms=<class:n,...> from_graphics=<n>
+//!     rebuilt=<yes:solids+triangles|why not>: for a family with no form the rebuild knows
+//!     that nests instances, their families' own documents found and what those hold
+//!     (`forms`: every model form but extrusions, nested instances included). Each nested
+//!     family is drawn from the saved graphics its own document holds for its visible solid
+//!     forms where every one meshes whole (`from_graphics` counts those), else from its
+//!     extrusions rebuilt by the same rules and its revolutions meshed by the shared
+//!     revolution reader, with no other form; it is placed in the family by the transform
+//!     its nested instance's saved graphics hold, refused where that is not a rotation, and
+//!     a boxed instance is drawn from all of them placed by its own
+//!     (`rebuilt=from_nested_family`, and `nested=` on its line says how its family's nested
+//!     families went);
 //!   formless family=<ElementId> records=<n> drawing=<class:n,...> classes=<class:n,...>: for
 //!     each family with no
 //!     extrusion and no other form the rebuild knows, every record class its document holds,
@@ -297,6 +301,117 @@ fn nested_transform(graph: &ObjectGraph) -> Option<([V3; 3], V3)> {
     Some((matrix, triple(trf.get("m_or")?)?))
 }
 
+/// Whether a 3x3 matrix is a rotation: orthonormal rows and a determinant of 1, within
+/// 1e-9, so no scale, shear or mirror (the saved graphics refuse a scaled instance too).
+fn is_rotation(m: &[V3; 3]) -> bool {
+    let dot = |a: V3, b: V3| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let orthonormal = (0..3)
+        .all(|a| (0..3).all(|b| (dot(m[a], m[b]) - if a == b { 1.0 } else { 0.0 }).abs() < 1e-9));
+    let det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    orthonormal && (det - 1.0).abs() < 1e-9
+}
+
+/// The model form classes whose saved graphics draw a family's geometry.
+const FORM_CLASSES: [&str; 8] = [
+    "ExtrusionElem",
+    "RevolutionElem",
+    "SweepElem",
+    "BlendElem",
+    "SweptBlendElem",
+    "FreeFormElement",
+    "Text3dElem",
+    "ImportInstance",
+];
+
+/// A form's stored `Visible` (`IS_VISIBLE_PARAM`, -1006205), where it holds one.
+fn stored_visible(graph: &ObjectGraph) -> Option<i64> {
+    graph
+        .objects
+        .iter()
+        .filter(|o| o.class_name == "ParamValueSetInt")
+        .filter_map(|o| o.fields.get("m_paramSet")?.as_array())
+        .flatten()
+        .find(|entry| entry.get("m_paramId").and_then(element_id_signed) == Some(-1_006_205))
+        .and_then(|entry| entry.get("m_value")?.as_i64())
+}
+
+/// [`element_id`], keeping the sign (a built-in parameter's id is negative).
+fn element_id_signed(value: &Fv) -> Option<i64> {
+    if let Some(n) = value.as_i64() {
+        return Some(n);
+    }
+    ["m_id", "m_id64"]
+        .iter()
+        .find_map(|key| value.get(*key))
+        .and_then(element_id_signed)
+}
+
+/// What a nested family's own document saved as graphics for its visible solid forms,
+/// meshed, in its own coordinates; else why not. Every form that is not a void and not
+/// stored hidden must have graphics that mesh whole with a triangle.
+fn nested_form_graphics(records: &[(u64, ObjectGraph)]) -> Result<NestedBodies, String> {
+    let graphics: BTreeMap<u64, &ObjectGraph> = records
+        .iter()
+        .filter(|(_, g)| {
+            g.objects
+                .first()
+                .is_some_and(|r| r.class_name == "GElement")
+        })
+        .map(|(id, g)| (*id, g))
+        .collect();
+    let mut bodies = NestedBodies::default();
+    let mut forms = 0;
+    for (id, graph) in records {
+        let Some(root) = graph
+            .objects
+            .first()
+            .filter(|r| FORM_CLASSES.contains(&r.class_name.as_str()))
+        else {
+            continue;
+        };
+        if root.fields.get("m_cutting").and_then(Fv::as_bool) == Some(true)
+            || stored_visible(graph) == Some(0)
+        {
+            continue;
+        }
+        forms += 1;
+        let Some(own) = graphics.get(id) else {
+            return Err(format!("{} has no graphics", root.class_name));
+        };
+        let meshes = graphics_with_resolver(own, &|other| graphics.get(&other).copied());
+        if let Some(why) = meshes.diagnostics.first() {
+            return Err(format!("{} graphics {why}", root.class_name));
+        }
+        if meshes.unbounded_faces != 0 {
+            return Err(format!("{} graphics unbounded faces", root.class_name));
+        }
+        let before = bodies.triangles.len();
+        for primitive in meshes
+            .primitives
+            .iter()
+            .filter(|p| !p.hidden && !p.filtered)
+        {
+            let base = bodies.vertices.len();
+            bodies.vertices.extend(primitive.vertices.iter().copied());
+            bodies
+                .triangles
+                .extend(primitive.triangles.iter().filter_map(|t| {
+                    let corner = |i: u32| usize::try_from(i).ok().map(|i| base + i);
+                    Some([corner(t[0])?, corner(t[1])?, corner(t[2])?])
+                }));
+        }
+        if bodies.triangles.len() == before {
+            return Err(format!("{} graphics draw no triangle", root.class_name));
+        }
+    }
+    if forms == 0 {
+        return Err("no visible solid form".to_string());
+    }
+    Ok(bodies)
+}
+
 /// What a formless family's nested families draw, in the formless family's coordinates:
 /// their extrusions as solids and their revolutions as meshes.
 #[derive(Default)]
@@ -317,6 +432,8 @@ struct NestedFamily {
     /// Every model form class its document holds but extrusions, counted.
     forms: BTreeMap<String, usize>,
     bodies: Result<NestedBodies, String>,
+    /// Its visible solid forms' own saved graphics, meshed ([`nested_form_graphics`]).
+    graphics: Result<NestedBodies, String>,
 }
 
 fn nested_family(records: Vec<(u64, ObjectGraph)>) -> NestedFamily {
@@ -330,6 +447,7 @@ fn nested_family(records: Vec<(u64, ObjectGraph)>) -> NestedFamily {
             *forms.entry(root.class_name.clone()).or_default() += 1;
         }
     }
+    let graphics = nested_form_graphics(&records);
     let mut document = FormDocument::default();
     for (record, graph) in records {
         document.insert(record, graph);
@@ -370,6 +488,7 @@ fn nested_family(records: Vec<(u64, ObjectGraph)>) -> NestedFamily {
         revolutions: revolution_ids.len(),
         forms,
         bodies,
+        graphics,
     }
 }
 
@@ -396,6 +515,7 @@ fn nested_family_solids(
         .map(|(family_id, records)| (family_id, nested_family(records)))
         .collect();
     let (mut found, mut extrusions, mut voids, mut revolutions) = (0, 0, 0, 0);
+    let mut from_graphics = 0usize;
     let mut forms: BTreeMap<String, usize> = BTreeMap::new();
     let mut placed = NestedBodies::default();
     let mut refused: Option<String> = None;
@@ -422,14 +542,27 @@ fn nested_family_solids(
             refused.get_or_insert("no nested transform".to_string());
             continue;
         };
+        if !is_rotation(&matrix) {
+            refused.get_or_insert("nested transform not a rotation".to_string());
+            continue;
+        }
         let carry =
             |v: V3| [0usize, 1, 2].map(|i| (0..3).map(|j| matrix[i][j] * v[j]).sum::<f64>());
         let place = |v: V3| {
             let moved = carry(v);
             [0usize, 1, 2].map(|i| origin[i] + moved[i])
         };
-        match &nested_family.bodies {
+        // The forms' own saved graphics first, as Revit tessellated them; else the
+        // rebuilt extrusions and revolutions.
+        match nested_family
+            .graphics
+            .as_ref()
+            .or(nested_family.bodies.as_ref())
+        {
             Ok(own) => {
+                if nested_family.graphics.is_ok() {
+                    from_graphics += 1;
+                }
                 for solid in &own.solids {
                     placed.solids.push(ExtrusionSolid {
                         profile: solid.profile.clone(),
@@ -450,13 +583,18 @@ fn nested_family_solids(
                     .extend(own.triangles.iter().map(|t| t.map(|i| base + i)));
             }
             Err(why) => {
-                refused.get_or_insert(format!("nested {why}"));
+                let graphics_why = nested_family
+                    .graphics
+                    .as_ref()
+                    .err()
+                    .map_or("-", |w| w.as_str());
+                refused.get_or_insert(format!("nested {why}; graphics {graphics_why}"));
             }
         }
     }
     let listed: Vec<String> = forms.iter().map(|(c, n)| format!("{c}:{n}")).collect();
     let summary = format!(
-        "instances={} documents={found} extrusions={extrusions} voids={voids} revolutions={revolutions} forms={}",
+        "instances={} documents={found} extrusions={extrusions} voids={voids} revolutions={revolutions} forms={} from_graphics={from_graphics}",
         nested.len(),
         if listed.is_empty() {
             "-".to_string()
@@ -608,8 +746,12 @@ fn main() -> Result<()> {
     let mut nested_meshes: BTreeMap<u64, (Vec<V3>, Vec<[usize; 3]>)> = BTreeMap::new();
     // A formless family's nested families' own extrusions, each read from its own
     // document and placed by its nested instance's saved transform.
-    let mut nested_records =
-        nested_family_records_in(&mut rf, &formless, &classes, &Options::default().releases)?;
+    let mut nested_records = nested_family_records_in(
+        &mut rf,
+        &formless,
+        &BTreeSet::new(),
+        &Options::default().releases,
+    )?;
     let mut nested_solids: BTreeMap<u64, Result<NestedBodies, String>> = BTreeMap::new();
     for (id, items) in &everything {
         let graphics: BTreeMap<u64, &ObjectGraph> = items
