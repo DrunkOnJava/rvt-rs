@@ -75,6 +75,16 @@ smallest rectangle) and, of those, how far the rectangle is turned from the plan
 The plan axes there are rvt-rs's own, the probe's and the record boxes': Revit's export is turned from them
 by the turn of its IfcSite's placement, which is taken out before a column's extent along a plan axis and its
 turn from the plan axes are read.
+
+S6 (#1839) reads the probe's `line_low` and `line_high`, the same question asked along the beam's own line by
+the column's own outline (its saved mesh's plan hull, else the section the export draws where that is not its
+record box, else the record box), since S5 on a structure turned about 4 degrees found every `endcol_*`
+extent longer than the chord: the export draws a column as its record box, and the box of a turned column is
+the axis-aligned box around it. For each end it sets the line's extent over the chord of Revit's beam line
+through Revit's column, by where the outline is from, and where the line and Revit's beam end in that chord.
+It also repeats the probe's `outlines` and `turncheck` lines: the probe turns the model by 4 degrees itself
+and says on how many ends the line fields come out the same. A probe output without the fields prints none
+of this, and every other line is as before.
 """
 
 import collections
@@ -605,6 +615,105 @@ def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_degre
             print(f"beam ends:   Revit {stands:<8} beam {label} the column, {sum(cells.values())} ends: {text}")
 
 
+# The probe's `line_*` source (S6): where the column's outline is from.
+LINE_SOURCES = {"m": "column's saved mesh", "s": "column's section", "b": "column's record box"}
+
+
+def line_columns(fields):
+    """The probe's `line_low` and `line_high` of a beam (S6): end -> (column Tag, t, extent in feet, source),
+    read along the beam's own line by the column's own outline."""
+    out = {}
+    for end in ("low", "high"):
+        value = fields.get(f"line_{end}", "-")
+        if value == "-":
+            continue
+        tag, t, extent, source = value.split(":")
+        out[end] = (tag, float(t), float(extent), source)
+    return out
+
+
+def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
+    """S6 (#1839): the probe's `line_*` fields beside Revit's export. For each end the probe names a column
+    for, the chord of Revit's beam line through Revit's column, the probe's extent over it, and where the
+    probe's line and Revit's beam end in that chord, from the face toward the beam's middle (0) to the face
+    away from it (1). Nothing is printed for a probe output without the fields."""
+    if not any("line_low" in fields or "line_high" in fields for fields in beams.values()):
+        return
+    ratios = collections.Counter()
+    joint = collections.defaultdict(collections.Counter)
+    seen = collections.Counter()
+    for tag, fields in beams.items():
+        stands = stands_by_tag.get(tag)
+        beam = by_tag.get(tag)
+        if stands is None or beam is None or fields.get("axis") == "-":
+            continue
+        caps = cap_centres(meshes[beam][2])
+        if caps is None:
+            continue
+        direction = caps[1] - caps[0]
+        length = numpy.linalg.norm(direction)
+        if length == 0 or math.hypot(float(direction[0]), float(direction[1])) < 1e-9:
+            continue
+        axis = direction / length
+        middle = float(meshes[beam][2].reshape(-1, 3).mean(axis=0) @ axis)
+        named = line_columns(fields)
+        found = {}
+        for end, (column_tag, t, extent, source) in named.items():
+            column = by_tag.get(column_tag)
+            if column is not None:
+                found[end] = (column, t, extent, source)
+        seen["beam ends the probe's line names a column for"] += len(named)
+        seen["of those the export draws the column of"] += len(found)
+        centres = {
+            end: (meshes[column][4][0] + meshes[column][4][1]) / 2 for end, (column, _, _, _) in found.items()
+        }
+        placed = assign_caps(caps, centres)
+        kind = alignment(fields)
+        for end, (column, t_line, extent, source) in found.items():
+            crossing = chord(meshes[column][2], caps[0], axis)
+            if crossing is None:
+                seen["of those, ends whose line crosses no face of Revit's column"] += 1
+                continue
+            start = float(caps[0] @ axis)
+            low, high = start + crossing[0], start + crossing[1]
+            where = LINE_SOURCES.get(source, source)
+            ratio = ratio_bin(extent, (high - low) * factor)
+            ratios[(kind, "all", ratio)] += 1
+            ratios[(kind, where, ratio)] += 1
+            near, far = (low, high) if abs(low - middle) < abs(high - middle) else (high, low)
+            if far == near:
+                continue
+            t_revit = (float(caps[placed[end]] @ axis) - near) / (far - near)
+            joint[(stands, where)][(fraction_bin(t_line), fraction_bin(t_revit))] += 1
+    print(
+        "beam ends: S6, each end by the beam's own line and the column's own outline (the probe's line_* fields), "
+        "beside the chord of Revit's beam line through Revit's column:"
+    )
+    for what, n in seen.items():
+        print(f"beam ends:   S6, {n} {what}")
+    ratio_names = [name for name, _ in RATIO_BINS] + [CHORD_NONE]
+    for kind in ("in line with a plan axis", "oblique to the plan axes", "of unknown direction"):
+        for where in ("all", *LINE_SOURCES.values()):
+            parts = [f"{name} {ratios[(kind, where, name)]}" for name in ratio_names if ratios[(kind, where, name)]]
+            if parts:
+                label = "" if where == "all" else f", outline from the {where}"
+                print(f"beam ends:   S6, beams {kind}, the line's extent over the chord{label}: {'; '.join(parts)}")
+    order = {name: i for i, name in enumerate(FRACTION_BINS)}
+    for stands in ("shorter", "same", "longer"):
+        for where in LINE_SOURCES.values():
+            cells = joint.get((stands, where))
+            if not cells:
+                continue
+            text = "; ".join(
+                f"{ours} -> {revit} {n}"
+                for (ours, revit), n in sorted(cells.items(), key=lambda item: (order[item[0][0]], order[item[0][1]]))
+            )
+            print(
+                f"beam ends:   S6, Revit {stands:<8} beam, outline from the {where}, {sum(cells.values())} ends, "
+                f"the line's end -> Revit's end in the chord: {text}"
+            )
+
+
 def print_ends(model, stands_by_tag, factor, beams):
     """Count the ends of the beams, by how Revit's length stands to the record box's and by the kind
     of element each end lies on."""
@@ -639,6 +748,7 @@ def print_ends(model, stands_by_tag, factor, beams):
         cells = ", ".join(f"{kind} {ends[(stands, kind)]}" for kind in (*FACE_KINDS, "nothing"))
         print(f"beam ends:   Revit {stands:<8} {total} ends: {cells}")
     print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_turn_degrees(model))
+    print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor)
 
 
 def feet_per_unit(raw, records):
@@ -678,6 +788,11 @@ def main():
         f"(a section's centre from its record box's centre, median/largest in feet: "
         f"{drawn.get('section_centre_offset', '?')})"
     )
+
+    # S6: the probe's own account of where the outlines are from, and its check on the model it turns.
+    for line in open(args[0], encoding="utf-8", errors="replace"):
+        if line.startswith(("outlines ", "turncheck ")):
+            print(f"beam ends: the probe's {line.rstrip()}")
 
     table = collections.Counter()
     cut = collections.Counter()
