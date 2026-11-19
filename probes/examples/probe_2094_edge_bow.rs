@@ -28,6 +28,11 @@
 //!     rvt-rs's surface (`TARGETS`), the three edges whose sides pass nearest it, how far
 //!     each face's side (saved points, 16 steps evaluated between) passes from it, and the
 //!     axis each face's side runs along (`-` where it crosses both);
+//!   mesh owner=<ElementId> faces=<n> diagnostics=<n> boundary_vertices=<n> over_0.0001=<n>
+//!     over_0.001=<n> largest=<ft>: the two flights' faces meshed as the export meshes them
+//!     (`graphics_with_resolver`), each face's open boundary vertices and how far each lies
+//!     from every other face, then the eight farthest with where they are: faces that part
+//!     along a shared edge show here as a gap;
 //!   tally faces=<a>/<b> edges=<n> gap_over_0.001=<n> largest=<ft>
 //! ElementIds, surface classes and distances in feet only.
 //!
@@ -59,6 +64,46 @@ const TARGETS: [V3; 4] = [
     [157.7549, 49.7848, 226.0539],
     [157.7549, 49.5977, 225.901],
 ];
+
+/// The two flights whose meshes are checked for faces that part along a shared edge.
+const MESH_OWNERS: [u64; 2] = [3_558_983, 3_561_904];
+
+/// The closest distance from `p` to the triangle `a`, `b`, `c`.
+fn triangle_distance(p: V3, a: V3, b: V3, c: V3) -> f64 {
+    let sub = |x: V3, y: V3| -> V3 { std::array::from_fn(|k| x[k] - y[k]) };
+    let dot = |x: V3, y: V3| x[0] * y[0] + x[1] * y[1] + x[2] * y[2];
+    let (ab, ac, ap) = (sub(b, a), sub(c, a), sub(p, a));
+    let n: V3 = [
+        ab[1] * ac[2] - ab[2] * ac[1],
+        ab[2] * ac[0] - ab[0] * ac[2],
+        ab[0] * ac[1] - ab[1] * ac[0],
+    ];
+    let nn = dot(n, n);
+    if nn > 0. {
+        // Barycentric coordinates of the foot of the perpendicular.
+        let t = dot(ap, n) / nn;
+        let foot: V3 = std::array::from_fn(|k| p[k] - t * n[k]);
+        let (v0, v1, v2) = (ab, ac, sub(foot, a));
+        let (d00, d01, d11, d20, d21) = (
+            dot(v0, v0),
+            dot(v0, v1),
+            dot(v1, v1),
+            dot(v2, v0),
+            dot(v2, v1),
+        );
+        let den = d00 * d11 - d01 * d01;
+        if den.abs() > 0. {
+            let v = (d11 * d20 - d01 * d21) / den;
+            let w = (d00 * d21 - d01 * d20) / den;
+            if v >= 0. && w >= 0. && v + w <= 1. {
+                return (t * t * nn).sqrt();
+            }
+        }
+    }
+    segment_distance(p, a, b)
+        .min(segment_distance(p, b, c))
+        .min(segment_distance(p, c, a))
+}
 
 /// Sub-steps evaluated between two saved points of an edge on each face.
 const SUBSTEPS: usize = 16;
@@ -391,9 +436,18 @@ fn main() -> Result<()> {
     let mut refused = BTreeMap::new();
     let mut seen = BTreeSet::new();
     let mut wanted = BTreeSet::new();
+    // The two flights' own graphs, and the symbols they name, kept for the mesh check.
+    let mut kept: BTreeMap<u64, ObjectGraph> = BTreeMap::new();
+    let mut kept_symbols: BTreeSet<u64> = BTreeSet::new();
     native_document::extract_graphs(&mut rf, &options, |r| {
         seen.insert(r.identity.element_id);
         wanted.extend(instance_symbols(&r));
+        if MESH_OWNERS.contains(&r.identity.element_id) {
+            kept_symbols.extend(instance_symbols(&r));
+            if let Some(graph) = &r.graph {
+                kept.insert(r.identity.element_id, graph.clone());
+            }
+        }
         scan(r.identity.element_id, &r, &mut bows, &mut refused);
         Ok(())
     })?;
@@ -407,6 +461,11 @@ fn main() -> Result<()> {
         let mut found = Vec::new();
         native_document::extract_graphs(&mut rf, &options, |r| {
             found.extend(instance_symbols(&r));
+            if kept_symbols.contains(&r.identity.element_id) {
+                if let Some(graph) = &r.graph {
+                    kept.insert(r.identity.element_id, graph.clone());
+                }
+            }
             scan(r.identity.element_id, &r, &mut bows, &mut refused);
             Ok(())
         })?;
@@ -447,6 +506,72 @@ fn main() -> Result<()> {
             println!(
                 "near target={:.4},{:.4},{:.4} owner={} object={} sides={} points={} side0={d0:.6} side1={d1:.6} gap={:.6}",
                 target[0], target[1], target[2], b.owner, b.object, b.axes, b.points, b.gap
+            );
+        }
+    }
+    // Whether the flights' faces, meshed as the export meshes them, meet along their shared
+    // edges: each face's open boundary (an edge of one of its triangles that no other of
+    // its triangles has), and how far each of its vertices lies from every other face.
+    for owner in MESH_OWNERS {
+        let Some(graph) = kept.get(&owner) else {
+            println!("mesh owner={owner} not read");
+            continue;
+        };
+        let meshes =
+            rvt::research::native_saved_mesh::graphics_with_resolver(graph, &|id| kept.get(&id));
+        let faces: Vec<&rvt::research::native_saved_mesh::Primitive> = meshes
+            .primitives
+            .iter()
+            .filter(|p| !p.hidden && !p.filtered)
+            .collect();
+        let mut gaps: Vec<(f64, V3, usize)> = Vec::new();
+        for (fi, face) in faces.iter().enumerate() {
+            let key = |i: u32| face.vertices[i as usize].map(|x| (x * 1e6).round() as i64);
+            let mut uses: BTreeMap<([i64; 3], [i64; 3]), usize> = BTreeMap::new();
+            for t in &face.triangles {
+                for (a, b) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
+                    let (ka, kb) = (key(a), key(b));
+                    let edge = if ka < kb { (ka, kb) } else { (kb, ka) };
+                    *uses.entry(edge).or_default() += 1;
+                }
+            }
+            let mut boundary: BTreeSet<[i64; 3]> = BTreeSet::new();
+            for ((a, b), n) in &uses {
+                if *n == 1 {
+                    boundary.insert(*a);
+                    boundary.insert(*b);
+                }
+            }
+            for k in &boundary {
+                let p: V3 = k.map(|x| x as f64 / 1e6);
+                let mut best = f64::INFINITY;
+                for (gi, other) in faces.iter().enumerate() {
+                    if gi == fi {
+                        continue;
+                    }
+                    for t in &other.triangles {
+                        let [a, b, c] = t.map(|i| other.vertices[i as usize]);
+                        best = best.min(triangle_distance(p, a, b, c));
+                    }
+                }
+                gaps.push((best, p, face.object_index));
+            }
+        }
+        gaps.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let over = |bar: f64| gaps.iter().filter(|g| g.0 > bar).count();
+        println!(
+            "mesh owner={owner} faces={} diagnostics={} boundary_vertices={} over_0.0001={} over_0.001={} largest={:.6}",
+            faces.len(),
+            meshes.diagnostics.len(),
+            gaps.len(),
+            over(1e-4),
+            over(1e-3),
+            gaps.first().map_or(0., |g| g.0)
+        );
+        for (d, p, face) in gaps.iter().take(8) {
+            println!(
+                "mesh owner={owner} gap={d:.6} at={:.4},{:.4},{:.4} face_object={face}",
+                p[0], p[1], p[2]
             );
         }
     }
