@@ -20,6 +20,10 @@
 //!     does not draw: a rebuilt body of a family that has any is short of them;
 //!   - `volume`: the rebuilt solids' volumes summed (two that overlap are counted twice);
 //!   - `low` and `high`: the corners of the rebuilt solids' box in the model's frame, feet.
+//!   formless family=<ElementId> records=<n> classes=<class:n,...>: for each family with no
+//!     extrusion and no other form the rebuild knows, every record class its document holds,
+//!     most first (12 at most), so that what draws such a family (a nested instance, a
+//!     free-form solid, an import) can be told;
 //!   tally <key> <n>
 //! Nested families are not followed, as the export does not follow them.
 //!
@@ -220,6 +224,46 @@ fn main() -> Result<()> {
             document.insert(record, graph);
         }
         read.insert(id, family(&document, others));
+    }
+    // What a family with no form the rebuild reads holds instead: every record
+    // class of its document, counted (nested instances are `FamilyInstance`).
+    let formless: BTreeSet<u64> = families
+        .iter()
+        .filter(|f| {
+            read.get(f)
+                .is_none_or(|family| family.extrusions == 0 && family.others == 0)
+        })
+        .copied()
+        .collect();
+    let everything = family_records_in(
+        &mut rf,
+        &formless,
+        &BTreeSet::new(),
+        &Options::default().releases,
+        None,
+    )?;
+    for (id, items) in &everything {
+        let mut classes: BTreeMap<&str, usize> = BTreeMap::new();
+        for (_, graph) in items {
+            if let Some(root) = graph.objects.first() {
+                *classes.entry(root.class_name.as_str()).or_default() += 1;
+            }
+        }
+        let mut ranked: Vec<(&str, usize)> = classes.into_iter().collect();
+        ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        let listed: Vec<String> = ranked
+            .iter()
+            .take(12)
+            .map(|(class, n)| format!("{class}:{n}"))
+            .collect();
+        println!(
+            "formless family={id} records={} classes={}",
+            items.len(),
+            listed.join(",")
+        );
+    }
+    for id in formless.difference(&everything.keys().copied().collect()) {
+        println!("formless family={id} records=0 classes=-");
     }
     let wanted: BTreeSet<u32> = ids
         .iter()
