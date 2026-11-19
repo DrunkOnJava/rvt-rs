@@ -190,6 +190,8 @@ struct Bow {
     /// Each face's side of the edge, the saved points with `SUBSTEPS` between, in the model.
     lines: [Vec<V3>; 2],
     axes: String,
+    /// How many face regions each of its two faces holds (`m_faceRegions`).
+    regions: String,
 }
 
 /// A face's surface, as far as the probe evaluates one: a plane by its origin and two axes
@@ -254,6 +256,8 @@ struct EdgeRead {
     at: (usize, usize),
     lines: [Vec<V3>; 2],
     axes: String,
+    /// How many face regions each of its two faces holds (`m_faceRegions`).
+    regions: String,
 }
 
 fn edge_bow(g: &ObjectGraph, ei: usize) -> Result<Option<EdgeRead>> {
@@ -334,6 +338,14 @@ fn edge_bow(g: &ObjectGraph, ei: usize) -> Result<Option<EdgeRead>> {
         Ok(out)
     };
     let lines = [line(&s0, &sides[0])?, line(&s1, &sides[1])?];
+    let region_count = |f: usize| {
+        g.objects[f]
+            .fields
+            .get("m_faceRegions")
+            .and_then(Fv::as_array)
+            .map_or(0, <[Fv]>::len)
+    };
+    let regions = format!("{}/{}", region_count(f0), region_count(f1));
     let axes = format!(
         "{}:{}/{}:{}",
         c0,
@@ -359,6 +371,7 @@ fn edge_bow(g: &ObjectGraph, ei: usize) -> Result<Option<EdgeRead>> {
         at,
         lines,
         axes,
+        regions,
     }))
 }
 
@@ -382,6 +395,7 @@ fn scan(owner: u64, record: &Record, bows: &mut Vec<Bow>, refused: &mut BTreeMap
                 at: read.at,
                 lines: read.lines,
                 axes: read.axes,
+                regions: read.regions,
             }),
             Ok(None) => {}
             Err(error) => {
@@ -588,7 +602,9 @@ fn main() -> Result<()> {
                 })
                 .min_by(|a, b| a.0.total_cmp(&b.0));
             let key = match nearest {
-                Some((near, b)) if near < 0.01 => format!("{} object={}", b.axes, b.object),
+                Some((near, b)) if near < 0.01 => {
+                    format!("{} object={} regions={}", b.axes, b.object, b.regions)
+                }
                 Some((near, _)) => format!("no read edge within 0.01 ft (nearest {near:.4})"),
                 None => "no read edge".to_string(),
             };
