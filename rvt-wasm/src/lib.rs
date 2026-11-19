@@ -126,7 +126,8 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
 /// `progress`, when given, is a JS function `(stage, done, total)` called as
 /// the decoder works: `stage` is a [`Stage`] name as `rvt-gltf --progress`
 /// prints it (`schema-parse`, `candidate-scan`, `element-decode`,
-/// `partition-scan`, `saved-graphics`, `saved-meshes`), `done` a count and
+/// `partition-scan`, `partition-recovery`, `saved-graphics`, `saved-meshes`),
+/// `done` a count and
 /// `total` the count it is out of, or `null` where the stage has no
 /// denominator yet (#1195). It is called when a stage begins, when it ends,
 /// and each time a stage with a total passes another whole percent, so a
