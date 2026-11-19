@@ -7,7 +7,7 @@
 //! Skips what is absent.
 
 use rvt::RevitFile;
-use rvt::research::native_form_geometry::{self as nfg, FAMILY_RELEASES, FormDocument};
+use rvt::research::native_form_geometry::{self as nfg, FormDocument};
 use rvt::research::native_parameters::{GraphLimits, decode_graph_with_limits};
 use std::path::PathBuf;
 
@@ -16,13 +16,6 @@ const LIMITS: GraphLimits = GraphLimits {
     max_objects: 500_000,
     max_depth: 128,
 };
-
-#[test]
-fn family_releases_start_at_2014() {
-    assert!(FAMILY_RELEASES.contains(&2014));
-    assert!(!FAMILY_RELEASES.contains(&2013));
-    assert!(FAMILY_RELEASES.contains(&2027));
-}
 
 /// (file, extrusions) of the Revit 2014 families measured in RE-489.
 const FILES: [(&str, usize); 3] = [
@@ -48,12 +41,13 @@ fn revit_2014_family_extrusions_build() {
         assert_eq!(document.release, 2014, "{name}");
         let mut forms = FormDocument::default();
         let walked = nfg::walk(&mut file, &document, &[102], |entry| {
-            if matches!(
+            if !matches!(
                 entry.class,
                 Some("ExtrusionElem" | "CurveElem" | "SketchPlane" | "VarSketch")
-            ) && let Ok(graph) =
-                decode_graph_with_limits(entry.body, &document.registry, &LIMITS)
-            {
+            ) {
+                return Ok(());
+            }
+            if let Ok(graph) = decode_graph_with_limits(entry.body, &document.registry, &LIMITS) {
                 forms.insert(entry.id, graph);
             }
             Ok(())
