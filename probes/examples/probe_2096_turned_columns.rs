@@ -14,6 +14,7 @@
 //! of the mesh in plan, and prints:
 //!   column tag=<ElementId> angle=<deg|-> turn=<aligned|quarter|oblique|-> rotation=<deg|->
 //!     section=<rectangle|circle|outline|box|other> mesh=<yes|no> drawn=<ft|-> turned=<ft|->
+//!     section_size=<w>x<d> mesh_size=<w>x<d> centre_offset=<ft> mesh_corners=<n>
 //!   - `angle`: the plan angle of the instance's X axis from the model's, degrees in (-180, 180],
 //!     `-` where no transform is read or the instance is not upright;
 //!   - `turn`: `aligned` at a multiple of 180 degrees, `quarter` at 90 or -90, else `oblique`
@@ -24,7 +25,11 @@
 //!   - `drawn`: the farthest a corner of the section as drawn lies from the nearest vertex of the
 //!     mesh's hull, feet (`-` without a mesh or for a circle);
 //!   - `turned`: the same with the section turned about its centre by `angle` less the export's
-//!     rotation, the outline the fix would draw.
+//!     rotation, the outline the fix would draw;
+//!   - `section_size`, `mesh_size`, `centre_offset`, `mesh_corners`: the section's and the mesh
+//!     outline's plan extents along the model's axes (feet), how far their centres lie apart,
+//!     and how many corners the mesh's outline has (`-` without both), which say why the two
+//!     differ where they do.
 //!
 //! and one `tally <key> <n>` line per turn and section kind. ElementIds, angles and distances in
 //! feet only.
@@ -290,8 +295,36 @@ fn main() -> Result<()> {
                 distance(&turned(corners, *centre, by))
             });
         let feet = |d: Option<f64>| d.map_or_else(|| "-".to_string(), |d| format!("{d:.6}"));
+        // Why a section and its mesh differ: each one's plan extents along the model's
+        // axes, the offset of their centres, and how many corners the mesh's outline has.
+        let extents = |points: &[P2]| -> (f64, f64, P2) {
+            let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+            for p in points {
+                for k in 0..2 {
+                    lo[k] = lo[k].min(p[k]);
+                    hi[k] = hi[k].max(p[k]);
+                }
+            }
+            (
+                hi[0] - lo[0],
+                hi[1] - lo[1],
+                [(lo[0] + hi[0]) / 2., (lo[1] + hi[1]) / 2.],
+            )
+        };
+        let shape = match (column.corners.as_ref(), mesh) {
+            (Some((corners, _)), Some(hull)) => {
+                let (sw, sd, sc) = extents(corners);
+                let (mw, md, mc) = extents(hull);
+                format!(
+                    "section_size={sw:.4}x{sd:.4} mesh_size={mw:.4}x{md:.4} centre_offset={:.4} mesh_corners={}",
+                    (sc[0] - mc[0]).hypot(sc[1] - mc[1]),
+                    hull.len()
+                )
+            }
+            _ => "section_size=- mesh_size=- centre_offset=- mesh_corners=-".to_string(),
+        };
         println!(
-            "column tag={id} angle={} turn={turn} rotation={} section={} mesh={} drawn={} turned={}",
+            "column tag={id} angle={} turn={turn} rotation={} section={} mesh={} drawn={} turned={} {shape}",
             angle.map_or_else(|| "-".to_string(), |a| format!("{a:.6}")),
             column
                 .rotation
