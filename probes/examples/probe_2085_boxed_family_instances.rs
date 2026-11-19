@@ -1,0 +1,301 @@
+//! #2085: of the family instances an export leaves as a box because the file holds no saved
+//! mesh for them, how many could be drawn from their family's own extrusions?
+//!
+//! FACT under test: `--family-extrusions` draws an instance from its family's extrusions only
+//! where they reproduce the instance's own saved mesh, so an instance with no saved mesh never
+//! enters it and keeps its record box. Rebuilt by the same rules (no void in the family, every
+//! visible extrusion rebuilt, placed by the instance's transform), how many of those instances
+//! would have a body, and how close is it to Revit's own (`tools/re/probe_2085_vs_ifc.py`
+//! scores the second against Revit's export)?
+//!
+//! For each exported element whose `SavedMeshRefusal` is `no_saved_mesh` or
+//! `no_saved_graphics` (a body still its record box, with nothing saved to draw it from), the
+//! probe finds its symbol (`FamilyInstance.m_masterSymbolId`) and family
+//! (`FamilySymbol.m_familyId`), reads the family's forms, rebuilds its extrusions as
+//! `ifc::family_extrusions` does, places them by the instance's transform (RE-87) and prints:
+//!   instance tag=<ElementId> class=<IFC entity> refusal=<..> family=<ElementId|-> extrusions=<n>
+//!     voids=<n> others=<n> rebuilt=<yes|why not> transform=<yes|no> volume=<ft3|-> low=<x,y,z|->
+//!     high=<x,y,z|->
+//!   - `others`: the family's sweeps, blends, revolutions and swept blends, which the rebuild
+//!     does not draw: a rebuilt body of a family that has any is short of them;
+//!   - `volume`: the rebuilt solids' volumes summed (two that overlap are counted twice);
+//!   - `low` and `high`: the corners of the rebuilt solids' box in the model's frame, feet.
+//!   tally <key> <n>
+//! Nested families are not followed, as the export does not follow them.
+//!
+//! Usage:
+//!   cargo run --profile ci -p rvt-probes --example probe_2085_boxed_family_instances -- MODEL.rvt
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use anyhow::Result;
+use rvt::RevitFile;
+use rvt::ifc::entities::{IfcEntity, PropertyValue};
+use rvt::ifc::{ExportOptions, run_export};
+use rvt::research::native_document::{self, Options};
+use rvt::research::native_family_forms::family_records_in;
+use rvt::research::native_form_geometry::{ExtrusionSolid, FormDocument, Frame};
+use rvt::research::partition_instance_transforms::{InstanceTransform, scan_instance_transforms};
+
+/// The refusals of a body the file holds nothing to draw from.
+const NO_MESH: [&str; 2] = ["no_saved_mesh", "no_saved_graphics"];
+/// Forms a family can hold that the rebuild does not draw.
+const OTHER_FORMS: [&str; 4] = ["SweepElem", "BlendElem", "RevolutionElem", "SweptBlendElem"];
+
+type V3 = [f64; 3];
+
+/// `class.field` of each record of `ids` whose root is `class`: the ElementId it names.
+fn named_ids(
+    rf: &mut RevitFile,
+    ids: &BTreeSet<u64>,
+    class: &str,
+    field: &str,
+) -> Result<BTreeMap<u64, u64>> {
+    let mut out = BTreeMap::new();
+    if ids.is_empty() {
+        return Ok(out);
+    }
+    let options = Options {
+        selected_ids: ids.clone(),
+        ..Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        let target = record
+            .graph
+            .as_ref()
+            .and_then(|graph| graph.objects.first())
+            .filter(|root| root.class_name == class)
+            .and_then(|root| root.fields.get(field))
+            .and_then(|value| value.get("m_id"))
+            .and_then(|id| id.get("m_id64").or_else(|| id.get("m_id")))
+            .and_then(|id| id.as_i64())
+            .and_then(|n| u64::try_from(n).ok());
+        if let Some(target) = target {
+            out.insert(record.identity.element_id, target);
+        }
+        Ok(())
+    })?;
+    Ok(out)
+}
+
+/// What the family's document holds and, where the rebuild draws it, its solids.
+struct Family {
+    extrusions: usize,
+    voids: usize,
+    others: usize,
+    solids: Result<Vec<ExtrusionSolid>, String>,
+}
+
+fn family(document: &FormDocument, others: usize) -> Family {
+    let ids = document.extrusion_ids();
+    let mut voids = 0;
+    let mut solids = Vec::new();
+    let mut refused: Option<String> = None;
+    for id in &ids {
+        match document.extrusion(*id) {
+            Ok(extrusion) if extrusion.cutting => voids += 1,
+            Ok(extrusion) if extrusion.visible == Some(0) => {}
+            Ok(extrusion) => match extrusion.default_solid() {
+                Ok(solid) => solids.push(solid),
+                Err(why) => {
+                    refused.get_or_insert(why);
+                }
+            },
+            Err(why) => {
+                refused.get_or_insert(why);
+            }
+        }
+    }
+    let solids = if ids.is_empty() {
+        Err("no extrusion".to_string())
+    } else if voids > 0 {
+        Err("a void".to_string())
+    } else if let Some(why) = refused {
+        Err(why)
+    } else if solids.is_empty() {
+        Err("no visible extrusion".to_string())
+    } else {
+        Ok(solids)
+    };
+    Family {
+        extrusions: ids.len(),
+        voids,
+        others,
+        solids,
+    }
+}
+
+/// `solid`, in the family's coordinates, placed in the model by `transform`.
+fn placed(solid: &ExtrusionSolid, transform: &InstanceTransform) -> ExtrusionSolid {
+    let carry =
+        |v: V3| [0usize, 1, 2].map(|i| (0..3).map(|j| transform.axes[j][i] * v[j]).sum::<f64>());
+    let moved = carry(solid.frame.origin);
+    ExtrusionSolid {
+        profile: solid.profile.clone(),
+        frame: Frame {
+            origin: [0usize, 1, 2].map(|i| transform.origin[i] + moved[i]),
+            axes: solid.frame.axes.map(carry),
+        },
+        low: solid.low,
+        high: solid.high,
+    }
+}
+
+/// A why-not with its digits written as `#`, so that reasons that differ only in a number are
+/// one tally, and its spaces as `_`, so that it is one field.
+fn reason(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            '0'..='9' => '#',
+            ' ' => '_',
+            other => other,
+        })
+        .take(80)
+        .collect()
+}
+
+fn main() -> Result<()> {
+    let path = std::env::args()
+        .skip(1)
+        .find(|arg| !arg.starts_with("--"))
+        .ok_or_else(|| anyhow::anyhow!("usage: probe_2085_boxed_family_instances MODEL.rvt"))?;
+    let mut rf = RevitFile::open(&path)?;
+    let release = rf.basic_file_info()?.version;
+    let export = run_export(&mut rf, &ExportOptions::default())?;
+    // ElementId -> (IFC entity, refusal) of every body the file holds nothing to draw from.
+    let mut boxed: BTreeMap<u64, (String, String)> = BTreeMap::new();
+    let mut refusals = 0usize;
+    for entity in &export.model.entities {
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            property_set: Some(set),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let refusal = set.properties.iter().find_map(|p| match &p.value {
+            PropertyValue::Text(text) if p.name == "SavedMeshRefusal" => Some(text.clone()),
+            _ => None,
+        });
+        let Some(refusal) = refusal else {
+            continue;
+        };
+        refusals += 1;
+        if let (Ok(id), true) = (tag.parse::<u64>(), NO_MESH.contains(&refusal.as_str())) {
+            boxed.insert(id, (ifc_type.clone(), refusal));
+        }
+    }
+    let ids: BTreeSet<u64> = boxed.keys().copied().collect();
+    let symbol_of = named_ids(&mut rf, &ids, "FamilyInstance", "m_masterSymbolId")?;
+    let symbols: BTreeSet<u64> = symbol_of.values().copied().collect();
+    let family_of_symbol = named_ids(&mut rf, &symbols, "FamilySymbol", "m_familyId")?;
+    let families: BTreeSet<u64> = family_of_symbol.values().copied().collect();
+    let classes: BTreeSet<String> = ["ExtrusionElem", "CurveElem", "SketchPlane"]
+        .iter()
+        .chain(OTHER_FORMS.iter())
+        .map(|class| class.to_string())
+        .collect();
+    let records = family_records_in(
+        &mut rf,
+        &families,
+        &classes,
+        &Options::default().releases,
+        None,
+    )?;
+    let mut read: BTreeMap<u64, Family> = BTreeMap::new();
+    for (id, items) in records {
+        let others = items
+            .iter()
+            .filter(|(_, graph)| {
+                graph
+                    .objects
+                    .first()
+                    .is_some_and(|root| OTHER_FORMS.contains(&root.class_name.as_str()))
+            })
+            .count();
+        let mut document = FormDocument::default();
+        for (record, graph) in items {
+            document.insert(record, graph);
+        }
+        read.insert(id, family(&document, others));
+    }
+    let wanted: BTreeSet<u32> = ids
+        .iter()
+        .filter_map(|id| u32::try_from(*id).ok())
+        .collect();
+    let transforms = scan_instance_transforms(&mut rf, release, &wanted)?;
+
+    println!(
+        "file revit={release} refused_bodies={refusals} no_mesh={} with_family={} families={}",
+        boxed.len(),
+        boxed
+            .keys()
+            .filter(|id| symbol_of
+                .get(id)
+                .is_some_and(|s| family_of_symbol.contains_key(s)))
+            .count(),
+        families.len(),
+    );
+    let mut tally: BTreeMap<String, usize> = BTreeMap::new();
+    for (id, (class, refusal)) in &boxed {
+        let family_id = symbol_of
+            .get(id)
+            .and_then(|symbol| family_of_symbol.get(symbol))
+            .copied();
+        let family = family_id.and_then(|f| read.get(&f));
+        let transform = u32::try_from(*id).ok().and_then(|key| transforms.get(&key));
+        let (rebuilt, solids) = match (family_id, family) {
+            (None, _) => ("no_family".to_string(), None),
+            (Some(_), None) => ("family_document_not_read".to_string(), None),
+            (Some(_), Some(family)) => match &family.solids {
+                Ok(solids) => ("yes".to_string(), Some(solids)),
+                Err(why) => (reason(why), None),
+            },
+        };
+        *tally
+            .entry(format!("{class} rebuilt {rebuilt}"))
+            .or_default() += 1;
+        let placed_solids: Option<Vec<ExtrusionSolid>> = solids
+            .zip(transform)
+            .map(|(solids, transform)| solids.iter().map(|s| placed(s, transform)).collect());
+        if solids.is_some() {
+            let key = match (&placed_solids, family.map(|f| f.others)) {
+                (None, _) => "rebuilt, no transform read",
+                (Some(_), Some(0)) => "rebuilt and placed, extrusions only",
+                (Some(_), _) => "rebuilt and placed, with forms not drawn",
+            };
+            *tally.entry(key.to_string()).or_default() += 1;
+        }
+        let (volume, low, high) = match &placed_solids {
+            Some(solids) => {
+                let mut low = [f64::INFINITY; 3];
+                let mut high = [f64::NEG_INFINITY; 3];
+                for solid in solids {
+                    let (a, b) = solid.bounding_box();
+                    for k in 0..3 {
+                        low[k] = low[k].min(a[k]);
+                        high[k] = high[k].max(b[k]);
+                    }
+                }
+                let volume: f64 = solids.iter().map(ExtrusionSolid::volume).sum();
+                let point = |p: V3| format!("{:.6},{:.6},{:.6}", p[0], p[1], p[2]);
+                (format!("{volume:.6}"), point(low), point(high))
+            }
+            None => ("-".to_string(), "-".to_string(), "-".to_string()),
+        };
+        println!(
+            "instance tag={id} class={class} refusal={refusal} family={} extrusions={} voids={} others={} rebuilt={rebuilt} transform={} volume={volume} low={low} high={high}",
+            family_id.map_or_else(|| "-".to_string(), |f| f.to_string()),
+            family.map_or(0, |f| f.extrusions),
+            family.map_or(0, |f| f.voids),
+            family.map_or(0, |f| f.others),
+            if transform.is_some() { "yes" } else { "no" },
+        );
+    }
+    for (key, n) in &tally {
+        println!("tally {key} {n}");
+    }
+    Ok(())
+}
