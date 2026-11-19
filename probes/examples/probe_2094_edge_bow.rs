@@ -33,7 +33,11 @@
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_2094_edge_bow -- MODEL.rvt [ID ...]
-//! With no ElementId it reads the two timber office flights, 3558983 and 3561904.
+//! With no ElementId it reads every element the export writes, and adds a line for each
+//! element whose edges border a ruled face with a spline profile:
+//!   spline owner=<ElementId> class=<IFC class> edges=<n> gap_over_0.001=<n> largest=<ft>
+//! (an owner is the record the graphics are read from: a shared symbol's own id where an
+//! element draws one).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -42,7 +46,7 @@ use rvt::RevitFile;
 use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Record};
 use rvt::research::native_parameters::ObjectGraph;
-use rvt::research::native_parametric_surface::ParametricSurface;
+use rvt::research::native_parametric_surface::{Curve, ParametricSurface};
 use rvt::research::native_saved_mesh::pointer;
 
 type V3 = [f64; 3];
@@ -129,6 +133,8 @@ fn dist(a: V3, b: V3) -> f64 {
 
 /// One edge's two faces' boundaries compared.
 struct Bow {
+    /// Whether one of its faces is a ruled face with a spline profile.
+    hermite: bool,
     owner: u64,
     object: usize,
     faces: String,
@@ -195,6 +201,7 @@ fn surface_of(g: &ObjectGraph, face: usize) -> Result<(Surface, String)> {
 
 /// What `edge_bow` reads of one edge.
 struct EdgeRead {
+    hermite: bool,
     faces: String,
     points: usize,
     join: f64,
@@ -291,7 +298,15 @@ fn edge_bow(g: &ObjectGraph, ei: usize) -> Result<Option<EdgeRead>> {
     );
     let mut pair = [c0, c1];
     pair.sort();
+    let spline = |s: &Surface| {
+        matches!(s, Surface::Parametric(p) if matches!(
+            p.as_ref(),
+            ParametricSurface::RuledSurf { profile1, profile2, .. }
+                if matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. })
+        ))
+    };
     Ok(Some(EdgeRead {
+        hermite: spline(&s0) || spline(&s1),
         faces: format!("{}/{}", pair[0], pair[1]),
         points: points.len(),
         join,
@@ -312,6 +327,7 @@ fn scan(owner: u64, record: &Record, bows: &mut Vec<Bow>, refused: &mut BTreeMap
         }
         match edge_bow(graph, ei) {
             Ok(Some(read)) => bows.push(Bow {
+                hermite: read.hermite,
                 owner,
                 object: ei,
                 faces: read.faces,
@@ -340,10 +356,29 @@ fn main() -> Result<()> {
         .first()
         .ok_or_else(|| anyhow::anyhow!("usage: probe_2094_edge_bow MODEL.rvt [ID ...]"))?;
     let mut ids: BTreeSet<u64> = args[1..].iter().filter_map(|a| a.parse().ok()).collect();
-    if ids.is_empty() {
-        ids = BTreeSet::from([3_558_983, 3_561_904]);
-    }
     let mut rf = RevitFile::open_with_limits(path, rvt::cli::open_limits(None, None, false))?;
+    // With no ElementId given, every element the export writes, with its IFC class.
+    let mut classes: BTreeMap<u64, String> = BTreeMap::new();
+    let model = rvt::ifc::RvtDocExporter.export_with_mode_and_limits(
+        &mut rf,
+        rvt::ifc::ExportQualityMode::Scaffold,
+        rvt::walker::WalkerLimits::default(),
+    )?;
+    for entity in &model.entities {
+        if let rvt::ifc::entities::IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            ..
+        } = entity
+        {
+            if let Ok(id) = tag.parse::<u64>() {
+                classes.insert(id, ifc_type.clone());
+            }
+        }
+    }
+    if ids.is_empty() {
+        ids = classes.keys().copied().collect();
+    }
     let mut options = native_document::Options {
         selected_ids: ids.clone(),
         channels: BTreeSet::from([103]),
@@ -414,6 +449,21 @@ fn main() -> Result<()> {
                 target[0], target[1], target[2], b.owner, b.object, b.axes, b.points, b.gap
             );
         }
+    }
+    // Per element, the edges that border a ruled face with a spline profile: how many,
+    // how many bow more than 0.001 ft from their saved points' straight lines, the most.
+    let mut owners: BTreeMap<u64, (usize, usize, f64)> = BTreeMap::new();
+    for bow in bows.iter().filter(|b| b.hermite) {
+        let entry = owners.entry(bow.owner).or_default();
+        entry.0 += 1;
+        entry.1 += usize::from(bow.gap > 0.001);
+        entry.2 = entry.2.max(bow.gap);
+    }
+    for (owner, (n, over, largest)) in &owners {
+        println!(
+            "spline owner={owner} class={} edges={n} gap_over_0.001={over} largest={largest:.6}",
+            classes.get(owner).map_or("-", String::as_str)
+        );
     }
     let mut tally: BTreeMap<&str, (usize, usize, f64)> = BTreeMap::new();
     for bow in &bows {
