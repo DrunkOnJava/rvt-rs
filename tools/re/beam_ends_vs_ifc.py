@@ -631,6 +631,8 @@ LINE_SOURCES = {"m": "column's saved mesh", "s": "column's section", "b": "colum
 
 OFFSET_BINS = (("under 0.05 ft", 0.05), ("0.05 to 0.2 ft", 0.2), ("0.2 to 0.5 ft", 0.5), ("over 0.5 ft", math.inf))
 OFFSET_STEPS = 50
+MIDDLE_MISS = "middle line crosses no face of Revit's column"
+MIDDLE_NONE = "no middle line"
 
 
 def middle_line(corners, axis):
@@ -724,10 +726,13 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
         mid = middle_line(meshes[beam][2], axis)
         for end, (column, t_line, extent, source) in found.items():
             where = LINE_SOURCES.get(source, source)
-            middle_ratio = CHORD_NONE
-            if mid is not None:
+            if mid is None:
+                middle_ratio = MIDDLE_NONE
+            else:
                 along_middle = chord(meshes[column][2], mid[0], mid[1])
-                if along_middle is not None:
+                if along_middle is None:
+                    middle_ratio = MIDDLE_MISS
+                else:
                     middle_ratio = ratio_bin(extent, (along_middle[1] - along_middle[0]) * factor)
             middles[(kind, "all", middle_ratio)] += 1
             middles[(kind, where, middle_ratio)] += 1
@@ -773,7 +778,8 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 print(f"beam ends:   S6, beams {kind}, the line's extent over the chord{label}: {'; '.join(parts)}")
     for kind in ("in line with a plan axis", "oblique to the plan axes", "of unknown direction"):
         for where in ("all", *LINE_SOURCES.values()):
-            parts = [f"{name} {middles[(kind, where, name)]}" for name in ratio_names if middles[(kind, where, name)]]
+            names = [*ratio_names, MIDDLE_MISS, MIDDLE_NONE]
+            parts = [f"{name} {middles[(kind, where, name)]}" for name in names if middles[(kind, where, name)]]
             if parts:
                 label = "" if where == "all" else f", outline from the {where}"
                 print(
