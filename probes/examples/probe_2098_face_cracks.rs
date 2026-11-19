@@ -15,8 +15,9 @@
 //!   body owner=<ElementId> crossing=<n> faces=<n> triangles=<n> boundary=<n>
 //!     over_0.0001=<n> over_0.001=<n> largest=<ft> refused=<why|->
 //!   - `crossing`: the plane-to-parametric edges whose curved side changes both parameters;
-//!   - `over_*` and `largest`: boundary vertices farther than that from every other face;
-//!   total bodies=<n> refused=<n> triangles=<n> over_0.001=<n> largest=<ft>
+//!   - `over_*` and `largest`: boundary vertices farther than that from every other face.
+//!
+//! and last `total bodies=<n> refused=<n> triangles=<n> over_0.001=<n> largest=<ft>`.
 //! ElementIds, counts and distances in feet only.
 //!
 //! Usage:
