@@ -512,7 +512,9 @@ pub const STAIR_TYPE_COMPONENT_SLOTS: usize = 7;
 /// Uniformat description "Interiors". The type's name follows them.
 pub const STAIR_TYPE_PARAMETERS_OFFSET: usize = 0x13f;
 /// A landing type's one-byte flag: 0 on the one type Snowdon's landings use,
-/// which Revit names Non-Monolithic Landing, 1 on two unused types.
+/// which Revit names Non-Monolithic Landing, and 1 on the type of the BIM4LCA
+/// office's 21 monolithic landings, which Revit names Monolithic Landing
+/// (RE-491).
 pub const LANDING_TYPE_MONOLITHIC_OFFSET: usize = 0x95;
 /// A landing type's name, `u32` length and UTF-16.
 pub const LANDING_TYPE_NAME_OFFSET: usize = 0x98;
@@ -606,11 +608,14 @@ pub fn component_type_at(buf: &[u8], id_at: usize, kind: ComponentKind) -> Optio
         }
         ComponentKind::Landing => {
             let family = if flag(buf, id_at + LANDING_TYPE_MONOLITHIC_OFFSET)? {
-                None
+                "Monolithic Landing"
             } else {
-                Some("Non-Monolithic Landing")
+                "Non-Monolithic Landing"
             };
-            (family, utf16_at(buf, id_at + LANDING_TYPE_NAME_OFFSET)?)
+            (
+                Some(family),
+                utf16_at(buf, id_at + LANDING_TYPE_NAME_OFFSET)?,
+            )
         }
         ComponentKind::Support => {
             let family = if flag(buf, id_at + SUPPORT_TYPE_CARRIAGE_OFFSET)? {
