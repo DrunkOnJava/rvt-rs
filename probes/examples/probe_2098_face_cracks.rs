@@ -32,6 +32,8 @@ use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::{graphics_with_resolver, pointer};
 
 type V3 = [f64; 3];
+/// A mesh edge by its two ends, rounded to a millionth of a foot, the lower first.
+type EdgeKey = ([i64; 3], [i64; 3]);
 
 const CURVED: [&str; 3] = ["RuledSurf", "SurfRev", "ConeSurf"];
 
@@ -193,7 +195,7 @@ fn body(graph: &ObjectGraph, kept: &BTreeMap<u64, ObjectGraph>) -> Result<Body, 
     let mut gaps = Vec::new();
     for (fi, face) in faces.iter().enumerate() {
         let key = |i: u32| face.vertices[i as usize].map(|x| (x * 1e6).round() as i64);
-        let mut uses: BTreeMap<([i64; 3], [i64; 3]), usize> = BTreeMap::new();
+        let mut uses: BTreeMap<EdgeKey, usize> = BTreeMap::new();
         for t in &face.triangles {
             for (a, b) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
                 let (ka, kb) = (key(a), key(b));
