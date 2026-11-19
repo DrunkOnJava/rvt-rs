@@ -23,6 +23,11 @@
 //!   - `gap`: the farthest the two faces' middles of one step lie apart, the bow left
 //!     between the two boundaries;
 //!   only edges whose `gap` is over 1e-6 ft are listed, the farthest first, 40 at most;
+//!   near target=<x,y,z> owner=<ElementId> object=<n> sides=<class:axis>/<class:axis>
+//!     points=<n> side0=<ft> side1=<ft> gap=<ft>: for each Revit vertex that leaves
+//!     rvt-rs's surface (`TARGETS`), the three edges whose sides pass nearest it, how far
+//!     each face's side (saved points, 16 steps evaluated between) passes from it, and the
+//!     axis each face's side runs along (`-` where it crosses both);
 //!   tally faces=<a>/<b> edges=<n> gap_over_0.001=<n> largest=<ft>
 //! ElementIds, surface classes and distances in feet only.
 //!
@@ -41,6 +46,47 @@ use rvt::research::native_parametric_surface::ParametricSurface;
 use rvt::research::native_saved_mesh::pointer;
 
 type V3 = [f64; 3];
+
+/// The Revit vertices `far_vertices_vs_ifc.py` places more than 0.001 ft from rvt-rs's
+/// surface on the timber office's two flights (Measure 44518424477), in rvt-rs's frame.
+const TARGETS: [V3; 4] = [
+    [305.0318, 49.7848, 226.0539],
+    [305.0318, 49.5977, 225.901],
+    [157.7549, 49.7848, 226.0539],
+    [157.7549, 49.5977, 225.901],
+];
+
+/// Sub-steps evaluated between two saved points of an edge on each face.
+const SUBSTEPS: usize = 16;
+
+fn segment_distance(p: V3, a: V3, b: V3) -> f64 {
+    let ab: V3 = std::array::from_fn(|k| b[k] - a[k]);
+    let ap: V3 = std::array::from_fn(|k| p[k] - a[k]);
+    let len2: f64 = ab.iter().map(|x| x * x).sum();
+    let t = if len2 > 0. {
+        (ap.iter().zip(ab).map(|(x, y)| x * y).sum::<f64>() / len2).clamp(0., 1.)
+    } else {
+        0.
+    };
+    dist(p, std::array::from_fn(|k| a[k] + t * ab[k]))
+}
+
+fn polyline_distance(p: V3, line: &[V3]) -> f64 {
+    line.windows(2)
+        .map(|w| segment_distance(p, w[0], w[1]))
+        .fold(f64::INFINITY, f64::min)
+}
+
+/// Whether every point of a face's side of an edge holds one parameter fixed: the
+/// axis that runs, or `-` for an edge that runs across both.
+fn iso_axis(side: &[[f64; 2]]) -> &'static str {
+    let fixed = |k: usize| side.iter().all(|p| (p[k] - side[0][k]).abs() < 1e-7);
+    match (fixed(0), fixed(1)) {
+        (false, true) => "u",
+        (true, false) => "v",
+        _ => "-",
+    }
+}
 
 fn uv(v: &Fv) -> Option<[f64; 2]> {
     let a = v.as_array().filter(|a| a.len() == 2)?;
@@ -90,20 +136,75 @@ struct Bow {
     join: f64,
     gap: f64,
     at: (usize, usize),
+    /// Each face's side of the edge, the saved points with `SUBSTEPS` between, in the model.
+    lines: [Vec<V3>; 2],
+    axes: String,
+}
+
+/// A face's surface, as far as the probe evaluates one: a plane by its origin and two axes
+/// (as `native_saved_mesh` reads one), else the parametric reader's surface.
+enum Surface {
+    Plane { origin: V3, x: V3, y: V3 },
+    Parametric(Box<ParametricSurface>),
+}
+
+impl Surface {
+    fn bounds(&self) -> [[f64; 2]; 2] {
+        match self {
+            Surface::Plane { .. } => [[f64::NEG_INFINITY; 2], [f64::INFINITY; 2]],
+            Surface::Parametric(s) => s.bounds(),
+        }
+    }
+    fn evaluate(&self, u: f64, v: f64) -> Result<V3> {
+        match self {
+            Surface::Plane { origin, x, y } => {
+                Ok(std::array::from_fn(|k| origin[k] + u * x[k] + v * y[k]))
+            }
+            Surface::Parametric(s) => s.evaluate(u, v),
+        }
+    }
+}
+
+fn triple(v: &Fv) -> Option<V3> {
+    let a = v.as_array().filter(|a| a.len() == 3)?;
+    Some([a[0].as_f64()?, a[1].as_f64()?, a[2].as_f64()?])
 }
 
 /// The face at `face`'s surface and its class.
-fn surface_of(g: &ObjectGraph, face: usize) -> Result<(ParametricSurface, String)> {
+fn surface_of(g: &ObjectGraph, face: usize) -> Result<(Surface, String)> {
     let f = &g.objects[face];
     let si = pointer(g, face, &f.fields["m_pSurf"])?.context("face surface")?;
-    let class = g.objects[si].class_name.clone();
-    Ok((ParametricSurface::read(g, si)?, class))
+    let s = &g.objects[si];
+    let class = s.class_name.clone();
+    if class == "Plane" {
+        let read = |name: &str| s.fields.get(name).and_then(triple).context("plane field");
+        return Ok((
+            Surface::Plane {
+                origin: read("m_origin")?,
+                x: read("m_xVec")?,
+                y: read("m_yVec")?,
+            },
+            class,
+        ));
+    }
+    Ok((
+        Surface::Parametric(Box::new(ParametricSurface::read(g, si)?)),
+        class,
+    ))
 }
 
-fn edge_bow(
-    g: &ObjectGraph,
-    ei: usize,
-) -> Result<Option<(String, usize, f64, f64, (usize, usize))>> {
+/// What `edge_bow` reads of one edge.
+struct EdgeRead {
+    faces: String,
+    points: usize,
+    join: f64,
+    gap: f64,
+    at: (usize, usize),
+    lines: [Vec<V3>; 2],
+    axes: String,
+}
+
+fn edge_bow(g: &ObjectGraph, ei: usize) -> Result<Option<EdgeRead>> {
     let e = &g.objects[ei];
     let faces = e.fields["m_pFace"].as_array().context("edge faces")?;
     if faces.len() != 2 {
@@ -151,7 +252,7 @@ fn edge_bow(
     let mut gap = 0.0_f64;
     let mut at = (0, points.len() - 1);
     for k in 0..points.len() - 1 {
-        let mid = |s: &ParametricSurface, side: &Vec<[f64; 2]>| {
+        let mid = |s: &Surface, side: &Vec<[f64; 2]>| {
             s.evaluate(
                 (side[k][0] + side[k + 1][0]) / 2.0,
                 (side[k][1] + side[k + 1][1]) / 2.0,
@@ -163,15 +264,42 @@ fn edge_bow(
             at = (k, points.len() - 1);
         }
     }
+    // Each face's side of the edge in the model: its saved points, and `SUBSTEPS` evaluated
+    // between each two on that face's own surface.
+    let line = |s: &Surface, side: &Vec<[f64; 2]>| -> Result<Vec<V3>> {
+        let mut out = Vec::new();
+        for k in 0..side.len() - 1 {
+            for j in 0..SUBSTEPS {
+                let t = j as f64 / SUBSTEPS as f64;
+                out.push(s.evaluate(
+                    side[k][0] + t * (side[k + 1][0] - side[k][0]),
+                    side[k][1] + t * (side[k + 1][1] - side[k][1]),
+                )?);
+            }
+        }
+        let last = side[side.len() - 1];
+        out.push(s.evaluate(last[0], last[1])?);
+        Ok(out)
+    };
+    let lines = [line(&s0, &sides[0])?, line(&s1, &sides[1])?];
+    let axes = format!(
+        "{}:{}/{}:{}",
+        c0,
+        iso_axis(&sides[0]),
+        c1,
+        iso_axis(&sides[1])
+    );
     let mut pair = [c0, c1];
     pair.sort();
-    Ok(Some((
-        format!("{}/{}", pair[0], pair[1]),
-        points.len(),
+    Ok(Some(EdgeRead {
+        faces: format!("{}/{}", pair[0], pair[1]),
+        points: points.len(),
         join,
         gap,
         at,
-    )))
+        lines,
+        axes,
+    }))
 }
 
 fn scan(owner: u64, record: &Record, bows: &mut Vec<Bow>, refused: &mut BTreeMap<String, usize>) {
@@ -183,14 +311,16 @@ fn scan(owner: u64, record: &Record, bows: &mut Vec<Bow>, refused: &mut BTreeMap
             continue;
         }
         match edge_bow(graph, ei) {
-            Ok(Some((faces, points, join, gap, at))) => bows.push(Bow {
+            Ok(Some(read)) => bows.push(Bow {
                 owner,
                 object: ei,
-                faces,
-                points,
-                join,
-                gap,
-                at,
+                faces: read.faces,
+                points: read.points,
+                join: read.join,
+                gap: read.gap,
+                at: read.at,
+                lines: read.lines,
+                axes: read.axes,
             }),
             Ok(None) => {}
             Err(error) => {
@@ -263,6 +393,27 @@ fn main() -> Result<()> {
             "edge owner={} object={} faces={} points={} join={:.6} gap={:.6} at={}/{}",
             bow.owner, bow.object, bow.faces, bow.points, bow.join, bow.gap, bow.at.0, bow.at.1
         );
+    }
+    // The edges nearest each Revit vertex that leaves rvt-rs's surface: how far each
+    // face's side of the edge passes from it.
+    for target in TARGETS {
+        let mut near: Vec<(f64, f64, &Bow)> = bows
+            .iter()
+            .map(|b| {
+                (
+                    polyline_distance(target, &b.lines[0]),
+                    polyline_distance(target, &b.lines[1]),
+                    b,
+                )
+            })
+            .collect();
+        near.sort_by(|a, b| a.0.min(a.1).total_cmp(&b.0.min(b.1)));
+        for (d0, d1, b) in near.iter().take(3) {
+            println!(
+                "near target={:.4},{:.4},{:.4} owner={} object={} sides={} points={} side0={d0:.6} side1={d1:.6} gap={:.6}",
+                target[0], target[1], target[2], b.owner, b.object, b.axes, b.points, b.gap
+            );
+        }
     }
     let mut tally: BTreeMap<&str, (usize, usize, f64)> = BTreeMap::new();
     for bow in &bows {
