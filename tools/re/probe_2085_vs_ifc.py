@@ -58,16 +58,18 @@ def binned(value, bins):
 
 
 def main():
-    if len(sys.argv) != 3:
+    # Measure passes `--list` after the two paths, as to every probe scorer.
+    args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
+    if len(args) != 2:
         print(__doc__)
         return 2
-    tallies, rebuilt = read_probe(sys.argv[1])
+    tallies, rebuilt = read_probe(args[0])
     for line in tallies:
         print(f"boxed: {line}")
     print(f"boxed: {len(rebuilt)} bodies rebuilt from their family's extrusions and placed")
     if not rebuilt:
         return 0
-    revit = meshes(sys.argv[2], tags=set(rebuilt))
+    revit = meshes(args[1], tags=set(rebuilt))
     rows = collections.Counter()
     seen = collections.Counter()
     for tag, fields in rebuilt.items():
