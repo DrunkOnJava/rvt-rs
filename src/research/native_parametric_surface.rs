@@ -345,7 +345,7 @@ impl Curve {
     }
     /// How many equal parameter steps between `lo` and `hi` hold a spline's
     /// chord error to `chord` feet (one for any other curve): by the largest
-    /// second difference of 64 samples, at most [`SPLINE_STEP_CAP`].
+    /// second difference of 64 samples, at most 128 (`SPLINE_STEP_CAP`).
     pub fn spline_steps(&self, lo: f64, hi: f64, chord: f64) -> usize {
         if !matches!(self, Self::Hermite { .. }) {
             return 1;
