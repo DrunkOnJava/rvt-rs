@@ -5,6 +5,14 @@
 //! `Partitions/*`. The IFC exporter previously inlined its own
 //! partition scan; this module is the shared path for IFC export,
 //! diagnostics, CLI counts, and ElemTable linkage.
+//!
+//! A record the byte pattern finds is kept only where the native record of
+//! its ElementId is a wall, an `ArcWall` or `SWall` (RE-440). On Revit 2023
+//! `Revit_IFC5_Einhoven`, the one local file the pattern matches at all, its
+//! 24 matches are the curtain wall's panels (15 `FamilyInstance`s), grid
+//! lines (7 `CurtainGridLine`s) and 2 matches with no ElementId: none is a
+//! wall, and taking them as walls shadowed the 15 panels the element records
+//! read under the same ElementIds.
 // Tracker: D20.
 
 use crate::arc_wall_record::{
@@ -14,7 +22,7 @@ use crate::element_record_storeys::elevation_storey_name;
 use crate::ifc::Storey;
 use crate::walker::{WalkerLimitHit, WalkerLimits};
 use crate::{Result, RevitFile};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Stable reference to a decoded ArcWall record inside a partition
 /// stream. Suitable as an ElemTable → partition index value.
@@ -198,10 +206,56 @@ pub(crate) fn compute_partition_arc_walls(
 
     PartitionArcWallScan {
         status,
-        walls,
+        walls: native_walls_only(rf, walls),
         scanned_bytes,
         limit_hit,
     }
+}
+
+/// The classes of a wall's native record (RE-440).
+const NATIVE_WALL_CLASSES: [&str; 2] = ["ArcWall", "SWall"];
+
+/// The matches of `walls` whose ElementId's native record is a wall
+/// ([`NATIVE_WALL_CLASSES`], RE-440). A match with no ElementId, or whose
+/// record is of another class or not read, is left out, and so is every match
+/// where the records cannot be read: the byte pattern alone is not evidence of
+/// a wall. Only the records' classes are read, not their graphs.
+fn native_walls_only(rf: &mut RevitFile, walls: Vec<PartitionArcWall>) -> Vec<PartitionArcWall> {
+    use crate::native_document::{Options, extract_graphs};
+    let selected_ids: BTreeSet<u64> = walls
+        .iter()
+        .filter_map(PartitionArcWall::element_id)
+        .map(u64::from)
+        .collect();
+    if selected_ids.is_empty() {
+        return Vec::new();
+    }
+    let options = Options {
+        selected_ids,
+        graph_classes: Some(BTreeSet::new()),
+        ..Options::default()
+    };
+    let mut wall_ids = BTreeSet::new();
+    let read = extract_graphs(rf, &options, |record| {
+        if record
+            .class_name
+            .as_deref()
+            .is_some_and(|class| NATIVE_WALL_CLASSES.contains(&class))
+        {
+            wall_ids.insert(record.identity.element_id);
+        }
+        Ok(())
+    });
+    if read.is_err() {
+        return Vec::new();
+    }
+    walls
+        .into_iter()
+        .filter(|wall| {
+            wall.element_id()
+                .is_some_and(|id| wall_ids.contains(&u64::from(id)))
+        })
+        .collect()
 }
 
 /// Convenience wrapper: read BasicFileInfo version, then scan.

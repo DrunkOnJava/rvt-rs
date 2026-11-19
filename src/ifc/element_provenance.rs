@@ -924,6 +924,7 @@ const PROFILE_FRAME_READERS: &[&str] = &[
     "type_section",
     "room_solid_faces",
     "type_hollow_section",
+    "type_tube_section",
     "type_i_section",
     "pipe_connectors",
     "family_forms",
@@ -1078,9 +1079,9 @@ fn property_readers(name: &str, value: &str) -> &'static [&'static str] {
         "BodyHeightSource" => match value {
             ec::AREA_BODY_HEIGHT_SOURCE => &[crate::partition_area_records::AREA_LEVELS_READER],
             ec::LANDING_SLAB_BODY_HEIGHT_SOURCE => &["native_landing", "native_landing_type"],
-            ec::WALL_TOP_COVER_BODY_HEIGHT_SOURCE | ec::WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE => {
-                WALL_TOP_READERS
-            }
+            ec::WALL_TOP_COVER_BODY_HEIGHT_SOURCE
+            | ec::WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE
+            | ec::WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE => WALL_TOP_READERS,
             _ => &[],
         },
         ec::WALL_BASE_SOURCE_PROPERTY => match value {
@@ -1102,7 +1103,9 @@ fn property_readers(name: &str, value: &str) -> &'static [&'static str] {
         | ec::WALL_PROFILE_TOP_PROPERTY
         | ec::WALL_PROFILE_CUT_PROPERTY => &["sketch_lines", "sketch_list"],
         ec::PLACEMENT_AXES_SOURCE_PROPERTY => match value {
-            ec::OPENING_PLACEMENT_AXES_SOURCE => PLACEMENT_READERS,
+            ec::OPENING_PLACEMENT_AXES_SOURCE | ec::OPENING_STORED_HOST_PLACEMENT_AXES_SOURCE => {
+                PLACEMENT_READERS
+            }
             _ => &[],
         },
         // RE-361: a door set in no wall is placed at its stored transform's
@@ -1197,11 +1200,17 @@ pub(crate) fn attach_value_sources(
         let mut profile_source = None;
         let mut profile_resolved = false;
         let mut i_section = false;
+        let mut tube_section = false;
         let mut property_list: Vec<&'static str> = Vec::new();
         for property in property_set.iter().flat_map(|set| &set.properties) {
             match (property.name.as_str(), &property.value) {
                 ("BodySource", PropertyValue::Text(text)) => body = Some(text.as_str()),
                 ("SectionShape", PropertyValue::Text(text)) if text == "I" => i_section = true,
+                ("SectionShape", PropertyValue::Text(text))
+                    if text == super::export_content::TUBE_SECTION_SHAPE =>
+                {
+                    tube_section = true
+                }
                 ("ProfileSource", PropertyValue::Text(text)) => {
                     profile_source = Some(text.as_str())
                 }
@@ -1273,10 +1282,13 @@ pub(crate) fn attach_value_sources(
             // A beam or column whose body is its type's I section (`SectionShape`
             // is written only then) is drawn from the type's parameters.
             let drawn_i_section = i_section && reader == "type_i_section";
+            // A beam whose body is its type's rectangular tube (#1698), likewise.
+            let drawn_tube = tube_section && reader == "type_tube_section";
             if !(body_list.contains(&reader)
                 || profile_list.contains(&reader)
                 || property_list.contains(&reader)
-                || drawn_i_section)
+                || drawn_i_section
+                || drawn_tube)
                 || entry
                     .value_sources
                     .iter()

@@ -1926,6 +1926,7 @@ pub fn areas_from_partition_chain_records(
                     segment_ids: body.face.line_ids.into_iter().collect(),
                     pieces: Vec::new(),
                     void_openings: Vec::new(),
+                    first_drawn_piece: None,
                 };
                 for (name, mut value) in profile.fields() {
                     if name == PLAN_PROFILE_SOURCE_FIELD {

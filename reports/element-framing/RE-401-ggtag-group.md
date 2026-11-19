@@ -41,10 +41,10 @@
 
 | product | base (`main`) | head | rvt-rs's volume against Revit's, bounding box |
 |---|---|---|---|
-| roof 1924305 | differs: 276.16 ft3 against 261.40, farthest vertex 13.4 ft | match | 1.0000001, within 0.000003 ft |
-| roof 1924316 | differs: 122.51 against 115.85, 7.72 ft | match | 0.9999999, within 0.000003 ft |
-| roof 1924325 | differs: 36.94 against 35.22, 0.281 ft | match | 1.0000000, 0 ft |
-| roof 1935345 | differs: 33.91 against 32.13, 0.0833 ft | match | 1.0000000, 0 ft |
+| roof 1924305 | differs: 5.6% over Revit's volume, farthest vertex 13.4 ft | match | 1.0000001, within 0.000003 ft |
+| roof 1924316 | differs: 5.7% over, 7.72 ft | match | 0.9999999, within 0.000003 ft |
+| roof 1924325 | differs: 4.9% over, 0.281 ft | match | 1.0000000, 0 ft |
+| roof 1935345 | differs: 5.5% over, 0.0833 ft | match | 1.0000000, 0 ft |
 | slab 1405282 | an extruded solid | a mesh | 1.0000853, within 0.00046 ft |
 | slab 1406102 | an extruded solid | a mesh | 0.9999529, within 0.00004 ft |
 

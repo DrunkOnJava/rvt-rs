@@ -93,7 +93,10 @@ pub fn column_diameter_from_fields(fields: &[(String, InstanceField)]) -> Option
 /// (RE-291) and each whose type is round
 /// ([`crate::partition_type_parameters::round_section`]) its diameter
 /// (RE-353). The exporter draws a hollow section only where its record box is
-/// the section's outside.
+/// the section's outside. A structural framing element whose type is a
+/// rectangular tube ([`crate::partition_type_parameters::tube_beam_section`])
+/// gets the same four fields, on [`TUBE_BEAM_REVIT_VERSIONS`] (#1698), from the
+/// same read of the types' lengths.
 pub(super) fn attach_column_sections(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -108,7 +111,11 @@ pub(super) fn attach_column_sections(
     let mut elements: Vec<&mut DecodedElement> = groups
         .into_iter()
         .flat_map(|group| group.iter_mut())
-        .filter(|element| HOLLOW_SECTION_CLASSES.contains(&element.class.as_str()))
+        .filter(|element| {
+            HOLLOW_SECTION_CLASSES.contains(&element.class.as_str())
+                || (element.class == "StructuralFraming"
+                    && TUBE_BEAM_REVIT_VERSIONS.contains(&revit_version))
+        })
         .filter(|element| beam_i_section_from_fields(&element.fields).is_none())
         .collect();
     let types: BTreeSet<u32> = elements
@@ -129,7 +136,13 @@ pub(super) fn attach_column_sections(
         let Some(by_name) = type_of(element).and_then(|id| held.get(&id)) else {
             continue;
         };
-        if let Some(section) = crate::partition_type_parameters::hollow_section(by_name) {
+        let beam = element.class == "StructuralFraming";
+        let hollow = if beam {
+            crate::partition_type_parameters::tube_beam_section(by_name)
+        } else {
+            crate::partition_type_parameters::hollow_section(by_name)
+        };
+        if let Some(section) = hollow {
             let values = [
                 section.width_feet,
                 section.height_feet,
@@ -142,15 +155,27 @@ pub(super) fn attach_column_sections(
                     .push(((*name).into(), InstanceField::Float { value, size: 8 }));
             }
             if let (true, Some(id), Some(type_id)) = (recording, element.id, type_of(element)) {
+                let (reader, captions): (&str, &[&str]) = if beam {
+                    (
+                        "type_tube_section",
+                        &crate::partition_type_parameters::TUBE_BEAM_PARAMETER_NAMES,
+                    )
+                } else {
+                    (
+                        "type_hollow_section",
+                        &crate::partition_type_parameters::HOLLOW_SECTION_PARAMETER_NAMES,
+                    )
+                };
                 crate::partition_type_parameters::note_parameter_source(
                     rf,
-                    "type_hollow_section",
+                    reader,
                     (id, type_id),
-                    crate::partition_type_parameters::HOLLOW_SECTION_PARAMETER_NAMES
-                        .map(String::from),
+                    captions.iter().map(|caption| caption.to_string()),
                     &places,
                 );
             }
+        } else if beam {
+            // A framing type that is no tube keeps its box, or its I section.
         } else if let Some(sides) = crate::partition_type_parameters::rectangular_section(by_name) {
             for (name, value) in COLUMN_RECTANGLE_FIELDS.iter().zip(sides) {
                 element
@@ -308,6 +333,9 @@ fn beam_column_cut(element: &DecodedElement) -> bool {
 /// leaves the box, or a box no solid along the line reproduces, is not
 /// attached. A beam a column cuts (RE-122) is skipped: its record box fields are
 /// the cut box's, a line is tested against them, and its body is the cut box's.
+/// A beam whose copies in several partitions disagree takes the line of its
+/// current partition's copy ([`crate::partition_beam_axes::scan_beam_lines`],
+/// #1719), for its properties only: its body stays the box.
 pub(super) fn attach_beam_axes(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -325,7 +353,7 @@ pub(super) fn attach_beam_axes(
     if beams.is_empty() {
         return;
     }
-    let Ok(lines) = pba::scan_first_bounded_lines(rf, revit_version, &beams) else {
+    let Ok((lines, from_current)) = pba::scan_beam_lines(rf, revit_version, &beams) else {
         return;
     };
     for element in products
@@ -359,6 +387,12 @@ pub(super) fn attach_beam_axes(
                 }
             }
         }
+        // #1719: the line of a beam whose copies disagree is its newest state's,
+        // which gives the properties above; no solid along it has been measured
+        // against Revit's, so the body stays the record box (#1698).
+        if element.id.is_some_and(|id| from_current.contains(&id)) {
+            continue;
+        }
         let resolves = bbox.is_some_and(|bbox| {
             pba::beam_body(bbox, start, end).is_some()
                 || (unrotated && pba::beam_body_in_box(bbox, start, end).is_some())
@@ -386,8 +420,14 @@ pub(super) fn attach_beam_axes(
 ///
 /// The same pass gives every framing element its structural usage in
 /// [`STRUCT_USAGE_FIELD`] (#1841), the `m_structUsage` of its record's root: a
-/// usage whose copies disagree, or whose record is not read, is not given.
-pub(super) fn attach_beam_rotations(rf: &mut RevitFile, products: &mut [DecodedElement]) {
+/// usage whose copies disagree, or whose record is not read, is not given. A
+/// horizontal bracing on [`BRACE_TYPE_REVIT_VERSIONS`] also carries
+/// [`BRACE_TYPE_FIELD`].
+pub(super) fn attach_beam_rotations(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
     let beams: BTreeSet<u64> = products
         .iter()
         .filter(|element| element.class == "StructuralFraming")
@@ -448,6 +488,13 @@ pub(super) fn attach_beam_rotations(rf: &mut RevitFile, products: &mut [DecodedE
                     size: 4,
                 },
             ));
+            if u64::try_from(value) == Ok(crate::ifc::category_map::HORIZONTAL_BRACING_USAGE)
+                && BRACE_TYPE_REVIT_VERSIONS.contains(&revit_version)
+            {
+                element
+                    .fields
+                    .push((BRACE_TYPE_FIELD.into(), InstanceField::Bool(true)));
+            }
         }
         if beam_column_cut(element) {
             continue;

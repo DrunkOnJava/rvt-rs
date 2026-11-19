@@ -49,6 +49,11 @@ lists change:
                        the default axes (OPENINGS_LEFT_OUT_MOST) are set per
                        project and year, and the second can only shrink
 
+  column lengths       every IfcColumn's Qto_ColumnBaseQuantities.Length,
+                       by Tag, held to the 2024 save (#1801): a column's height
+                       is the same in every save of a project; each rme sample
+                       compares at least its 135 columns (COLUMN_LENGTH_LEAST)
+
 Each is paired by `Tag` (the ElementId, which a project keeps across saves)
 with the earlier save's element, and fails on any difference in: its IFC
 class, GlobalId, storey, BodySource, ProfileResolved, representation types
@@ -143,6 +148,13 @@ REFERENCE_YEAR = {
 # The save readers_across_saves.py holds a save's door and window cuts, ports and
 # properties to (RE-346).
 READERS_YEAR = 2025
+# #1801: each column's Qto_ColumnBaseQuantities.Length is held to the 2024
+# save's, by Tag. The 2025 to 2027 saves of the rme samples record column boxes
+# up to 7.3 m taller than their meshes, which are the 2024 save's, and the box's
+# height was written as the Length of 131 columns in each. The least each
+# project must compare is set where the issue counted its columns.
+COLUMN_LENGTH_YEAR = 2024
+COLUMN_LENGTH_LEAST = {"rmeadvancedsampleproject": 135, "rmebasicsampleproject": 135}
 
 # Bodies the sample is known to draw by BodySource (Measure run 41988011289,
 # head 1d5bbf03, exported diagnostics; the MEP samples' pipes, run 42063046730,
@@ -301,6 +313,25 @@ def properties(element):
             elif prop.Name == "ProfileResolved":
                 resolved = bool(value.wrappedValue)
     return source, resolved
+
+
+def column_lengths(model):
+    """Tag -> sorted Qto_ColumnBaseQuantities.Length of each IfcColumn holding one."""
+    out = collections.defaultdict(list)
+    for column in model.by_type("IfcColumn"):
+        tag = getattr(column, "Tag", None)
+        if not tag:
+            continue
+        for rel in column.IsDefinedBy:
+            if not rel.is_a("IfcRelDefinesByProperties"):
+                continue
+            definition = rel.RelatingPropertyDefinition
+            if not (definition.is_a("IfcElementQuantity") and definition.Name == "Qto_ColumnBaseQuantities"):
+                continue
+            for quantity in definition.Quantities or []:
+                if quantity.is_a("IfcQuantityLength") and quantity.Name == "Length":
+                    out[tag].append(quantity.LengthValue)
+    return {tag: sorted(values) for tag, values in out.items()}
 
 
 def placement_source(element):
@@ -677,6 +708,30 @@ def main():
         other = OTHER_YEAR.get(group)
         if other in earlier and other != own_number and chosen:
             against_other(settings, (scale_candidate, ifcopenshell.util.unit.calculate_unit_scale(earlier[other][0])), chosen, earlier[other][1], group, other)
+    if own_number is not None and own_number <= COLUMN_LENGTH_YEAR:
+        print(f"column lengths: not applicable, the {COLUMN_LENGTH_YEAR} save is the reference and this is the {own_year} save")
+    elif COLUMN_LENGTH_YEAR in earlier:
+        mine = column_lengths(model)
+        theirs = column_lengths(earlier[COLUMN_LENGTH_YEAR][0])
+        both = sorted(set(mine) & set(theirs), key=lambda tag: (len(tag), tag))
+        differ = [
+            tag
+            for tag in both
+            if len(mine[tag]) != len(theirs[tag])
+            or any(abs(a - b) > 1e-6 * max(abs(b), 1.0) for a, b in zip(mine[tag], theirs[tag]))
+        ]
+        for tag in differ:
+            fail(f"column lengths: {tag} has Length {mine[tag]} here and {theirs[tag]} in the {COLUMN_LENGTH_YEAR} save")
+        least = COLUMN_LENGTH_LEAST.get(project, 0)
+        if len(both) < least:
+            fail(f"column lengths: {len(both)} compared, fewer than the {least} it holds")
+        print(
+            f"column lengths: compared {len(both)} against the {COLUMN_LENGTH_YEAR} save, {len(both) - len(differ)} equal, "
+            f"{len(differ)} differ; {len(set(mine) - set(theirs))} only here, {len(set(theirs) - set(mine))} only there, not scored"
+        )
+        total += len(both)
+    else:
+        not_compared.append(f"column lengths (the {COLUMN_LENGTH_YEAR} save is not in this run)")
     if own_number is not None and own_number <= READERS_YEAR:
         print(f"cut openings, ports and properties: not applicable, the {READERS_YEAR} save is the reference of the later saves and this is the {own_year} save")
     elif READERS_YEAR in earlier:

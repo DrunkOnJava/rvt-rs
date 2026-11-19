@@ -56,27 +56,39 @@
 //! one whose mesh starts at its base.
 
 use super::IfcModel;
-use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyValue, SolidShape};
+use super::entities::{
+    BrepTriangle, IfcEntity, ProfileDef, Property, PropertySet, PropertyValue, SolidShape,
+};
 use super::export_content::{
     BEAM_AXIS_BODY_SOURCE, BEAM_BOX_BODY_SOURCE, INSTANCE_ORIENTED_BODY_SOURCE,
     INSTANCE_TURNED_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SAVED_MESH_ELEMENT_ID_SHARED,
     SAVED_MESH_NO_GRAPHICS, SAVED_MESH_NO_MESH, SAVED_MESH_NO_TRIANGLES,
     SAVED_MESH_NOT_CANDIDATE_PREFIX, SAVED_MESH_NOT_OFFERED_PREFIX, SAVED_MESH_PARTIAL_PREFIX,
     SAVED_MESH_REFUSAL_PROPERTY, SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH,
-    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{
     BeamQuantities, ColumnQuantities, MESH_LENGTH_REACH, Placed, Prism, all_faces_flat,
     beam_quantities, box_plan_width, closed_mesh_volume, column_quantities, mullion_surface_area,
     partner_ends, partners_the_boxes_missed, prism_along,
 };
-use super::mesh_wall_quantities::{WallFrame, WallMeshQuantities, wall_mesh_quantities};
+use super::mesh_wall_quantities::{
+    OpeningBox, WallFrame, WallMeshQuantities, wall_mesh_quantities,
+};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// `BodySource` of a body drawn from the element's saved graphics.
 pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
+
+/// The record-geometry property that says an element of the Roofs category is
+/// written as another entity than `IfcRoof` by its "Export to IFC As" value
+/// (#1713: the BIM4LCA timber office's 8 roofs written as `IfcSlab`). It is the
+/// element's category kept past the redirect, which the record's schema class
+/// (`ProfileRoof` for a footprint roof, RE-76) names for only some roofs.
+pub const REDIRECTED_ROOF_PROPERTY: &str = "RedirectedRoof";
 
 /// RE-443: only duct fittings meet the measured native-reference body bound.
 const COLLAPSED_RULED_CATEGORY_REFUSAL: &str =
@@ -90,6 +102,12 @@ const COLLAPSED_RULED_CATEGORY_REFUSAL: &str =
 /// 9.514 ft above their base, the curtain wall's height, and the other 99 on
 /// it to within 0.001 ft.
 const EMBED_RAISE_MIN_FEET: f64 = 0.5;
+
+/// The releases whose walls' native records name what embeds in them, and so
+/// the releases a wall that embeds a curtain wall is drawn from its saved mesh
+/// on (RE-340): the walls' records of 2023 name no embed step, so the rule
+/// found none there and the scope's 2023 was never exercised (#1945).
+const EMBED_HOST_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2024..=2027;
 
 /// What [`attach`] did.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
@@ -134,6 +152,19 @@ fn leaves_partial(diagnostic: &str) -> bool {
         && !diagnostic.ends_with(crate::native_graphics_traversal::VIEW_COMPONENT_DIAGNOSTIC)
 }
 
+/// Whether a wall's saved mesh failed to decode in a way that can leave out part
+/// of the wall, so its quantities are not read from it (#1947): any diagnostic
+/// [`leaves_partial`] counts but a view-resolved instance, which on every
+/// measured wall leaves the wall's own solid whole (#2020). Bodies, beams and
+/// columns keep [`partial_refusal`]'s wider test.
+fn wall_mesh_partial(meshes: &GraphicsMeshes) -> bool {
+    meshes.diagnostics.iter().any(|diagnostic| {
+        leaves_partial(diagnostic)
+            && !diagnostic
+                .ends_with(crate::native_graphics_traversal::VIEW_RESOLVED_INSTANCE_DIAGNOSTIC)
+    })
+}
+
 /// A decoder diagnostic as [`SAVED_MESH_REFUSAL_PROPERTY`] says it: without the
 /// object it names (the text before its first `: `) and with its digits written
 /// as `#`, so that two elements with the same fault say it alike.
@@ -169,8 +200,11 @@ fn partial_refusal(meshes: &GraphicsMeshes) -> Option<String> {
 /// mullion's box along its own axes (RE-106, RE-421: 327 mullions of the BIM4LCA
 /// timber office at permit, whose Revit solids have mitred ends), each a
 /// stand-in for the mesh; and a roof's level block, whose record box holds the
-/// reference surface and not the slope or thickness (#1612). A resolved outline
-/// is the body of any other class (a floor's plan, a ceiling's).
+/// reference surface and not the slope or thickness (#1612), whatever entity the
+/// roof is exported as: a roof whose "Export to IFC As" says `IfcSlab` is the
+/// same element with the same record box and the same mesh, and carries
+/// [`REDIRECTED_ROOF_PROPERTY`] (#1713). A resolved
+/// outline is the body of any other class (a floor's plan, a ceiling's).
 fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
     let source = properties
         .iter()
@@ -181,6 +215,11 @@ fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
     let profile_resolved = properties.iter().any(|property| {
         property.name == "ProfileResolved" && matches!(property.value, PropertyValue::Boolean(true))
     });
+    let roof = ifc_type == "IFCROOF"
+        || properties.iter().any(|property| {
+            property.name == REDIRECTED_ROOF_PROPERTY
+                && matches!(property.value, PropertyValue::Boolean(true))
+        });
     matches!(
         source,
         Some(
@@ -189,7 +228,7 @@ fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
                 | INSTANCE_TURNED_BODY_SOURCE
                 | INSTANCE_ORIENTED_BODY_SOURCE
         )
-    ) && !(profile_resolved && ifc_type != "IFCROOF")
+    ) && !(profile_resolved && !roof)
 }
 
 /// Say on each box body that no pass offered a saved mesh why none did
@@ -329,13 +368,20 @@ pub fn attach_scoped_with_control(
 
     let mut by_id: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     // A stair or curtain wall is drawn by its parts; its own saved graphics
-    // would draw it twice.
+    // would draw it twice. A ramp is not: its railings are parts beside its
+    // own body (#1988), which Revit's export draws from the same saved mesh.
     let wholes: BTreeSet<usize> = model
         .entities
         .iter()
         .filter_map(|entity| match entity {
             IfcEntity::Aggregate { whole, .. } => Some(*whole),
             _ => None,
+        })
+        .filter(|&whole| {
+            !matches!(
+                model.entities.get(whole),
+                Some(IfcEntity::BuildingElement { ifc_type, .. }) if ifc_type == "IFCRAMP"
+            )
         })
         .collect();
     // #1645: why each box that keeps its box does; a box the pass does not take
@@ -438,7 +484,7 @@ pub fn attach_scoped_with_control(
     // over the record's height (a resolved profile, which the pass leaves alone:
     // `is_replaceable_box`), whose base quantities their saved mesh gives all the
     // same. That body is Revit's own form for a plain section and stays so, as a
-    // beam's does.
+    // beam's does, unless the mesh shows another section (#1710).
     let mut column_rectangles: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     for (index, entity) in model.entities.iter().enumerate() {
         if wholes.contains(&index) {
@@ -472,6 +518,11 @@ pub fn attach_scoped_with_control(
             column_rectangles.entry(id).or_default().push(index);
         }
     }
+    // #1209: the ceilings with no `GrossArea`, which their saved mesh's face
+    // gives where it is one piece, and the family instances Revit writes as
+    // coverings (`ROOFING` units), which it gives where the mesh is one part.
+    let ceilings = coverings_without_area(model, &wholes, scope, "Ceiling");
+    let instances = coverings_without_area(model, &wholes, scope, "FamilyInstance");
     let hosts = match embed_hosts(rf, model, &by_id) {
         Ok(hosts) => hosts,
         Err(error) => {
@@ -485,6 +536,8 @@ pub fn attach_scoped_with_control(
         && walls.is_empty()
         && beam_lines.is_empty()
         && column_rectangles.is_empty()
+        && ceilings.is_empty()
+        && instances.is_empty()
     {
         for (index, reason) in refusals {
             note_refusal(model, index, reason);
@@ -498,6 +551,8 @@ pub fn attach_scoped_with_control(
             .chain(walls.keys())
             .chain(beam_lines.keys())
             .chain(column_rectangles.keys())
+            .chain(ceilings.keys())
+            .chain(instances.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
         max_graph_values: 1_000_000,
@@ -519,6 +574,8 @@ pub fn attach_scoped_with_control(
     let mut columns: Vec<(usize, ColumnQuantities)> = Vec::new();
     // RE-416: the volume of each column's mesh, whatever its faces.
     let mut column_volumes: Vec<(usize, f64)> = Vec::new();
+    // #1801: the height of each column's mesh, whatever its faces.
+    let mut column_heights: Vec<(usize, f64)> = Vec::new();
     // RE-388: what the mesh of each wall gives of its quantities.
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
     // #1046: what a wall's mesh needs besides itself to be read as a vertical
@@ -531,6 +588,8 @@ pub fn attach_scoped_with_control(
         crate::native_wall_cuts::walls_with_no_base_join(rf, &wall_ids).unwrap_or_default();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
+    // #1209: the area of each covering's one-piece saved face.
+    let mut covering_areas: Vec<(usize, f64)> = Vec::new();
     // #1645: the candidates the scene held graphics for.
     let mut seen: BTreeSet<u64> = BTreeSet::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
@@ -569,13 +628,22 @@ pub fn attach_scoped_with_control(
             if let Some([index]) = walls.get(&element.identity.element_id).map(Vec::as_slice) {
                 let held = wall_openings.get(index);
                 let frame = held.map_or(WallFrame { turn: 0.0 }, |held| held.frame);
-                let boxes: &[[f64; 6]] = held.map_or(&[], |held| held.boxes.as_slice());
-                let found = wall_mesh_quantities(
-                    &element.meshes.primitives,
-                    &frame,
-                    boxes,
-                    !no_base_join.contains(&element.identity.element_id),
-                );
+                let boxes: &[OpeningBox] = held.map_or(&[], |held| held.boxes.as_slice());
+                // A mesh that decoded only in part can still hold one closed
+                // solid (another of its solids is what failed), and its
+                // quantities would be that solid's alone: refused, as a
+                // beam's and a column's are (#1947), unless all that failed is
+                // a view-resolved instance (#2020).
+                let found = (!wall_mesh_partial(&element.meshes))
+                    .then(|| {
+                        wall_mesh_quantities(
+                            &element.meshes.primitives,
+                            &frame,
+                            boxes,
+                            !no_base_join.contains(&element.identity.element_id),
+                        )
+                    })
+                    .flatten();
                 if let Some(found) = found {
                     wall_quantities.push((*index, found));
                 }
@@ -592,6 +660,9 @@ pub fn attach_scoped_with_control(
                     beams.push((*index, found));
                 }
             }
+            // #1710: a column whose mesh is a vertical prism of another section
+            // than its type's rectangle is drawn from its mesh, as a box is.
+            let mut mesh_body: Option<[usize; 1]> = None;
             if let Some([index]) = column_rectangles
                 .get(&element.identity.element_id)
                 .map(Vec::as_slice)
@@ -601,19 +672,56 @@ pub fn attach_scoped_with_control(
                     .then(|| column_mesh_quantities(&element.meshes.primitives))
                     .flatten();
                 if let Some(found) = found {
-                    columns.push((*index, found));
+                    if section_not_rectangle(&model.entities[*index], found.cross_section_area) {
+                        report.candidates += 1;
+                        mesh_body = Some([*index]);
+                    } else {
+                        columns.push((*index, found));
+                    }
+                }
+            }
+            if let Some(&index) = ceilings
+                .get(&element.identity.element_id)
+                .and_then(|indices| indices.first())
+            {
+                let primitives = &element.meshes.primitives;
+                let found = partial_refusal(&element.meshes)
+                    .is_none()
+                    .then(|| {
+                        one_piece_face_area(primitives)
+                            .or_else(|| first_piece_face_area(primitives))
+                    })
+                    .flatten();
+                if let Some(area) = found {
+                    covering_areas.push((index, area));
+                }
+            }
+            if let Some([index]) = instances
+                .get(&element.identity.element_id)
+                .map(Vec::as_slice)
+            {
+                let found = (partial_refusal(&element.meshes).is_none()
+                    && one_part(&element.meshes.primitives))
+                .then(|| one_piece_face_area(&element.meshes.primitives))
+                .flatten();
+                if let Some(area) = found {
+                    covering_areas.push((*index, area));
                 }
             }
             if let Some(&index) = hosts.get(&element.identity.element_id) {
                 raise_embed_host(model, index, &element.meshes, &mut report);
                 return Ok(());
             }
-            let Some(indices) = by_id.get(&element.identity.element_id) else {
-                return Ok(());
+            let indices: &[usize] = match &mesh_body {
+                Some(index) => index,
+                None => match by_id.get(&element.identity.element_id) {
+                    Some(indices) => indices,
+                    None => return Ok(()),
+                },
             };
             // A Tag carried by several entities (a slab's pieces) is ambiguous:
             // leave them as they are.
-            let [index] = indices.as_slice() else {
+            let [index] = indices else {
                 refusals.extend(
                     indices
                         .iter()
@@ -661,6 +769,17 @@ pub fn attach_scoped_with_control(
                 .eq_ignore_ascii_case("IFCCOLUMN")
                 .then(|| oriented_mesh_volume(primitives, *origin))
                 .flatten();
+            let column_height = ifc_type
+                .eq_ignore_ascii_case("IFCCOLUMN")
+                .then(|| {
+                    let (low, high) = vertices
+                        .iter()
+                        .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), v| {
+                            (low.min(v[2]), high.max(v[2]))
+                        });
+                    high - low
+                })
+                .filter(|height| height.is_finite() && *height > 0.0);
             // RE-418: the mullion's own axis, from its record, turned into the
             // element's frame as its mesh is.
             let member = volume
@@ -730,6 +849,9 @@ pub fn attach_scoped_with_control(
             if let Some(volume) = column_volume {
                 column_volumes.push((*index, volume));
             }
+            if let Some(height) = column_height {
+                column_heights.push((*index, height));
+            }
             if let Some(width) = plate_width {
                 plate_widths.push((*index, width));
             }
@@ -757,6 +879,7 @@ pub fn attach_scoped_with_control(
         },
     )?;
     drop_column_box_quantities(model, &column_volumes);
+    shorten_column_box_lengths(model, &column_heights);
     let moved = add_mesh_volumes(model, &volumes, &members);
     follow_mesh_span(model, &moved);
     add_mullion_surface_areas(model, &members);
@@ -764,6 +887,7 @@ pub fn attach_scoped_with_control(
     add_column_quantities(model, &mut columns);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
+    add_covering_areas(model, &covering_areas);
     // #1645: a candidate the scene held no graphics for keeps its box too.
     for (id, indices) in &by_id {
         if !seen.contains(id) {
@@ -778,6 +902,40 @@ pub fn attach_scoped_with_control(
         note_refusal(model, index, reason);
     }
     Ok(report)
+}
+
+/// How far, relative to the rectangle's, the section of a column's mesh may
+/// differ from its type's rectangle and the rectangle still be the column's
+/// section (#1710): the mesh's single-precision corners move a section's area
+/// by far less, and the BIM4LCA housing's chamfered columns are 0.3% and 1.1%
+/// under their rectangles.
+const COLUMN_SECTION_TOLERANCE: f64 = 1e-3;
+
+/// Whether `entity`, a column drawn as its type's rectangle, has a mesh whose
+/// section, of area `mesh_area` (square feet), is not that rectangle (#1710):
+/// a chamfered or thin-walled section, which the mesh draws and the rectangle
+/// does not. False where the body is not a rectangle's extrusion.
+fn section_not_rectangle(entity: &IfcEntity, mesh_area: f64) -> bool {
+    let IfcEntity::BuildingElement {
+        extrusion: Some(extrusion),
+        ..
+    } = entity
+    else {
+        return false;
+    };
+    let (width, depth) = match &extrusion.profile_override {
+        None => (extrusion.width_feet, extrusion.depth_feet),
+        Some(ProfileDef::Rectangle {
+            width_feet,
+            depth_feet,
+        }) => (*width_feet, *depth_feet),
+        Some(_) => return false,
+    };
+    let area = width * depth;
+    area.is_finite()
+        && area > 0.0
+        && mesh_area.is_finite()
+        && (mesh_area - area).abs() > COLUMN_SECTION_TOLERANCE * area
 }
 
 /// How far a column's box volume may differ from the volume of the mesh Revit
@@ -876,6 +1034,67 @@ fn drop_column_box_quantities(model: &mut IfcModel, found: &[(usize, f64)]) {
                     "CrossSectionArea" | "OuterSurfaceArea" | "GrossVolume" | "NetVolume"
                 )
             });
+        }
+    }
+}
+
+/// How much shorter than its box's height a column's mesh must be for the
+/// box's height not to be its `Length`, feet (about 0.3 mm).
+const COLUMN_LENGTH_TOLERANCE_FEET: f64 = 0.001;
+
+/// Give each column of `found` (an index into the entities and the height of
+/// the mesh its body was drawn from) its mesh's height as its `Length` where
+/// the `Length` it holds is its record box's height and the mesh is shorter
+/// (#1801). revit-ifc takes a column's `Length` from the extrusion its exporter
+/// finds, which is the column's solid. Over the exports Measure kept (RE-444,
+/// Measure 43115049478), no written `Length` is shorter than its column's mesh
+/// by 2 mm, and one is longer only on 786 columns of the Revit 2025 to 2027
+/// saves of Autodesk's rme samples (and 5 BIM4LCA elements RE-444 itself
+/// fixed). Those saves record boxes up to 7.3 m taller than the meshes, which
+/// are the same as in each project's 2024 save, whose box is the mesh's height.
+/// It applies to any column drawn from its mesh, on the releases whose meshes
+/// are drawn (Revit 2023 to 2027), with flat faces or curved: a round column's
+/// mesh is left out of the quantities read from a mesh of flat faces (RE-424),
+/// and a flat-faced one's `Length` from that reading is never written over a
+/// held value, so either kept the box's height. A `Length` from anything but
+/// the box (a clean pair's, RE-291 and #1203) is left as it is.
+fn shorten_column_box_lengths(model: &mut IfcModel, found: &[(usize, f64)]) {
+    if found.is_empty() {
+        return;
+    }
+    let mut held: BTreeMap<usize, usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_ColumnBaseQuantities" {
+                held.entry(*element).or_insert(position);
+            }
+        }
+    }
+    for &(index, mesh_height) in found {
+        let Some(IfcEntity::BuildingElement {
+            extrusion: Some(body),
+            ..
+        }) = model.entities.get(index)
+        else {
+            continue;
+        };
+        let box_height = body.height_feet;
+        let Some(&position) = held.get(&index) else {
+            continue;
+        };
+        let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
+        else {
+            continue;
+        };
+        for property in &mut set.properties {
+            if let PropertyValue::PositiveLengthFeet(length) = &mut property.value {
+                if property.name == "Length"
+                    && (*length - box_height).abs() <= 1e-9 * box_height.max(1.0)
+                    && mesh_height < *length - COLUMN_LENGTH_TOLERANCE_FEET
+                {
+                    *length = mesh_height;
+                }
+            }
         }
     }
 }
@@ -1345,24 +1564,28 @@ const WALL_BOX_MESH_TOLERANCE: f64 = 1e-3;
 const WALL_HEIGHT_AGREE_FEET: f64 = 5e-4;
 
 /// How far, radians, an element's turn may lie off its wall's own axes for its
-/// world box, which is axis aligned, to be that element's extent in the wall's
-/// frame (#1046).
+/// rectangle's corners to give that element's extent in the wall's frame: a
+/// rectangle turned with the wall, or across it (#1046).
 const OPENING_TURN_TOLERANCE: f64 = 1e-6;
 
-/// A wall's own axes and the world boxes, feet, of the openings rvt-rs cuts in
-/// it, `[min_x, min_y, min_z, max_x, max_y, max_z]` (#1046).
+/// How far, feet, a corner of a wall opening's outline may lie off the
+/// rectangle its ranges make and the outline still be that rectangle (#1046).
+const OUTLINE_CORNER_TOLERANCE_FEET: f64 = 1e-6;
+
+/// A wall's own axes and the openings rvt-rs cuts in it (#1046).
 struct WallOpenings {
     frame: WallFrame,
-    boxes: Vec<[f64; 6]>,
+    boxes: Vec<OpeningBox>,
 }
 
 /// #1046: each wall's frame, by its index in `model.entities`, and the boxes of
 /// the openings written in it: the rectangle of every element the wall hosts,
 /// with the axis across the wall cut to the wall's thickness, placed on that
 /// element's own placement and extruded up its height, as the writer emits it
-/// (#227, RE-84). A wall whose element is not read, and an opening whose turn is
-/// not one of its wall's, is left out, so the wall gets no areas of the mesh for
-/// them.
+/// (#227, RE-84), and the rectangle of every opening rvt-rs cuts through the wall
+/// with nothing filling it (`WallCutOpening`). A wall whose element is not read,
+/// and an opening whose turn is not one of its wall's, is left out, so the wall
+/// gets no areas of the mesh for them.
 fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
     let mut out: BTreeMap<usize, WallOpenings> = BTreeMap::new();
     for (index, entity) in model.entities.iter().enumerate() {
@@ -1415,38 +1638,140 @@ fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
             [cut.x_dim_feet, cut.y_dim_feet]
         });
         let [cx, cy] = cut.map_or([0.0, 0.0], |cut| cut.centre_feet);
+        // `z_range_feet` is where the opening starts and how high it is (RE-93),
+        // as the writer extrudes it: its top is `start + height`, so the start
+        // is added once, below.
         let [start, height] = cut
             .and_then(|cut| cut.z_range_feet)
-            .map_or([0.0, body.height_feet], |[start, height]| {
-                [start, start + height]
-            });
+            .unwrap_or([0.0, body.height_feet]);
         let (sin, cos) = rotation_radians.unwrap_or(0.0).sin_cos();
-        let mut x = [f64::INFINITY, f64::NEG_INFINITY];
-        let mut y = [f64::INFINITY, f64::NEG_INFINITY];
-        for side_x in [-1.0, 1.0] {
-            for side_y in [-1.0, 1.0] {
+        let corners =
+            [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]].map(|[side_x, side_y]| {
                 let (px, py) = (cx + side_x * x_dim / 2.0, cy + side_y * y_dim / 2.0);
-                let corner = [
+                [
                     location[0] + px * cos - py * sin,
                     location[1] + px * sin + py * cos,
-                ];
-                x = [x[0].min(corner[0]), x[1].max(corner[0])];
-                y = [y[0].min(corner[1]), y[1].max(corner[1])];
-            }
+                ]
+            });
+        let opening = OpeningBox {
+            corners,
+            heights: [location[2] + start, location[2] + start + height],
+        };
+        if opening
+            .corners
+            .iter()
+            .flatten()
+            .chain(&opening.heights)
+            .all(|value| value.is_finite())
+        {
+            hosted.boxes.push(opening);
         }
-        let world = [
-            x[0],
-            y[0],
-            location[2] + start,
-            x[1],
-            y[1],
-            location[2] + start + height,
+    }
+    // The openings rvt-rs cuts in a wall with nothing filling them (#1165,
+    // RE-321): a rectangle in the wall's vertical plane, along an axis turned
+    // with the wall's, extruded through it. A recess does not pass through, so
+    // its back face is no jamb, and an outline that is not a rectangle makes
+    // faces no box explains: both are left out.
+    for entity in &model.entities {
+        let IfcEntity::WallCutOpening {
+            host,
+            outline_feet,
+            axis_turn_radians,
+            plane_offset_feet,
+            thickness_feet,
+            recess: false,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let Some(IfcEntity::BuildingElement {
+            location_feet: Some(location),
+            rotation_radians,
+            ..
+        }) = model.entities.get(*host)
+        else {
+            continue;
+        };
+        let Some(hosted) = out.get_mut(host) else {
+            continue;
+        };
+        if (2.0 * axis_turn_radians).sin().abs() > OPENING_TURN_TOLERANCE {
+            continue;
+        }
+        let Some((along, up)) = outline_rectangle(outline_feet) else {
+            continue;
+        };
+        let left = [
+            plane_offset_feet - thickness_feet / 2.0,
+            plane_offset_feet + thickness_feet / 2.0,
         ];
-        if world.iter().all(|value| value.is_finite()) {
-            hosted.boxes.push(world);
+        let (sin, cos) = (rotation_radians.unwrap_or(0.0) + axis_turn_radians).sin_cos();
+        let corners = [
+            [along[0], left[0]],
+            [along[1], left[0]],
+            [along[1], left[1]],
+            [along[0], left[1]],
+        ]
+        .map(|[a, l]| {
+            [
+                location[0] + a * cos - l * sin,
+                location[1] + a * sin + l * cos,
+            ]
+        });
+        let opening = OpeningBox {
+            corners,
+            heights: [location[2] + up[0], location[2] + up[1]],
+        };
+        if opening
+            .corners
+            .iter()
+            .flatten()
+            .chain(&opening.heights)
+            .all(|value| value.is_finite())
+        {
+            hosted.boxes.push(opening);
         }
     }
     out
+}
+
+/// The ranges, feet, of the outline `outline` along its first axis and its
+/// second, where it is a rectangle on them: four corners, each at an end of
+/// both ranges and no two at the same. `None` for any other outline.
+fn outline_rectangle(outline: &[(f64, f64)]) -> Option<([f64; 2], [f64; 2])> {
+    let [_, _, _, _] = outline else {
+        return None;
+    };
+    let fold = |pick: fn(&(f64, f64)) -> f64| {
+        outline
+            .iter()
+            .map(pick)
+            .fold([f64::INFINITY, f64::NEG_INFINITY], |[low, high], v| {
+                [low.min(v), high.max(v)]
+            })
+    };
+    let (x, y) = (fold(|p| p.0), fold(|p| p.1));
+    let at_end = |v: f64, range: [f64; 2]| {
+        (v - range[0]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET
+            || (v - range[1]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET
+    };
+    let corners: BTreeSet<(bool, bool)> = outline
+        .iter()
+        .map(|&(px, py)| {
+            (
+                (px - x[0]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET,
+                (py - y[0]).abs() <= OUTLINE_CORNER_TOLERANCE_FEET,
+            )
+        })
+        .collect();
+    (x[1] - x[0] > OUTLINE_CORNER_TOLERANCE_FEET
+        && y[1] - y[0] > OUTLINE_CORNER_TOLERANCE_FEET
+        && corners.len() == 4
+        && outline
+            .iter()
+            .all(|&(px, py)| at_end(px, x) && at_end(py, y)))
+    .then_some((x, y))
 }
 
 /// Give each wall of `found` (an index into the entities and what the mesh
@@ -1487,13 +1812,30 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
         let Some(&position) = held.get(index) else {
             continue;
         };
-        // The height of the wall's body, where it is the extrusion of its box.
+        // The height of the wall's body, where it is the extrusion of its box,
+        // or where its top is cut along a sloped roof (#1478): that solid keeps
+        // the box's extrusion, whose height is the record's, and Revit's export
+        // writes that height as the wall's `Height` (25 of 25 on the R2025
+        // models, which matched it before the cut).
         let body_height = match model.entities.get(*index) {
             Some(IfcEntity::BuildingElement {
                 extrusion: Some(body),
                 solid_shape: None,
                 ..
             }) => Some(body.height_feet),
+            Some(IfcEntity::BuildingElement {
+                extrusion: Some(body),
+                solid_shape: Some(_),
+                property_set: Some(own),
+                ..
+            }) if has_text_property(
+                own,
+                "BodyHeightSource",
+                WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE,
+            ) =>
+            {
+                Some(body.height_feet)
+            }
             _ => None,
         };
         let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
@@ -1600,6 +1942,324 @@ fn add_plate_widths(model: &mut IfcModel, widths: &[(usize, f64)]) {
     }
 }
 
+/// The coverings of `model` (by ElementId) that hold no
+/// `Qto_CoveringBaseQuantities.GrossArea`: an `IfcCovering` whose `RevitClass`
+/// is `class` (#1209). Of `Ceiling`, they are the ceilings
+/// `add_ceiling_quantities` leaves out: those a step cuts, and the uncut ones
+/// whose sketch it does not read. Of `FamilyInstance`, they are the family
+/// instances Revit writes as `IfcCovering` `ROOFING` (ventilation units, snow
+/// guards, downpipes and their casings on the BIM4LCA office and housing).
+/// rvt-rs writes a ceiling sketched in pieces as one covering per piece, all
+/// with its ElementId (#331), where Revit's export writes one covering: such a
+/// ceiling is listed only where none of its coverings holds `GrossArea`, its
+/// own covering first and its pieces after it, in the order they were written.
+fn coverings_without_area(
+    model: &IfcModel,
+    wholes: &BTreeSet<usize>,
+    scope: SavedMeshScope,
+    class: &str,
+) -> BTreeMap<u64, Vec<usize>> {
+    let with_area: BTreeSet<usize> = model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            IfcEntity::ElementPropertySet { element, set }
+                if set.name == "Qto_CoveringBaseQuantities" && has_property(set, "GrossArea") =>
+            {
+                Some(*element)
+            }
+            _ => None,
+        })
+        .collect();
+    let mut out: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    let mut ids_with_area: BTreeSet<u64> = BTreeSet::new();
+    for (index, entity) in model.entities.iter().enumerate() {
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            property_set: Some(set),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if ifc_type != "IFCCOVERING"
+            || !scope.includes(ifc_type)
+            || wholes.contains(&index)
+            || !has_text_property(set, "RevitClass", class)
+        {
+            continue;
+        }
+        let Ok(id) = tag.parse::<u64>() else {
+            continue;
+        };
+        if with_area.contains(&index) {
+            ids_with_area.insert(id);
+        } else {
+            out.entry(id).or_default().push(index);
+        }
+    }
+    out.retain(|id, _| !ids_with_area.contains(id));
+    out
+}
+
+/// The area of a ceiling's saved face where it is one piece (#1209): the
+/// largest upward and the largest downward horizontal face of `primitives`,
+/// each the triangles at one height (0.001 ft) whose outward normal is
+/// vertical, must each be one connected piece (triangles sharing a vertex
+/// 1e-6 ft apart), and the two must be the same area to 0.1%. Revit's export
+/// gives such a ceiling that area as its `GrossArea` on all 370 one-piece
+/// ceilings of the eight BIM4LCA office and housing files, cut or uncut. On a
+/// ceiling in pieces it gives one piece's, and not always the largest
+/// ([`first_piece_face_area`]); a sloped ceiling, which has no horizontal
+/// face, gets none.
+fn one_piece_face_area(primitives: &[Primitive]) -> Option<f64> {
+    const SAME_AREA: f64 = 1e-3;
+    type Level = Vec<[[f64; 3]; 3]>;
+    let mut levels: BTreeMap<(i64, bool), (f64, Level)> = BTreeMap::new();
+    for primitive in primitives {
+        for triangle in horizontal_triangles(primitive).into_iter().flatten() {
+            let level = levels
+                .entry((triangle.height, triangle.up))
+                .or_insert_with(|| (0.0, Vec::new()));
+            level.0 += triangle.area;
+            level.1.push(triangle.corners);
+        }
+    }
+    let largest = |up: bool| {
+        levels
+            .iter()
+            .filter(|((_, direction), _)| *direction == up)
+            .max_by(|x, y| x.1.0.total_cmp(&y.1.0))
+            .map(|(_, level)| level)
+    };
+    let (upper, lower) = (largest(true)?, largest(false)?);
+    if pieces(&upper.1) != 1 || pieces(&lower.1) != 1 {
+        return None;
+    }
+    ((upper.0 - lower.0).abs() <= SAME_AREA * upper.0.max(lower.0)).then_some(lower.0)
+}
+
+/// A horizontal triangle of a saved mesh: its height (0.001 ft), whether its
+/// outward normal points up, its corners and its area.
+struct Horizontal {
+    height: i64,
+    up: bool,
+    corners: [[f64; 3]; 3],
+    area: f64,
+}
+
+/// Each triangle of `primitive`, in order, where its outward normal is
+/// vertical to 0.999 (none where it is not, has no area or names a vertex the
+/// primitive lacks). The direction of a triangle is its winding turned outward
+/// by its saved normals, where the primitive has one per vertex.
+fn horizontal_triangles(primitive: &Primitive) -> Vec<Option<Horizontal>> {
+    const HORIZONTAL: f64 = 0.999;
+    let oriented = primitive.normals.len() == primitive.vertices.len();
+    primitive
+        .triangles
+        .iter()
+        .map(|triangle| {
+            let corners = triangle.map(|i| primitive.vertices.get(i as usize).copied());
+            let [Some(a), Some(b), Some(c)] = corners else {
+                return None;
+            };
+            let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+            let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+            let mut normal = [
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0],
+            ];
+            let length =
+                (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
+            if !length.is_finite() || length < 1e-12 {
+                return None;
+            }
+            if oriented {
+                let outward = triangle.iter().fold([0.0; 3], |sum, i| {
+                    let n = primitive.normals[*i as usize];
+                    [sum[0] + n[0], sum[1] + n[1], sum[2] + n[2]]
+                });
+                if normal[0] * outward[0] + normal[1] * outward[1] + normal[2] * outward[2] < 0.0 {
+                    normal = [-normal[0], -normal[1], -normal[2]];
+                }
+            }
+            (normal[2].abs() / length >= HORIZONTAL).then(|| Horizontal {
+                height: (a[2] * 1000.0).round() as i64,
+                up: normal[2] > 0.0,
+                corners: [a, b, c],
+                area: length / 2.0,
+            })
+        })
+        .collect()
+}
+
+/// The area of a ceiling's piece that Revit's export names, where its saved
+/// face is in pieces (#1209, RE-486). revit-ifc 24.2's `BodyExporter.ExportBody`
+/// sets the body's `ScaledArea` from each extrusion as it creates it, so a
+/// ceiling in pieces gets the area of the piece it creates last as its
+/// `GrossArea`. The saved mesh stores the slab one face per primitive, the
+/// pieces as connected parts of each face (triangles sharing a vertex 1e-6 ft
+/// apart). The part of the first primitive that holds its first triangle is
+/// Revit's piece on all 78 ceilings in pieces of the four BIM4LCA office
+/// files (73 uncut, 5 cut), where the largest piece is Revit's on 45. The
+/// first primitive must be one horizontal face, every triangle at
+/// one height facing one way, in more than one part. A horizontal face facing
+/// the other way must hold a part of the same area to 0.1%. Anything else
+/// gets none.
+fn first_piece_face_area(primitives: &[Primitive]) -> Option<f64> {
+    const SAME_AREA: f64 = 1e-3;
+    let first = primitives.first()?;
+    let face: Vec<Horizontal> = horizontal_triangles(first)
+        .into_iter()
+        .collect::<Option<Vec<Horizontal>>>()?;
+    let (height, up) = face.first().map(|t| (t.height, t.up))?;
+    if face.iter().any(|t| t.height != height || t.up != up) {
+        return None;
+    }
+    let corners: Vec<[[f64; 3]; 3]> = face.iter().map(|t| t.corners).collect();
+    let roots = part_roots(&corners);
+    if roots.iter().collect::<BTreeSet<_>>().len() < 2 {
+        return None;
+    }
+    let area: f64 = face
+        .iter()
+        .zip(&roots)
+        .filter(|(_, root)| **root == roots[0])
+        .map(|(t, _)| t.area)
+        .sum();
+    let mut opposite: BTreeMap<i64, Vec<Horizontal>> = BTreeMap::new();
+    for primitive in &primitives[1..] {
+        for triangle in horizontal_triangles(primitive).into_iter().flatten() {
+            if triangle.up != up {
+                opposite.entry(triangle.height).or_default().push(triangle);
+            }
+        }
+    }
+    let matched = opposite.values().any(|level| {
+        let corners: Vec<[[f64; 3]; 3]> = level.iter().map(|t| t.corners).collect();
+        let mut parts: BTreeMap<usize, f64> = BTreeMap::new();
+        for (triangle, root) in level.iter().zip(part_roots(&corners)) {
+            *parts.entry(root).or_insert(0.0) += triangle.area;
+        }
+        parts
+            .values()
+            .any(|part| (part - area).abs() <= SAME_AREA * part.max(area))
+    });
+    matched.then_some(area)
+}
+
+/// Whether `primitives` make one connected part (#1209). A family instance
+/// that Revit writes as a covering is given the area of the extrusion its body
+/// was exported as (revit-ifc 24.2's `GrossAreaCalculator`). Where the body is
+/// one part with one-piece faces, that area is its face's, on all 72 such
+/// coverings of the BIM4LCA office and housing with Revit's export. A body of
+/// several solids, such as a vent's plate and duct, is given one solid's
+/// instead (0.338 ft² against a face of 1.012 ft²), so it gets none.
+fn one_part(primitives: &[Primitive]) -> bool {
+    let triangles: Vec<[[f64; 3]; 3]> = primitives
+        .iter()
+        .flat_map(|primitive| {
+            primitive.triangles.iter().filter_map(|triangle| {
+                match triangle.map(|i| primitive.vertices.get(i as usize).copied()) {
+                    [Some(a), Some(b), Some(c)] => Some([a, b, c]),
+                    _ => None,
+                }
+            })
+        })
+        .collect();
+    !triangles.is_empty() && pieces(&triangles) == 1
+}
+
+/// How many connected parts `triangles` make, two triangles joined where they
+/// share a vertex 1e-6 ft apart.
+fn pieces(triangles: &[[[f64; 3]; 3]]) -> usize {
+    part_roots(triangles)
+        .into_iter()
+        .collect::<BTreeSet<usize>>()
+        .len()
+}
+
+/// The connected part of each of `triangles`, as one triangle index per part,
+/// two triangles joined where they share a vertex 1e-6 ft apart.
+fn part_roots(triangles: &[[[f64; 3]; 3]]) -> Vec<usize> {
+    fn root(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+    let key = |p: [f64; 3]| p.map(|v| (v * 1e6).round() as i64);
+    let mut parent: Vec<usize> = (0..triangles.len()).collect();
+    let mut seen: BTreeMap<[i64; 3], usize> = BTreeMap::new();
+    for (index, corners) in triangles.iter().enumerate() {
+        for corner in corners {
+            match seen.get(&key(*corner)) {
+                Some(&other) => {
+                    let (a, b) = (root(&mut parent, index), root(&mut parent, other));
+                    if a != b {
+                        parent[a] = b;
+                    }
+                }
+                None => {
+                    seen.insert(key(*corner), index);
+                }
+            }
+        }
+    }
+    (0..triangles.len())
+        .map(|index| root(&mut parent, index))
+        .collect()
+}
+
+/// Give each covering of `found` (an index into the entities and the area of
+/// its saved face, or of the piece of it Revit names) the `GrossArea` of its
+/// `Qto_CoveringBaseQuantities` (#1209),
+/// in the set it holds or a new one. A value a covering holds is never
+/// replaced.
+fn add_covering_areas(model: &mut IfcModel, found: &[(usize, f64)]) {
+    if found.is_empty() {
+        return;
+    }
+    let mut held: BTreeMap<usize, usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_CoveringBaseQuantities" {
+                held.entry(*element).or_insert(position);
+            }
+        }
+    }
+    for &(index, area) in found {
+        let gross = Property {
+            name: "GrossArea".into(),
+            value: PropertyValue::AreaSquareFeet(area),
+        };
+        match held.get(&index) {
+            Some(&position) => {
+                if let Some(IfcEntity::ElementPropertySet { set, .. }) =
+                    model.entities.get_mut(position)
+                {
+                    if !has_property(set, "GrossArea") {
+                        set.properties.push(gross);
+                    }
+                }
+            }
+            None => {
+                held.insert(index, model.entities.len());
+                model.entities.push(IfcEntity::ElementPropertySet {
+                    element: index,
+                    set: PropertySet {
+                        name: "Qto_CoveringBaseQuantities".into(),
+                        properties: vec![gross],
+                    },
+                });
+            }
+        }
+    }
+}
+
 /// Whether `set` has a property called `name`.
 fn has_property(set: &PropertySet, name: &str) -> bool {
     set.properties.iter().any(|property| property.name == name)
@@ -1631,13 +2291,20 @@ fn plain_or_stepped(solid_shape: &Option<SolidShape>, property_set: &Option<Prop
 /// hosted in them but the opening their own curtain wall cuts (an
 /// `IfcEntity::WallCutOpening` whose Tag is the curtain wall's: Revit's export
 /// holds that void and the raised strip both). Nothing where the model has no
-/// curtain wall, so a file without one reads no wall record here. An `Err`
+/// curtain wall, so a file without one reads no wall record here, and nothing
+/// on a release outside [`EMBED_HOST_REVIT_VERSIONS`]. An `Err`
 /// names why the walls' native records were not read.
 fn embed_hosts(
     rf: &mut crate::RevitFile,
     model: &IfcModel,
     taken: &BTreeMap<u64, Vec<usize>>,
 ) -> Result<BTreeMap<u64, usize>, String> {
+    if !rf
+        .basic_file_info()
+        .is_ok_and(|info| EMBED_HOST_REVIT_VERSIONS.contains(&info.version))
+    {
+        return Ok(BTreeMap::new());
+    }
     let element_id = |entity: &IfcEntity, wanted: &str| match entity {
         IfcEntity::BuildingElement {
             ifc_type,

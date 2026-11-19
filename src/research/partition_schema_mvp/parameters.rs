@@ -23,6 +23,60 @@ pub(super) fn attach_type_text_parameters(
     }
 }
 
+/// Give each door and window of `groups` that its type's family type table
+/// gave no Fire Rating (RE-354) the value of its saved parameter captioned
+/// [`FIRE_RATING_CAPTION`], its own before its type's, as the field
+/// [`attach_type_text_parameters`] would have given it: the export writes it
+/// as the `FireRating` of the standard sets that define one, after a parameter
+/// named for the property (`named_parameter_properties`). puzzbobb's Revit
+/// 2025 window types hold their `0.5h` as a family parameter of that caption,
+/// which the type-table scan does not read (#1507, #1730). On the releases in
+/// [`SAVED_FIRE_RATING_REVIT_VERSIONS`] only.
+pub(super) fn attach_saved_fire_ratings(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    if !SAVED_FIRE_RATING_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let field = format!("{TYPE_PARAMETER_FIELD_PREFIX}{FIRE_RATING_CAPTION}");
+    let ids: BTreeSet<u64> = groups
+        .iter()
+        .flat_map(|elements| elements.iter())
+        .filter(|element| !element.fields.iter().any(|(name, _)| *name == field))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let is_fire_rating: fn(&str) -> bool = |caption| caption == FIRE_RATING_CAPTION;
+    let Ok(saved) = crate::native_element_parameters::read_property_values(
+        rf,
+        &ids,
+        is_fire_rating,
+        is_fire_rating,
+    ) else {
+        return;
+    };
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(id) = element.id.map(u64::from).filter(|id| ids.contains(id)) else {
+            continue;
+        };
+        let rating = saved.elements.get(&id).and_then(|parameters| {
+            parameters
+                .iter()
+                .filter(|parameter| parameter.name.as_deref() == Some(FIRE_RATING_CAPTION))
+                .find_map(|parameter| parameter.value.as_str().filter(|text| !text.is_empty()))
+        });
+        if let Some(rating) = rating {
+            element
+                .fields
+                .push((field.clone(), InstanceField::String(rating.to_string())));
+        }
+    }
+}
+
 /// The `IsExternal` Revit's exporter calculates for `element` (RE-193),
 /// following revit-ifc's `CategoryUtil.IsElementExternal` (CLEANROOM.md
 /// source 5): a parameter named [`IS_EXTERNAL_PARAMETER_NAME`] on the

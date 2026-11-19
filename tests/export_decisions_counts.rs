@@ -56,7 +56,7 @@ fn u64_at(buf: &[u8], at: usize) -> Option<u64> {
 }
 
 /// The reasons whose entries are frames of the element-record partitions.
-const FRAME_REASONS: [&str; 8] = [
+const FRAME_REASONS: [&str; 9] = [
     "element_record_without_element_id",
     "element_record_without_volume",
     "element_record_in_non_primary_design_option",
@@ -65,6 +65,7 @@ const FRAME_REASONS: [&str; 8] = [
     "element_record_empty_curtain_panel",
     "element_record_family_space_without_body",
     "element_record_family_type_draws_nothing",
+    "element_record_curtain_host_panel",
 ];
 
 /// One export of a model, and what its log must show.
@@ -99,8 +100,6 @@ const CASES: [Case; 5] = [
             "body_is_record_box",
             "low_confidence_schema_scan_candidate",
             "saved_mesh_not_used",
-            "unsupported_geometry_missing_dimensions",
-            "unsupported_geometry_profile",
             "unsupported_geometry_unresolved_host",
         ],
         frames: false,
@@ -113,13 +112,12 @@ const CASES: [Case; 5] = [
     },
     // Einhoven keeps no box: every boxed element of a Revit 2023 file is drawn
     // from its saved mesh by default (#1191), so `body_is_record_box` is not one.
+    // Its elements are all on its one Level, and its curtain wall's body is its
+    // panels' (RE-440), so no geometry gap is one either.
     Case {
         model: "Revit_IFC5_Einhoven",
         phase: None,
-        reasons: &[
-            "low_confidence_schema_scan_candidate",
-            "unsupported_geometry_missing_level",
-        ],
+        reasons: &["low_confidence_schema_scan_candidate"],
         frames: false,
     },
     // The office has no family-instance space left as a box for the same

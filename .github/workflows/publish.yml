@@ -413,6 +413,17 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
           cache: "false"
+      # The same RE1 models as viewer-test.yml fetches (the viewer journey runs
+      # on all four). parameters-row.spec.ts's empty-state test looks for an
+      # element rvt-elements prints no parameters for in the sample, then Core
+      # Interior, then RE1 Mechanical, because since RE-440 neither of the first
+      # two has one. Without the file the test found none and failed 0.23.0's
+      # dry run (run 43557099002), which is the check this job is for.
+      - name: Fetch the RE1 models (Drshelden/IFC-ECS, MIT)
+        uses: $/.github/actions/fetch-re1
+        with:
+          files: RE1-Architecture.rvt RE1-Mechanical.rvt RE1-Plumbing.rvt RE1-Electrical.rvt
+          path: _project_corpus/Revit
       - name: Install Rust stable
         uses: $/.github/actions/setup-rust
         with:

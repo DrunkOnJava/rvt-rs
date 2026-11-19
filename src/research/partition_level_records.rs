@@ -781,12 +781,14 @@ pub fn levels_from_records_and_blocks(
 /// Fail closed: at least one level, one block per Level, and no two
 /// building-storey levels sharing an elevation. A partial recovery is not
 /// silently emitted as a smaller building. A single Level passes here;
-/// [`scan_partition_levels`] keeps it only on Revit 2024 to 2027 and only
+/// [`scan_partition_levels`] keeps it on Revit 2024 to 2027 only
 /// when the broader [`scan_partition_level_ids`] finds no other Level
 /// either, as on a one-storey project (R2025 `01_Walls`, whose Revit export
-/// has that one storey). On Revit 2023 `Revit_IFC5_Einhoven.rvt` decodes
-/// one Level while its walls stand at two or more base elevations, so a
-/// lone 2015 to 2023 Level is not trusted.
+/// has that one storey). On 2015 to 2023 it keeps a single Level only when
+/// the file's native `Level` records are that Level alone (RE-440): Revit
+/// 2023 `Revit_IFC5_Einhoven.rvt` holds one, `Level 1`, and the "walls at
+/// two or more base elevations" that once argued for a missed Level were
+/// its curtain wall's panels and grid lines, not walls.
 ///
 /// A Level that is not a building storey may share a storey's elevation
 /// (#746: BIM4LCA `Housing_Timber_*` has the reference level
@@ -1199,14 +1201,20 @@ pub fn scan_partition_levels(
     if !recovered_levels_are_a_storey_set(&records, &levels) {
         return Ok(Vec::new());
     }
-    // One Level is the storey set only on 2024 to 2027 and when no other
-    // Level frames anywhere: a second Level the full recovery missed would
-    // otherwise leave its elements on the wrong storey.
-    if levels.len() == 1
-        && (crate::partition_element_records_2023::is_32bit_release(revit_version)
-            || scan_partition_level_ids(rf, revit_version, declared_ids)?.len() != 1)
-    {
-        return Ok(Vec::new());
+    // One Level is the storey set only when no other Level is in the file: a
+    // second Level the full recovery missed would otherwise leave its
+    // elements on the wrong storey. On 2024 to 2027 no other Level frames
+    // anywhere; on 2015 to 2023, where that scan does not read, the file's
+    // native `Level` records are that one Level alone (RE-440).
+    if levels.len() == 1 {
+        let alone = if crate::partition_element_records_2023::is_32bit_release(revit_version) {
+            native_level_ids(rf) == Some(BTreeSet::from([u64::from(levels[0].element_id)]))
+        } else {
+            scan_partition_level_ids(rf, revit_version, declared_ids)?.len() == 1
+        };
+        if !alone {
+            return Ok(Vec::new());
+        }
     }
     if recording {
         use crate::ifc::element_provenance::{CopyRule, ValueSource};
@@ -1228,6 +1236,28 @@ pub fn scan_partition_levels(
         }
     }
     Ok(levels)
+}
+
+/// The ElementIds of the file's native `Level` records, on the releases
+/// whose records frame ([`crate::native_document::NATIVE_RELEASES`]); `None`
+/// where they cannot be read. Only the records' classes are read (RE-440).
+fn native_level_ids(rf: &mut RevitFile) -> Option<BTreeSet<u64>> {
+    use crate::native_document::{NATIVE_RELEASES, Options, extract_graphs};
+    let options = Options {
+        selected_classes: BTreeSet::from(["Level".to_string()]),
+        graph_classes: Some(BTreeSet::new()),
+        releases: NATIVE_RELEASES,
+        ..Options::default()
+    };
+    let mut ids = BTreeSet::new();
+    extract_graphs(rf, &options, |record| {
+        if record.class_name.as_deref() == Some("Level") {
+            ids.insert(record.identity.element_id);
+        }
+        Ok(())
+    })
+    .ok()?;
+    Some(ids)
 }
 
 /// The reader name of the value source of a Level's name, elevation and

@@ -42,9 +42,9 @@ pub struct ElementInput<'a> {
     pub display_name: String,
     pub guid: Option<String>,
     /// Which storey contains this element. Index into
-    /// `BuilderOptions.storeys`. `None` → element lands in
-    /// storey index 0 (fine when only one storey is defined or
-    /// when the element's level hasn't been resolved yet).
+    /// `BuilderOptions.storeys`. `None` leaves it in no storey: the writer
+    /// contains it in the building, as for an element whose level was not
+    /// resolved (RE-27).
     pub storey_index: Option<usize>,
     /// Which material the element associates with. Index into
     /// `BuilderOptions.materials`. `None` = no material emitted.
@@ -120,8 +120,9 @@ pub struct BuilderOptions {
     /// Classifications to carry through (usually populated from
     /// PartAtom taxonomies).
     pub classifications: Vec<Classification>,
-    /// Unit assignments (usually populated by
-    /// `RvtDocExporter::build_unit_list`).
+    /// The source model's display units. They describe the Revit file and
+    /// are reported in the diagnostics; the IFC's `IfcUnitAssignment` is the
+    /// writer's fixed SI list whatever they hold (#403).
     pub units: Vec<UnitAssignment>,
     /// Project name override. If `None`, falls back to the first
     /// element's class name.

@@ -626,7 +626,11 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
         let drawn = drawn.filter(|(_, matrix)| matrix.iter().all(|v| v.is_finite()));
         let (mesh, matrix) = match drawn {
             Some(((position, indices), matrix)) => {
+                // An index past the model's materials names none, as the STEP
+                // writer drops it: in glTF it would point past `materials[]`
+                // and make the whole file invalid.
                 let material = material_index
+                    .filter(|&index| index < model.materials.len())
                     .or_else(|| single_material.get(&entity_index).copied())
                     .or_else(|| {
                         Some(

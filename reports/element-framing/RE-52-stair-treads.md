@@ -12,7 +12,7 @@
 **Probe:** `examples/probe_re52_stair_treads.rs` lists each run type's values and flags and each run's outcome, and with `--json` writes each drawn run's sketch and side view for scoring.
 
 **Oracles:**
-- Snowdon Towers Sample Architectural (local only) with Revit's IFC4 export of it. Revit's flights are meshed by IfcOpenShell 0.8.5 and moved from the export's shared coordinates to the model's by the site placement the export states: origin (417622.2672, 78713.9831, 237.8964) m, reference direction (0.898675, 0.438615).
+- Snowdon Towers Sample Architectural (local only) with Revit's IFC4 export of it. Revit's flights are meshed by IfcOpenShell 0.8.5 and moved from the export's shared coordinates to the model's by the site placement the export states.
 - The VIM export of the 2027 edition of Snowdon (`vimaec/vim-hackathon`, local only), for the 6 runs whose Tag Revit's IFC gives to a copy of the stair on another floor. The VIM holds each flight's mesh under its ElementId.
 - No licensed file in CI has a stair: Core Interior, Einhoven and the RE1 models have none. Unit tests pin the byte layouts and both constructions.
 
@@ -20,7 +20,7 @@
 
 ## 1. The run's sketch
 
-After its element-data header and ElementId (RE-44), run 621141's data holds 99 bounded line records (`04 00 08 01 · f64 start · f64 end · f64×3 origin · f64×3 unit direction`), all at z = −16.917 ft, the run's base:
+After its element-data header and ElementId (RE-44), run 621141's data holds 99 bounded line records (`04 00 08 01 · f64 start · f64 end · f64×3 origin · f64×3 unit direction`), all at one height, the run's base:
 
 | order | line | meaning |
 |---:|---|---|

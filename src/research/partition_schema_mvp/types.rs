@@ -17,7 +17,13 @@ pub(super) fn attach_ifc_export_overrides(
     // parameter.
     for elements in lists.iter_mut() {
         for element in elements.iter_mut() {
-            if matches!(element.class.as_str(), "Furniture" | "Casework") {
+            let defaults = matches!(element.class.as_str(), "Furniture" | "Casework")
+                || crate::ifc::category_map::lookup(&element.class).is_some_and(|mapping| {
+                    NOTDEFINED_DEFAULTS
+                        .iter()
+                        .any(|(entity, _)| *entity == mapping.ifc_type)
+                });
+            if defaults {
                 element.fields.push((
                     FURNITURE_RELEASE_FIELD.into(),
                     InstanceField::Integer {
@@ -578,8 +584,13 @@ pub(super) fn attach_wall_sweep_types(
 /// its own, the type its native record names
 /// ([`crate::native_element_types::system_type_names`], RE-240). Its family
 /// is then its class's system family ([`system_family`]), and a sweep's is
-/// Wall Sweep, as RE-69 names it.
-pub(super) fn attach_native_type_names(rf: &mut RevitFile, products: &mut [DecodedElement]) {
+/// Wall Sweep, as RE-69 names it. A wall sweep and a ramp on the releases of
+/// [`SWEEP_RAMP_NATIVE_TYPE_REVIT_VERSIONS`] only (#1945).
+pub(super) fn attach_native_type_names(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
     let has = |element: &DecodedElement, field: &str| {
         element.fields.iter().any(|(name, _)| name == field)
     };
@@ -587,6 +598,8 @@ pub(super) fn attach_native_type_names(rf: &mut RevitFile, products: &mut [Decod
         .iter()
         .filter(|element| {
             crate::native_element_types::reads_class(&element.class)
+                && (!matches!(element.class.as_str(), "WallSweep" | "Ramp")
+                    || SWEEP_RAMP_NATIVE_TYPE_REVIT_VERSIONS.contains(&revit_version))
                 && !has(element, TYPE_NAME_FIELD)
                 && !has(element, ELEMENT_NAME_FIELD)
         })

@@ -47,7 +47,7 @@ The measured detail behind each row is in [`docs/evidence.md`](docs/evidence.md)
 
 ## Install and quick start
 
-The latest release is [v0.22.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.22.0) (2026-11-13). Install it with any of:
+The latest release is [v0.25.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.25.0) (2026-11-15). Install it with any of:
 
 - the prebuilt Linux, macOS and Windows binaries on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases), or the container image `ghcr.io/drunkonjava/rvt-rs`;
 - `cargo install rvt --locked`;
@@ -55,7 +55,7 @@ The latest release is [v0.22.0](https://github.com/DrunkOnJava/rvt-rs/releases/t
 - `cargo install rvt-rs-mcp --locked`, for the [MCP server](#mcp-server) alone;
 - nothing at all: the [browser viewer](https://drunkonjava.github.io/rvt-rs/) reads a file inside the tab.
 
-[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.21" in the [changelog](CHANGELOG.md#upgrading-from-021) says what a user of 0.21 has to change, and each change `main` adds after 0.22.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`<!-- w10: release versions of this project, not measurements -->. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.24" in the [changelog](CHANGELOG.md#upgrading-from-024) says what a user of 0.24 has to change, and each change `main` adds after 0.25.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`<!-- w10: release versions of this project, not measurements -->. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
 Three commands cover most of what the command line does:
 
@@ -107,6 +107,14 @@ The full list, with each gap's status and evidence, is in [`docs/evidence.md`](d
 Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `probes/examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (so the core `rvt` crate can stay unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 `rvt-analyze --redact path/to/your.rfa` prints a file report: identity, upgrade history, format anchors, the schema table, the schema-to-data link histogram, content metadata and a disclosure scan. Every command with an example, the Rust library's modules and the research probes are in [`docs/library.md`](docs/library.md).
+
+## Built on rvt-rs
+
+Projects by other people that use rvt-rs as their reader. Each is its own project, with its own claims and measurements; rvt-rs does not measure them.
+
+- [rvt-prt](https://github.com/puzzbobb/rvt-prt) (Apache-2.0, by puzzbobb) prints a project's sheets to vector PDF without Revit, and also writes DWFx and DXF. It builds on the `rvt` crate's reader, its IFC model and its element meshes, and measures itself against Revit's own PDF, DWFx and DXF exports.
+
+Built something on rvt-rs? Open a [discussion](https://github.com/DrunkOnJava/rvt-rs/discussions) and it will be listed here.
 
 ## For contributors
 

@@ -131,7 +131,10 @@ jobs:
             echo "found=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          count=$(gh api "repos/$REPO/actions/runs/$run_id/artifacts" --jq '[.artifacts[] | select(.name == "semantic-diff" and (.expired | not))] | length')
+          # A full Measure run uploads more artifacts than one page of the listing holds
+          # (46 against 30), and which page the semantic-diff lands on depends on the order
+          # the jobs finished in: read every page (#2010).
+          count=$(gh api --paginate "repos/$REPO/actions/runs/$run_id/artifacts?per_page=100" --jq '.artifacts[] | select(.name == "semantic-diff" and (.expired | not)) | .id' | wc -l | tr -d ' ')
           if [ "$count" = 0 ]; then
             echo "::notice::Measure run $run_id has no semantic-diff artifact (no base, or no dump on either side), so no check run is written"
             echo "found=false" >> "$GITHUB_OUTPUT"

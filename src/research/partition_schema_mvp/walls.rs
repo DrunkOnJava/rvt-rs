@@ -1082,6 +1082,10 @@ pub(super) fn attach_wall_top_joins(
     };
     for wall in walls.iter_mut() {
         if let Some(joined) = wall.id.and_then(|id| joined.get(&u64::from(id))) {
+            // `attach_wall_layers` may have pushed it already from the same
+            // records: one copy, this read's, as the field's doc says.
+            wall.fields
+                .retain(|(name, _)| name != WALL_TOP_JOINED_FIELD);
             wall.fields
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
         }
@@ -1171,14 +1175,15 @@ pub(super) fn attach_wall_layers(
         let line = wall
             .id
             .and_then(|id| native.get(&u64::from(id)))
-            .filter(|record| record.flipped.is_some())
-            .map(|record| {
-                (
+            .and_then(|record| {
+                let flipped = record.flipped?;
+                Some((
                     record.end[0] - record.start[0],
                     record.end[1] - record.start[1],
-                )
+                    flipped,
+                ))
             });
-        if let Some((dx, dy)) = line {
+        if let Some((dx, dy, flipped)) = line {
             let length = dx.hypot(dy);
             if length.is_finite() && length > 1e-9 {
                 for (name, value) in WALL_NATIVE_DIRECTION_FIELDS
@@ -1188,15 +1193,20 @@ pub(super) fn attach_wall_layers(
                     wall.fields
                         .push(((*name).into(), InstanceField::Float { value, size: 8 }));
                 }
+                // RE-474: a door set in it that rvt-rs binds to no wall turns
+                // with the wall's flip.
+                wall.fields.push((
+                    WALL_NATIVE_FLIPPED_FIELD.into(),
+                    InstanceField::Bool(flipped),
+                ));
             }
         }
         if let Some(joined) = wall.id.and_then(|id| top_joined.get(&u64::from(id))) {
             wall.fields
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
         }
-        // RE-364 section 9: on 2015 to 2023 a record's control joins read
-        // empty, but its steps do not, and every wall of Autodesk's samples
-        // holds the step classes, so the uncut flag, of its later save. Its
+        // RE-364 section 9: every wall of Autodesk's samples holds, on 2015 to
+        // 2023, the step classes, so the uncut flag, of its later save. Its
         // Height is that save's on every wall both saves hold.
         if wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
             wall.fields
@@ -1379,8 +1389,9 @@ pub(super) fn attach_wall_layers(
         let vertical = word == 1 || !pcs::wall_orientation_has_word(revit_version);
         // RE-364: on 2015 to 2023 a wall along a model axis keeps its record
         // box cut back at its joins, whose ends Revit's own export of a 2018
-        // project confirms where the line's overrun them: its control joins,
-        // which tell a butt end, are not read there.
+        // project confirms where the line's overrun them. The control joins
+        // that tell a butt end are read there since #1584 (RE-364 section 10),
+        // and this rule has not been measured with them.
         let along_a_model_axis = lines.get(&id).is_some_and(|line| {
             let (start, end) = (line.start(), line.end());
             let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
@@ -1499,12 +1510,7 @@ pub(super) fn attach_wall_layers(
         attach_wall_butt_joins(rf, revit_version, walls, &layers, &native);
         attach_native_tee_reaches(walls, &native);
         attach_wall_corner_reaches(walls, &layers, &native);
-        // A 2015 to 2023 record is read without its control joins (RE-364), and
-        // the rule takes a wall with none listed as joined to nothing, so its
-        // `Length` is left out.
-        if !crate::partition_element_records_2023::is_32bit_release(revit_version) {
-            attach_wall_lengths(walls, &native, &located_lines);
-        }
+        attach_wall_lengths(walls, &native, &located_lines);
     }
 }
 

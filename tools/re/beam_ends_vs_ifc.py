@@ -20,7 +20,9 @@ counted apart.
 
 The same is asked of each kind of element a beam's list can name (`column`, `wall`, `beam`), whose
 bounds the probe prints as `<kind>_low` and `<kind>_high`: the near face of the one element of that
-kind that holds the end, where it lies more than 1 mm inside the box. The beams Revit makes shorter
+kind that holds the end, where it lies more than 1 mm inside the box. `section` is the columns again,
+held and cut not by their record box but by the section the export draws for them, along the
+beam's centre line (the probe's `section_*`). The beams Revit makes shorter
 are counted by whether they name an element of the kind, whether one holds an end, whether the
 kind gives them bounds and, where it does, whether the cut length is Revit's within 1 mm. The beams
 Revit leaves at the record or makes longer are counted by whether the kind cuts them, which it must
@@ -37,6 +39,19 @@ near a face, not that the two touch. The ends of the beams Revit makes shorter, 
 at the record length and of those it makes longer are counted by the kind of element they lie on
 (column first, then beam, wall, slab), or on nothing.
 
+Where Revit's end lies against the column the beam frames into is asked the same way, from Revit's
+export alone and in its own frame (#1839, S5). For each beam end the probe names the column its list
+names that lies nearest that end (`endcol_low`, `endcol_high`) and says where the record box ends in
+it, as a fraction `t` of the column's extent along the beam: 0 at the face toward the beam's middle
+(`near`), 1 at the face away from it (`far`), below 0 short of the column and above 1 past it. The
+scorer finds that column in Revit's export by `Tag`, takes the extent of its mesh along the beam's axis,
+and puts the cap of Revit's beam that is nearest it at the same fraction: `short` below -0.02, `near`
+within 0.02 of 0, `0-.5`, `centre` within 0.02 of 0.5, `.5-1`, `far` within 0.02 of 1 and `beyond`. The
+ends are counted by where the record box ends and where Revit's beam ends in the same column, by whether
+Revit makes the beam shorter than the record box, leaves it or makes it longer, and by whether the beam
+is narrower than, about as wide as (within 10%) or wider than the column across the beam, which is what
+decides, where a column cuts a beam, how much of the beam's end it cuts.
+
 Every summary line starts `beam ends:` and holds counts beside fixed words; `--list` adds one line
 per beam, which names an ElementId.
 
@@ -45,6 +60,21 @@ Usage:
     python3 tools/re/beam_ends_vs_ifc.py <probe output> <revit-export.ifc> [--list]
 
 Needs IfcOpenShell.
+
+S5.1 sets the column's extent the probe reads beside two of Revit's: the span of the whole column along
+the beam's axis (the projection of every point of the mesh) and the chord the beam's centre line cuts
+through the column (#1839). The two differ for a column turned against the beam. The probe's `angle`
+splits the chord count into beams in line with a plan axis (within half a degree), oblique to them, and
+of unknown direction.
+
+For the same ends the scorer also says why the probe's extent and the chord differ, in counts: the probe's
+extent over the chord in bins; whether the probe's extent is the extent of Revit's column along a plan
+axis (the record box's extent, when the column is turned, is longer than the column across the beam);
+whether Revit's column has a rectangular plan outline (the convex hull fills 98 per cent or more of its
+smallest rectangle) and, of those, how far the rectangle is turned from the plan axes and from the beam.
+The plan axes there are rvt-rs's own, the probe's and the record boxes': Revit's export is turned from them
+by the turn of its IfcSite's placement, which is taken out before a column's extent along a plan axis and its
+turn from the plan axes are read.
 """
 
 import collections
@@ -55,11 +85,13 @@ import sys
 
 import ifcopenshell
 import ifcopenshell.geom
+import ifcopenshell.util.placement
 import numpy
 
 TOLERANCE_FEET = 0.0033  # 1 mm
+ALIGNED_DEGREES = 0.5  # a beam within this of a plan axis is counted as in line with it (#1839, S5)
 METRES_FEET = 1 / 0.3048
-KINDS = ("column", "wall", "beam")
+KINDS = ("column", "wall", "beam", "section")
 # The elements whose faces a beam's end may lie on, by the IFC class that first matches, and the
 # kind each is counted as, in the order a lying-on is reported when an end lies on several.
 FACES = (
@@ -109,6 +141,14 @@ def read_probe(path):
         fields = dict(part.split("=", 1) for part in line.split()[1:] if "=" in part)
         beams[fields["tag"]] = fields
     return beams
+
+
+def read_file_line(path):
+    """The probe's `file` line as fields: what the export holds and how many columns' sections it read."""
+    for line in open(path, encoding="utf-8", errors="replace"):
+        if line.startswith("file "):
+            return dict(part.split("=", 1) for part in line.split()[1:] if "=" in part)
+    return {}
 
 
 def lengths(model, tags):
@@ -225,7 +265,330 @@ def lies_on(point, corners, normals):
     return bool(((u >= -0.001) & (v >= -0.001) & (w >= -0.001)).any())
 
 
-def print_ends(model, stands_by_tag, factor):
+FRACTION_BINS = ("short", "near", "0-.5", "centre", ".5-1", "far", "beyond")
+WIDTHS = (("narrower", "narrower than"), ("equal", "as wide as"), ("wider", "wider than"))
+
+
+def fraction_bin(t):
+    """Where an end lies along a column, from the face toward the beam's middle (0) to the face away
+    from it (1): within 2% of the column's extent counts as on a face or at the centre."""
+    if t < -0.02:
+        return "short"
+    if t <= 0.02:
+        return "near"
+    if t < 0.48:
+        return "0-.5"
+    if t <= 0.52:
+        return "centre"
+    if t < 0.98:
+        return ".5-1"
+    if t <= 1.02:
+        return "far"
+    return "beyond"
+
+
+def width_bin(beam_across, column_across):
+    """Whether the beam is narrower than, about as wide as (within 10%) or wider than the column."""
+    if column_across <= 0:
+        return None
+    ratio = beam_across / column_across
+    return "narrower" if ratio < 0.9 else "wider" if ratio > 1.1 else "equal"
+
+
+def end_columns(fields):
+    """The probe's `endcol_low` and `endcol_high` of a beam: end -> (column Tag, t, extent in feet)."""
+    out = {}
+    for end in ("low", "high"):
+        value = fields.get(f"endcol_{end}", "-")
+        if value == "-":
+            continue
+        tag, t, extent, _source = value.split(":")
+        out[end] = (tag, float(t), float(extent))
+    return out
+
+
+def assign_caps(caps, centres):
+    """Which cap of Revit's beam each end of the probe is: the pairing with the least total distance
+    from a cap to the centre of the column that end names (the probe's low and high are in rvt-rs's
+    frame and say nothing of which cap is which in Revit's)."""
+    ends = list(centres)
+
+    def distance(cap, end):
+        return float(numpy.linalg.norm(caps[cap] - centres[end]))
+
+    if len(ends) == 2:
+        first, second = ends
+        straight = distance(0, first) + distance(1, second)
+        crossed = distance(1, first) + distance(0, second)
+        return {first: 0, second: 1} if straight <= crossed else {first: 1, second: 0}
+    if len(ends) == 1:
+        (end,) = ends
+        return {end: int(distance(1, end) < distance(0, end))}
+    return {}
+
+
+def chord(triangles, origin, axis):
+    """The extent along `axis` of the line `origin + t * axis` through a mesh: the first and last
+    parameter at which the line crosses a triangle, or None where it crosses none. This is the span
+    the beam's centre line has in the column, where the projection of every point of the column
+    onto the axis is the span of its whole outline, longer for a column turned against the beam."""
+    a, b, c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    edge1, edge2 = b - a, c - a
+    p = numpy.cross(axis, edge2)
+    det = (edge1 * p).sum(axis=1)
+    usable = numpy.abs(det) > 1e-12
+    inverse = numpy.zeros_like(det)
+    inverse[usable] = 1.0 / det[usable]
+    s = origin - a
+    u = (s * p).sum(axis=1) * inverse
+    q = numpy.cross(s, edge1)
+    v = (axis * q).sum(axis=1) * inverse
+    t = (edge2 * q).sum(axis=1) * inverse
+    hit = usable & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1 + 1e-9)
+    crossings = t[hit]
+    return (float(crossings.min()), float(crossings.max())) if crossings.size else None
+
+
+RATIO_BINS = (
+    ("under 0.5", 0.5),
+    ("0.5 to 0.9", 0.9),
+    ("0.9 to 0.99", 0.99),
+    ("within 1 per cent", 1.01),
+    ("1.01 to 1.1", 1.1),
+    ("1.1 to 1.5", 1.5),
+    ("over 1.5", math.inf),
+)
+CHORD_NONE = "chord under 1 mm"
+TURN_BINS = (
+    ("in line", 0.5),
+    ("up to 5 degrees", 5.0),
+    ("up to 15 degrees", 15.0),
+    ("up to 40 degrees", 40.0),
+    ("about 45 degrees", 45.0),
+)
+RECTANGLE_FILL = 0.98  # a plan outline whose hull fills this much of its smallest rectangle is a rectangle
+
+
+def ratio_bin(extent, chord_feet):
+    """The bin of the probe's extent over the chord (both in feet)."""
+    if chord_feet < TOLERANCE_FEET:
+        return CHORD_NONE
+    ratio = extent / chord_feet
+    for name, top in RATIO_BINS:
+        if ratio < top:
+            return name
+    return RATIO_BINS[-1][0]
+
+
+def turn_bin(degrees):
+    """The bin of a turn between two directions, folded to 0 up to 45 degrees."""
+    for name, top in TURN_BINS:
+        if degrees <= top:
+            return name
+    return TURN_BINS[-1][0]
+
+
+def convex_hull(points):
+    """The convex hull of the 2-D `points` (Andrew's monotone chain), counter-clockwise, no repeated point."""
+    unique = sorted({(round(float(x), 6), round(float(y), 6)) for x, y in points})
+    if len(unique) < 3:
+        return unique
+
+    def turn(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower = []
+    for p in unique:
+        while len(lower) >= 2 and turn(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper = []
+    for p in reversed(unique):
+        while len(upper) >= 2 and turn(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
+def outline_of(points):
+    """(orientation in degrees from 0 up to 90 of the smallest rectangle around the plan outline of a mesh,
+    the share of that rectangle the convex hull fills), or None where the hull has no area. `points` is (n, 2)."""
+    hull = numpy.array(convex_hull(points))
+    if len(hull) < 3:
+        return None
+    x, y = hull[:, 0], hull[:, 1]
+    area = abs(float(numpy.dot(x, numpy.roll(y, -1)) - numpy.dot(y, numpy.roll(x, -1)))) / 2
+    best = None
+    for i in range(len(hull)):
+        edge = hull[(i + 1) % len(hull)] - hull[i]
+        length = float(numpy.hypot(edge[0], edge[1]))
+        if length < 1e-9:
+            continue
+        c, s = edge / length
+        rectangle = float(numpy.ptp(x * c + y * s) * numpy.ptp(-x * s + y * c))
+        if best is None or rectangle < best[0]:
+            best = (rectangle, math.degrees(math.atan2(s, c)) % 90.0)
+    if best is None or best[0] <= 0:
+        return None
+    return best[1], area / best[0]
+
+
+def site_turn_degrees(model):
+    """How far Revit's export turns the shared frame from rvt-rs's own (the turn of the IfcSite's placement),
+    in degrees. The probe's `angle` and the record boxes' axes are in rvt-rs's frame, so a turn of a column
+    from the plan axes means from those, and Revit's world axes are turned from them by this much."""
+    sites = model.by_type("IfcSite")
+    if not sites:
+        return 0.0
+    matrix = ifcopenshell.util.placement.get_local_placement(sites[0].ObjectPlacement)
+    return math.degrees(math.atan2(matrix[1][0], matrix[0][0]))
+
+
+def alignment(fields):
+    """Whether the probe's `angle` puts the beam in line with a plan axis, oblique to them, or gives none."""
+    angle = fields.get("angle", "-")
+    if angle == "-":
+        return "of unknown direction"
+    return "in line with a plan axis" if abs(float(angle)) <= ALIGNED_DEGREES else "oblique to the plan axes"
+
+
+def print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_degrees=0.0):
+    """Count the ends of the beams by where the record box and Revit's beam end in the named column
+    nearest the end, as fractions of that column's extent along the beam."""
+    joint = collections.defaultdict(collections.Counter)
+    seen = collections.Counter()
+    chords = collections.Counter()
+    shapes = collections.Counter()
+    outlines = {}
+    for tag, fields in beams.items():
+        stands = stands_by_tag.get(tag)
+        beam = by_tag.get(tag)
+        if stands is None or beam is None or fields.get("axis") == "-":
+            continue
+        caps = cap_centres(meshes[beam][2])
+        if caps is None:
+            continue
+        direction = caps[1] - caps[0]
+        length = numpy.linalg.norm(direction)
+        sideways = numpy.array([-direction[1], direction[0], 0.0])
+        if length == 0 or numpy.linalg.norm(sideways) < 1e-9:
+            continue
+        axis = direction / length
+        sideways /= numpy.linalg.norm(sideways)
+        points = meshes[beam][2].reshape(-1, 3)
+        middle = float(points.mean(axis=0) @ axis)
+        beam_across = float(numpy.ptp(points @ sideways))
+        named = end_columns(fields)
+        found = {}
+        for end, (column_tag, t, extent) in named.items():
+            column = by_tag.get(column_tag)
+            if column is not None:
+                found[end] = (column, t, extent)
+        seen["beam ends the probe names a column for"] += len(named)
+        seen["of those the export draws the column of"] += len(found)
+        seen["beam ends the probe finds no column in line for"] += 2 - len(named)
+        centres = {
+            end: (meshes[column][4][0] + meshes[column][4][1]) / 2 for end, (column, _, _) in found.items()
+        }
+        placed = assign_caps(caps, centres)
+        for end, (column, t_box, extent) in found.items():
+            column_points = meshes[column][2].reshape(-1, 3)
+            along = column_points @ axis
+            low, high = float(along.min()), float(along.max())
+            near, far = (low, high) if abs(low - middle) < abs(high - middle) else (high, low)
+            if far == near:
+                continue
+            if abs((high - low) * factor - extent) > 0.05:
+                seen["column extents along the beam that differ between Revit's export and the probe by over 0.05 ft"] += 1
+            # The chord of the beam's own centre line through Revit's column, by the beam's direction.
+            crossing = chord(meshes[column][2], caps[0], axis)
+            kind = alignment(fields)
+            if crossing is None:
+                # A beam whose line passes over the column's top (seated on it) crosses none of its faces.
+                chords[(kind, "ends whose line crosses no face of Revit's column")] += 1
+            else:
+                chords[(kind, "ends with a chord through Revit's column")] += 1
+                chord_feet = (crossing[1] - crossing[0]) * factor
+                if abs(chord_feet - extent) > 0.05:
+                    chords[(kind, "of those, the chord differs from the probe's extent by over 0.05 ft")] += 1
+                shapes[(kind, "ratio", ratio_bin(extent, chord_feet))] += 1
+                # Whether the probe's extent is the column's extent along a plan axis of rvt-rs's frame, the
+                # axes of the record boxes: Revit's export is turned from that frame by the site's turn.
+                site = math.radians(site_degrees)
+                along_x = float(numpy.ptp(column_points[:, 0] * math.cos(site) + column_points[:, 1] * math.sin(site))) * factor
+                along_y = float(numpy.ptp(-column_points[:, 0] * math.sin(site) + column_points[:, 1] * math.cos(site))) * factor
+                if min(abs(along_x - extent), abs(along_y - extent)) <= 0.05:
+                    shapes[(kind, "plan axis", "equal")] += 1
+                if column not in outlines:
+                    outlines[column] = outline_of(column_points[:, :2])
+                outline = outlines[column]
+                if outline is None or outline[1] < RECTANGLE_FILL:
+                    shapes[(kind, "outline", "not a rectangle")] += 1
+                else:
+                    theta = outline[0]
+                    shapes[(kind, "outline", "a rectangle")] += 1
+                    own = (theta - site_degrees) % 90.0
+                    shapes[(kind, "turned from the plan axes", turn_bin(min(own, 90.0 - own)))] += 1
+                    beam_theta = math.degrees(math.atan2(axis[1], axis[0])) % 90.0
+                    delta = abs(beam_theta - theta) % 90.0
+                    shapes[(kind, "turned from the beam", turn_bin(min(delta, 90.0 - delta)))] += 1
+            t_revit = (float(caps[placed[end]] @ axis) - near) / (far - near)
+            width = width_bin(beam_across, float(numpy.ptp(column_points @ sideways)))
+            if width is None:
+                continue
+            joint[(stands, width)][(fraction_bin(t_box), fraction_bin(t_revit))] += 1
+    print(
+        "beam ends: where each end lies in the named column nearest to it, as a fraction of the column along the beam "
+        "from the face toward the beam's middle (near, 0) to the face away from it (far, 1): the record box's end -> Revit's end:"
+    )
+    for what, n in seen.items():
+        print(f"beam ends:   {n} {what}")
+    for kind in ("in line with a plan axis", "oblique to the plan axes", "of unknown direction"):
+        total = chords[(kind, "ends with a chord through Revit's column")]
+        none = chords[(kind, "ends whose line crosses no face of Revit's column")]
+        if total or none:
+            differ = chords[(kind, "of those, the chord differs from the probe's extent by over 0.05 ft")]
+            print(
+                f"beam ends:   beams {kind}: {total} ends with a chord of the beam's line through Revit's column, "
+                f"{differ} differing from the probe's extent by over 0.05 ft, and {none} whose line crosses no face of it"
+            )
+            if not total:
+                continue
+
+            def bins(group, names):
+                parts = [f"{name} {shapes[(kind, group, name)]}" for name in names if shapes[(kind, group, name)]]
+                return "; ".join(parts) if parts else "none"
+
+            ratio_names = [name for name, _ in RATIO_BINS] + [CHORD_NONE]
+            turn_names = [name for name, _ in TURN_BINS]
+            print(f"beam ends:   beams {kind}, the probe's extent over the chord: {bins('ratio', ratio_names)}")
+            print(
+                f"beam ends:   beams {kind}, the probe's extent is the extent of Revit's column along a plan axis "
+                f"(within 0.05 ft) on {shapes[(kind, 'plan axis', 'equal')]} of {total} ends"
+            )
+            print(
+                f"beam ends:   beams {kind}, Revit's column plan outline: "
+                f"{bins('outline', ['a rectangle', 'not a rectangle'])}"
+            )
+            print(
+                f"beam ends:   beams {kind}, of the rectangular outlines, turned from the plan axes: "
+                f"{bins('turned from the plan axes', turn_names)}; turned from the beam: "
+                f"{bins('turned from the beam', turn_names)}"
+            )
+    order = {name: i for i, name in enumerate(FRACTION_BINS)}
+    for stands in ("shorter", "same", "longer"):
+        for width, label in WIDTHS:
+            cells = joint.get((stands, width))
+            if not cells:
+                continue
+            text = "; ".join(
+                f"{box} -> {revit} {n}"
+                for (box, revit), n in sorted(cells.items(), key=lambda item: (order[item[0][0]], order[item[0][1]]))
+            )
+            print(f"beam ends:   Revit {stands:<8} beam {label} the column, {sum(cells.values())} ends: {text}")
+
+
+def print_ends(model, stands_by_tag, factor, beams):
     """Count the ends of the beams, by how Revit's length stands to the record box's and by the kind
     of element each end lies on."""
     TOLERANCE_UNITS[0] = TOLERANCE_FEET / factor
@@ -258,6 +621,7 @@ def print_ends(model, stands_by_tag, factor):
             continue
         cells = ", ".join(f"{kind} {ends[(stands, kind)]}" for kind in (*FACE_KINDS, "nothing"))
         print(f"beam ends:   Revit {stands:<8} {total} ends: {cells}")
+    print_end_fractions(meshes, by_tag, beams, stands_by_tag, factor, site_turn_degrees(model))
 
 
 def feet_per_unit(raw, records):
@@ -289,6 +653,14 @@ def main():
     revit = {tag: length * factor for tag, length in raw.items()}
     square = sum(1 for f in beams.values() if f["axis"] == "-")
     print(f"beam ends: {len(beams)} beams in the probe, {len(revit)} with a body in Revit's export, {square} square in plan (not scored)")
+    # A section kind that read no column cuts no beam, which would read as a pass: say how many it read.
+    drawn = read_file_line(args[0])
+    print(
+        f"beam ends: the export draws {drawn.get('columns_exported', '?')} columns; the probe reads the "
+        f"section of {drawn.get('sections', '?')} and leaves out {drawn.get('unread', '?')} "
+        f"(a section's centre from its record box's centre, median/largest in feet: "
+        f"{drawn.get('section_centre_offset', '?')})"
+    )
 
     table = collections.Counter()
     cut = collections.Counter()
@@ -343,21 +715,21 @@ def main():
         print(f"beam ends: the {len(shortfalls)} beams Revit makes shorter than the record box, by the kind of element their list names:")
         for kind in KINDS:
             print(
-                f"beam ends:   {kind:<6} names {shortened[(kind, 'names')]}, holds an end {shortened[(kind, 'holds an end')]},"
+                f"beam ends:   {kind:<7} names {shortened[(kind, 'names')]}, holds an end {shortened[(kind, 'holds an end')]},"
                 f" gives bounds {shortened[(kind, 'gives bounds')]}"
                 f" (exact {shortened[(kind, 'exact')]}, cut too far {shortened[(kind, 'cut too far')]},"
                 f" cut too little {shortened[(kind, 'cut too little')]})"
             )
     print("beam ends: the beams Revit leaves at the record box's length or makes longer, cut by a kind of element (cut where Revit does not):")
     for kind in KINDS:
-        print(f"beam ends:   {kind:<6} same {spared[(kind, 'same')]}, longer {spared[(kind, 'longer')]}")
+        print(f"beam ends:   {kind:<7} same {spared[(kind, 'same')]}, longer {spared[(kind, 'longer')]}")
     if shortfalls:
         mm = sorted(value * 304.8 for value in shortfalls)
         print(
             f"beam ends: Revit's beam is shorter than the record box by a median {statistics.median(mm):.0f} mm"
             f" (quartiles {mm[len(mm) // 4]:.0f} and {mm[(3 * len(mm)) // 4]:.0f}, longest {mm[-1]:.0f}) on {len(mm)} beams"
         )
-    print_ends(model, stands_by_tag, factor)
+    print_ends(model, stands_by_tag, factor, beams)
     if "--list" in sys.argv:
         for tag, f, record, theirs, trimmed, stands in sorted(rows, key=lambda row: (len(row[0]), row[0])):
             shown = "-" if trimmed is None else f"{trimmed:.3f}"

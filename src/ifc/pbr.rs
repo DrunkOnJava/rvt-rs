@@ -96,8 +96,9 @@ fn color_from_packed(packed: Option<u32>) -> [f32; 3] {
     let r = ((p & 0x0000_00FF) as f32) / 255.0;
     let g = (((p & 0x0000_FF00) >> 8) as f32) / 255.0;
     let b = (((p & 0x00FF_0000) >> 16) as f32) / 255.0;
-    // Revit colors are sRGB; glTF wants linear. Apply the standard
-    // gamma approximation (pow 2.2) for viewer-accurate colors.
+    // Revit colors are sRGB; glTF's baseColorFactor is linear, so each
+    // channel goes through the exact sRGB transfer function, not the
+    // pow 2.2 approximation.
     [srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b)]
 }
 

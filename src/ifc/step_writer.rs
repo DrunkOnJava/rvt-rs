@@ -330,7 +330,7 @@ enum ElementTail {
 /// subtype in IFC4.
 fn element_tail_for(ifc_upper: &str) -> ElementTail {
     match ifc_upper {
-        "IFCFURNISHINGELEMENT" | "IFCFLOWCONTROLLER" => ElementTail::Tag,
+        "IFCFURNISHINGELEMENT" | "IFCFLOWCONTROLLER" | "IFCFLOWSEGMENT" => ElementTail::Tag,
         "IFCDOOR" | "IFCWINDOW" => ElementTail::Opening,
         "IFCSPACE" => ElementTail::Space,
         "IFCREINFORCINGBAR" => ElementTail::ReinforcingBar,
@@ -384,6 +384,11 @@ fn step_enum_token(raw: &str) -> Option<String> {
 /// the occurrence's `PredefinedType` (RE-110). An occurrence and its type
 /// share one enumeration. `None` for entities rvt-rs does not type.
 fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String, String)> {
+    // #1989: the one `IfcFlowSegment` rvt-rs writes is a gutter, which Revit's
+    // export types by an `IfcPipeSegmentType` `GUTTER`.
+    if ifc_upper == "IFCFLOWSEGMENT" {
+        return Some(("IFCPIPESEGMENTTYPE".to_string(), ".GUTTER.".to_string()));
+    }
     let pt = format!(
         ".{}.",
         predefined
@@ -523,6 +528,12 @@ pub fn type_objects(model: &IfcModel) -> TypeObjects {
             continue;
         };
         if folded.contains(&entity_idx) {
+            continue;
+        }
+        // #1977: Revit's export gives the copy of a multistory stair, its
+        // flights and its landing no type object, though they share their
+        // originals' Tag.
+        if super::multistory_stairs::copy_without_type_object(ifc_type, property_set.as_ref()) {
             continue;
         }
         let Some(type_id) = type_guid
@@ -2555,8 +2566,8 @@ impl StepWriter<'_> {
         // Revit element (Wall, Floor, Roof, Ceiling, Door, Window, Column,
         // Beam…). Each element gets its own `IFCLOCALPLACEMENT` relative
         // to whichever storey contains it (index from
-        // `BuildingElement.storey_index`; falls back to storey[0] when
-        // unset). At the end, elements are grouped by storey and one
+        // `BuildingElement.storey_index`; with none it is placed and
+        // contained in the building). At the end, elements are grouped by storey and one
         // `IFCRELCONTAINEDINSPATIALSTRUCTURE` is emitted per non-empty
         // storey — which is how IFC4 tools (BlenderBIM, IfcOpenShell)
         // show "Floor 2 contains Wall-7, Wall-8" in the project
@@ -2571,8 +2582,10 @@ impl StepWriter<'_> {
         // them. Each material gets:
         //   - IFCMATERIAL with just a name (IFC4 minimum)
         //   - If the material has a color: IFCCOLOURRGB +
-        //     IFCSURFACESTYLERENDERING + IFCSURFACESTYLE +
-        //     IFCSTYLEDITEM to surface the color to IFC4 viewers
+        //     IFCSURFACESTYLERENDERING + IFCSURFACESTYLE + IFCSTYLEDITEM,
+        //     in an IFCSTYLEDREPRESENTATION of an
+        //     IFCMATERIALDEFINITIONREPRESENTATION that names the material,
+        //     which is how IFC4 viewers find the colour
         // The color emission is gated because a color-less material
         // is valid IFC4 — we don't want to emit empty rendering
         // records when there's nothing to render.
@@ -2615,6 +2628,25 @@ impl StepWriter<'_> {
                     styled_item_id,
                     format!("IFCSTYLEDITEM($,(#{presentation_id}),'{name_escaped}')"),
                 );
+                // A styled item with no `Item` styles nothing until a material
+                // definition representation hangs it on its material: IFC4's
+                // way to give a material its surface style, which a viewer
+                // then applies to every element associated with the material.
+                // Without it the colour was written and reached no consumer.
+                let styled_rep_id = self.id();
+                self.emit_entity(
+                    styled_rep_id,
+                    format!(
+                        "IFCSTYLEDREPRESENTATION(#{geom_ctx},'Style','Material',(#{styled_item_id}))"
+                    ),
+                );
+                let material_rep_id = self.id();
+                self.emit_entity(
+                    material_rep_id,
+                    format!(
+                        "IFCMATERIALDEFINITIONREPRESENTATION($,$,(#{styled_rep_id}),#{mat_id})"
+                    ),
+                );
             }
             material_ids.push(mat_id);
         }
@@ -2652,7 +2684,8 @@ impl StepWriter<'_> {
                 };
                 let layer_id = self.id();
                 // IfcMaterialLayer(Material, LayerThickness, IsVentilated=$,
-                //                  Category=$, Priority=$, Name=$, Description=$)
+                //                  Name, Description=$, Category=$, Priority=$),
+                // IFC4's order: the name is the fourth attribute (#1947).
                 // Thickness in metres (feet × 0.3048).
                 let thickness_m = layer.thickness_feet * 0.3048;
                 let name_slot = match &layer.name {
@@ -2662,7 +2695,7 @@ impl StepWriter<'_> {
                 self.emit_entity(
                     layer_id,
                     format!(
-                        "IFCMATERIALLAYER({material_slot},{thickness_m:.6},$,$,$,{name_slot},$)"
+                        "IFCMATERIALLAYER({material_slot},{thickness_m:.6},$,{name_slot},$,$,$)"
                     ),
                 );
                 layer_ids.push(layer_id);
@@ -5374,7 +5407,7 @@ fn aggregate_wholes(model: &IfcModel) -> BTreeMap<usize, usize> {
 
 /// The parts of every aggregate whose whole is a building element (#323):
 /// they reach the spatial structure through that whole.
-fn aggregate_parts_of_elements(model: &IfcModel) -> std::collections::BTreeSet<usize> {
+pub(super) fn aggregate_parts_of_elements(model: &IfcModel) -> std::collections::BTreeSet<usize> {
     aggregate_wholes(model).into_keys().collect()
 }
 

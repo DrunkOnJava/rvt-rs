@@ -1,7 +1,7 @@
 {
   "name": "rvt-viewer",
   "private": true,
-  "version": "0.22.0",
+  "version": "0.25.0",
   "type": "module",
   "description": "In-browser Revit viewer powered by rvt-rs compiled to WebAssembly. Zero upload — every byte stays in the tab.",
   "license": "Apache-2.0",
@@ -24,6 +24,6 @@
     "@playwright/test": "^1.65.0",
     "@types/three": "^0.187.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.6"
+    "vite": "^8.3.8"
   }
 }

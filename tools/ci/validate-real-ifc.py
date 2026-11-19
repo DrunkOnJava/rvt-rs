@@ -147,10 +147,16 @@ def validate(ifc_path: Path, diagnostics: dict) -> None:
         if got != expected:
             fail(f"{ifc_class} count regressed: IfcOpenShell saw {got}, diagnostics saw {expected}")
 
-    # Current real-project coverage comes from the 2023 Einhoven ArcWall
-    # decoder. This threshold catches silent walker/decoder regressions while
-    # allowing future improvements to add more recovered element classes.
-    assert_at_least(model, "IfcWall", 10)
+    # Einhoven (Revit 2023) is one wall, one curtain wall of 24 panels and two
+    # windows, as its native records read (RE-440): the 24 records the old
+    # ArcWall pattern took for walls are the curtain wall's panels and grid
+    # lines. No Revit export of the file exists (magnetar-io/revit-test-datasets
+    # holds only the .rvt), so these pin that reading, not Revit's export; they
+    # are floors, so a class recovered later does not trip them.
+    assert_at_least(model, "IfcWall", 1)
+    assert_at_least(model, "IfcCurtainWall", 1)
+    assert_at_least(model, "IfcPlate", 24)
+    assert_at_least(model, "IfcWindow", 2)
 
     # One IfcRelContainedInSpatialStructure per non-empty storey is correct
     # IFC4 practice (see docs/launch/buildingsmart-forum.md). Elevation-derived

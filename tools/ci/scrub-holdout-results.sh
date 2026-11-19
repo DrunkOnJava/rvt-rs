@@ -15,7 +15,8 @@
 # each RESULTS_DIR/holdout-*/, RESULTS_DIR/bimcollab-*/ and RESULTS_DIR/racadv-*/
 # this keeps
 # counts.txt, made of the summary lines of its probe scores (the wall length
-# rule, with the walls it is wrong on as a count, the export's version, the
+# rule, with the walls it is wrong on as a count and the walls whose Length only
+# Revit's Axis checks as three counts, the export's version, the
 # census of its wall representations, the hours between its save and its
 # export and the railing rules' counts), the count lines a probe prints for
 # such a model (`type refs:` and `type copies:`, RE-253), the `native framing:`
@@ -66,6 +67,10 @@
 # tools/re/native_levels_vs_ifc.py (RE-281:
 # counts, the same restricted alphabet), the totals and per property counts of
 # its property set census (standard Pset_ and Qto_ names only; RE-281),
+# the `history base:` count lines of tools/re/history_base_vs_ifc.py (RE-459: how
+# many of Revit's project, building, site and storey GlobalIds are the GUID in the
+# header of Global/History with an id XORed in, as numbers beside fixed words and an
+# IFC entity name, never a GlobalId or a name),
 # the `door axes:` count lines of tools/re/door_axes_vs_ifc.py (RE-347: how many
 # doors and windows have rvt-rs's local axes the same as Revit's, a half turn or
 # a quarter turn from them, and how many placed by the rule differ, as numbers
@@ -100,6 +105,14 @@
 # Revit's base and top, and how many floors, roofs and footings cut them, as
 # numbers beside the scorer's fixed words, never a Tag, a height or the files'
 # offset), and
+# the `opening boxes:` lines of tools/re/opening_boxes_vs_ifc.py (#227: how many
+# openings are within each fixed distance of Revit's, by IFC class), the
+# `export parameters pre2024:` count lines of probe_1695_export_parameters_pre2024
+# (#1695: entries by IFC export key and a listed value, never an id, a byte or a
+# name), the `beam lines:` count lines of probe_1719_beam_line_copies (#1719:
+# how many structural-framing elements read a location line, and how many of the
+# rest fall under each of the four reasons the reader gives none, never an id, a
+# length or a partition), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -118,10 +131,53 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # tools/re/window_door_type_maps_vs_ifc.py (#1603, RE-478): per IFC class
+      # of door and window, how many Revit gives materials and how many a
+      # symbol's map names exactly, as numbers beside fixed words and an IFC
+      # entity name, never a Tag or a material name.
+      grep -E '^window door type maps: class Ifc[A-Za-z0-9]+( grouped)? elements [0-9]+ revit materials [0-9]+ drawn read [0-9]+ drawn equal [0-9]+ master read [0-9]+ master equal [0-9]+ either equal [0-9]+ both equal [0-9]+$' "$f" || true
+      grep -E '^window door type maps: class Ifc[A-Za-z0-9]+( grouped)? drawn symbol: equal [0-9]+, equal with the unset material spelled apart [0-9]+, unset material only [0-9]+, Revit more found in the drawn symbol'"'"'s record [0-9]+, Revit more found in the master symbol'"'"'s record [0-9]+, Revit more found in the family'"'"'s record [0-9]+, Revit more found in the instance'"'"'s record [0-9]+, Revit more not found [0-9]+, drawn more [0-9]+, apart [0-9]+; Revit spells the unset material apart on [0-9]+$' "$f" || true
+      # tools/re/window_door_unnamed_vs_ifc.py (#1603, RE-482): per IFC class, how many
+      # doors and windows whose map holds geometry mapped to no material have Revit's
+      # `<Unnamed>`, by what the family's forms show: numbers beside fixed words and an
+      # IFC entity name, never a Tag or a material name; its `--list` lines are dropped.
+      grep -E '^unnamed before 2024: class Ifc[A-Za-z0-9]+( grouped)? map unset [0-9]+; unset form shown: written [0-9]+, not written [0-9]+; unset form hidden: written [0-9]+, not written [0-9]+; unset voids only: written [0-9]+, not written [0-9]+; no unset form, nested instance: written [0-9]+, not written [0-9]+; no unset form: written [0-9]+, not written [0-9]+; family not read: written [0-9]+, not written [0-9]+$' "$f" || true
+      # tools/re/window_door_unnamed_bound_vs_ifc.py (#1603, RE-483): the same counts
+      # by what the family's forms with no material show once a Visible bound to a
+      # parameter is read from the parameter's value, and the reference export's IFC
+      # schema and Revit release: numbers and fixed words, never a Tag, a material
+      # name or an author; its `--list` lines are dropped.
+      grep -E '^unnamed bound before 2024: class Ifc[A-Za-z0-9]+( grouped)? map unset [0-9]+; unset form effectively shown: written [0-9]+, not written [0-9]+; unset form unresolved, none shown: written [0-9]+, not written [0-9]+; unset forms effectively hidden: written [0-9]+, not written [0-9]+; unset voids only: written [0-9]+, not written [0-9]+; no unset form, nested instance: written [0-9]+, not written [0-9]+; no unset form: written [0-9]+, not written [0-9]+; family not read: written [0-9]+, not written [0-9]+$' "$f" || true
+      grep -E '^reference export: schema [A-Za-z0-9_]+, Revit (20[0-9]{2}|unknown)$' "$f" || true
+      # tools/re/window_door_unnamed_by_type_vs_ifc.py (#1603, RE-485): the same doors and
+      # windows grouped by drawn symbol, family and the number of unset tags of the
+      # symbol's map: numbers beside fixed words and an IFC entity name, never an id, a Tag
+      # or a name; its `--list` lines are dropped.
+      grep -E '^unnamed by type before 2024: class Ifc[A-Za-z0-9]+ elements [0-9]+ symbols [0-9]+: all written [0-9]+, none written [0-9]+, mixed [0-9]+; elements of mixed symbols: written [0-9]+, not written [0-9]+; families [0-9]+: all written [0-9]+, none written [0-9]+, mixed [0-9]+; elements of mixed families: written [0-9]+, not written [0-9]+$' "$f" || true
+      grep -E '^unnamed by facts before 2024: class Ifc[A-Za-z0-9]+ fact groups [0-9]+ with both outcomes [0-9]+: constant within a symbol [0-9]+, within a family [0-9]+, within an unset tag count [0-9]+$' "$f" || true
+      grep -E '^unnamed by unset tags before 2024: class Ifc[A-Za-z0-9]+ unset tags 1: written [0-9]+, not written [0-9]+; unset tags 2: written [0-9]+, not written [0-9]+; unset tags 3 or more: written [0-9]+, not written [0-9]+$' "$f" || true
+      grep -E '^unnamed by nested before 2024: class Ifc[A-Za-z0-9]+ no nested instance: written [0-9]+, not written [0-9]+; nested instances all shown, none bound: written [0-9]+, not written [0-9]+; a nested instance hidden: written [0-9]+, not written [0-9]+; a nested instance bound to a parameter: written [0-9]+, not written [0-9]+$' "$f" || true
+      # tools/re/window_door_unnamed_nested_types_vs_ifc.py (#1603, RE-487): the same doors
+      # and windows by the symbol's total geometry tags and by what the types of the
+      # family's nested instances hold: numbers beside fixed words and an IFC entity name,
+      # never an id, a Tag or a name; its `--list` lines are dropped.
+      grep -E '^unnamed by total tags before 2024: class Ifc[A-Za-z0-9]+ total tags [0-9]+: written [0-9]+, not written [0-9]+(; total tags [0-9]+: written [0-9]+, not written [0-9]+)*$' "$f" || true
+      grep -E '^unnamed by nested types before 2024: class Ifc[A-Za-z0-9]+ no nested instance: written [0-9]+, not written [0-9]+; nested types read, none holds an unset tag: written [0-9]+, not written [0-9]+; a nested type holds an unset tag: written [0-9]+, not written [0-9]+; a nested type not read: written [0-9]+, not written [0-9]+$' "$f" || true
+      # tools/re/window_door_family_rules_vs_ifc.py (#1603, RE-481): the same counts
+      # before and after the family rules, as numbers beside fixed words and an IFC
+      # entity name, never a Tag or a material name; its `--list` lines are dropped.
+      grep -E '^family rules: class Ifc[A-Za-z0-9]+( grouped)? elements [0-9]+ map read [0-9]+ forms found [0-9]+ shows unset true [0-9]+ false [0-9]+ unknown [0-9]+$' "$f" || true
+      grep -E '^family rules: class Ifc[A-Za-z0-9]+( grouped)? (before|after) the rules: equal [0-9]+, equal with the unset material spelled apart [0-9]+, unset material only [0-9]+, Revit more [0-9]+, drawn more [0-9]+, apart [0-9]+$' "$f" || true
+      grep -E '^family rules: class Ifc[A-Za-z0-9]+( grouped)? moves: (none|[A-Za-z ]+ to [A-Za-z ]+ [0-9]+(, [A-Za-z ]+ to [A-Za-z ]+ [0-9]+)*)$' "$f" || true
       # tools/re/beam_lines_vs_ifc.py (#1697): counts beside fixed words and the
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # tools/re/history_base_vs_ifc.py (RE-459, #878): how many project, building,
+      # site and storey GlobalIds are the header GUID of Global/History with an id
+      # XORed in, as counts beside fixed words and IFC entity names, never a
+      # GlobalId or a name; its `list` lines are dropped.
+      grep -E "^history base: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
       grep -E '^category census[A-Za-z ]*: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^re363 [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^door flips: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" | grep -v -E '^door flips: field ' || true
@@ -140,10 +196,20 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       [ -f "$f" ] || continue
       grep -E "^(elements Revit gives materials: [0-9]+|of those, rvt-rs gives materials: [0-9]+, the same set: [0-9]+)$" "$f" | sed 's/^/materials: /' || true
       grep -E "^(different sets by|no materials from rvt-rs, by) Revit entity: \{((')?Ifc[A-Za-z0-9]+(')?: [0-9]+(, )?)*\}$" "$f" | sed 's/^/materials: /' || true
+      # #1805: how a set differs, and the elements a shared Tag hides, as counts.
+      grep -E "^different sets, how: (none|([a-zA-Z' -]+ [0-9]+(, )?)+)$" "$f" | sed 's/^/materials: /' || true
+      grep -E "^elements sharing an earlier element's Tag, not compared, (rvt-rs|Revit) by entity: \{((')?Ifc[A-Za-z0-9]+(')?: [0-9]+(, )?)*\}$" "$f" | sed 's/^/materials: /' || true
+    done
+    # tools/re/unfilled_openings_vs_ifc.py (#1165): how many openings nothing
+    # fills each side writes, by the class of the cutter and the host, and the
+    # per-class counts; never a Tag (the lines naming one carry a comma).
+    for f in "$dir"unfilled_openings_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^(unfilled openings in Revit's export: [0-9]+; in rvt-rs's: [0-9]+; both: [0-9]+|written that Revit's export does not[A-Za-z0-9 ,()']*: [0-9]+|(Ifc[A-Za-z0-9]+|none) in Ifc[A-Za-z0-9]+:|  [A-Za-z0-9_. %']+: [0-9]+)$" "$f" | sed 's/^/unfilled: /' || true
     done
     for f in "$dir"psets_vs_ifc.txt; do
       [ -f "$f" ] || continue
-      grep -E "^(Revit values on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs values Revit does not write: [0-9]+|  (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|  (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+, [0-9]+|  (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+|IFC4 properties IFC2X3's definitions do not have, which Revit's IFC2X3 export cannot write, not scored: [0-9]+|rvt-rs values Revit does not write, on objects Revit writes and on others:|values on a key that more than one object of Revit's export holds, scored against the object held, in the totals above \(#1576\): [0-9]+ on [0-9]+ such keys; equal [0-9]+, different [0-9]+, missing [0-9]+|values on a key that more than one object of Revit's export holds, whose objects hold different values, counted apart \(#1576\): [0-9]+ on [0-9]+ such keys|  on a repeated key, (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+ counted apart|IFC2X3 (lengths IFC4 holds as quantities|values also in an IFC4 set and scored there), not scored here: [0-9]+|IFC2X3 values no IFC4 set Revit's export writes holds, in rvt-rs's own set, not scored here: [0-9]+|Revit values known to be wrong, left out \(RE-235 §5\): (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+ [0-9]+|Revit values known to be wrong, left out \(RE-235 §5, RE-269\): (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+ on [a-z ]+ [0-9]+|Revit values the project's own property set file places, out of scope \(RE-239\), not scored: [0-9]+|Revit values on openings rvt-rs does not write \(a door or wall cut in a further host, a curtain wall's or cabinet's cut\), not scored: [0-9]+|Revit's export writes no standard property set \(its setup, RE-239 §5\); rvt-rs values not scored: [0-9]+|rvt-rs values on openings Revit's export of this file lacks but its export of a sibling file holds, counted apart \(a pair inconsistency, RE-338\): [0-9]+ on [0-9]+ openings)$" "$f" | sed 's/^/psets: /' || true
+      grep -E "^(Revit values on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs values Revit does not write: [0-9]+|  (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|  (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+, [0-9]+|  (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+|IFC4 properties IFC2X3's definitions do not have, which Revit's IFC2X3 export cannot write, not scored: [0-9]+|rvt-rs values Revit does not write, on objects Revit writes and on others:|values on a key that more than one object of Revit's export holds, scored against the object held, in the totals above \(#1576\): [0-9]+ on [0-9]+ such keys; equal [0-9]+, different [0-9]+, missing [0-9]+|values on a key that more than one object of Revit's export holds, whose objects hold different values, counted apart \(#1576\): [0-9]+ on [0-9]+ such keys|  on a repeated key, (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+ counted apart|IFC2X3 (lengths IFC4 holds as quantities|values also in an IFC4 set and scored there), not scored here: [0-9]+|IFC2X3 values no IFC4 set Revit's export writes holds, in rvt-rs's own set, not scored here: [0-9]+|Revit values known to be wrong, left out \(RE-235 §5\): (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+ [0-9]+|Revit values the saved file does not decide, counted apart \(RE-277, #1193\): (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+ [0-9]+|Revit values known to be wrong, left out \(RE-235 §5, RE-269\): (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+ on [a-z ]+ [0-9]+|Revit values the project's own property set file places, out of scope \(RE-239\), not scored: [0-9]+|Revit values on openings rvt-rs does not write \(a door or wall cut in a further host, a curtain wall's or cabinet's cut\), not scored: [0-9]+|Revit's export writes no standard property set \(its setup, RE-239 §5\); rvt-rs values not scored: [0-9]+|rvt-rs values on openings Revit's export of this file lacks but its export of a sibling file holds, counted apart \(a pair inconsistency, RE-338\): [0-9]+ on [0-9]+ openings)$" "$f" | sed 's/^/psets: /' || true
     done
     for f in "$dir"probe.txt "$dir"probe-*.txt; do
       [ -f "$f" ] || continue
@@ -153,6 +219,18 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^census stages: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^previous lines: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # probe_1695_export_parameters_pre2024 (#1695): the counts of a release's
+      # IFC export parameter entries by key and by value (a value only from the
+      # probe's fixed lists of IFC entity names and predefined type words, else
+      # other-text) and of their owners, each line in its own fixed wording. The
+      # lines of raw bytes before a furniture word (`export parameters pre2024
+      # bytes:`) are not kept: those bytes can be an id, a length or an offset.
+      grep -E '^export parameters pre2024: (release [0-9]+|element data layout (u64-id|u32-id|none-measured)|data objects the 2024 reader finds [0-9]+|entries (export-as|type-export-as|predefined-type|type-predefined-type) (i64|i32) (Ifc[A-Za-z]+|[A-Z]+|other-text) [0-9]+|entries with a value in either form [0-9]+|owners: pairs [0-9]+ over [0-9]+ declared owners, set to two values [0-9]+, no element data header in range [0-9]+, undeclared owner [0-9]+|strings equal to an IfcFurnitureTypeEnum word [0-9]+ in [0-9]+ distinct 8-byte prefixes)$' "$f" || true
+      # probe_1719_beam_line_copies (#1719): the release, how many beams read a
+      # line, and the four reasons' counts for the rest; its `beam` and `copy`
+      # lines, which carry ElementIds, lengths and partitions, are dropped.
+      grep -E '^release [0-9]+: [0-9]+ structural-framing elements, [0-9]+ with a line$' "$f" | sed 's/^/beam lines: /' || true
+      grep -E '^summary no_data [0-9]+ data_without_line [0-9]+ arc_first [0-9]+ copies_disagree [0-9]+ other [0-9]+$' "$f" | sed 's/^/beam lines: /' || true
       # probe_1842_level_storeys (#1842): the release and Level counts, no names.
       grep -E '^levels release=[0-9]+ recovered=[0-9]+ building_story_true=[0-9]+ false=[0-9]+ unread=[0-9]+ false_below_first_storey=[0-9]+ false_above=[0-9]+ false_at_a_storey_elevation=[0-9]+$' "$f" || true
       # probe_1335_projected_graphs (#1335): counts, verdict words, schema class
@@ -166,6 +244,41 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^file (left|right) entities=[0-9]+ duplicates=[0-9]+$' "$f" || true
       grep -E '^class IFC[A-Z0-9]+ both=[0-9]+ left_only=[0-9]+ right_only=[0-9]+$' "$f" || true
       grep -E '^projects shared=[0-9]+( IFC[A-Z0-9]+=[0-9]+)*$' "$f" || true
+      # probe_1603_type_maps_pre2024 (#1603): per release and class of family
+      # instance, the counts of types a geometry-material map or the scan names
+      # a material for, beside a schema class name; each line in its own fixed
+      # wording, never an id or a name. The `type map:` lines name ElementIds
+      # and are not kept.
+      grep -E '^type maps pre2024: (release [0-9]+ native read failed|release [0-9]+ types [0-9]+ records [0-9]+ read [0-9]+ entries in the 2024 shape [0-9]+ in the 2015 to 2023 shape [0-9]+|class [A-Za-z0-9_]+ types [0-9]+ read [0-9]+ named by the map [0-9]+ named by the scan [0-9]+ only by the map [0-9]+ only by the scan [0-9]+ unset only [0-9]+|instances class [A-Za-z0-9_]+ total [0-9]+ naming a type [0-9]+)$' "$f" || true
+      # probe_1603_unnamed_before_2024 (#1603, RE-482): a family's forms by stored
+      # Visible value, as counts beside fixed words.
+      grep -E '^family visible values: release [0-9]+ forms [0-9]+ stored zero [0-9]+ stored one [0-9]+ stored other [0-9]+ stored none [0-9]+$' "$f" || true
+      # probe_1603_unnamed_bound_before_2024 (#1603, RE-483): the unset forms of the
+      # doors and windows whose map holds a -1, how many have a Visible bound to a
+      # family parameter and how many of those the parameter's value resolves, as
+      # counts beside fixed words.
+      grep -E '^bound visible values: release [0-9]+ unset forms [0-9]+ bound [0-9]+ resolved [0-9]+ unresolved [0-9]+ ambiguous [0-9]+$' "$f" || true
+      grep -E '^family record copies: release [0-9]+ records [0-9]+ held more than once [0-9]+ copies differing [0-9]+$' "$f" || true
+      # probe_1603_unnamed_nested_types_before_2024 (#1603, RE-487): the nested family
+      # instances of the doors' and windows' families and how many of their types' maps
+      # were read, as counts beside fixed words.
+      grep -E '^nested types read: release [0-9]+ families [0-9]+ nested instances [0-9]+ map read [0-9]+ map with an unset tag [0-9]+$' "$f" || true
+      # probe_1603_family_forms_pre2024 (#1603, RE-479): per release, how many
+      # families of doors and windows have a document and how many forms of each
+      # class (a schema class name) hold a material or a stored Visible, as
+      # numbers beside fixed words, never an id or a name.
+      grep -E '^family forms pre2024: (release [0-9]+ read failed|release [0-9]+ families [0-9]+ with a document [0-9]+ forms [0-9]+ nested instances [0-9]+|class [A-Za-z0-9_]+ forms [0-9]+ material in the 2015 to 2023 shape [0-9]+ in the 2024 shape [0-9]+ unset [0-9]+ none [0-9]+ cutting [0-9]+ visible stored [0-9]+ visible bound [0-9]+)$' "$f" || true
+      # probe_1603_instance_types_pre2024 (#1603): per category of family
+      # instance, how many instances stop at each stage of the type join, as
+      # numbers beside fixed words, a category's Revit id and a placement
+      # kind's flag word, never an ElementId or a name.
+      grep -E '^type join pre2024: release [0-9]+ category -?[0-9]+ instances [0-9]+ symbol types [0-9]+ named types [0-9]+ no candidate [0-9]+ of which unnamed symbol [0-9]+ of which other category symbol [0-9]+ several [0-9]+ no family [0-9]+ joined [0-9]+$' "$f" || true
+      grep -E '^type join pre2024: release [0-9]+ category -?[0-9]+ unjoined instances [0-9]+ refer to (a record of kind 0x[0-9a-f]+|a named id with no record) in [0-9]+$' "$f" || true
+      # probe_1603_unjoined_lists_pre2024 (#1603): per category, how many
+      # instances with and without a symbol record hold how many ids that no
+      # scanned record carries and only this category's records hold, as
+      # numbers beside fixed words and a category's Revit id.
+      grep -E '^unjoined lists pre2024: release [0-9]+ category -?[0-9]+ (instances [0-9]+ with a symbol record [0-9]+ without [0-9]+|(unjoined|joined) instances hold (named ids with no record|ids only this category holds): 0 [0-9]+ 1 [0-9]+ 2 [0-9]+ 3 or more [0-9]+|ids only this category holds, held by unjoined instances [0-9]+ held by 1 instance [0-9]+ by 2 to 9 [0-9]+ by 10 or more [0-9]+ most held by one id [0-9]+|unjoined instances hold an id an instance with a symbol record holds [0-9]+ hold the family of a symbol record [0-9]+|unjoined instances hold one id only this category holds [0-9]+ of them held by 2 or more instances [0-9]+)$' "$f" || true
       grep -E '^exit [0-9]+$' "$f" | sed 's/^/probe: /' || true
       grep -E '^void rule: [A-Za-z0-9 ,]+$' "$f" || true
     done
@@ -175,7 +288,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
-      grep -E "^(Revit quantities on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs quantities Revit does not write: [0-9]+|  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart \(RE-252\): [0-9]+|walls whose Length is rvt-rs's curve's: [0-9]+; Revit's Axis's: [0-9]+; neither: [0-9]+( \(none counted apart\))?|walls the two exports give different types, their differing Width counted apart \(RE-253\): [0-9]+|walls the two exports give different types, their other differing wall quantities counted apart \(RE-253, RE-388\): [0-9]+|walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored \(RE-253\): [0-9]+|values on a key that more than one object of Revit's export holds, counted apart \(#1576\): [0-9]+ of Revit's on [0-9]+ such keys, and [0-9]+ of rvt-rs's with none in the object held|  on a repeated key, Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+; against the object held: equal [0-9]+, different [0-9]+, missing [0-9]+|Revit's export writes no base quantities \(its setup's Export base quantities off, RE-242\): rvt-rs writes [0-9]+, which rvt-ifc --no-base-quantities leaves out|Revit values known to be wrong, left out \(RE-235 §5\): Qto_[A-Za-z]+\.[A-Za-z]+ [0-9]+|Revit quantities on openings rvt-rs does not write \(a door or wall cut in a further host, a curtain wall's or cabinet's cut, #1165\), not scored: [0-9]+|quantities with their own unit, not scored: rvt-rs [0-9]+, Revit [0-9]+|exit [0-9]+)$" "$f" || true
+      grep -E "^(Revit quantities on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs quantities Revit does not write: [0-9]+|  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart \(RE-252\): [0-9]+|walls whose Length is rvt-rs's curve's: [0-9]+; Revit's Axis's: [0-9]+; neither: [0-9]+( \(none counted apart\))?|walls rvt-rs gives a Length and Revit's export does not, against the length of Revit's Axis \(within 1e-4 ft\): equal [0-9]+; differ [0-9]+; no Axis [0-9]+|walls the two exports give different types, their differing Width counted apart \(RE-253\): [0-9]+|walls the two exports give different types, their other differing wall quantities counted apart \(RE-253, RE-388\): [0-9]+|walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored \(RE-253\): [0-9]+|values on a key that more than one object of Revit's export holds, counted apart \(#1576\): [0-9]+ of Revit's on [0-9]+ such keys, and [0-9]+ of rvt-rs's with none in the object held|  on a repeated key, Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+; against the object held: equal [0-9]+, different [0-9]+, missing [0-9]+|Revit's export writes no base quantities \(its setup's Export base quantities off, RE-242\): rvt-rs writes [0-9]+, which rvt-ifc --no-base-quantities leaves out|Revit values known to be wrong, left out \(RE-235 §5\): Qto_[A-Za-z]+\.[A-Za-z]+ [0-9]+|Revit quantities on openings rvt-rs does not write \(a door or wall cut in a further host, a curtain wall's or cabinet's cut, #1165\), not scored: [0-9]+|quantities with their own unit, not scored: rvt-rs [0-9]+, Revit [0-9]+|exit [0-9]+)$" "$f" || true
       awk '/^largest differences/ { on = 1; next }
            on && $2 ~ /^Qto_[A-Za-z]+\.[A-Za-z]+:$/ && $6 + 0 != 0 {
              q = $2; sub(/:$/, "", q); a = $4; sub(/,$/, "", a)
@@ -209,7 +322,17 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     done
     for f in "$dir"layer_sets_vs_ifc.txt; do
       [ -f "$f" ] || continue
-      grep -E "^( +[0-9]+  [a-z][a-z ]*(: [A-Za-z',: ]+| = Revit's Family:Type)?|  [a-z ]+ within [0-9.]+ ft of Revit's: [0-9]+ of [0-9]+)$" "$f" | sed 's/^/layer sets: /' || true
+      # Counts beside fixed words. The layer-count lines are named one by one:
+      # the general form allows no capital before a colon, and dropped
+      # "layer sets whose count differs from Revit's" until #1805.
+      grep -E "^( +[0-9]+  [a-z][a-z ]*(: [A-Za-z',: ]+| = Revit's Family:Type)?| +[0-9]+  (layer sets whose count differs from Revit's|layer count: (Revit's export names no layers|rvt-rs fewer than Revit's|rvt-rs more than Revit's|every name rvt-rs writes is one of Revit's|Revit's names in order once its 0 thick layers are left out))|  [a-z ]+ within [0-9.]+ ft of Revit's: [0-9]+ of [0-9]+)$" "$f" | sed 's/^/layer sets: /' || true
+    done
+    # How close each door's and window's opening is to Revit's (#227, RE-93), as counts
+    # beside the scorer's fixed titles, an IFC class and a fixed distance band, never a
+    # Tag or a distance (its `--list` lines are not kept).
+    for f in "$dir"opening_boxes_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^((unfilled )?openings in Revit's export: [0-9]+; in rvt-rs's: [0-9]+; both: [0-9]+|  Ifc[A-Za-z]+ (within [0-9.]+ ft|over 1 ft): [0-9]+)$" "$f" | sed 's/^/opening boxes: /' || true
     done
     for f in "$dir"class_sets_vs_ifc.txt; do
       [ -f "$f" ] || continue

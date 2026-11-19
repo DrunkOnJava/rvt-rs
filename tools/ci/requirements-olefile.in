@@ -1,0 +1,7 @@
+# olefile for tools/ci/olefile_streams.py, the second reader of the OLE container that
+# CI's Writer patch corpus job holds rvt-rs's own to (#1938).
+# Dependabot proposes updates (.github/dependabot.yml).
+# requirements-olefile.txt pins this and every dependency with its hashes, and pip
+# installs it with --require-hashes; after changing a pin here, regenerate it
+# with the uv command at its top.
+olefile==0.47

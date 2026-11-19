@@ -322,11 +322,102 @@ the four levels a file can reach are in the
   materials, MEP systems and some types), 79 corner mullions of Autodesk's
   `rac_advanced` 2027 save get no `IsExternal` (#1865), and `[0.21.0]` in
   [`CHANGELOG.md`](CHANGELOG.md) lists what each change does not measure.
+- **0.22.0, 2026-11-13.** It limits what a crafted Revit file can make the MCP
+  server, the command-line tools, the Python bindings and the viewer do:
+  `rvt-rs-mcp` reads from and writes to one folder and bounds what an answer
+  carries (#1883); `rvt-doc --redact`, `rvt-info -f csv`, `rvt-dump`,
+  `rvt-ifc`, `rvt-write`, the Python bindings and the viewer each lose a way a
+  hostile file reached a terminal, a spreadsheet, a log or a file they should
+  not touch (#1884, #1885, #1887, #1919); and a wall profile of thousands of
+  regions no longer builds a chain of boolean cuts too deep for a thread to
+  walk (#1845). More elements are written the way Revit's export writes them:
+  roofs by extrusion of Revit 2024, 2026 and 2027, floors of the Structural
+  Foundations category, horizontal bracing, the storeys of beams and braces,
+  the corner mullions and the door of a curtain wall on Revit 2027, a lone
+  non-ASCII name on Revit 2023, and the doors, windows and walls of Revit 2015
+  to 2023 (#1479, #1841, #1842, #1865, #1899, #1912, RE-448, RE-456).
+  Against 0.21.0, 72 of the 146 measured exports differ and 37 of the 121
+  `diagnostics.json` files; 56 of the 72 are Autodesk's sample projects, which
+  no Revit export covers. A foundation slab and a horizontal bracing are
+  checked on one reporter's counts, a roof by extrusion is held to the same
+  project's 2025 save, 5 corner mullions of the 2027 `rac_advanced` stand in no
+  curtain wall (#1865), and `[0.22.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists
+  what each change does not measure.
+- **0.23.0, 2026-11-14.** It writes more of what Revit's own export writes and
+  narrows rules that audits found wider than their evidence. A wall of a
+  curtain wall type is an `IfcCurtainWall` on Revit 2023 to 2027 whether or not
+  a mullion names it, and a curtain wall that is the host panel of another is
+  not one (#1960). A roof, stair, stair flight or building element proxy with
+  no predefined type of its own gets Revit's `NOTDEFINED` (#1713), a sloped
+  floor gets its `Qto_SlabBaseQuantities.Depth` and `GrossVolume` (#1208), a
+  door's or window's `FireRating` is read from its saved parameter (#1507), and
+  a column whose saved mesh is a prism of another section than its type's
+  rectangle is drawn from the mesh. The doors and windows of Revit 2015 to 2023
+  cut the outline their symbol cuts, a material's colour reaches IFC viewers,
+  and a file that stores no project GUID gets the project, building and site
+  GlobalIds Revit's export gives them, from the GUID in its history header
+  (RE-459). Against 0.22.0 all 146 measured exports differ, and 120 of the 121
+  `diagnostics.json` files; 79 of the 146 have no Revit export, and on the
+  other 67 no count that equals Revit's falls and none that differs rises. A
+  horizontal bracing's `BRACE` type is checked on one reporter's counts of a
+  structural model (#1841), `NOTDEFINED` on stairs and flights on Revit 2024
+  only (#1713), a multistory stair is written once where Revit's export writes
+  it once per storey (#1977, RE-463), no Revit export holds a curtain wall
+  without a mullion (#1960), and `[0.23.0]` in [`CHANGELOG.md`](CHANGELOG.md)
+  lists what each change does not measure.
+- **0.24.0, 2026-11-14.** It closes #1713: on the 42 models with a public Revit
+  export, every one of the 58,665 elements both exports hold has Revit's
+  `PredefinedType`, and a Revit 2024 or later file whose export parameters
+  differ between its partitions gives each element its current copy's value.
+  A ramp's railings are its parts (#1988), a gutter is an `IfcFlowSegment`
+  typed by an `IfcPipeSegmentType` `GUTTER` (#1989), a multistory stair is
+  written once on each storey it repeats on (#1977), a ceiling in pieces has
+  its piece's `GrossArea` (#1209), and a wall under a roof drawn from its
+  slopes is cut along the roof's underside (#1478). Against 0.23.0, 72 of the
+  126 measured exports differ, and 29 of the 102 `diagnostics.json` files; 28
+  of the 72 are Autodesk's sample projects, which no Revit export covers, and
+  on the other 44 no count that equals Revit's falls except those the
+  changelog names (the saved-mesh `IfcCovering` row that the gutters leave, and
+  the plan-outline and layer counts of the roofs now drawn from their saved
+  meshes), and none that differs rises but 4 floors of one held-out Revit 2020
+  file, whose layer sets leave out Revit's 0-wide membrane layers (#1805).
+  `PredefinedType` stays unset on some
+  held-out pairs of Revit 2023 and earlier (counts only: 4 of 12 roofs, 1 of 5
+  stairs, 1 of 5 stair flights, 12 of 60 furniture and 2 of 10 railings), a
+  ceiling's piece `GrossArea` rests on one building, a multistory stair's
+  copies are inferred from three groups of one building, and `[0.24.0]` in
+  [`CHANGELOG.md`](CHANGELOG.md) lists what each change does not measure.
+- **0.25.0, 2026-11-15.** It fixes a way to take unbounded memory with a crafted
+  stream (the partition scanner stops at 16,777,216 candidates, #1833) and reads
+  more of what Revit's own export has: beams whose copies in several partitions
+  disagree (#1719), hollow rectangular tube beams (#1698), a wall end that a
+  joined wall's face lies inside (#1474), a door's opening in a second wall
+  (#1165), a door in a curtain wall on Revit's axes (#1494), the side areas of
+  more walls (#1046), the `GrossArea` of cut ceilings and roof equipment
+  (#1209), the types of Revit 2015 to 2023 doors and windows (#1603), and the
+  storeys of a Revit 2027 model's columns and footings (#1842). Against 0.24.0,
+  44 of the 127 measured exports differ, and 57 of the 102 `diagnostics.json`
+  files; 29 of the 44 have no Revit export on Measure, and on the other 15 no
+  count that equals Revit's falls and none that differs from Revit's rises but
+  the type objects of the spent Vitoria, which differ from Revit's in Name and
+  GlobalId (#1603). The Revit 2027 storeys rest on one reporter's model, the
+  tube beams on 8 beams of one building, a wall's `Length` before Revit 2024 on
+  Revit 2023 curtain walls held to the 2024 save (an ordinary wall's `Length` is
+  written on 8 walls of one held-out Revit 2021 project, which no quantity of
+  Revit's checks and the length of Revit's own `Axis` does, 8 of 8 within
+  1e-4 ft, #2069), and `[0.25.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists what
+  each change does not measure.
+- **0.14.1, 2026-11-19.** A patch to the 0.14 line, for users who compare
+  rvt-rs's output exactly and so cannot take a later release's changed exports
+  (#1808). It lowers the peak memory of the saved-mesh pass and changes no
+  export: on the 112 models measured, each file equals 0.14.0's but for the
+  version it records. It is not the latest release, which stays 0.25.0, and it
+  was not run on the reporter's own model before it shipped.
 
-### 0.22.0: IFC geometry and element data
+### 0.26.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.21.0, moved from the
-0.21.0 milestone when 0.21.0 shipped. Each
+The geometry and element-data work that continues after 0.25.0, moved from the
+0.25.0 milestone when 0.25.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall

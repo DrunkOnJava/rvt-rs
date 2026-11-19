@@ -337,13 +337,26 @@ fn choose_copy(copies: &[LayerCopy], current: Option<u32>) -> CopyChoice<'_> {
     }
 }
 
+/// Releases of Revit 2008 to 2023 on which a host type whose layer copies
+/// disagree takes its current partition's copy, as on 2024 and later (RE-466,
+/// #1805): 2020, where the one file measured with such a type, a held-out
+/// file read as counts, has 5 floors whose current copy holds Revit's widths
+/// and, on every layer with a width, Revit's material, where the first copy
+/// holds them on none. The four layers with no material of their own take
+/// their category's, which RE-464's reader gives as Revit's export does. That
+/// export also writes the 0-wide membranes rvt-rs leaves out (RE-53), on 4 of
+/// the 5. None of Autodesk's 34 samples of 2015 to 2023 has a type whose copies
+/// disagree, so no other release is measured.
+pub const CURRENT_COPY_32BIT_REVIT_VERSIONS: &[u32] = &[2020];
+
 /// The layers of each type in `types`, by ElementId, from each type's own
 /// data. On Revit 2024 and later a type whose copies in the partitions disagree
 /// takes its current partition's copy (`choose_copy`: the partition the element
 /// index routes it to, else the latest that holds a copy,
 /// [`crate::native_document::current_partitions`], RE-145, RE-216) and is
-/// dropped where that copy is not one list; on Revit 2008 to 2023 such a type
-/// is dropped. Empty for a release the layout is not measured on.
+/// dropped where that copy is not one list; so it does on the releases of
+/// [`CURRENT_COPY_32BIT_REVIT_VERSIONS`]. On the rest of Revit 2008 to 2023
+/// such a type is dropped. Empty for a release the layout is not measured on.
 pub fn scan_type_layers(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -412,12 +425,11 @@ pub fn scan_type_layers(
         // The scan met the streams in name order, which is not partition order.
         held.sort_by_key(|(partition, hit, _)| (*partition, *hit));
     }
-    // Measured on Revit 2024 and later only (the 64-bit layout): on the one
-    // held-out file of Revit 2008 to 2023 that has such a type (Revit 2020)
-    // the current copy gives five floors layers of Revit's widths and, on four
-    // of them, materials Revit's export does not give, so there a type whose
-    // copies disagree stays dropped (RE-446).
-    let current = if layout.wide_ids {
+    // Measured on Revit 2024 and later (the 64-bit layout) and on the releases
+    // of `CURRENT_COPY_32BIT_REVIT_VERSIONS`; on the rest of 2008 to 2023 no
+    // file measured has a type whose copies disagree, and such a type stays
+    // dropped (RE-446, RE-466).
+    let current = if layout.wide_ids || CURRENT_COPY_32BIT_REVIT_VERSIONS.contains(&revit_version) {
         let disagreeing: BTreeMap<u32, BTreeSet<u32>> = copies
             .iter()
             .filter(|(_, held)| held.iter().any(|(_, _, layers)| *layers != held[0].2))

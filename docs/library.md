@@ -136,7 +136,9 @@ cargo build --release
 # an element (its stream, its offsets) is not compared: a later save moves it.
 # Compare with one build: a change in how rvt-rs reads a file shows as a change
 # too. An element whose GlobalId an export writes twice is not compared, and
-# the summary says so.
+# the summary says so. A difference only in which rule read a value (its
+# LevelBindSource, or its BodySource where the body is equal) leaves the
+# element unchanged and is listed apart, as a label change (#1864).
 ./target/release/rvt-diff --elements monday.rvt tuesday.rvt --json changes.json
 
 # Dump the full class schema (4,126 classes and 11,562 fields on a Revit 2024 file)

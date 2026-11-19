@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://drunkonjava.github.io/rvt-rs/schemas/rvt-diff-elements.schema.json",
   "title": "rvt-diff --elements --json",
-  "description": "The comparison rvt-diff --elements A B --json PATH writes (rvt::ifc::element_diff::ElementDiff, #1843): the elements the IFC export of each file writes, keyed by the GlobalId it writes, as added, removed, changed (with the fields that differ) or unchanged. The fields are what the export writes, not the Revit file's records, so a change rvt-rs does not read is not seen. An element whose GlobalId either export writes for more than one element is not compared: it is in none of the four lists, and duplicate_global_ids and set_aside say which and how many, so that left_elements = removed + changed + unchanged + set_aside.left and right_elements = added + changed + unchanged + set_aside.right.",
+  "description": "The comparison rvt-diff --elements A B --json PATH writes (rvt::ifc::element_diff::ElementDiff, #1843): the elements the IFC export of each file writes, keyed by the GlobalId it writes, as added, removed, changed (with the fields that differ) or unchanged; an unchanged element whose label properties alone differ (the rule that read a value, not the value) is also listed in relabelled. The fields are what the export writes, not the Revit file's records, so a change rvt-rs does not read is not seen. An element whose GlobalId either export writes for more than one element is not compared: it is in none of the four lists, and duplicate_global_ids and set_aside say which and how many, so that left_elements = removed + changed + unchanged + set_aside.left and right_elements = added + changed + unchanged + set_aside.right.",
   "type": "object",
   "required": [
     "left",
@@ -14,7 +14,8 @@
     "changed",
     "unchanged",
     "duplicate_global_ids",
-    "set_aside"
+    "set_aside",
+    "relabelled"
   ],
   "properties": {
     "left": {
@@ -57,7 +58,7 @@
       }
     },
     "unchanged": {
-      "description": "In both, with every field equal.",
+      "description": "In both, with every field equal but label properties.",
       "type": "integer",
       "minimum": 0
     },
@@ -104,6 +105,13 @@
           "minimum": 0
         }
       }
+    },
+    "relabelled": {
+      "description": "Of the unchanged, those whose label properties differ (LevelBindSource, and BodySource where the body is equal), by GlobalId: the rule that read a value changed and the value did not (#1864).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relabel"
+      }
     }
   },
   "$defs": {
@@ -132,7 +140,10 @@
         },
         "tag": {
           "description": "Its Tag, the Revit ElementId.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "ifc_type": {
           "description": "The IFC entity, such as IFCBEAM.",
@@ -143,17 +154,29 @@
         },
         "storey": {
           "description": "The name of the storey the export puts it on.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "type_name": {
           "description": "The name of the type object the export writes for it.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "predefined_type": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "material": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "location_feet": {
           "description": "Where its body is placed, model feet.",
@@ -172,11 +195,17 @@
           ]
         },
         "rotation_radians": {
-          "type": ["number", "null"]
+          "type": [
+            "number",
+            "null"
+          ]
         },
         "body": {
           "description": "A digest of the body (its extrusion, solid and mapped geometry): equal digests are equal bodies.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "properties": {
           "description": "Each property the export writes, keyed <set>.<property>, as {kind, value}.",
@@ -187,14 +216,24 @@
     "change": {
       "description": "An element both exports write, with the fields that differ (rvt::ifc::element_diff::ElementChange).",
       "type": "object",
-      "required": ["global_id", "tag", "ifc_type", "name", "changes"],
+      "required": [
+        "global_id",
+        "tag",
+        "ifc_type",
+        "name",
+        "changes",
+        "labels"
+      ],
       "properties": {
         "global_id": {
           "type": "string",
           "minLength": 1
         },
         "tag": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "ifc_type": {
           "type": "string"
@@ -207,10 +246,97 @@
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["field", "left", "right"],
+            "required": [
+              "field",
+              "left",
+              "right"
+            ],
             "properties": {
               "field": {
                 "description": "A field of the element, or property:<set>.<property>.",
+                "type": "string"
+              },
+              "left": {
+                "description": "Its value in the first export, null where it had none."
+              },
+              "right": {
+                "description": "Its value in the second export, null where it has none."
+              }
+            }
+          }
+        },
+        "labels": {
+          "description": "The label properties that differ, which are not changes (#1864).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "field",
+              "left",
+              "right"
+            ],
+            "properties": {
+              "field": {
+                "description": "property:<set>.<property>.",
+                "type": "string"
+              },
+              "left": {
+                "description": "Its value in the first export, null where it had none."
+              },
+              "right": {
+                "description": "Its value in the second export, null where it has none."
+              }
+            }
+          }
+        }
+      }
+    },
+    "relabel": {
+      "description": "An unchanged element whose label properties differ (rvt::ifc::element_diff::ElementChange with no changes).",
+      "type": "object",
+      "required": [
+        "global_id",
+        "tag",
+        "ifc_type",
+        "name",
+        "changes",
+        "labels"
+      ],
+      "properties": {
+        "global_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ifc_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "labels": {
+          "description": "The label properties that differ.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "field",
+              "left",
+              "right"
+            ],
+            "properties": {
+              "field": {
+                "description": "property:<set>.<property>.",
                 "type": "string"
               },
               "left": {

@@ -290,9 +290,24 @@ pub(super) fn extend_profile_stubs(
         return;
     }
     let mut openings: HashMap<usize, Vec<usize>> = HashMap::new();
+    // Each wall's pockets: a region one of them equals is that pocket, and is
+    // written as it (`cut_profiles_from_bodies`), so it is not carried on, which
+    // would stop it equalling the pocket and cut it into the body (#1947).
+    let mut pocket_outlines: HashMap<usize, Vec<Vec<(f64, f64)>>> = HashMap::new();
     for (index, entity) in entities.iter().enumerate() {
-        if let IfcEntity::WallProfileOpening { host, .. } = entity {
-            openings.entry(*host).or_default().push(index);
+        match entity {
+            IfcEntity::WallProfileOpening { host, .. } => {
+                openings.entry(*host).or_default().push(index);
+            }
+            IfcEntity::WallProfilePocket { host, .. } => {
+                if let Some(outline) = outline_of(entity) {
+                    pocket_outlines
+                        .entry(*host)
+                        .or_default()
+                        .push(outline.to_vec());
+                }
+            }
+            _ => {}
         }
     }
     for wall in pending {
@@ -306,6 +321,14 @@ pub(super) fn extend_profile_stubs(
         let mut kinds: Vec<Kind> = Vec::new();
         let mut refusal: Option<&'static str> = None;
         for &index in indices {
+            let equals_a_pocket = outline_of(&entities[index]).is_some_and(|outline| {
+                pocket_outlines.get(&wall.index).is_some_and(|pockets| {
+                    pockets.iter().any(|pocket| same_outline(outline, pocket))
+                })
+            });
+            if equals_a_pocket {
+                continue;
+            }
             let IfcEntity::WallProfileOpening {
                 outline_feet,
                 axis_turn_radians,

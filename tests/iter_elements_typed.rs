@@ -13,9 +13,6 @@ use std::path::{Path, PathBuf};
 
 use rvt::elements::MVP_TYPED_CLASSES;
 use rvt::elements::typed_json::is_mvp_typed_class;
-use rvt::geometry::{
-    recover_level_elevation, recover_wall_location_curve, recover_wall_location_curve_from_arc_wall,
-};
 use rvt::walker::{self, PRODUCTION_ELEMENT_MIN_SCORE};
 use rvt::{RevitFile, elements};
 
@@ -117,7 +114,10 @@ fn decode_instance_prefer_typed_fails_closed_for_mvp_wrong_schema() {
 }
 
 #[test]
-fn einhoven_iter_elements_yields_typed_arcwalls_with_location_curves() {
+fn einhoven_iter_elements_yields_its_curtain_wall_and_panels() {
+    // RE-440: Einhoven's elements are one basic wall, one curtain wall whose
+    // 24 cells each hold a panel, and two windows. The 24 standard ArcWall
+    // pattern matches are none of them walls and are not elements.
     let Some(project_dir) = project_dir() else {
         eprintln!("skipping: RVT_PROJECT_CORPUS_DIR unset");
         return;
@@ -138,23 +138,28 @@ fn einhoven_iter_elements_yields_typed_arcwalls_with_location_curves() {
         "production must filter HostObjAttr: {:?}",
         elements.iter().map(|e| &e.class).collect::<Vec<_>>()
     );
-
-    let arcwalls: Vec<_> = elements.iter().filter(|e| e.class == "ArcWall").collect();
     assert!(
-        arcwalls.len() >= 20,
-        "expected ≥20 ArcWall DecodedElements from production iter_elements, got {}",
-        arcwalls.len()
+        elements.iter().all(|e| e.class != "ArcWall"),
+        "no pattern match is a wall"
     );
-
-    let mut curves = 0usize;
-    for el in &arcwalls {
-        if recover_wall_location_curve(el).is_recovered() {
-            curves += 1;
-        }
-    }
-    assert!(
-        curves >= 20,
-        "expected ≥20 recovered wall location curves from ArcWall fields, got {curves}"
+    let ids = |class: &str| -> Vec<u32> {
+        let mut ids: Vec<u32> = elements
+            .iter()
+            .filter(|e| e.class == class)
+            .filter_map(|e| e.id)
+            .collect();
+        ids.sort_unstable();
+        ids
+    };
+    assert_eq!(ids("Wall"), [2808]);
+    assert_eq!(ids("CurtainWall"), [7187]);
+    assert_eq!(ids("Window").len(), 2);
+    assert_eq!(
+        ids("CurtainWallPanel"),
+        [
+            7197, 7290, 7292, 7294, 7300, 7301, 7302, 7303, 8574, 8575, 8579, 8580, 8638, 8639,
+            8640, 8641, 8642, 8643, 8681, 8682, 8683, 8684, 8685, 8686
+        ]
     );
 
     let mut diag_rf = RevitFile::open(&path).unwrap();
@@ -168,10 +173,8 @@ fn einhoven_iter_elements_yields_typed_arcwalls_with_location_curves() {
     );
 
     eprintln!(
-        "iter_elements Einhoven ok · total={} · arcwalls={} · curves={} · production_min_score={PRODUCTION_ELEMENT_MIN_SCORE}",
-        elements.len(),
-        arcwalls.len(),
-        curves
+        "iter_elements Einhoven ok · total={} · production_min_score={PRODUCTION_ELEMENT_MIN_SCORE}",
+        elements.len()
     );
 }
 
@@ -191,25 +194,10 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
     let version = rf.basic_file_info().unwrap().version;
     assert_eq!(version, 2023);
 
+    // RE-440: no ArcWall pattern match is a wall, so the scan keeps none.
     let scan =
         rvt::research::partition_arc_walls::scan_partition_arc_walls(&mut rf, version).unwrap();
-    assert!(scan.walls.len() >= 20);
-    let mut recovered_curves = 0usize;
-    let mut with_elevation = 0usize;
-    for wall in &scan.walls {
-        let typed = elements::arc_wall::from_partition_arc_wall(wall);
-        let loc = recover_wall_location_curve_from_arc_wall(&typed);
-        assert!(loc.line_length_feet().unwrap_or(0.0) > 0.0);
-        recovered_curves += 1;
-        if typed.base_elevation_feet.is_some() {
-            with_elevation += 1;
-        }
-    }
-    assert_eq!(recovered_curves, scan.walls.len());
-    assert!(
-        with_elevation >= 15,
-        "expected most ArcWall trailers to carry base elevation, got {with_elevation}"
-    );
+    assert!(scan.walls.is_empty());
 
     let mut rf2 = RevitFile::open(&path).unwrap();
     let decoded: Vec<_> = walker::iter_elements(&mut rf2).unwrap().collect();
@@ -224,25 +212,13 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
         .filter(|e| e.class == "ArcWallRectOpening")
         .collect();
 
-    // Levels: elevation-derived storeys merge into production iter_elements.
+    // Levels: none is invented from base elevations (RE-440). The one Level,
+    // `Level 1`, is the export's storey, read from its record as on every
+    // other 2015 to 2027 project, none of which yields a Level element here.
     assert!(
-        levels.len() >= 2,
-        "expected ≥2 Level DecodedElements from partition storeys, got {}",
+        levels.is_empty(),
+        "no Level element from wall elevations, got {}",
         levels.len()
-    );
-    let mut level_elevations = 0usize;
-    for level in &levels {
-        let l = elements::level::Level::from_decoded(level);
-        assert!(l.name.is_some(), "Level must carry a name");
-        let outcome = recover_level_elevation(&l);
-        if outcome.is_recovered() {
-            assert!(outcome.as_recovered().unwrap().elevation_feet.is_finite());
-            level_elevations += 1;
-        }
-    }
-    assert!(
-        level_elevations >= 2,
-        "expected ≥2 Levels with recovered elevations, got {level_elevations}"
     );
 
     // Materials: strict partition display names.
@@ -275,12 +251,7 @@ fn einhoven_partition_schema_mvp_levels_materials_floors() {
     );
 
     eprintln!(
-        "partition MVP Einhoven ok · arcwalls={} · curves={} · elev={} · levels={} · level_elev={} · materials={} · doors={} · windows={}",
-        scan.walls.len(),
-        recovered_curves,
-        with_elevation,
-        levels.len(),
-        level_elevations,
+        "partition MVP Einhoven ok · materials={} · doors={} · windows={}",
         materials.len(),
         doors.len(),
         windows.len()

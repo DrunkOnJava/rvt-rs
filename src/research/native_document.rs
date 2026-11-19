@@ -132,6 +132,15 @@ pub struct Options {
     /// the index inflated and walked every group. Off by default: the other
     /// readers share the copy.
     pub uncached_partitions: bool,
+    /// Whether a read that finds no record index for its channel builds one and
+    /// keeps it on the handle for the reads that follow (#1032). On by default:
+    /// the saved-graphics pass reads a file in many batches, and each later
+    /// batch inflates only the groups that hold its records. A reader that
+    /// reads a file once turns it off: the index costs 48 bytes for each record
+    /// of the file, held to the end of the export, where the walk that builds
+    /// it is the walk the read makes anyway (#1977). A read with it off leaves
+    /// the handle as it found it; one that finds an index uses it either way.
+    pub index_records: bool,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
 /// group's bytes.
@@ -214,6 +223,7 @@ impl Default for Options {
             deferred_history_episodes: false,
             graph_fields: None,
             uncached_partitions: false,
+            index_records: true,
         }
     }
 }
@@ -680,6 +690,7 @@ fn definition_key(options: &Options) -> DefinitionKey {
         deferred_history_episodes,
         graph_fields: _,
         uncached_partitions: _,
+        index_records: _,
     } = options;
     (
         *max_group_bytes,
@@ -1187,7 +1198,8 @@ fn extract_records(
     });
     let record_index = channel.and_then(|channel| file.native_record_index_of(channel));
     let mut indexed: Option<(Vec<IndexedRecord>, Vec<usize>)> =
-        (channel.is_some() && record_index.is_none()).then(Default::default);
+        (channel.is_some() && record_index.is_none() && options.index_records)
+            .then(Default::default);
     // #1694: a read that walks without the handle's copies inflates only the
     // groups that hold a selected record, each copy of it, as the index names
     // them: an id's other copies decide which one is current, as they do in a

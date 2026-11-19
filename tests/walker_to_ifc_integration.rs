@@ -396,22 +396,22 @@ fn diagnostic_ifc_export_includes_hostobjattr_proxies_with_provenance() -> Resul
 }
 
 #[test]
-fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
-    // DEC-05 per RE-14.3: verify that the record-level ArcWall decoder
-    // path in RvtDocExporter produces IFCWALL entities > 0 on a real
-    // corpus file. The empirical RE-14.3 count is 28 standard ArcWall
-    // records on Einhoven Partitions/5 (2 compound + 4 metadata/index
-    // records are correctly not decoded by the standard path).
+fn einhoven_exports_its_wall_curtain_wall_and_panels() -> Result<()> {
+    // RE-440: Revit 2023 Einhoven holds one basic wall (2808), one curtain
+    // wall (7187, a `NewCurtainWallType`) whose grid has 24 cells, each with a
+    // panel, two windows and one Level. The 24 standard ArcWall pattern
+    // matches (RE-14.3) are its panels, grid lines and two matches with no
+    // ElementId, none a wall, and are not written.
     let project_dir = match std::env::var("RVT_PROJECT_CORPUS_DIR") {
         Ok(d) => d,
         Err(_) => {
-            eprintln!("skipping DEC-05 assertion: RVT_PROJECT_CORPUS_DIR unset");
+            eprintln!("skipping RE-440 assertion: RVT_PROJECT_CORPUS_DIR unset");
             return Ok(());
         }
     };
     let path = format!("{project_dir}/Revit_IFC5_Einhoven.rvt");
     if !std::path::Path::new(&path).exists() {
-        eprintln!("skipping DEC-05: corpus file missing at {path}");
+        eprintln!("skipping RE-440: corpus file missing at {path}");
         return Ok(());
     }
 
@@ -419,137 +419,118 @@ fn arcwall_decoder_yields_ifcwall_on_einhoven() -> Result<()> {
     let result = RvtDocExporter.export_with_diagnostics(&mut rf)?;
     let model = result.model;
 
-    // Count IFCWALL entities in the model (by scanning entity variants
-    // that carry an `ifc_type` field equal to "IFCWALL").
-    let wall_count = model
+    let elements: Vec<(usize, &str, &str, Option<usize>)> = model
+        .entities
+        .iter()
+        .enumerate()
+        .filter_map(|(index, e)| match e {
+            IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid,
+                storey_index,
+                ..
+            } => Some((
+                index,
+                ifc_type.as_str(),
+                type_guid.as_deref().unwrap_or(""),
+                *storey_index,
+            )),
+            _ => None,
+        })
+        .collect();
+    let of_type = |ifc_type: &str| -> Vec<&str> {
+        elements
+            .iter()
+            .filter(|e| e.1 == ifc_type)
+            .map(|e| e.2)
+            .collect()
+    };
+    assert_eq!(of_type("IFCWALL"), ["2808"], "the one basic wall");
+    assert_eq!(of_type("IFCCURTAINWALL"), ["7187"], "the one curtain wall");
+    assert_eq!(of_type("IFCWINDOW").len(), 2, "the two windows");
+    let mut panels = of_type("IFCPLATE");
+    panels.sort_unstable();
+    assert_eq!(
+        panels,
+        [
+            "7197", "7290", "7292", "7294", "7300", "7301", "7302", "7303", "8574", "8575", "8579",
+            "8580", "8638", "8639", "8640", "8641", "8642", "8643", "8681", "8682", "8683", "8684",
+            "8685", "8686"
+        ],
+        "the panels of the curtain wall's 24 cells"
+    );
+
+    // The curtain wall is named by its type and has no body of its own: its
+    // panels, which it aggregates, carry it.
+    let (wall_index, wall) = model
+        .entities
+        .iter()
+        .enumerate()
+        .find(|(_, e)| matches!(e, IfcEntity::BuildingElement { ifc_type, .. } if ifc_type == "IFCCURTAINWALL"))
+        .expect("curtain wall");
+    let IfcEntity::BuildingElement {
+        name,
+        extrusion,
+        solid_shape,
+        representation_map_index,
+        ..
+    } = wall
+    else {
+        unreachable!()
+    };
+    assert_eq!(name, "Curtain Wall:Curtain Wall 1:7187");
+    assert!(extrusion.is_none() && solid_shape.is_none() && representation_map_index.is_none());
+    let parts: Vec<usize> = model
         .entities
         .iter()
         .filter_map(|e| match e {
-            IfcEntity::BuildingElement { ifc_type, .. } => Some(ifc_type.as_str()),
+            IfcEntity::Aggregate { whole, parts } if *whole == wall_index => Some(parts.clone()),
             _ => None,
         })
-        .filter(|t| *t == "IFCWALL")
-        .count();
-    assert!(
-        wall_count >= 10,
-        "expected ≥10 IFCWALL entities on Einhoven (RE-14.3 observed 26 \
-         standard ArcWall records); got {wall_count}"
-    );
-    let wall_geometry_count = model
-        .entities
+        .flatten()
+        .collect();
+    let plates: Vec<usize> = elements
         .iter()
-        .filter(|e| {
-            matches!(
-                e,
-                IfcEntity::BuildingElement {
-                    ifc_type,
-                    location_feet: Some(_),
-                    extrusion: Some(_),
-                    ..
-                } if ifc_type == "IFCWALL"
-            )
-        })
-        .count();
-    assert!(
-        wall_geometry_count >= 10,
-        "expected ≥10 IFCWALL entities with ArcWall extrusion geometry; got {wall_geometry_count}"
-    );
-    assert!(
-        result.diagnostics.exported.building_elements_with_geometry >= wall_geometry_count,
-        "diagnostics should report the geometry-bearing wall count"
-    );
-    assert!(
-        model.building_storeys.len() >= 2,
-        "RE-15: ArcWall base elevations should populate real storeys; got {}",
-        model.building_storeys.len()
-    );
-    let walls_with_storey = model
-        .entities
-        .iter()
-        .filter(|e| {
-            matches!(
-                e,
-                IfcEntity::BuildingElement {
-                    ifc_type,
-                    storey_index: Some(_),
-                    ..
-                } if ifc_type == "IFCWALL"
-            )
-        })
-        .count();
-    assert!(
-        walls_with_storey >= 10,
-        "expected ≥10 IFCWALL entities assigned to elevation-derived storeys; got {walls_with_storey}"
-    );
-    let walls_with_element_id = model
-        .entities
-        .iter()
-        .filter(|e| match e {
-            IfcEntity::BuildingElement {
-                ifc_type,
-                property_set: Some(pset),
-                ..
-            } if ifc_type == "IFCWALL" => pset.properties.iter().any(|p| p.name == "ElementId"),
-            _ => false,
-        })
-        .count();
-    assert!(
-        walls_with_element_id >= 10,
-        "expected ≥10 IFCWALL entities with recovered ElementId property; got {walls_with_element_id}"
-    );
-    assert!(
+        .filter(|e| e.1 == "IFCPLATE")
+        .map(|e| e.0)
+        .collect();
+    assert_eq!(parts, plates, "the curtain wall aggregates its 24 panels");
+    assert_eq!(
         result
             .diagnostics
-            .warnings
-            .iter()
-            .any(|w| w.contains("lack recovered thickness")),
-        "diagnostics should warn that ArcWall thickness is unresolved"
+            .exported
+            .building_elements_carried_by_parts,
+        1
     );
-    assert!(
-        model
-            .building_storeys
-            .iter()
-            .any(|s| s.name == "Level 1" || s.name == "Roof"),
-        "RE-15/#86: expected at least one partition Level name on storeys: {:?}",
-        model.building_storeys
-    );
-    assert!(
-        result
-            .diagnostics
-            .warnings
-            .iter()
-            .any(|w| w.contains("partition Level-like strings")
-                || w.contains("elevation fallback labels")),
-        "diagnostics should report storey name recovery status"
-    );
-    assert!(
-        !result
-            .diagnostics
-            .unsupported_features
-            .iter()
-            .any(|feature| feature == "real_file_element_geometry"),
-        "real_file_element_geometry should not remain unsupported once ArcWall geometry is emitted"
-    );
+
+    // One storey, the file's one Level, and every element on it.
+    let storeys: Vec<&str> = model
+        .building_storeys
+        .iter()
+        .map(|s| s.name.as_str())
+        .collect();
+    assert_eq!(storeys, ["Level 1"]);
+    assert!(elements.iter().all(|e| e.3 == Some(0)));
+
+    // None of the warnings the pattern matches gave.
+    for gone in [
+        "lack recovered thickness",
+        "partition Level-like strings",
+        "elevation fallback labels",
+        "Unsupported or incomplete geometry",
+    ] {
+        assert!(
+            !result.diagnostics.warnings.iter().any(|w| w.contains(gone)),
+            "no warning should contain {gone:?}: {:?}",
+            result.diagnostics.warnings
+        );
+    }
+    assert_eq!(result.diagnostics.decoded.arcwall_records, 0);
 
     let step = write_step(&model);
-    let step_wall_count = step.matches("IFCWALL(").count();
-    assert!(
-        step_wall_count >= 1,
-        "STEP writer emitted {step_wall_count} IFCWALL lines — expected ≥1"
-    );
-    assert!(
-        step.matches("IFCEXTRUDEDAREASOLID(").count() >= wall_geometry_count,
-        "STEP should emit one swept solid per geometry-bearing ArcWall"
-    );
-    assert!(
-        step.matches("IFCSHAPEREPRESENTATION(").count() >= wall_geometry_count,
-        "STEP should attach shape representations to geometry-bearing ArcWalls"
-    );
-
-    eprintln!(
-        "DEC-05: Einhoven yields {wall_count} IFCWALL model entities, \
-         {wall_geometry_count} with geometry, {step_wall_count} IFCWALL lines in STEP output"
-    );
+    assert_eq!(step.matches("IFCWALL(").count(), 1);
+    assert_eq!(step.matches("IFCCURTAINWALL(").count(), 1);
+    assert_eq!(step.matches("IFCPLATE(").count(), 24);
     Ok(())
 }
 

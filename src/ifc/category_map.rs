@@ -366,9 +366,20 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCCABLECARRIERFITTING",
         predefined_type: None,
     },
+    // #1989: Revit's IFC4 export writes a gutter whose own "Export to IFC As"
+    // names no pipe segment as an `IfcFlowSegment`, typed by an
+    // `IfcPipeSegmentType` `GUTTER` (the BIM4LCA housing's 3 gutters, in each of
+    // its six files; BIM-Speed's Vitoria export of 2018 writes its 2 the same
+    // way in IFC2X3). An `IfcPipeSegment` value is acted on
+    // ([`EXPORT_OVERRIDE_TARGETS`]): the office's 24 gutters carry it with
+    // `GUTTER`, and Revit writes them as that. `type_entity_for`
+    // (`step_writer.rs`) types every `IFCFLOWSEGMENT` as that gutter type,
+    // which holds only while this mapping is the one way to an
+    // `IfcFlowSegment` (no override value names it): a class written as one
+    // by another path needs its type keyed on its own class first.
     Mapping {
         revit_class: "Gutter",
-        ifc_type: "IFCPIPESEGMENT",
+        ifc_type: "IFCFLOWSEGMENT",
         predefined_type: None,
     },
     // Massing / abstract.
@@ -495,6 +506,18 @@ pub static HORIZONTAL_BRACING_MEMBER: Mapping = Mapping {
     revit_class: "StructuralFraming",
     ifc_type: "IFCMEMBER",
     predefined_type: None,
+};
+
+/// [`HORIZONTAL_BRACING_MEMBER`] on the releases whose bracing type is
+/// measured as `BRACE` (`partition_schema_mvp::BRACE_TYPE_REVIT_VERSIONS`,
+/// #1841): a reporter's Revit 2027 model, whose `IfcMemberType` for the
+/// bracing carries it. The occurrence of a member writes no `PredefinedType`
+/// on those releases ([`predefined_type_left_out`]), so only the type object
+/// takes the value.
+pub static HORIZONTAL_BRACING_BRACE: Mapping = Mapping {
+    revit_class: "StructuralFraming",
+    ifc_type: "IFCMEMBER",
+    predefined_type: Some("BRACE"),
 };
 
 /// [`lookup`] for an element whose record names its own class
@@ -675,6 +698,14 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
         ifc_type: "IFCGEOGRAPHICELEMENT",
         predefined_type: None,
     },
+    // #1989: a gutter's own value, the only class it is acted on for (a pipe
+    // is an `IfcPipeSegment` already). Its `PredefinedType` is the element's
+    // own or its type's where it is an enumerator ([`predefined_type_for`]).
+    Mapping {
+        revit_class: "IfcPipeSegment",
+        ifc_type: "IFCPIPESEGMENT",
+        predefined_type: None,
+    },
 ];
 
 /// The Revit classes an [`EXPORT_OVERRIDE_TARGETS`] value is acted on for,
@@ -692,12 +723,46 @@ const OVERRIDE_CLASS_LIMITS: &[(&str, &[&str])] = &[
         "IfcGeographicElement",
         &["Floor", "Furniture", "Planting", "SpecialtyEquipment"],
     ),
+    ("IfcPipeSegment", &["Gutter"]),
 ];
 
+/// The Revit classes an [`EXPORT_OVERRIDE_TARGETS`] value is not acted on for,
+/// where Revit's export is measured to ignore it. Two of the BIM4LCA housing's
+/// three gutters carry `IfcCovering` with `ROOFING`, as do the roofing elements
+/// around them, and Revit's IFC4 export of each of its six files writes both
+/// as `IfcFlowSegment`, as it does the third, which carries no value (#1989).
+/// As for a wall sweep's, a curtain wall's ([`export_override_applies`]).
+///
+/// The BIM4LCA timber housing's ceiling type `AK-4.EI60` carries "Export Type
+/// to IFC As" `IfcSlabType` with `USERDEFINED`, and Revit's export of the file
+/// as built writes its one ceiling as `IfcCovering` `CEILING`, typed by an
+/// `IfcCoveringType` `CEILING`: neither the entity nor the predefined type is
+/// acted on (#2074, [`export_value_ignored`]).
+const OVERRIDE_CLASS_EXCLUSIONS: &[(&str, &[&str])] =
+    &[("IfcCovering", &["Gutter"]), ("IfcSlab", &["Ceiling"])];
+
+/// Whether an element of `revit_class` carries an "Export to IFC As" value
+/// that Revit's export is measured to ignore for that class
+/// (`OVERRIDE_CLASS_EXCLUSIONS`). Its "IFC Predefined Type" goes with it: the
+/// predefined type the value comes with is not acted on either (#2074).
+pub fn export_value_ignored(value: &str, revit_class: &str) -> bool {
+    lookup_export_override(value).is_some()
+        && OVERRIDE_CLASS_EXCLUSIONS.iter().any(|(name, classes)| {
+            name.eq_ignore_ascii_case(value.trim()) && classes.contains(&revit_class)
+        })
+}
+
 /// [`lookup_export_override`] for an element of `revit_class`: `None` where
-/// the value is limited to other classes (`OVERRIDE_CLASS_LIMITS`).
+/// the value is limited to other classes (`OVERRIDE_CLASS_LIMITS`) or
+/// ignored for this one (`OVERRIDE_CLASS_EXCLUSIONS`).
 pub fn lookup_export_override_for(value: &str, revit_class: &str) -> Option<&'static Mapping> {
     let target = lookup_export_override(value)?;
+    let excluded = OVERRIDE_CLASS_EXCLUSIONS.iter().any(|(name, classes)| {
+        name.eq_ignore_ascii_case(value.trim()) && classes.contains(&revit_class)
+    });
+    if excluded {
+        return None;
+    }
     let limited = OVERRIDE_CLASS_LIMITS
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case(value.trim()));
@@ -743,11 +808,20 @@ pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
 /// type (`HANDRAIL` on its `KAI-4` and `KJO-1`, `GUARDRAIL` on its `KAI-1`,
 /// `KAI-2`, `KAI-3` and `KAI-5`, `NOTDEFINED` on its `KAI-6`), and the railing's
 /// host does not decide it: 26 of the 41 name a stair and 8 a ramp, where 32 are
-/// `HANDRAIL`. `IfcStair` and `IfcDoor`, honoured as targets
-/// since #792, are not listed, because listing them would apply every door's
-/// and stair's own predefined type as well, which is not measured. An
-/// element exported as either through its value takes the target's
-/// default, the one Revit writes on the elements measured.
+/// `HANDRAIL`. `IfcStair`, honoured as a target since #792, is not listed,
+/// because listing it would apply every stair's own predefined type as well,
+/// which is not measured. An element exported as a stair through its value
+/// takes the target's default, the one Revit writes on the elements measured.
+/// `IfcDoor` is listed since #1713: Revit's export of the BIM4LCA files writes
+/// `TRAPDOOR` on 52 doors (3 on each of the four housing files, 10 on each of
+/// the four office files) and `DOOR` on every other door of every model
+/// measured, where rvt-rs wrote `DOOR` on all.
+/// `IfcBuildingElementProxy` is listed since #1713: in each of the twelve
+/// BIM4LCA files (six housing, six office) one proxy carries `USERDEFINED` as
+/// its own "IFC Predefined Type" under an "Export to IFC As" of
+/// `IfcBuildingElementProxy`, and Revit's export writes `USERDEFINED` on it,
+/// where rvt-rs left it unset because the value was not read for a proxy. A
+/// proxy with no value keeps the `NOTDEFINED` of `NOTDEFINED_DEFAULTS`.
 ///
 /// #1713 adds four more, each measured on the BIM4LCA office (Revit 2024)
 /// against Revit's export of it: `IfcWall`, whose 607 walls Revit writes
@@ -758,7 +832,7 @@ pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
 /// own before its type's, as RE-45 reads it: Revit writes two type objects
 /// for the wall type `KS-3`, `SOLIDWALL` and `STANDARD`, and types its 4
 /// `SOLIDWALL` walls by the first and its 2 `NOTDEFINED` ones by the second.
-/// The reason `IfcStair` and `IfcDoor` are not listed does not apply to the
+/// The reason `IfcStair` is not listed does not apply to the
 /// four: their elements are measured, and each class is reached by the rows
 /// of one or two Revit categories (Wall and ArcWall, Ramp, LightingFixture,
 /// Pipe and Gutter). A wall with no value keeps the mapping's `NOTDEFINED`,
@@ -966,6 +1040,22 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
             "HANDRAIL",
             "GUARDRAIL",
             "BALUSTRADE",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCDOOR",
+        &["DOOR", "GATE", "TRAPDOOR", "USERDEFINED", "NOTDEFINED"],
+    ),
+    (
+        "IFCBUILDINGELEMENTPROXY",
+        &[
+            "COMPLEX",
+            "ELEMENT",
+            "PARTIAL",
+            "PROVISIONFORVOID",
+            "PROVISIONFORSPACE",
             "USERDEFINED",
             "NOTDEFINED",
         ],

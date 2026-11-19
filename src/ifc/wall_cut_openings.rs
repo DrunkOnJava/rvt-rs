@@ -78,6 +78,8 @@ pub(super) mod reason {
     pub const DOOR_OPENING_NOT_READ: &str = "door_opening_box_not_read";
     pub const DOOR_WALL_AXIS_NOT_READ: &str = "door_wall_axis_not_read";
     pub const DOOR_WALL_PARALLEL: &str = "door_second_wall_parallel_to_door_wall";
+    pub const DOOR_WALL_HEIGHTS_DIFFER: &str =
+        "door_second_wall_spans_other_heights_than_door_wall";
     pub const DOOR_NOT_IN_WALL: &str = "door_opening_not_in_second_wall";
     pub const DEGENERATE: &str = "opening_extent_not_positive";
     pub const WALL_NOT_FRAMED: &str = "wall_body_not_an_axis_aligned_prism";
@@ -86,6 +88,17 @@ pub(super) mod reason {
     pub const OUTSIDE_HEIGHT: &str = "opening_outside_wall_height";
     pub const CURTAIN_COPIES: &str = "curtain_wall_record_copies_disagree";
     pub const DOOR_CUT_ELSEWHERE: &str = "door_cuts_a_wall_it_is_not_hosted_in_as_its_own";
+    pub const CUTTER_NAMED_AGAIN: &str = "cutter_named_again_in_wall";
+}
+
+/// The entity a door is hosted in, by index.
+fn hosted_in(entity: &IfcEntity) -> Option<usize> {
+    match entity {
+        IfcEntity::BuildingElement {
+            host_element_index, ..
+        } => *host_element_index,
+        _ => None,
+    }
 }
 
 /// A wall the openings are cut in: its entity, name and frame, as the
@@ -170,7 +183,8 @@ fn boxes_touch(a: &[f64; 6], b: &[f64; 6]) -> bool {
     (0..3).all(|axis| a[axis + 3].min(b[axis + 3]) - a[axis].max(b[axis]) > OVERLAP_FEET)
 }
 
-/// Whether a wall's body is RE-320's stepped one, #1384's, cut at the top
+/// Whether a wall's body is RE-320's stepped one, #1478's, cut along a sloped
+/// roof, #1384's, cut at the top
 /// of the floor it stands on, or #1396's, drawn to the wall beneath it: its
 /// `extrusion` is still the whole prism, and an opening voids every piece of
 /// the body.
@@ -181,6 +195,7 @@ fn is_stepped(set: Option<&PropertySet>) -> bool {
             .any(|property| match (property.name.as_str(), &property.value) {
                 ("BodyHeightSource", PropertyValue::Text(source)) => {
                     source == super::export_content::WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE
+                        || source == super::export_content::WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE
                 }
                 (name, PropertyValue::Text(_)) => {
                     name == super::export_content::WALL_BASE_SOURCE_PROPERTY
@@ -425,12 +440,64 @@ fn door_box(door: &IfcEntity, cut: &OpeningCut) -> Option<[f64; 6]> {
     world.iter().all(|value| value.is_finite()).then_some(world)
 }
 
-/// A door that also cuts a second wall: its own opening box, where the
-/// wall runs across the door's wall and the box reaches it. The door's wall runs along the long
-/// side of the box; a second wall along it is not written, for the opening
-/// then reaches five feet either side of the plane its symbol cuts in,
-/// which is not read.
-fn door_cut(host: &Host, world: &[f64; 6], door: usize) -> Result<Cut, &'static str> {
+/// How deep across a door's wall Revit's export cuts the opening the door
+/// makes in a second wall that runs along its own (#1165, RE-471): 10 ft on
+/// every one of the 82 such openings of the BIM4LCA models and the 24 of
+/// Snowdon Towers Architectural.
+const DOOR_PARALLEL_DEPTH_FEET: f64 = 10.0;
+
+/// How far a second wall's base and top may lie from those of the wall a door
+/// stands in for the door's opening in it to be written, feet (RE-471). Of the
+/// BIM4LCA models' openings that lie within their second wall's height, Revit's
+/// export writes each whose wall spans the door's wall's heights (23 of 23)
+/// and not the one whose wall does not (3064459 in 1619525, office as built).
+/// Of the openings that stand above or below a second wall of other heights,
+/// Revit writes 42 on the BIM4LCA models and 1 on Snowdon Towers Architectural
+/// and leaves out 4 and 3, which nothing read tells apart, so none of those is
+/// written.
+const DOOR_WALL_HEIGHT_TOLERANCE_FEET: f64 = 0.01;
+
+/// The heights a wall's body spans, its base and top, feet.
+fn body_heights(entity: &IfcEntity) -> Option<[f64; 2]> {
+    match entity {
+        IfcEntity::BuildingElement {
+            location_feet: Some(location),
+            extrusion: Some(body),
+            ..
+        } => Some([location[2], location[2] + body.height_feet]),
+        _ => None,
+    }
+}
+
+/// A door's local Y axis in plan, as its placement turns it: the writer's
+/// `IfcAxis2Placement3D` takes its X from the rotation about Z, so its Y is
+/// that turned a quarter turn further.
+fn door_y_axis(door: &IfcEntity) -> [f64; 2] {
+    let angle = match door {
+        IfcEntity::BuildingElement {
+            rotation_radians, ..
+        } => rotation_radians.unwrap_or(0.0),
+        _ => 0.0,
+    };
+    [-angle.sin(), angle.cos()]
+}
+
+/// A door that also cuts a second wall: its own opening box, where the wall
+/// runs across the door's wall and the box reaches it. The door's wall runs
+/// along the long side of the box. Where the second wall runs along it too,
+/// the opening is as wide and as tall as the box and
+/// [`DOOR_PARALLEL_DEPTH_FEET`] deep across the walls, centred on the box's
+/// face on the side the door's local Y (`y_axis`, in plan) points away from
+/// (RE-471), where the second wall spans the same heights as the wall the door
+/// stands in (`door_wall`); a door whose Y lies along its wall, or whose walls
+/// span other heights, is not written.
+fn door_cut(
+    host: &Host,
+    world: &[f64; 6],
+    y_axis: [f64; 2],
+    door_wall: Option<[f64; 2]>,
+    door: usize,
+) -> Result<Cut, &'static str> {
     let (dx, dy) = (world[3] - world[0], world[4] - world[1]);
     let (long, thin) = if dx >= dy { (dx, dy) } else { (dy, dx) };
     if !(thin > MIN_EXTENT_FEET && long >= DOOR_SLENDERNESS * thin) {
@@ -438,10 +505,29 @@ fn door_cut(host: &Host, world: &[f64; 6], door: usize) -> Result<Cut, &'static 
     }
     let wall_runs_along_x = host.axis[0].abs() > 0.5;
     let door_wall_runs_along_x = dx >= dy;
+    let mut world = *world;
     if wall_runs_along_x == door_wall_runs_along_x {
-        return Err(reason::DOOR_WALL_PARALLEL);
+        let across = usize::from(door_wall_runs_along_x);
+        let toward = y_axis[across];
+        if toward.abs() < 0.5 {
+            return Err(reason::DOOR_WALL_PARALLEL);
+        }
+        let wall = [host.location[2], host.location[2] + host.height];
+        let same_heights = door_wall.is_some_and(|door_wall| {
+            (0..2).all(|end| (door_wall[end] - wall[end]).abs() <= DOOR_WALL_HEIGHT_TOLERANCE_FEET)
+        });
+        if !same_heights {
+            return Err(reason::DOOR_WALL_HEIGHTS_DIFFER);
+        }
+        let face = if toward > 0.0 {
+            world[across]
+        } else {
+            world[across + 3]
+        };
+        world[across] = face - DOOR_PARALLEL_DEPTH_FEET / 2.0;
+        world[across + 3] = face + DOOR_PARALLEL_DEPTH_FEET / 2.0;
     }
-    let (along, left, up) = host.ranges(world);
+    let (along, left, up) = host.ranges(&world);
     if overlap(left, host.band) < -DOOR_REACH_FEET || overlap(along, host.along) < -DOOR_REACH_FEET
     {
         return Err(reason::DOOR_NOT_IN_WALL);
@@ -475,6 +561,10 @@ pub(super) fn attach_wall_cut_openings(
     let mut cabinets: BTreeMap<u64, usize> = BTreeMap::new();
     let mut doors: BTreeMap<u64, usize> = BTreeMap::new();
     let mut walls: BTreeSet<u64> = BTreeSet::new();
+    // Every entity holding each wall's ElementId, so a door's step in a wall
+    // that is not framed (one whose id two entities hold included) can be
+    // told from its own opening, as it is in a framed one.
+    let mut wall_entities: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     let mut repeated: BTreeSet<u64> = BTreeSet::new();
     for (index, entity) in entities.iter().enumerate() {
         if let Some((id, host)) = host_of(index, entity) {
@@ -502,6 +592,7 @@ pub(super) fn attach_wall_cut_openings(
         } else {
             if ifc_type.eq_ignore_ascii_case("IFCWALL") {
                 walls.insert(id);
+                wall_entities.entry(id).or_default().push(index);
             }
             continue;
         };
@@ -586,17 +677,28 @@ pub(super) fn attach_wall_cut_openings(
             // A wall rvt-rs does not frame as an axis-aligned prism (curved,
             // turned off the axes, stepped otherwise than RE-320's, a body
             // of several pieces, or an ElementId held twice) has no opening
-            // written, and each step of its record that would is counted.
+            // written, and each step of its record that a framed wall would
+            // write or count is counted (#1947): every step the loop below
+            // does not pass over, a door's included unless it is the door's
+            // own opening, and a shadow step of a cutter it reads.
+            let holders: &[usize] = wall_entities.get(wall).map_or(&[], Vec::as_slice);
             for step in list {
                 let named = match step.kind {
                     WallCutKind::Embed => curtains.contains_key(&step.cutter),
                     WallCutKind::Cutout => {
                         cabinets.contains_key(&step.cutter)
-                            || (doors.contains_key(&step.cutter)
-                                && step.cuts_something == Some(false))
+                            || doors.get(&step.cutter).is_some_and(|door| {
+                                !(step.cuts_something == Some(true)
+                                    && hosted_in(&entities[*door])
+                                        .is_some_and(|own| holders.contains(&own)))
+                            })
                     }
                     WallCutKind::RectOpening => true,
-                    WallCutKind::ShadowCutout => false,
+                    WallCutKind::ShadowCutout => {
+                        curtains.contains_key(&step.cutter)
+                            || cabinets.contains_key(&step.cutter)
+                            || doors.contains_key(&step.cutter)
+                    }
                 };
                 if named {
                     *left_out
@@ -634,13 +736,7 @@ pub(super) fn attach_wall_cut_openings(
                     } else if let Some(door) = doors.get(&step.cutter) {
                         match step.cuts_something {
                             Some(true) => {
-                                let own = match &entities[*door] {
-                                    IfcEntity::BuildingElement {
-                                        host_element_index, ..
-                                    } => *host_element_index,
-                                    _ => None,
-                                };
-                                if own == Some(host.index) {
+                                if hosted_in(&entities[*door]) == Some(host.index) {
                                     continue;
                                 }
                                 Err(reason::DOOR_CUT_ELSEWHERE)
@@ -651,7 +747,18 @@ pub(super) fn attach_wall_cut_openings(
                                     .get(door)
                                     .and_then(|cut| door_box(&entities[*door], cut));
                                 match world {
-                                    Some(world) => door_cut(host, &world, *door),
+                                    Some(world) => {
+                                        let door_wall = hosted_in(&entities[*door])
+                                            .and_then(|wall| entities.get(wall))
+                                            .and_then(body_heights);
+                                        door_cut(
+                                            host,
+                                            &world,
+                                            door_y_axis(&entities[*door]),
+                                            door_wall,
+                                            *door,
+                                        )
+                                    }
                                     None => Err(reason::DOOR_OPENING_NOT_READ),
                                 }
                             }
@@ -703,7 +810,13 @@ pub(super) fn attach_wall_cut_openings(
                 *left_out.entry(reason::DEGENERATE.to_string()).or_insert(0) += 1;
                 continue;
             }
+            // A cutter a wall's record names twice gets one opening, at its
+            // first place; the other step is counted rather than dropped
+            // unseen (#1947).
             if !seen.insert(step.cutter) {
+                *left_out
+                    .entry(reason::CUTTER_NAMED_AGAIN.to_string())
+                    .or_insert(0) += 1;
                 continue;
             }
             openings.push(IfcEntity::WallCutOpening {

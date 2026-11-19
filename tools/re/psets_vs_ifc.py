@@ -215,6 +215,16 @@ REVIT_DEFECTS = {
     ("Pset_StairFlightCommon", "WalkingLineOffset"),
     ("Pset_StairCommon", "WalkingLineOffset"),
 }
+# Values Revit's export takes from the model's geometry as its API returns it
+# when the exporter runs, which the saved file does not decide (RE-277): a
+# column's Slope, from the last solid of its geometry, written on 73 of the
+# BIM4LCA office's 279 columns as built and 101 of 345 at permit, and on six
+# columns whose native records are identical in both files at permit only.
+# rvt-rs leaves them out and they are counted apart (Griffin, 2026-11-14,
+# "Count it apart"; #1193).
+NOT_DECIDED_BY_FILE = {
+    ("Pset_ColumnCommon", "Slope"),
+}
 # The IsExternal of a curtain mullion or panel and of its type object is the
 # product of the exporter's cache of element types, not of the model (RE-269):
 # Revit 24.0's IsElementExternal also evaluates a type, and caches it as not
@@ -454,6 +464,7 @@ def main(argv):
     twice = 0
     in_own_set = 0
     defects = collections.Counter()
+    undecided = collections.Counter()
     cache_defects = collections.Counter()
     unwritten_openings = collections.Counter()
     from_file = collections.Counter()
@@ -483,6 +494,9 @@ def main(argv):
             continue
         if (pset, prop) in REVIT_DEFECTS:
             defects[(pset, prop)] += 1
+            continue
+        if (pset, prop) in NOT_DECIDED_BY_FILE:
+            undecided[(pset, prop)] += 1
             continue
         row = rows[(pset, prop)]
         row[0] += 1
@@ -552,6 +566,8 @@ def main(argv):
         print(f"  {pset}.{prop}: {n}, equal {equal}, different {different}, missing {missing}")
     for (pset, prop), n in sorted(defects.items()):
         print(f"Revit values known to be wrong, left out (RE-235 §5): {pset}.{prop} {n}")
+    for (pset, prop), n in sorted(undecided.items()):
+        print(f"Revit values the saved file does not decide, counted apart (RE-277, #1193): {pset}.{prop} {n}")
     for (pset, prop, where), n in sorted(cache_defects.items()):
         print(f"Revit values known to be wrong, left out (RE-235 §5, RE-269): {pset}.{prop} on {where} {n}")
     if from_file:

@@ -1027,6 +1027,9 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool, family: bo
                 "element_record_without_volume" => "without a 3D body",
                 "element_record_in_non_primary_design_option" => "in non-primary design options",
                 "element_record_empty_curtain_panel" => "empty curtain panels",
+                "element_record_curtain_host_panel" => {
+                    "curtain panels that are the host panel of another curtain wall"
+                }
                 "room_not_in_export_phase" => "rooms in a phase other than the export phase",
                 "element_record_family_type_draws_nothing" => {
                     "plumbing fixtures whose type draws nothing visible"

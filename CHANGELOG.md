@@ -8,6 +8,904 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-11-15
+
+0.25.0 ships a security fix and a batch of repairs found by checking 0.24.0 against Revit's own exports: the partition scanner no longer takes unbounded memory from a crafted stream (#1833); beams whose copies in several partitions disagree, hollow rectangular tube beams, wall ends, door openings and axes, ceilings and roof equipment, and the types of Revit 2015 to 2023 doors and windows are read as Revit's export has them; and the columns and footings of a Revit 2027 structural model reach their storeys.
+
+Not measured, and said in each entry:
+- The Revit 2027 columns' and footings' storeys (#1842) rest on one reporter's model (counts only), so they apply to Revit 2027 only and are listed under "Rules that rest on one project".
+- Tube beams (#1698) are measured on the BIM4LCA concrete office's 8 beams of Revit 2024, the one model that holds such a type.
+- A ceiling's or a roof fitting's `GrossArea` from its saved mesh (#1209) rests on the BIM4LCA office and housing; the 15 ceilings it adds on Autodesk's sample projects are checked by no Revit export.
+- A curtain wall's `Length` before Revit 2024 (#1584) is measured on Revit 2023, where it is held to the same project's 2024 save: no untouched Revit IFC4 export of a file of 2015 to 2023 holds a curtain wall's `Length` to compare. An ordinary wall's `Length` on those releases is checked by nothing: the Autodesk samples gain none and 8 walls of a Revit 2021 project do (counts only), on an IFC2X3 export that writes no base quantities. The side areas, footprint and volumes of walls before Revit 2024 stay out.
+- The types of Revit 2015 to 2023 doors and windows (#1603) are checked against three projects' exports, two of them IFC2X3 and counted apart (the spent Revit 2018 project's and BIM Whale's); their type objects' GlobalIds are not Revit's and they take no material from the type map yet.
+- A stair landing's type object on Revit 2025 to 2027 (#2046) has no Revit export of a model with a landing to score its Name (RE-476).
+- A door's opening in a second wall of other heights (#1165) still writes nothing: nothing read tells which of Revit's writes and omissions it is.
+- A wall end cut back at a joined wall's face (#1474) is written on 2 ends of the BIM4LCA office at building permit, and none of the wall body, end, height or layer scorers moves with it.
+
+Measured against 0.24.0 on every model Measure holds (run [43721278321](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43721278321), `main` at 156e2b25; the release adds only its notes, version strings, witness files and fixtures to them):
+
+- 44 of the 127 exports differ, and 57 of the 102 `diagnostics.json` files. 29 of the 44 have no Revit export on Measure, so no scorer says which of what moved there is Revit's: 28 are Autodesk's sample projects of 2015 to 2027 and the other is Einhoven (Revit 2023); each entry below was measured in its own pull request. The other 15 are scored against Revit's own exports, counts only for the held-out ones: 8 of the 12 BIM4LCA models, RE1 Architecture, 5 of the 18 held-out files and the spent Vitoria "Before". On them nothing that equals Revit's falls and nothing that differs from Revit's rises, but for the type objects of the spent Vitoria (said below), and the values Revit does not write rise only on four IFC2X3 files counted apart (the last line). The 83 exports that do not move include the 24 Revit 2025 models, Core Interior, the six `rac_advanced` saves of 2015 to 2020, three of RE1's four files and 13 of the 18 held-out files. What moved:
+  - Quantities (#1046, #1165, #1209, #1698, #1719, #1803): on the eight BIM4LCA files that move the ones equal to Revit's rise by 1,006, with 937 fewer missing, and none differs. 745 are the walls' `GrossSideArea` (189), `NetSideArea` (209), `GrossVolume` (189) and `Height` (158) (#1046); 94 are the `GrossArea` of coverings, the 22 cut ceilings of one piece of the office and 72 roof fittings of the office and housing (#1209); 96 are the six base quantities of the 8 tube beams, 48 on each of the concrete office's two files (#1698); 16 are the `NetSurfaceArea` of 4 mullions on each office file (#1803); 9 are the `Length` of the beams of #1719; and 46 are the `Depth` and `Height` of the 23 new door openings (#1165), whose 23 `Width` rvt-rs leaves out, as for every door opening in a second wall, so they add 23 to the missing.
+  - Properties (#1165, #1719): on the same files the property values equal to Revit's rise by 94, with 27 fewer missing, and none differs: the `Span`, `Slope` and `Roll` of the 9 beams (27) and 67 on the 23 new door openings (`Reference` in two sets on each, and `FireExit` on the 21 of the offices).
+  - Door openings (#1165): 23 more doors' openings in a second wall are written (the timber housing 1 to 2 on each of its two files; the office 25 to 30, 33 to 39, 16 to 21 and 16 to 21), each with Revit's GlobalId, Name, `PredefinedType`, `Reference`s and `Depth`, and its box within 0.01 ft of Revit's; none is an opening Revit's export lacks. Each office opening also holds 2 of Revit's values from the project's own property set file, which are out of scope (RE-239) and not scored (10, 12, 10 and 10 more on the four office files). `door_second_wall_parallel_to_door_wall` (9, 9, 10, 10, 9, 9, 7 and 7 on the eight files, 38 on Snowdon Towers Architectural) falls to none, and those steps are counted as `door_second_wall_spans_other_heights_than_door_wall` (9, 9, 9, 9, 4, 3, 2 and 2, and 20), with `door_opening_not_in_second_wall` (15) and `opening_outside_wall_height` (3) on Snowdon Towers Architectural. The box scorer also moves two unfilled wall openings of each office file from over 1 ft to within 0.001 ft of Revit's, which no entry here explains.
+  - Doors in curtain walls (#1494): the doors on Revit's axes rise from 212 to 261 of 269, 210 to 261 of 269, 207 to 258 of 266 and 207 to 258 of 266 on the four office files and from 4 to 5 of 5 on RE1 Architecture; the doors the rule places go from 194, 192, 190 and 190 to 260, 260, 257 and 257 (4 to 5 on RE1), and none differs from Revit's. The doors a half turn or a quarter turn from Revit's go from 57, 59, 59 and 59 to 8 on each office file. The same-project check compares 124 doors and windows of each `rac_advanced` and `rme` save of 2025 to 2027 with the 2024 save where it compared 107, and 22 of each `rac_basic` save where it compared 17.
+  - Doors and windows before Revit 2024 (#1603): on the spent Revit 2018 project, an IFC2X3 export counted apart, the 70 windows and 68 doors have Revit's Name and `ObjectType` (the windows 70 of 70 where none did, the doors 68 of 68 where 66 did), 72 more objects are typed (1,005 to 1,077 of 1,280) each with Revit's entity, and 144 property values become equal (the `Reference` of the 72 in `Pset_EnvironmentalImpactIndicators`, of the 70 windows in `Pset_WindowCommon` and of the 2 doors in `Pset_DoorCommon`); but the 72 type objects it now has differ from Revit's in Name and GlobalId, 72 more disagreements of each (no type Name of this export agrees, and the GlobalIds agree on 414 of 1,077 as they did on 414 of 1,005). On the held-out Revit 2020 project (an unmodified Revit IFC4 export) the 4 windows and 9 doors that differed in Name and `ObjectType` are equal and 26 property values become equal. On BIM Whale's Revit 2021 project the doors with Revit's Name rise from 11 to all 126, and 220 property values become equal.
+  - Walls (#1474, #1584): on the office at building permit the 2 ends counted as `joined_wall_face_inside_the_wall` are cut back, which raises the ends stepped to the joined walls from 4 to 6; the 5 ends of each timber office file counted so are counted as `joined_wall_faces_overhang_the_lower_end` and stay refused. None of the wall body, end, height or layer scorers moves on the BIM4LCA files. On BIM Whale's Revit 2021 project the angled walls' ends within 0.001 ft of Revit's rise from 124 to 167 of 390. The Revit 2015 to 2023 saves read their walls' types and curve lengths: `decoded.walls_type_confirmed` is filled on 36 of the 102 files and `decoded.wall_curve_lengths_feet` gains 68 walls on 18 of them; Einhoven's curtain wall gets its `Length`, and 8 walls of BIM Whale's Revit 2021 project get theirs (the last line).
+  - Columns (#1801): the same-project check's column lengths of the six `rme_advanced` and `rme_basic` saves of 2025 to 2027 go from 4 of 135 equal to the 2024 save's to 135 of 135, and its verdict from FAIL to PASS on each; its other checks pass (15 samples held to their earlier saves, and the Areas on 4 saves and on the 2021 save).
+  - Held-out files (counts only): beside the ones named above, a Revit 2025 file's one wall gains its four side-area, volume and height values, equal to Revit's (#1046), and a Revit 2021 project's one beam gains its `Span` and `Slope`, equal (#1719); the held-out Revit 2018 project moves as the spent one does (144 property values).
+  - `diagnostics.json`, beside the counters above: `exported.total_entities` rises on 34 files (389 in all) and `decoded.parameter_value_count` on 17 (274 in all), none falls, and the sample names of the skipped items carry the family and type of a door or window that is now typed on 10 files (their counts are unchanged).
+  - Counted apart (IFC2X3 exports, which never remove a value): the values rvt-rs writes that the export does not rise by 10 properties and 8 quantities on BIM Whale's Revit 2021 project (the `Reference` of 10 more doors, 11 now and 1 before; the `Qto_WallBaseQuantities.Length` of 8 walls, which count there because the export writes no base quantities), and in the MCP answers' census by 5 property values on each of the spent Revit 2018 project and its held-out twin, 4 on BIM Whale's and 1 property and 1 quantity value on a held-out Revit 2021 project.
+
+### Upgrading from 0.24
+
+- **Hollow rectangular tube beams change shape.** A beam whose type holds `bf`, `d`, `tf`, `tw`, `ri` and `ra` as a hollow rectangle is an extrusion over `IfcArbitraryProfileDefWithVoids`, its corners as arcs, where it was a solid box, and it carries the six base quantities (#1698).
+- **More values on existing elements.** Beams whose copies in several partitions disagree get `Length`, `Span`, `Slope` and `Roll` (#1719); a curtain wall of Revit 2015 to 2023 can get `Qto_CurtainWallQuantities.Length`, and a wall `Qto_WallBaseQuantities.Length` where its cut-back curve is as long as its curve (#1584: the curtain walls measured on Revit 2023, the walls on 8 of one Revit 2021 project, counts only); more walls get their side areas, `GrossVolume` and `Height` (#1046); a cut ceiling of one piece and a roof fitting Revit writes as `IfcCovering` `ROOFING` get `GrossArea` (#1209); four more mullions per BIM4LCA office file get `NetSurfaceArea` (#1803); a column drawn from its saved mesh takes the mesh's height as `Length` where its record box is taller (#1801).
+- **Doors and windows.** A door set in a curtain wall is placed on Revit's axes (#1494); a door that also cuts a second wall along its own writes that opening where the walls span the same heights (#1165); on Revit 2015 to 2023 a door or window the reference-list join left untyped has Revit's Name, `ObjectType` and type object (#1603).
+- **Walls and stairs.** A wall end that a joined wall's face lies inside is cut back over that height (#1474); an end is no longer drawn through a wall the end rule does not read (#1583); a stair landing of a Revit 2025 to 2027 save carries its type object (#2046); on Revit 2027 a column that names three or more Levels, and a footing that names none, are put in a storey (#1842).
+- **`diagnostics.json`.** `unread_wall_stands_in_the_added_end` (#1583), `cutter_named_again_in_wall` (#1947) and `door_second_wall_spans_other_heights_than_door_wall` (#1165) are new; `wall_body_not_an_axis_aligned_prism` counts every wall-cut step that writes no opening (#1947); `door_second_wall_parallel_to_door_wall` counts a second wall along the door's only where the door's local Y runs along the walls too (#1165), where it counted every one; an end counted as `joined_wall_face_inside_the_wall` is cut back, or counted as `joined_wall_faces_overhang_the_lower_end` where the joined walls' faces reach further above than below (#1474); `decoded.walls_type_confirmed` and `decoded.wall_curve_lengths_feet` are filled for Revit 2015 to 2023 files (#1584).
+- **Library.** `ScanOptions::default()` stops at 16,777,216 candidates and sets `PartitionScan::truncated`; a caller that needs more sets `max_candidates` to `None` (#1833).
+
+### Added
+
+- **A structural column that names three or more Levels, and a footing that
+  names none, are put in a storey on Revit 2027 (#1842).** A column takes the
+  highest Level its record names at or below its box's base, else the lowest; a
+  footing takes the highest Level of the model at or below its box's base. On
+  the one Revit 2027 structural model that holds them (a reporter's, counts
+  only) these put 48 of 48 columns and 88 of 88 footings in the storey Revit's
+  export has them in, where 48 columns and 3 footings were in none and 6
+  footings in another. Both rest on that model alone, so they apply to 2027
+  only, are listed under "Rules that rest on one project", and mark each element
+  they place on its `LevelBindSource`. An architectural column, and a footing
+  that names one, two or three or more Levels, are bound as before.
+
+### Changed
+
+- **A beam whose type is a rectangular tube is drawn as that tube, with its six
+  base quantities (#1698).** On Revit 2024, a structural framing type that holds
+  the captions `bf`, `d`, `tf`, `tw`, `ri` and `ra` as a hollow rectangle
+  (outside 200 by 300 mm, a 4 mm wall, corners rounded 8 mm outside and 4 mm
+  inside) is drawn as an extrusion over `IfcArbitraryProfileDefWithVoids`, its
+  corners as arcs, where it was a solid box. `CrossSectionArea`,
+  `OuterSurfaceArea`, `GrossSurfaceArea`, `NetSurfaceArea`, `GrossVolume` and
+  `NetVolume` follow from that profile and the beam's length. The BIM4LCA
+  office's 8 tube beams are the one model that holds such a type: on both
+  files the six quantities are Revit's on all 8 (48 values per file, none
+  different) and the profile has Revit's 12 points, lines and arcs to within
+  0.0005 mm, but its ring starts at another vertex; no other export of the 120
+  measured moves (RE-470). Only Revit 2024 reads it, as no other release has a
+  model that holds such a type.
+
+### Fixed
+
+- **A wall turned off the model's axes can get its side areas, gross volume and
+  height when its mesh is a prism less its openings (#1046).** The rule that
+  reads those walls compared each face with the openings' world boxes. A world
+  box is the opening's own extent only when the wall lies along a model axis or
+  across one, so a turned wall was refused. Each opening is now taken as the
+  corners of its rectangle, read in the wall's own frame, which is exact at any
+  turn of a wall whose openings turn with it.
+  On the models Measure scores, one wall is reached, in a held-out Revit 2025
+  file (counts only). It gains the four values, each equal to Revit's, and no
+  other export moves.
+
+- **A wall whose extra faces are the jambs of an opening rvt-rs cuts with
+  nothing filling it can get its side areas, gross volume and height (#1046).**
+  The rule for a wall that is a prism less its openings counted only the
+  openings of the doors and windows it hosts. A rectangular opening cut through
+  the wall with no filler (a wall opening, a door's opening in a second wall)
+  now counts too. A recess, which stops inside the wall, does not, and neither
+  does an outline that is not a rectangle.
+  On the BIM4LCA housing and office (two projects, eight files), 745 more of the
+  walls' `GrossSideArea`, `NetSideArea`, `GrossVolume` and `Height` values equal
+  Revit's, with no value different and none Revit's export does not write.
+
+- **A door that also cuts a second wall running along its own now gets that
+  opening, where the two walls span the same heights (#1165, RE-471).** Revit's
+  export cuts it ten feet deep across the two walls, as wide and as tall as the
+  door's own opening, centred on the face of the door's own opening on the side
+  the door's local Y points away from. rvt-rs counted these steps as
+  `door_second_wall_parallel_to_door_wall` and wrote nothing. It now writes the
+  opening where the second wall's base and top are the door's own wall's: of the
+  BIM4LCA models' openings that lie within their wall's height, Revit writes
+  every one in a wall of the door's wall's heights (23 of 23) and not the one in
+  a wall of other heights. Of the openings that stand above or below a second
+  wall of other heights, Revit writes 42 on the BIM4LCA models and 1 on Snowdon
+  Towers Architectural but leaves out 4 and 3, and nothing read tells them apart,
+  so those steps still write nothing and are counted, as are doors that face
+  along their walls.
+
+- **A ceiling with no `GrossArea` takes its saved mesh's face area where that
+  face is one piece (#1209, RE-480).** Revit's export gives a ceiling that a
+  step cuts its own computed area, which no saved parameter holds, so rvt-rs
+  wrote none. The saved mesh holds the cut body: where its largest upper and
+  lower horizontal faces are each one piece of the same area, that area is
+  Revit's `GrossArea` on all 370 such ceilings of the BIM4LCA office and
+  housing, cut or uncut. The office's 22 cut ceilings of one piece now carry
+  it, equal to Revit's on all 22, with nothing else moving; 15 ceilings of
+  Autodesk's sample projects gain one that no Revit export checks. A ceiling
+  in pieces, a sloped one and one whose saved mesh does not decode whole keep
+  none.
+
+- **A family instance Revit writes as a covering takes its saved mesh's face
+  area where the mesh is one part (#1209, RE-484).** Revit's export writes
+  roof equipment such as ventilation units, snow guards and downpipe casings as
+  `IfcCovering` `ROOFING` and gives each the area of the extrusion its body was
+  exported as; rvt-rs wrote none. Where the saved mesh is one connected part
+  and its largest upper and lower horizontal faces are each one piece of the
+  same area, that area is Revit's `GrossArea`: 72 values on the BIM4LCA office
+  and housing, equal to Revit's on all 72, with nothing else moving. A body of
+  several parts (a vent's plate and duct) and one whose faces differ (a
+  downpipe, which Revit gives none) keep none.
+
+- **A wall end that a joined wall's face lies inside is cut back over that
+  stretch of height (#1474).** The end rule read only faces that lie beyond the
+  end the record box gives, and refused a wall where a face lay inside it
+  (`joined_wall_face_inside_the_wall`). Revit cuts such an end back: on the
+  BIM4LCA office at building permit, walls 2056705 and 2056770 by 0.0985 ft above
+  182.087 ft. The wall's own plan now stops at that face, and a strip carries it
+  out to the end below.
+
+- **A door set in a curtain wall is placed on Revit's axes (#1494, RE-474).**
+  Revit's export cuts no opening for such a door, so rvt-rs binds it to no wall,
+  and it kept the default axes. It now takes its stored X axis, reversed where
+  its hand and facing flips differ or its curtain wall is flipped, but not
+  both. That is Revit's axes on 269 of 269 doors of the BIM4LCA office's four
+  files and RE1 Architecture. The doors set in plain walls are unchanged.
+
+- **A wall end is no longer drawn through a wall the end rule does not read
+  (#1583).** A wall with an edited elevation profile now keeps the end its
+  record gives where such a wall, one the record does not join there, stands
+  where the end would be drawn. It is marked `unread_wall_stands_in_the_added_end`.
+  That covers a wall drawn as a solid other than its plan's prism, one whose base
+  join names elements, and one whose ElementId several entities hold. Before
+  this, the end was drawn through it with no marker and no count. The wall is
+  found from the plan and the heights of the body the export draws for it, and
+  one whose body cannot be bounded is taken to stand there (RE-337).
+
+- **A Revit 2023 curtain wall gets its `Length`, and a wall record of Revit 2015
+  to 2023 is read with its control joins (#1584, RE-364).** The native wall
+  reader took every ElementId in the shape Revit 2024 writes, so a record of
+  Revit 2015 to 2023 gave it no control joins, side joins, exposed faces, step
+  partners or type. It reads either shape now. On Autodesk's three sample
+  projects of Revit 2023 that hold curtain walls (34, 9 and 33 of them) each
+  gets `Qto_CurtainWallQuantities.Length`, equal to the same project's 2024
+  save's on all of them. One Revit 2021 project (counts only, its export
+  through another tool) has 167 of its 390 angled walls' ends within 0.001 ft
+  of Revit's, where it had 124. A wall's step ids are still read as before,
+  because the wall top cover and the areas they start are not measured before
+  Revit 2024. The same `Length` rule now runs on those releases for an
+  ordinary wall too, where its cut-back curve is as long as its curve: on the
+  Autodesk samples none gains one, and 8 walls of that Revit 2021 project do,
+  which its export (it writes no base quantities) cannot check. The side
+  areas, footprint and volumes of 2015 to 2023 walls, and the curtain walls of
+  the sample saves before 2023, stay out, as does everything that needs the
+  steps; RE-364 section 11 says what is known.
+
+- **A door or window of a Revit 2015 to 2023 file that the reference-list join
+  leaves untyped is typed from its own native record (#1603, RE-477).** The scan
+  names a type only through a symbol record with a name entry. On the spent
+  Revit 2018 project 68 of the 70 windows name only their master symbol there,
+  and Revit's own type is an id the scan knows nothing of. The instance's native
+  record names it (`InstanceInfo.m_symbolId`), its master symbol the type's name
+  and the family. A member of a model group takes its master symbol as the type,
+  as Revit's export does for the spent project's 2 grouped doors, and is left
+  untyped where its symbol is not a copy of that master. On the spent project
+  the 70 windows and 68 doors now have Revit's Name, `ObjectType` and type
+  object (0 of 70 windows before), with the type's `Pset_WindowCommon.Reference`
+  and `Pset_DoorCommon.Reference`; on a held-out Revit 2020 project the 4
+  windows and 9 doors that differed are equal, and on BIM Whale's Revit 2021
+  project 115 doors are (126 of 126 now). On that project 10 of the 115 doors
+  take a `Pset_DoorCommon.Reference` that Revit's IFC2X3 export does not write
+  (a residual of the `Reference` rule, 1 door of 11 before). Their type objects'
+  GlobalIds are not Revit's, and they take no material from the type map yet.
+
+- **A beam whose copies in several partitions disagree gets its `Length`, `Span`,
+  `Slope` and `Roll` from its current partition's location line (#1719).** The
+  reader dropped a beam whose element data sat in several partitions with
+  different lines, so Revit's four values stayed missing on 9 beams of the
+  BIM4LCA models: one in each housing file as built and 7 in the timber office at
+  permit. They now take the line of the copy in the beam's current partition, the
+  rule sketch lines already follow (RE-216); each beam's record box is already
+  that copy's. The beam's body stays its box: no solid along those lines has been
+  measured against Revit's. The 36 values are Revit's, with none different; a
+  held-out 2021 project's one such beam also gains its `Span` and `Slope`, equal
+  (counts only).
+
+- **A column drawn from its saved mesh no longer takes a taller record box's
+  height as its `Length` (#1801).** On the Revit 2025 to 2027 saves of
+  Autodesk's `rme_advanced` and `rme_basic` samples, 131 columns in each file
+  have a record box 3.5, 7.3, 10.6 or 7.0 m tall around a mesh 3.2 to 3.5 m
+  tall, the same mesh their 2024 saves hold, and the round ones, whose mesh
+  quantities are not read, wrote the box's height. A column whose `Length` is
+  its box's height now takes its mesh's height where the mesh is shorter. No
+  Revit export covers these files: they are held to their 2024 saves.
+
+- **Four more mullions in each BIM4LCA office file get Revit's
+  `NetSurfaceArea` (#1803).** A mullion beside an overlapped one is left out
+  where an end has no partner and the overlapped mullion stands on that end's
+  plane (RE-441). A vertical overlapped only at its far end, its foot inside the
+  mullion below, left out the short pieces on its top, as the timber office's
+  3027086 did to 3028901 and 3028902 once RE-444 kept its newest frame. The rule
+  now counts an overlapped mullion there only by its end nearest the joint. On
+  the office in concrete and in timber, as built and at permit (one project),
+  4 mullions in each file go from missing to equal, and none becomes different.
+
+- **A solid the export writes from a plan is never its plan's bounding box, nor
+  loses its holes (#1947).** A sloped slab, a roof drawn along its planes and a
+  wall's base cut along a footing's top were meshed with the viewer's drawing
+  rule: a plan that did not triangulate became its bounding rectangle, and a
+  hole that could not be joined was filled. Such an element now keeps the body
+  its export falls back to, as it does for any other plan it cannot draw. The
+  viewer and the plan SVG still draw the rectangle. No measured model
+  holds such a plan: 61 of 61 exports are unchanged.
+
+- **A roof whose sketch is several loops is no longer sloped on its first loop
+  alone (#1947).** Its first loop rose along the roof's slope while each further
+  loop was written as a flat piece the height of the record box, so one roof was
+  drawn two ways. Every loop of such a roof is now its plan's prism, as a roof
+  sloped by arrows in several loops already was. No measured model holds one:
+  120 of 120 exports, the Autodesk samples included, are unchanged.
+
+- **Every wall-cut step that writes no opening is counted (#1947).** In a wall
+  not drawn as an axis-aligned prism, `wall_body_not_an_axis_aligned_prism`
+  counted a door's step only where its cut flag read 0 and never counted a
+  shadow step, though a framed wall counts both. A cutter a wall's record names
+  in two steps was written once and the second step dropped unseen; it is now
+  counted as `cutter_named_again_in_wall`. No measured export holds either
+  case: 61 of 61 exports and the counts in 43 of 43 `diagnostics.json` files
+  are unchanged.
+
+- **A wall's quantities are no longer read from a saved mesh that failed to
+  decode in a way that can leave part of the wall out (#1947, #2020).** A beam's
+  and a column's mesh were already refused when any of their solids failed to
+  decode. A wall's mesh is now refused for any failure but a view-resolved
+  instance. That is the only failure on the 49 partial walls among the 7,406
+  measured walls with a mesh, all in Autodesk's `rac_advanced` (2023 to 2027)
+  and Snowdon Towers Architectural samples, and on the 17 of them checked
+  against Revit's own drawn body the decoded mesh is that body. No measured
+  export changes.
+
+- **A stair landing of a Revit 2025 to 2027 save gets its type object (#2046).**
+  On Revit 2024 a landing's type name and family were read from byte offsets
+  measured on that release; on 2025 to 2027 the native reader named a stair, its
+  flights and its stringers and left the landings out, so a landing was written
+  with no `IfcSlabType` where Revit types it `LANDING`. A landing of a type that
+  is not monolithic now takes its type's name and the family `Non-Monolithic
+  Landing`, as on 2024, and its Name `<stair> Landing N`. On the Autodesk
+  samples the five landings of `rac_advanced` carry the same type as their 2024
+  save's, and no other export moves. A monolithic landing type's family is not
+  measured and stays out, and no Revit export of a 2025 to 2027 model with a
+  landing is in Measure to score the Name (RE-476).
+
+### Security
+
+- **The partition scanner stops at 16,777,216 candidates by default and says
+  so (#1833).** `ScanOptions::default()` kept every schema tag followed by two
+  zero bytes, up to one for every four bytes of a stream, and each candidate
+  holds about 250 bytes, so a crafted stream could take about 67 GB of
+  candidates from the 1 GiB the reader lets a stream inflate to. Real files keep
+  millions (at most 9,675,757 in a file and 6,531,651 in a stream, on the 28 files
+  of Revit 2023 and 2024 of Measure run 43663157788), so the cap leaves 1.7 times
+  the most any of them keeps and cuts none. A scan that reaches it returns the
+  first candidates in stream order with `PartitionScan::truncated` set; a caller
+  that needs more sets `max_candidates` to `None`. Nothing in the export or the
+  CLIs calls the scanner, so no export changes.
+
+## [0.24.0] — 2026-11-14
+
+0.24.0 closes #1713: on the 42 models with a public Revit export, every one of the 58,665 elements both exports hold has Revit's `PredefinedType` (Measure 43596206950) (railings, doors, proxies, ramps and geographic elements are new in this release), and a Revit 2024 or later file whose export parameters differ between its partitions gives each element its current copy's value. It also writes more of what Revit's own export writes: a ramp's railings are its parts, a gutter is an `IfcFlowSegment`, a multistory stair is written once on each storey it repeats on, a ceiling in pieces has its piece's `GrossArea`, and a wall under a roof drawn from its slopes is cut along the roof's underside. The export notes count the storeyless elements honestly, and the Semantic check now finds its artifact on every Measure run.
+
+Not measured, and said in each entry:
+- `PredefinedType` agrees on the 42 models with a public Revit export, not on every model: on the held-out pairs of Revit 2023 and earlier 4 of 12 roofs, 1 of 5 stairs, 1 of 5 stair flights, 12 of 60 furniture and 2 of 10 railings stay unset (counts only; none differs), since no default covers those releases.
+- A ceiling's piece `GrossArea` (#1209) rests on the one building that holds ceilings in pieces; a multistory stair's copies (#1977) are inferred from three groups of one building, since the file does not say how far a stair repeats.
+- `NOTDEFINED` on ramps and geographic elements (#1713) is measured on Revit 2024 only, the one release whose export holds them; on railings it is 2024 to 2026, and 2027 and the releases before 2024 write no such default.
+- A wall under a roof (#1478) is measured against Revit's exports on 2025; 2026 and 2027 are held to the same project's 2025 save.
+- The layers of a type whose copies disagree on Revit 2020 (#1805, RE-466) are measured on one Revit 2020 file; the other releases before 2024 still drop such a type.
+
+Measured against 0.23.0 on every model Measure holds (run [43608604021](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43608604021), `main` at 009a0703; the release adds only the version files and this section):
+
+- 72 of the 126 exports differ, and 29 of the 102 `diagnostics.json` files: 28 move the count of elements skipped for want of a level (#1842), beside the class counts the entries below describe, and the spent Vitoria "Before" moves its two gutters from `IfcPipeSegment` to `IfcFlowSegment`. 28 of the 72 are Autodesk's sample projects of 2015 to 2027, with no Revit export on Measure, so no scorer says which of what moved there is Revit's: each entry below was measured in its own pull request. The other 44 are scored against Revit's own exports: the 12 BIM4LCA models, 17 of the 24 Revit 2025 models, the six `rac_advanced` saves of 2015 to 2020, RE1 Architecture, seven held-out files and the spent Vitoria "Before". On them nothing that equals Revit's falls except the counts named in the last two lines, and nothing that differs from Revit's rises, but for the 4 floors of one held-out Revit 2020 file whose new layer sets leave out Revit's 0-wide membrane layers (#1805, RE-466, said in its entry). What moved:
+  - `PredefinedType` (#1713): on the 42 models with a public Revit export, the elements that agree with Revit's go from 58,480 to all 58,665 (17 models move): the 124 with none (42 spaces, 40 walls, 18 railings, 12 proxies, 6 ramps and 6 geographic elements) and the 52 doors written `DOOR` where Revit writes `TRAPDOOR` now agree, and "NOTDEFINED where Revit writes none" stays 0. Three held-out pairs gain 6 railings the same way (counts only).
+  - Values (#1713, #1209, #1989): property values equal to Revit's rise by 52 (50 on the timber office at permit, 2 on the concrete housing as built), with 52 fewer missing and 31 fewer that Revit does not write (15 on the four housing files, 16 on the timber office at permit); quantities equal to Revit's rise by 95, with 95 fewer missing: 62 are the `GrossArea` of ceilings in pieces on the four offices (15, 16, 15 and 16, Revit's piece on 62 of 62) and 33 are the `IfcSlab` roofs of the timber office at permit; the 6 fewer quantities that Revit does not write are all on the concrete housing as built (the wall that is an `IfcCovering`). Type objects with Revit's entity rise by 1 and 8 (the concrete housing as built, the timber office at permit) and with Revit's GlobalId by 1 and 16 (the office at permit, the timber office at permit).
+  - Classes (#1989): the gutters of the four large housing files and of Vitoria's two projects read as flow segments (3 of 3 on each housing file, from none), and the ducts the scorer counts are 3 of 3 where they were 1 of 3. The saved-mesh row of `IfcCovering` falls by 2 on each of those four files (26 to 24, 25 to 23, 26 to 24 and 25 to 23) and that of `IfcPipeSegment` from 1 to none, because the three gutters are now in the `IfcFlowSegment` row (none to 3).
+  - Aggregates (#1988): the 2 ramp railings per housing file that only Revit aggregated are aggregated, and none the other way; the ramp rows of the mesh scorer read through their parts (volume ratio 0.49 to 0.51, farthest vertex 3.248 ft to 0.0066 ft), the ramp's own body unchanged.
+  - Bodies (#1713): 52 roofs of the eight BIM4LCA files that Revit writes as `IfcSlab` or `IfcSolarDevice` are drawn from their saved meshes (50 of the 52 equal to Revit's in all six measures, 2 in five), so the saved-mesh scores of `IfcSlab` rise (the housing files 4 to 10, 4 to 9, 3 to 7 and 3 to 7, the offices 0 to 10 twice and 13 to 21 and 13 to 22) and the timber office at permit's `IfcRoof` row goes from 9 to 1, its roofs now `IfcSlab` as Revit writes them. Two counts that compare the old body with Revit's fall with them: the plan-outline vertices of `IfcSlab` within 0.01 ft of Revit's go from 40 to 39, 37 to 36, 36 to 35 and 36 to 35 on the four housing files (and rise from 36 to 37 on the two concrete offices), and the GLB's layers within 0.001 ft go from 100 of 127, 97 of 103, 101 of 102 and 97 of 98 to 95 of 122, 92 of 98, 98 of 99 and 96 of 97 on the offices (82 of 84 to 83 of 85 on the concrete housing as built), because the GLB draws these roofs from their mesh and not in layers; no layer compared is wrong.
+
+### Upgrading from 0.23
+
+- **Gutters change class.** A gutter is an `IfcFlowSegment` typed by an `IfcPipeSegmentType` `GUTTER`, no longer an `IfcCovering` or `IfcPipeSegment`, unless its own "Export to IFC As" names `IfcPipeSegment` (#1989); a script that looked for gutters among the coverings or the pipe segments looks at the flow segments.
+- **More aggregates and copies.** The railings of a ramp that Revit's export contains in an `IfcRamp` (Revit 2024, a railing with no level of its own) are its parts through an `IfcRelAggregates`, as a stair's are (#1988); a multistory stair is written again on each storey it repeats on, with `:2` names and `MultistoryCopyOf` on its record set (Revit 2024, #1977), so a count of stairs rises by Revit's.
+- **More values.** `PredefinedType` is `NOTDEFINED` on railings, ramps and geographic elements that carry no value, `TRAPDOOR` on the doors Revit's export writes it on, and `USERDEFINED` on a proxy that carries it (#1713); a ceiling in pieces has its piece's `GrossArea` (#1209).
+- **`diagnostics.json`.** `unsupported_geometry_missing_level` no longer counts the flights, landings and stringers of a stair, which are in the storey of their stair (#1842); a curtain wall's host panels are counted as `element_record_curtain_host_panel` and no longer written as `IfcPlate` (#1975).
+
+### Added
+
+- **A ceiling whose sketch is several separate loops gets
+  `Qto_CoveringBaseQuantities.GrossArea` (#1209, RE-465).** It is the area of
+  the piece its sketch's two lowest-ElementId lines, the first drawn, both lie
+  on: Revit's piece on 62 of 62 such ceilings of the BIM4LCA office. A ceiling
+  whose two lowest lines lie on two pieces gets none. Measured on that one
+  building only, since no other model with a Revit export has a ceiling in
+  pieces.
+
+- **A door takes its own or its type's "IFC Predefined Type" where that is an
+  IFC4 enumerator, as Revit's export writes it (#1713).** The wall hatches of
+  the BIM4LCA files, 3 on each housing file and 10 on each office file, are
+  `TRAPDOOR` in Revit's export; rvt-rs wrote `DOOR` on every door. A door with
+  no value keeps `DOOR`.
+
+- **A building element proxy takes its own or its type's "IFC Predefined Type"
+  where that is an `IfcBuildingElementProxyTypeEnum` enumerator (#1713).** In
+  each of the twelve BIM4LCA files (six housing, six office) one proxy carries
+  `USERDEFINED` under an "Export to IFC As" of `IfcBuildingElementProxy`, and
+  Revit's export writes `USERDEFINED` on it; rvt-rs left it unset. A proxy with
+  no value keeps `NOTDEFINED`.
+
+- **A railing with no predefined type of its own or its type's is `NOTDEFINED`
+  on Revit 2024 to 2026, as Revit's export writes it (#1713).** Revit's export
+  gives every such railing `NOTDEFINED`: the 8 of the BIM4LCA office files, the
+  10 of the R2025 models 13 to 17 and the 2 of each held-out pair of 2024 to
+  2026; rvt-rs left them unset. The 2027 export writes no value on a railing and
+  a 2022 file's export parameters are not read, so neither release takes the
+  default.
+
+- **A ramp or a geographic element with no predefined type of its own or its
+  type's is `NOTDEFINED` on Revit 2024, as Revit's export writes it (#1713).**
+  Revit's export gives `NOTDEFINED` to the one ramp of each BIM4LCA housing
+  file and to 3 of the 23 geographic elements of each of its two terrain files
+  (6 and 6 in all), where rvt-rs left them unset. No measured file of another
+  release and no held-out pair holds either in both exports, so no other
+  release takes the default.
+
+- **A multistory stair is written again on each storey its group repeats it
+  on, as Revit's export writes it, on Revit 2024 (#1977, RE-463).** Where no set
+  of a `MultistoryStairs` record covers the span between two consecutive Levels
+  of its stairs, and the span is as high as the stair that ends where it
+  begins, that stair is written once more with its flights, landing, stringers
+  and railings, shifted up by the Level difference, in the storey of the span.
+  The copy of the stair and of each part but a railing is named `<name>:2` and
+  keeps its original's `Tag`; the stair, its flights and its landing have no type
+  object and the flights are `NOTDEFINED`, as in Revit's export. On Autodesk's
+  Snowdon Towers architectural the three multistory stairs gain the 53 entities
+  Revit's export holds beyond rvt-rs's, with Revit's names, storeys and place.
+  A copy's `GlobalId` is rvt-rs's own, derived from its original's, and its
+  record set carries `MultistoryCopyOf`; the rule is inferred from three groups
+  of one building, since the file does not say how far a stair repeats, and a
+  span it does not reach is counted in the export notes, not copied.
+
+### Fixed
+
+- **On Revit 2025 to 2027, a wall under a roof drawn from its slopes is cut
+  along the roof's underside (#1478).** Each piece of the wall's plan rises to the plane
+  of the roof face above it, as Revit's export draws these walls; before, they
+  stood level at their own top, through the roof. A wall the roof's underside
+  does not cover once, or that the underside crosses above its top or below its
+  base, keeps its body. Measured against Revit's exports on 2025; 2026 and
+  2027 are held to the same project's 2025 save.
+
+- **An element whose IFC export parameters differ between the partitions of a
+  Revit 2024 or later file takes its current copy's value, as Revit's export
+  writes it (#1713).** The scan dropped a key an element set to two different
+  values, but the partition the element's stored revision routes to (else the
+  latest that holds the element's data, as every other read of a copied record
+  does) holds the edited value: the BIM4LCA permit files change a wall's or a
+  wall type's "IFC Predefined Type" after the first save, so 40 walls and 42
+  family-instance spaces of three of them read no value where Revit's export
+  writes one. The same rule moves 8 roofs of the timber office to `IfcSlab`
+  and one wall of the concrete housing as built to `IfcCovering`, as their
+  latest "Export to IFC As" says. A current copy that disagrees with itself, or
+  that carries no entry for the key, still leaves the key out.
+
+- **A roof that an "Export to IFC As" value writes as another entity than
+  `IfcRoof` keeps its saved mesh, as a roof written as `IfcRoof` does (#1713).**
+  The exporter marks such a roof `RedirectedRoof` and the saved-mesh pass reads
+  the mark, so the 8 roofs above keep the bodies they had as `IfcRoof`. The
+  mark is on every roof written this way, so the body of 52 roofs in the eight
+  BIM4LCA files changes from a sketch outline to the mesh Revit drew: 48
+  `IfcSlab` roofs and the 4 `IfcSolarDevice` roofs of the housing files, 50 of
+  the 52 equal to Revit's body in all six measures and 2 in five. The viewer
+  and the GLB draw these roofs from their mesh and not in layers, as they draw
+  a roof written as `IfcRoof`.
+
+- **A category's material is read on Revit 2015 to 2023 where its object
+  style has no pattern (#1805, RE-464).** That entry holds a null object where
+  a patterned one holds its `PatternHelper`, so the material sits 10 bytes
+  earlier, and none was read. It is every host category of Autodesk's
+  `rac_advanced`, `rme` and `rst` samples of 2015 to 2023. A wall, floor, roof
+  or ceiling layer there that takes its category's material now carries that
+  material, as `rac_basic`'s layers already did.
+
+- **A wall, floor, roof or ceiling type whose layer copies disagree takes its
+  current copy on Revit 2020 too (#1805, RE-466).** It was dropped there, and
+  its elements had no layer set. On the one Revit 2020 file measured with such
+  a type, the 5 floors' layer sets are now within 0.001 ft of Revit's, with
+  Revit's material on every layer that has a width; a layer with no material
+  of its own takes its category's (RE-464). On 4 of them, Revit's export also
+  writes 0-wide membrane layers, which rvt-rs leaves out as Revit's Snowdon
+  export does (RE-53). No Autodesk sample of 2015 to 2023 has such a type, so
+  the other releases before 2024 still drop it.
+
+- **A part of an aggregate is no longer counted as written outside any storey
+  (#1842).** `unsupported_geometry_missing_level` counted every element whose own
+  storey is empty, so the flights and landings of a stair, which reach their
+  storey through the stair as in Revit's export, were counted as storeyless: 28
+  of the 79 elements a Revit 2027 structural model reported, and 396 of the
+  2,407 that 28 of Measure's 102 `diagnostics.json` files held (2,011 after: 258
+  `IfcStairFlight`, 113 `IfcSlab` landings and 25 `IfcMember` stringers fewer).
+  The count now holds only the elements, and the wholes, that are in no storey.
+  The IFC file does not change.
+
+- **A curtain panel that is the host panel of another curtain wall's grid is
+  left out on Revit 2024, as Revit's export leaves it out (#1975).** Snowdon
+  Towers Architectural's 23 host panels were written as `IfcPlate` that Revit
+  writes nothing for; the export diagnostics count them as
+  `element_record_curtain_host_panel`.
+
+- **A ceiling exported as `IfcSlab` no longer carries `Pset_SlabCommon.PitchAngle`
+  0 (#1987).** RE-238's level-slab rule is measured on floors, roofs and stair
+  landings; on the BIM4LCA timber housing Revit's export writes no `PitchAngle`
+  on a compound ceiling it exports as a slab.
+
+- **A railing that names a ramp and has no level of its own is aggregated under
+  the ramp on Revit 2024, as Revit's export aggregates it (#1988).** Revit's
+  export writes the BIM4LCA housing's ramp as an `IfcRamp` with its two
+  railings as parts, where rvt-rs wrote them as plain elements of their
+  storey. The office's eight railings that name a ramp each have a level of
+  their own, and Revit's export leaves them plain, so they stay plain.
+
+- **A gutter is an `IfcFlowSegment` typed by an `IfcPipeSegmentType`
+  `GUTTER`, as Revit's IFC4 export writes it, unless its own "Export to IFC
+  As" names `IfcPipeSegment` (#1989).** The BIM4LCA housing's 3 gutters, in each
+  of its six files, were written as an `IfcPipeSegment` and two `IfcCovering`
+  (their own value says `IfcCovering` `ROOFING`, which Revit's export does not
+  act on for a gutter) where Revit writes three `IfcFlowSegment`s. The office's
+  24 gutters carry an `IfcPipeSegment` value and stay `IfcPipeSegment`. A
+  gutter written as an `IfcFlowSegment` has no `PredefinedType`, quantity set
+  or invert, as Revit's has none.
+
+## [0.23.0] — 2026-11-14
+
+0.23.0 writes more of what Revit's own export writes, and narrows rules that audits found wider than their evidence. A wall of a curtain wall type is an `IfcCurtainWall` on Revit 2023 to 2027 whether or not a mullion names it, and a curtain wall that is the host panel of another is not one. A roof, stair, stair flight or building element proxy with no predefined type of its own gets Revit's `NOTDEFINED`, a sloped floor gets its `Qto_SlabBaseQuantities.Depth` and `GrossVolume`, a door's or window's `FireRating` is read from its saved parameter, and a column whose saved mesh is a prism of another section than its type's rectangle is drawn from the mesh. The doors and windows of Revit 2015 to 2023 cut the outline their symbol cuts and carry its `OverallWidth` and `OverallHeight`. A material's colour reaches IFC viewers. A file that stores no project GUID gets the project, building and site GlobalIds Revit's export gives them, from the GUID in its history header. `rvt-diff --elements` counts a change in the rule that read a value as a label change, not as a changed element.
+
+Not measured, and said in each entry:
+- A horizontal bracing's `IfcMemberType` carrying `BRACE` on Revit 2027 (#1841) is checked on a reporter's counts of a structural model alone: no model Measure holds with a Revit export has a horizontal bracing.
+- `NOTDEFINED` on stairs and flights is measured on Revit 2024 only, the one release whose export has such stairs (#1713).
+- A multistory stair is written once, where Revit's export writes it once per storey: Snowdon Towers' three lack 53 entities (#1977, RE-463).
+- No Revit export holds a curtain wall without a mullion, so what Revit writes for `rme_basic`'s two rests on the source of its exporter (#1960).
+
+Measured against 0.22.0 on every model Measure holds (run [43555120928](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43555120928), `main` at 21d310f0; the release adds only its notes, witness files, version strings, fixtures and the publish workflow's viewer smoke to them, and #1991, a probe, a scorer and a report, landed on `main` after it):
+
+- All 146 exports differ, and 120 of the 121 `diagnostics.json` files (the
+  blank Revit 2025 model's is equal). 79 of the 146 have no Revit export:
+  Autodesk's 59 sample projects (34 of 2015 to 2023, 25 of 2024 to 2027), 19
+  families and Einhoven, so no scorer says which of what moved is Revit's: each
+  entry above was measured in its own pull request. The other 67 are scored
+  against Revit's own exports: Core Interior, the four RE1 models, BIMcollab's
+  example, the 12 BIM4LCA models, the 24 Revit 2025 models, the six
+  `rac_advanced` saves of 2015 to 2020, 18 held-out files and the spent Vitoria
+  "Before". On them no count of values or quantities that equals Revit's falls
+  and none that differs rises, what rvt-rs writes that Revit's export does not
+  rises on four files (the last two lines below), BIMcollab's example moves in
+  no scorer line, and every other line that moves is one of these:
+  - The project's, building's and site's GlobalId is Revit's on 50 models (0 of
+    1 each before), and the storeys' on 11 files of 2017 to 2022 (69 storeys,
+    from 6) (RE-459). On the spent Vitoria "Before", 1,297 of the 1,314
+    elements Revit's export holds are Revit's (from none), its 73 rooms pair
+    with Revit's by GlobalId (from none) and 414 of 1,005 type objects have
+    Revit's GlobalId (from none).
+  - `NOTDEFINED` (#1713): the roofs that agree with Revit's `PredefinedType` go
+    from 8 to 39 of 39 on 30 models and the proxies from 34 to 456 of 464 on 22
+    (the 8 left are the one proxy in each of the eight BIM4LCA files at permit
+    and as built that Revit writes `USERDEFINED` on). The stairs of the two
+    timber housing files go from 70 to 76 of 76 and the flights of the two
+    timber offices from 58 to 62 of 62.
+  - A door's or window's `FireRating` (#1507) is Revit's on 120 values (from
+    none) on 14 models: the eight held-out files of 2024 to 2027 and six of the
+    Revit 2025 models.
+  - A wall's quantities with each opening at its real height:
+    `Qto_WallBaseQuantities` equal to Revit's on all 10 walls of each of four
+    held-out files of 2024 to 2027 (2 before) and all 9 of each of four
+    held-out offices (3 before), on 4 of 5 walls of six Revit 2025 models (2
+    before), and on 1 or 2 more walls of four BIM4LCA files.
+  - The openings of Revit 2015 to 2023 doors and windows (RE-450): the
+    opening's `Qto_OpeningElementBaseQuantities.Depth` is Revit's on 224 of 224
+    openings of four held-out files (from none); on the spent Vitoria "Before"
+    68 of 68 doors and 64 of 70 windows have Revit's `OverallWidth` and
+    `OverallHeight` (from none; the other 6 windows get none) and the boxes of
+    54 doors and 3 windows are within 0.001 ft of Revit's (within 0.26 ft for 5
+    and within 1 ft for 52 before).
+  - The mullions' `Pset_MemberCommon.Span` and `Qto_MemberBaseQuantities.Length`
+    are Revit's on 6 more mullions of each concrete office and 8 more of each
+    timber office (#1193); the sloped floors' `Qto_SlabBaseQuantities.Depth`
+    and `GrossVolume` on 8 more floors of each office (#1208); and 4 more of
+    the timber housing's columns are drawn from the mesh Revit saved, which
+    matches Revit's on all 8 scored (#1710).
+  - A wall profile region that a pocket equals is no longer cut into the wall's
+    body: `wall_profile_cut_in_body` goes from 9 to 8 as built and from 10 to 8
+    at permit on the timber offices (#1947), and one more wall of the timber
+    office as built is drawn in layers (593, of which 592 are within 0.001 ft
+    of Revit's, where 591 of 592 were).
+  - Where Revit's setup wrote no base quantities, rvt-rs writes more of them,
+    counted apart (RE-242): 24 more on Core Interior (3,859 to 3,883), 107 more
+    on each `rac_advanced` save of 2015 to 2020 (3,469 to 3,576) and 37 more on
+    one held-out file (127 to 164). On another held-out file, whose export holds
+    no quantities on the objects rvt-rs writes, rvt-rs writes 389 more opening
+    depths, which the scorer counts as quantities Revit does not write (522 to
+    911), not apart.
+  - One measured negative: the spent Vitoria "Before" gains one opening that
+    nothing fills and that Revit's export does not hold (Revit's 5 unfilled
+    openings in that file are other doors'), and a held-out Vitoria and a
+    held-out Gdynia each gain one opening that Revit's export does not hold,
+    with 2 more values that Revit does not write on each of the three (#1165).
+    It is a door's cut in a second wall: reading the door cuts of 2015 to 2023
+    (RE-450) takes the door cuts the spent file leaves out because the door's
+    box was not read from 9 to 2, 6 of the 7 now read are left out as a wall
+    parallel to the door's and 1 is written. The three files whose Revit export
+    lacks the opening are all Revit's IFC2X3 Coordination View 2.0 exports, and
+    an IFC2X3 view does not remove a value. The rule stays on every release,
+    held to the same project's 2024 save (RE-353, RE-461): rvt-rs's export of every save
+    of `rac_basic` from 2015 to 2027 holds the same door's opening in its second
+    wall as its 2024 save. `rac_basic` has no Revit export, so that shows the cut
+    is read alike on every release, not that Revit writes it there. Revit's own
+    exports hold this kind of opening on 8 of the 12 BIM4LCA models, all Revit
+    2024 (13 to 43 each, rvt-rs writing 1 to 33 of them with every box within
+    0.01 ft), and on one held-out Revit 2026 house (1, none written; counts
+    only); no Revit export of 2015 to 2023 does (#1165).
+- What differs in `diagnostics.json` is counts: the wording of the storey
+  warning (120 files), the skipped items (62), the parameter values (32), the
+  exported entities (21), the bodies' sources (the saved mesh in 11 files, the
+  partition record's box in 10), the walls and curtain walls exported (10), and
+  the door openings a wall's cuts leave out because the door's box is not read
+  (10).
+- Time and peak memory, base and head on one runner (timing run
+  [43558339212](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43558339212),
+  `main` at 92af055c against 0.22.0, three rounds each): the 16 reference
+  models and BIM4LCA files take a median 1.02 times the time (0.995 to 1.04) and
+  1.00 times the peak memory (0.99 to 1.00); the 29 samples of 2023 to 2027,
+  1.00 times the time (0.99 to 1.05) and 1.00 times the peak memory (0.99 to
+  1.06). Five files are more than 3% slower: the two BIM4LCA offices as built
+  (concrete 1.04, timber 1.04) and three samples (1.03 to 1.05). No peak is more
+  than 2% higher but two Snowdon files', HVAC (1.06) and Plumbing (1.05), whose
+  peak is one of two values from round to round and the higher one on every head
+  round.
+
+### Upgrading from 0.22
+
+- **GlobalIds move once on files that store none.** The project's, the building's and the site's GlobalId of a Revit 2017 to 2027 file that stores none, and the storeys' of a file of 2017 to 2022, are Revit's now (#878, RE-459); a tool that tracks them sees the old ones removed and the new ones added. The type of a hosted door or window whose host frame or facing was not read no longer carries a GlobalId hashed with a guessed flip (#1947).
+- **New entities and values.** Every coloured material has an `IfcMaterialDefinitionRepresentation` naming its surface style; roofs, stairs, flights and proxies carry `PredefinedType` `NOTDEFINED` where they carried none; the two single-cell curtain walls of `rme_basic` and `rme_advanced` (573660 and 573664) are `IfcCurtainWall` with their panels where they were `IfcWall`; the openings of doors and windows of Revit 2015 to 2023 have their symbol's outline, not their record box's.
+- **`rvt-diff --elements` JSON** lists the elements whose only difference is a label (`relabelled`, each with its `labels`); a script that counted every difference as a change reads fewer.
+
+### Added
+
+- **A sloped floor drawn along the plane its shape-edited corners lie in gets
+  its `Qto_SlabBaseQuantities.Depth` and `GrossVolume` on Revit 2024 (#1208, RE-298,
+  RE-384).** Other releases keep neither until a file of theirs is
+  measured. Revit's export writes the volume of the slab there, the type's
+  layers' total thickness times the cosine of the slope for the `Depth` and
+  that times the floor's `GrossArea` for the `GrossVolume`, on all 8 sloped
+  floors of the BIM4LCA office as built, where rvt-rs wrote
+  neither. A level floor of several layers keeps neither: Revit 2024's
+  exporter writes its last layer's thickness and Revit 26.4's another value
+  (RE-298).
+
+### Changed
+
+- **`rvt-diff --elements` compares resolved values, not the rules that read
+  them (#1864).** An element whose `LevelBindSource` alone differs, or whose
+  `BodySource` differs while its body is the same, is counted unchanged and
+  listed apart as a label change (`relabelled` in the JSON, each with its
+  `labels`). Two saves of a project whose beams bind the same Level by two
+  rules no longer show those beams as changed. A body that differs is still a
+  change, with its `BodySource` beside it.
+
+- **The support matrix rates two capabilities for the proof they have, and
+  one evidence line says what runs where (#1933).**
+  `cfb-container-open` was `verified` on one reader, rvt-rs's own over the
+  `cfb` crate, where `docs/verification-protocol.md` asks two independent
+  witnesses agreeing across a recorded edge, gated in CI: it is `partial`,
+  named for `.rvt` and `.rfa` (`.rte` and `.rft` are the same code and in no
+  corpus), and its note says an encrypted file opens at the outer container
+  with inner streams that read as nonsense, as `docs/compatibility.md` does.
+  `record-elevation-storey-bind` was `verified` on an 11 of 11 elevation
+  match measured once, before #218 made it the fallback that runs only where
+  no Level records are recoverable, with no CI comparison on its path: it is
+  `partial`. The evidence of `standalone-family-revolutions-2020` now says
+  its export and refusal checks run only where two environment variables
+  point at the pinned revolutions package, which CI sets for neither. No
+  export changes.
+
+- **CI reads every corpus file's container with a second reader, olefile, and
+  holds rvt-rs's to it (#1938).** `tools/ci/olefile_streams.py` lists each
+  `.rvt` and `.rfa` of the family corpus, the project corpus and
+  `tests/fixtures/families/empty.rfa` with olefile, runs `rvt-dump --raw` on
+  the same file and fails on any difference in the stream names, in each
+  stream's stored size, or in the stored bytes. It prints how many files and
+  streams it compared, and a directory with no Revit file or a run that
+  compared no stream fails. `cfb-container-open` stays `partial`: a stream-list
+  agreement checks the container and is not yet one of the two independent
+  witnesses `docs/verification-protocol.md` asks for. No export changes.
+
+- **Four rules that wrote values on releases their reports never measured now
+  stop at the release they are measured on, and the reports of four more say
+  what holds them (RE-461, #1945).** A hollow-section column's
+  `CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume` and `NetVolume`
+  (RE-247) and a wall sweep's and a ramp's type from its own record (RE-240)
+  are written on Revit 2024 only, the one release they are measured on. The
+  wall that embeds a curtain wall is drawn from its saved mesh on 2024 to 2027
+  (its records of 2023 name no embed step), and a shaft's cut takes only
+  outlines drawn from sketch lines, as RE-99 measured. A beam's storey at its
+  record box's top (RE-119), a pipe from its own record (RE-370), a door's
+  origin from its stored transform (RE-361) and a railing's type from its
+  payload (RE-66) keep their range: each is held to the project's 2024 save on
+  the releases the corpora have a file of, and the doc comments and the report
+  say which. In an unfiltered Measure of 146
+  exports (run 43525326226) none of the exports and none of the 121
+  diagnostics moves.
+
+### Fixed
+
+- **A curtain mullion turned off the model's axes is measured along its own
+  axes down to a nearer-degenerate turn (#1193).** On the BIM4LCA office 6
+  mullions of each concrete file and 8 of each timber file, shorter than
+  their own section and turned some 45 degrees, get their `Span` and
+  `Qto_MemberBaseQuantities.Length` from the box along their own axes, within
+  0.0003 ft of Revit's; the 6 and 4 nearer 45 degrees keep RE-226's rule.
+
+- **The wall top and base passes tell a roof by its Revit record, not by the
+  IFC entity it is exported as (#1480).** A wall is cut at a roof only where
+  the roof is a level plate (RE-351); a floor exported as `IfcRoof` now keeps
+  its cut, and a roof exported as `IfcSlab` is held to the plate rule.
+
+- **A door's or window's `FireRating` is read from its saved parameter
+  captioned Fire Rating on Revit 2024 to 2027 (#1507).** Where its type's family
+  type table gives no Fire Rating, the element's own value of that parameter,
+  else its type's, is written as the `FireRating` of the standard sets that
+  define one. puzzbobb's Revit 2025 window types hold their rating that way.
+
+- **A column drawn as its type's rectangle is drawn from its saved mesh where
+  that mesh is a vertical prism of another section (#1710).** The BIM4LCA
+  housing's chamfered concrete columns and the thin-walled struts of Autodesk's
+  `rme` samples were solid rectangles; their bodies and base quantities now come
+  from the mesh Revit saved. A column whose mesh section is its rectangle keeps
+  the rectangle, Revit's own form for a plain section.
+
+- **A roof, stair, stair flight or building element proxy with no "IFC
+  Predefined Type" of its own or its type's is written `NOTDEFINED`, as
+  Revit's export writes it (#1713),** on the releases measured, where it was
+  written with none: roofs on Revit 2024 to 2026, stairs and flights on 2024,
+  proxies on 2024 to 2027. Furniture already took this default (RE-419).
+
+- **On Revit 2027, a horizontal bracing's type object is an `IfcMemberType` with
+  the `PredefinedType` `BRACE` (#1841),** as Revit's export writes it, where it
+  was `NOTDEFINED`. The member's occurrence keeps no `PredefinedType`, as Revit
+  2027's export leaves it off members.
+
+- **A door's or window's type takes no guessed flip in its GlobalId (#1947).**
+  Revit hashes a door's type GlobalId with the door's flip (RE-167), and
+  RE-167 measures that a door with no host is not flipped. rvt-rs also took a
+  hosted door whose host frame or facing was not read as not flipped. Such a
+  door's type now gets the GlobalId the writer derives, as any type rvt-rs
+  cannot match does. Found by the batch 9 export audit.
+
+- **A face-hosted cut's opening keeps its place among its host's openings
+  when an earlier one is not written (#1947).** Revit's export names each
+  opening a door or window cuts in a host after the host and its place among
+  that host's cutting instances, the highest ElementId first. rvt-rs counted
+  only the openings it wrote, so a cut declined before one (no transform read,
+  not an upright prism, a host drawn otherwise) shifted the name and GlobalId
+  of every opening after it. Each cut now takes its number before any is
+  declined. Found by the batch 9 export audit.
+
+- **A wall profile region that a pocket equals stays that pocket (#1947).**
+  A region of a wall's edited elevation profile that one of its pockets equals
+  is written as that pocket's opening, with the wall left whole (RE-380). The
+  pass that carries a region on to the wall's end (#1473) carried such a region
+  too, after which it no longer equalled the pocket, so it was cut into the
+  wall's body: the one case the profile rules say must not happen. A region a
+  pocket equals is no longer carried. Found by the batch 9 export audit.
+
+- **A room bound by its parameter block says so, every refused wall end is
+  counted, and a material layer's name is its `Name` (#1947).** Found by the
+  batch 9 export audit.
+  - A room bound to the Level its own parameter block names (RE-29), where its
+    record names none, carried `LevelBindSource`
+    `partition_element_record_reference_list`; it now carries
+    `partition_room_parameter_block`.
+  - A wall with one end refused with face evidence and the other without
+    counted only the first: `exported.wall_end_reads_unmarked` now counts the
+    second, as `docs/export-diagnostics.md` says every refusal is counted.
+  - `IFCMATERIALLAYER` wrote a layer's name in its sixth attribute
+    (`Category`). IFC4 puts `Name` fourth, and the name now goes there. No
+    layer is named today, so no export changes from it.
+
+- **A column or beam drawn as its type's I or hollow section binds to a storey
+  by its base elevation, as one drawn as its record box does (#1947).** The
+  section replaces the record box's footprint and must fit it, and the element
+  stays at the box's base. `record_base_elevation_feet` did not list the two
+  section body sources, so such an element whose record names no single Level
+  lost the base-elevation storey binding its record box had given it.
+  Found by the batch 9 export audit.
+
+- **A curved wall's chords stay within 0.0005 ft of its arc whatever its
+  radius (#1947).** Each arc of a curved wall's outline was capped at 512
+  chords, so a radius past about 100 ft over a half turn gave chords straying
+  further inside the arc than the 0.0005 ft its doc and RE-75 promise
+  (0.0047 ft at 1,000 ft). The cap is now 8,192 chords, which holds the
+  tolerance up to a radius of about 27,000 ft. An arc that would need more is
+  not drawn as an arc, and the wall keeps the body it would otherwise have.
+  Found by the batch 9 export audit.
+
+- **A wall's base is not cut at the top of a roof drawn as its record box
+  (#1947).** The base pass (#1384) took any roof's top as a level a wall's base
+  stops at. For a roof drawn as its record box (a roof by extrusion, or a slope
+  its reader does not read) that is the box's top, not the roof's, which RE-351
+  section 4 names as a flaw the top pass already avoids. The base pass now
+  takes a roof only where the top pass does: a level plate, its box exactly its
+  type's layers and its outline read. Found by the batch 9 export audit.
+
+- **A wall of a curtain wall type is an `IfcCurtainWall` on Revit 2024 to 2027
+  although no mullion or grid names it, and a curtain wall that is the host
+  panel of another is not one on any release (#1960).** The 2024 reader made a
+  wall a curtain wall only where a mullion named it or a grid was found, so a
+  single-cell curtain wall with no mullion (walls 573660 and 573664 of
+  Autodesk's `rme_basic` and `rme_advanced`) came out as an `IfcWall`, where
+  the 2023 reader, which goes by the wall's type, writes an `IfcCurtainWall`
+  with its panel. Revit's own exporter (revit-ifc, `CurtainSystemExporter`)
+  makes a wall a curtain wall by the curtain grid it has, with no test of
+  mullions or cells, so the 2024 reader goes by the type too. A curtain-type
+  wall that is the host panel of another curtain wall's grid (its record holds
+  a `HostPanelInfo`; Snowdon Towers has 23) is written by Revit only as parts
+  of its owner, and neither reader makes it a curtain wall. No Revit export in
+  the corpora holds a mullion-free curtain wall: that case rests on the
+  exporter's source (RE-462).
+
+- **A Revit 2017 to 2027 file that stores none gets the project, building
+  and site GlobalIds Revit's export gives them, and a Revit 2017 to 2022
+  file the storeys', from the project's own GUID; a history with an entry
+  closed by another byte than `0x28` is read (#878, #1929, RE-459).**
+  Revit's exporter makes the project's, the building's and the site's
+  GlobalIds from one GUID with a fake ElementId (-16, -15, -14) XORed into
+  its last 32 bits, and a storey's from it with the Level's ElementId before
+  Revit 2023. RE-220 could not find that GUID, and files that stored none
+  kept generated ids. It is in the file: the header of `Global/History`
+  holds it four times, at `0x16`, `0x26`, `0x36` and `0x56`, and it is not
+  an entry of the history.
+  On the 67 models of Measure that have a Revit export, the four copies are
+  equal on all of them (268 of 268), and the project, building and one site
+  are Revit's on 63 of the 64 files of 2017 to 2027 whose export is of their
+  own project; the storeys are Revit's on 69 of 69 on 11 files of 2017 to
+  2022, and on none of 229 from 2023, where each Level's own episode gives
+  them as before (Core Interior, 15 of 15). Where Revit's export is of
+  another project than the file (two `rac_advanced` saves of 2015 and 2016,
+  whose header holds another GUID than the saves that export came from)
+  nothing is measured, and BIMcollab's Revit 2015 example stores its ids as
+  strings, which win as they did. One held-out Revit 2018 project follows no
+  rule found for its project-level ids: neither the header GUID, nor a
+  stored string, nor an episode gives them, and they are not claimed. The
+  rule is read only on Revit 2017 and later, because no file of 2015 or 2016
+  can test it.
+  Alongside it, `EpisodeHistory::parse` read none of the 1,314 elements of
+  the Revit 2018 Vitoria "Before" model because four of its 1,127 entries
+  are closed by `0x1e`, not `0x28`: it reads them now, and the elements of
+  that model Revit's export holds are Revit's on 1,297 of 1,314 (from none),
+  and 1,420 of 1,441 on the held-out Revit 2018 project, with the 73 rooms
+  of each.
+  Every project, building, site and storey GlobalId of a file the rule
+  applies to changes once, in the release after 0.22.0: 50 of the 146
+  exports of an unfiltered Measure get Revit's project, building and site
+  where they had none, and 11 files get their storeys, with the diagnostics
+  of all 121 equal and, on 22 exports kept from both builds, no line changed
+  but the GlobalIds and the clock
+  (`reports/element-framing/RE-459-episode-global-ids-2015-2023.md`).
+
+- **`rvt-ifc-compare`'s notes on walls, doors, windows, slabs and openings
+  say what rvt-rs now does.** They still cited closed issues (#23, #219,
+  #238) and RE-23's host slot: walls are 360 of 360 world-exact on Core
+  Interior since RE-127, doors and windows take the wall their reference
+  list names (RE-85), and slabs and windows are storey-bound (RE-27). The
+  open gap the door and opening notes name is #227's, the opening cut on
+  releases other than 2024 and 2025. The table in `docs/ifc-compare.md`
+  says the same.
+
+- **The support matrix, the status pages and the viewer promise what their
+  proof shows.** An audit of every capability in `docs/support-matrix.json`
+  and of `README.md`, `docs/compatibility.md`, `ROADMAP.md`, `docs/status.md`
+  and the viewer's support text against the tests, reports and code each names
+  corrected over 70 statements, and changed no status. Among them: the viewer's
+  legend gave 1.0's range as 2015 to 2027 (it is 2024 to 2027) and listed phase
+  filtering as not ready (the phase field has it); the roadmap had the Python
+  bindings writing glTF and plan SVG (they write IFC4 and CSV); notes still
+  said railings, horizontal bracing, roofs by extrusion outside 2025, Areas,
+  Floors and Rooms' storeys, connector SystemType and 2008 to 2014 element
+  records were not handled, which later work does handle; and functions,
+  tests and counts are named as the code and reports now have them. Four
+  status questions the audit raised are on #1933.
+
+- **The viewer's schedule names a layered element's material, the diagnostics
+  count what `--revit-property-sets` adds, and a few messages say what the
+  export does.** Found by the batch 9 export audit; no IFC value changes.
+  - The viewer's schedule read only an element's single material, so a wall
+    of layers showed none where the elements CSV names its layer set. Both
+    now read one rule: profile set, then layer set, then single material,
+    then constituents.
+  - `rvt-ifc --revit-property-sets` added its sets after the export's counts
+    were taken, so `exported.total_entities` missed them; the counts are taken
+    again after it, as after every other step that changes the model.
+  - With no Revit Level recovered, the warning said the IFC used a fallback
+    storey. It has none, and its elements are contained in the building
+    (RE-124); the warning says so.
+  - The element panel printed a length that rounds to zero as `-0.000 ft`, as
+    its placement rows never do.
+  - A glTF export drops a material index past the model's materials, which
+    would have made the file invalid, as the IFC writer already drops it.
+
+- **Revit 2023's ArcWall pattern no longer writes a curtain wall's panels and
+  grid lines as walls (RE-440).** On `Revit_IFC5_Einhoven` its 24 matches were
+  15 curtain panels, 7 curtain grid lines and 2 records with no ElementId:
+  they were written as 24 walls with a placeholder thickness, hid 15 of the
+  curtain wall's panels and made three storeys from the grid's rows. A match
+  is now kept only where its native record is a wall. Einhoven exports its
+  one wall, its curtain wall as an `IfcCurtainWall` of 24 panels and its two
+  windows on its one Level, `Level 1`, and four of its warnings are gone. A
+  Revit 2023 wall whose type is a curtain wall type is an `IfcCurtainWall`
+  named by that type, aggregating its panels; 2023 `rac_basic`'s 9 curtain
+  walls take the name its 2024 and 2025 saves give them. A curtain wall whose
+  panels carry its body is no longer reported as missing one.
+
+- **A material's colour reaches IFC viewers.** rvt-rs wrote each coloured
+  material's surface style as an `IfcStyledItem` with no `Item`, which IFC4
+  allows only inside an `IfcStyledRepresentation` of an
+  `IfcMaterialDefinitionRepresentation`; none was written, so no viewer could
+  find the colour, and elements showed in its default grey. Each coloured
+  material now has that representation, naming the material, so a viewer
+  colours every element associated with it. The glTF export already carried
+  the colours. Found by the batch 9 export audit.
+
+- **A wall's quantities from its saved mesh set aside each opening at its
+  real height.** Where a door's or window's opening starts above its
+  placement (RE-93), the box `wall_mesh_quantities` sets aside for it was as
+  tall as its start plus its top, so the faces of the wall above a window up
+  to that height were taken for the opening's. The box is now the opening the
+  writer cuts: from its start, as high as it is. Since #1741; found by the
+  batch 9 export audit.
+
+- **Revit 2015 to 2023 doors and windows cut the outline their symbol cuts
+  (RE-450).** On those releases a door's or window's opening was its record
+  box, frame and trim included, and its `OverallWidth` and `OverallHeight`
+  were not written; the outline its symbol cuts and its own transform were
+  read on 2024 to 2027 only. Both are now read on 2015 to 2023 too. On every
+  save of Autodesk's `rac_basic` and `rac_advanced` from 2015 to 2023 each
+  opening is the same project's 2024 save's in size, and in place but for 24
+  `rac_advanced` windows 0.0075 m off it on the 2015 to 2020 saves, and its
+  door or window has the 2024 save's `OverallWidth` and `OverallHeight`.
+
+- **The export's storey warning counts each way an element reached its
+  storey, and no longer describes a count of zero.** It said "N building
+  element(s) reached their storey through the Level ElementId their own
+  element record names, the rest through a measured elevation match" even
+  where N was every element, as on all 970 of Core Interior's, and it
+  counted rooms as building elements. It now says "all N element(s)" where
+  one join placed them all, and otherwise names how many reached their
+  storey by the Level ElementId, by a measured elevation match, by another
+  rule and by none, leaving out the parts of an aggregate.
+
+### Research
+
+- **The beam-end probe cuts a beam at the section the export draws for each
+  column its list names, and on the BIM4LCA models that is the column's box
+  (RE-455, #1839).** A fourth kind beside `column`, `wall` and `beam` holds
+  the beam at the column's own section (a rectangle, a circle or a closed
+  outline, turned by the element's rotation and placed at its location),
+  along the beam's centre line, where the column kind uses the record box. On
+  the ten BIM4LCA models it reads the section of 1,307 of 1,441 columns and
+  gives the column kind's bounds on every beam it cuts: Revit's length within
+  1 mm on the one beam Revit shortens and it reaches, and a cut where Revit
+  leaves the beam on 2 beams, as the box does. The columns there are boxes, so
+  that is a check that the kind does no harm, not a test of it; the test is a
+  model whose boxes run past Revit's beams, such as the reporter's. Nothing
+  ships.
+
 ## [0.22.0] — 2026-11-13
 
 0.22.0 limits what a crafted Revit file can make the MCP server, the command-line tools, the Python bindings and the viewer do, and writes more elements the way Revit's own export writes them. The MCP server reads from and writes to one folder and bounds what an answer carries (#1883). `rvt-doc --redact`, `rvt-info -f csv`, `rvt-dump`, `rvt-ifc`, `rvt-write`, the Python bindings and the viewer each lose a way a hostile file reached a terminal, a spreadsheet, a log or a file they should not touch (#1884, #1885, #1887, #1919), and a wall profile of thousands of regions no longer builds a chain of boolean cuts too deep for a thread to walk (#1845). On the element side, roofs by extrusion of Revit 2024, 2026 and 2027, floors of the Structural Foundations category, horizontal bracing, the storeys of beams and braces, the corner mullions and the door of a curtain wall on Revit 2027, a lone non-ASCII name on Revit 2023, and the doors, windows and walls of Revit 2015 to 2023 are read as Revit's export writes them (#1479, #1841, #1842, #1865, #1899, #1912, RE-448, RE-456). puzzbobb wrote the last two: doors and windows of Revit 2015 to 2023 are set in the wall their own record names, and those releases' walls get the openings their rectangular openings cut.
@@ -2776,7 +3674,7 @@ and version strings to it):
 
   The BIM4LCA office's room 3095831 at building permit, which kept its box,
   is now 1864.737 ft² against the 1864.74 of Revit's IFC4 export, and
-  Snowdon Towers' room 830902 304.059 ft², within 0.001 ft² of Revit's area
+  Snowdon Towers' room 830902 within 0.001 ft² of Revit's area
   for it (`Vim.Room.Area` in the model's later VIM edition, local only). On
   every room of Autodesk's samples,
   the office and the Revit 2025 models that the walk or the span already
@@ -2786,10 +3684,9 @@ and version strings to it):
   It is read only where every edge's two planes give it the same ends and
   the solid holds no point between its floor and 4 ft above it except on a
   vertical edge, so that a raised floor, a step, a pocket or a low bulkhead
-  refuses it. Snowdon Towers' room 2181757 shows why: its floor is 5172.857
-  ft², its section 4 ft above the floor is 5177.493, and Revit's area for it
+  refuses it. Snowdon Towers' room 2181757 shows why: Revit's area for it
   (`Vim.Room.Area` in the model's later VIM edition) is within 0.001 ft² of
-  that section and 4.6 ft² over the floor. It keeps its box.
+  its section 4 ft above the floor and 4.6 ft² over the floor. It keeps its box.
 
 ### Changed
 
@@ -5521,8 +6418,8 @@ Autodesk's sample projects, the held-out models and the families (Measure run
   - Measure's `racadv` input scores the 2015 to 2020 saves against that
     export, fetched for the run and never stored or cached; only its summary
     counts are uploaded.
-  - Revit's own area for `rac_basic` room 101 (its `GSA Space Areas`,
-    781.08 ft²) is the geometry with the column taken off, as the schedule
+  - Revit's own area for `rac_basic` room 101 (its
+    `GSA Space Areas`) is the geometry with the column taken off, as the schedule
     area now is; 4.95 ft² of the reader's 0.628% are in the room's outer
     ring, which this does not change and is not explained.
   - On Autodesk's samples (run 41909382808) the six rooms with columns
@@ -5715,6 +6612,53 @@ Autodesk's sample projects, the held-out models and the families (Measure run
   export pairs (Measure 41849309128 and 41849313875); the readers stay on
   the draft #1361. Report: `reports/element-framing/RE-302-ellipse-profiles-and-trimmed-parametric-faces.md`
   (§6 and §7).
+
+## [0.14.1] — 2026-11-19
+
+0.14.1 is a patch release of 0.14 for users who compare rvt-rs's output
+exactly and so cannot move to 0.15 or later, whose exports differ (#1808). It
+lowers the peak memory of the saved-mesh pass and changes no export: each
+file it writes equals 0.14.0's except for the rvt-rs version it records,
+`0.14.1`, in the header's `FILE_NAME` and in `IfcApplication`. It does not
+become the latest release: 0.25.0 is.
+
+### Fixed
+
+- The saved-mesh pass reads each owner's graph with the batch it is meshed
+  in and frees it with that batch, so it no longer holds every owner's graph
+  at once (#1429, #1690). This backports #1691 and the owner freeing of
+  #1441 from 0.15. It keeps 0.14.0's plan of the batches: #1441's plan
+  raised the 2023 `rac_basic` sample's peak from 537 to 790 MiB.
+
+### Security
+
+- `rvt-rs-mcp` builds with rmcp 3.9.0 (RUSTSEC-2026-0462).
+
+### Measured
+
+Against 0.14.0 on 112 models: the reference models, Autodesk's sample
+projects of every year, the BIM4LCA offices, BIMcollab's Revit 2015 model,
+the R2025 set and the held-out models. The runs are Measure 43315345839 (the
+default export) and 43315354501 (`--saved-meshes`, timed). Both measured
+`f6c4458f`, this release's code without its version bump, against v0.14.0.
+- 112 of 112 exports and 93 of 93 diagnostics files equal 0.14.0's in each
+  run, and so does every scorer output.
+- With `--saved-meshes`, no file's peak memory is above 0.14.0's. The 2023
+  `rac_basic` sample peaks at 523 MiB (537 on 0.14.0), and Snowdon Towers
+  Architectural at 1,892 MiB (2,846).
+- Over the 28 samples of Revit 2023 to 2027, the median time is 1.01 of
+  0.14.0's, and no file takes more than 1.06.
+- The BIM4LCA offices peak at 0.90 and 0.97 of 0.14.0's. Before the runs we
+  set the bar at 0.80 or less on both, and neither met it: their peak is held
+  by the export model, 0.7 to 0.85 GiB before the saved-mesh pass starts,
+  which this release does not change.
+- #1808's reporter measured their own earlier port of #1691, not this
+  release's code: 6.8 GB down to 1.8 GB on their model, with an identical
+  output. 0.14.1 itself has not been run on that model.
+- #1808's reporter reviewed this release's changes (#1827) and contributed a
+  check that CI runs on every push (#2081): on the Einhoven project (Revit
+  2023, 2,615 owners with saved graphics), the read in batches gives the same
+  elements and the same progress events as the read in one pass.
 
 ## [0.14.0] — 2026-11-04
 
@@ -12375,8 +13319,7 @@ Release, and a multi-arch container image on ghcr.io.
   piece as another element with the element's `Tag`, named `…:2`, `…:3`,
   as Revit's own export does.
   - On Snowdon Towers the five such slabs match Revit's pieces. Four match
-    piece for piece by area (2 × 1.60, 2 × 1.99, 2 × 0.38 and 9.02 + 9.76
-    m²). The fifth has three pieces, which Revit writes as one slab with
+    piece for piece by area. The fifth has three pieces, which Revit writes as one slab with
     three tessellated bodies.
   - A sketch whose loops cross each other still gives no profile.
 

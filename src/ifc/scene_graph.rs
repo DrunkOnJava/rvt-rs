@@ -735,7 +735,7 @@ fn format_property_value(v: &super::entities::PropertyValue) -> String {
             None => "Unknown",
         }
         .to_string(),
-        PropertyValue::LengthFeet(f) | PropertyValue::PositiveLengthFeet(f) => format!("{f:.3} ft"),
+        PropertyValue::LengthFeet(f) | PropertyValue::PositiveLengthFeet(f) => format_feet(*f),
         PropertyValue::AngleRadians(r) => format!("{:.3}°", r.to_degrees()),
         PropertyValue::AreaSquareFeet(a) => format!("{a:.2} sq ft"),
         PropertyValue::VolumeCubicFeet(c) => format!("{c:.2} cu ft"),
@@ -820,8 +820,9 @@ pub struct ScheduleRow {
     pub name: String,
     pub storey: String,
     pub material: String,
-    /// The IFC element's GUID if present; empty when the source
-    /// didn't carry one.
+    /// The element's Revit ElementId as text (its `Tag`), which the
+    /// elements CSV writes as `revit_element_id`; empty when the source
+    /// carried none. Not the IFC `GlobalId`.
     pub guid: String,
 }
 
@@ -888,6 +889,7 @@ impl Schedule {
 pub fn build_schedule(model: &IfcModel) -> Schedule {
     let mut rows: Vec<(f64, ScheduleRow)> = Vec::new();
     let placed = placements(model);
+    let material_names = super::schedule_csv::MaterialNames::new(model);
     for (idx, ent) in model.entities.iter().enumerate() {
         if let IfcEntity::BuildingElement {
             ifc_type,
@@ -895,6 +897,8 @@ pub fn build_schedule(model: &IfcModel) -> Schedule {
             type_guid,
             storey_index: _,
             material_index,
+            material_layer_set_index,
+            material_profile_set_index,
             ..
         } = ent
         {
@@ -905,11 +909,14 @@ pub fn build_schedule(model: &IfcModel) -> Schedule {
                 .and_then(|i| model.building_storeys.get(i))
                 .map(|s| (s.name.clone(), s.elevation_feet))
                 .unwrap_or_else(|| ("".into(), f64::INFINITY));
-            let material = material_index
-                .filter(|_| associates_material(ifc_type))
-                .and_then(|i| model.materials.get(i))
-                .map(|m| m.name.clone())
-                .unwrap_or_default();
+            // The elements CSV's rule: a layered wall names its layer set.
+            let material = material_names.of(
+                idx,
+                ifc_type,
+                *material_index,
+                *material_layer_set_index,
+                *material_profile_set_index,
+            );
             rows.push((
                 elev,
                 ScheduleRow {

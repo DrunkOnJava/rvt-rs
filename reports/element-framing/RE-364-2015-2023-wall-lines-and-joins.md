@@ -169,3 +169,76 @@ gh workflow run measure.yml --ref main -f ref=748eff38ecdeb0fc22e15259826453eea4
 python3 tools/re/save_pair_wall_quantities.py sample-2023-racadvancedsampleproject/model.ifc \
   ../measure-head-samples-2024-2099/sample-2024-racadvancedsampleproject/model.ifc
 ```
+
+## 10. Addendum, 2026-11-14: the control joins are in the graph on 2015 to 2023 (#1584)
+
+Section 5 says a 2015 to 2023 record is "read without its control joins" and section 6 that "why the graph holds none is not decoded". **The graph holds them.** `probe_1584_wall_control_joins` (Measure run 43666839412, probe at `35e4130e`, `-f samples=true`, all 59 sample models of 2015 to 2027) prints for each wall whether its record has a `VWallDriver`, whether that holds `m_controlJoinsSet`, the entries whose ElementId decodes, and its `CDJoinInfo` and `JoinEndGStep` objects. Counts and ElementIds only.
+
+- **Every wall record has the driver and the field.** In all 59 saves the wall records equal the walls with a `VWallDriver`, and none lacks `m_controlJoinsSet`.
+- **The sets are as full on 2015 to 2023 as on 2024 to 2027.** `rac_advanced` holds 179 walls with joins and 1 with an empty set on every save of 2015 to 2027; `rac_basic` 59 and 1; `rme_basic` and `rme_advanced` 151 and 15; `rst_basic` 9 and 0 on 2016 to 2027 (its 2015 save is another model with 4 walls and empty sets, RE-181); `rst_advanced` 6 and 0. A wall with a non-empty set always has an entry whose ElementId decodes, as `{"m_id":{"m_id":n}}` before 2024 and `{"m_id":{"m_id64":n}}` after (RE-280).
+- **Held to the same project's later save by ElementId**, with `tools/re/wall_control_joins_across_saves.py`: `rac_advanced` 2021, 2022 and 2023 against 2024, 180 of 180 walls hold the same sets, the same decoded entries, the same `CDJoinInfo` entries and the same `JoinEndGStep` and exposed-face entries; so do `rac_basic` 2019, 2020 and 2022 against 2023 (60 of 60), `rst_basic` 2016, 2022 and 2023 against 2024 (9 of 9), `rme_basic` 2019 against 2023 and `rme_advanced` 2019 against 2024 (166 of 166), and `rac_advanced` 2024 against 2027 (180 of 180).
+- **Where the sets differ they are the project's earlier state, as far as these files can show.** `rac_advanced` 2015 to 2020 are alike (180 of 180 between 2015, 2019 and 2020) and differ from 2021 on 33 walls; `rac_basic` 2015 differs from 2019 on 8. No set of the earlier save names a wall the later save does not: the later save holds more partners on all 33 and on 6 of the 8, and on the other 2 the same walls at other ends. That is what a project edited between saves looks like, and also what an earlier read missing entries would look like: the files cannot tell the two apart, so those saves are held to the earliest save that equals the later release's (`rac_advanced` 2021, `rac_basic` 2019), not to the later release's.
+
+**Why production reads them empty.** The native wall reader takes every ElementId through `native_json::element_id`, which reads `/m_id/m_id64` only. On 2015 to 2023 the field is `/m_id/m_id`, so `joins`, `side_joins` and `exposed` come back empty there, as do `shells` and `type_id` (section 5); `identifier_i64`, which RE-280 added, reads both. That is a reading of the source, not yet measured: the pull request that changes it measures it.
+
+**Not measured:** `Length`, the side areas, the footprint and the volumes written from these joins; the angled walls of 2015 to 2020 with their ends trimmed at the joins. Each is its own pull request held to Measure, as #1584 says.
+
+**Reproduce** (the probe's commit is archived under `refs/archive/2026-11-15/cited/35e4130ec3d5` because the pull request is squashed):
+
+```bash
+gh workflow run measure.yml --ref main -f ref=35e4130ec3d5787c1f1dbd48af5b588d3e51aa11 -f base=none -f samples=true \
+  -f probe=probe_1584_wall_control_joins
+# then, in the run's downloaded measure-head directory (a sample-<year>-<project>/probe.txt each):
+python3 tools/re/wall_control_joins_across_saves.py measure-head
+```
+
+## 11. Addendum, 2026-11-15: the wall reader reads either id shape, and a Revit 2023 curtain wall gets its `Length` (#1584)
+
+Section 10's cause is measured. The native wall reader took every ElementId through `native_json::element_id`, which reads `/m_id/m_id64`; a 2015 to 2023 save holds `/m_id/m_id`. The control joins, side joins, exposed faces, step partners and the wall's type now go through `identifier_u64`, which reads either. The `Length` rule (`attach_wall_lengths`), which section 5 kept off these releases, runs on them.
+
+**A step's ids stay in the 2024 shape, on purpose.** The first head read every id in either shape (Measure run 43668542421, against `main` at `f961f2aa`) and moved 7 exports, all of Revit 2015 to 2023. The kept exports of `rme_basic` 2023, held to the same project's 2024 save, showed one of the moves wrong: reading the ids a `JoinToRoofGStep` and a `CutPairGStep` name starts the wall top cover (RE-267) there, and 5 of the 6 walls it reached took `wall_top_cut_at_covering_floor`, a flat top at the covering floor, where the 2024 save has `wall_top_stepped_at_covering_floor` for the same floor, while wall 573321 lost the `Height` the 2024 save writes. Those rules, and the areas of walls joined to floors (RE-270), are measured on 2024 and later (RE-353), so the final head reads a step's top-join, cut-pair and base-join ids as before (`named_by_steps`, `base_joined_by_steps` and the bounded ids), and reading them on 2015 to 2023 is a change of its own, with this to hold it to. The one step id that is read in either shape is the partner of a clean, cut or embed step (`NativeWall::partners`): it only decides whether a cut-back length can be trusted, and the length is refused where a partner is not read.
+
+**What the final head moves**, in two Measure runs on the same inputs (unfiltered, with samples, the BIM4LCA office and housing, the Revit 2025 models, the held-out models, `racadv` and BIMcollab):
+
+- **The reads alone** (run 43671572302, `e4aa0767`, against `main` at `f961f2aa`): 126 of 127 exports are byte for byte `main`'s, every Revit 2024 to 2027 export, the `racadv` pairs of 2015 to 2020, BIMcollab's model and all the sample saves among them. The one that moves is a held-out Revit 2021 project, whose Revit export is IFC2X3 and so is counted apart: its angled walls with both ends along Revit's within 0.001 ft go from 124 to 167 of 390 (within 0.1 ft 126 to 173, within 1 ft 360 to 363, the largest miss 5.783 ft before and after). 36 of 102 `diagnostics.json` gain `decoded.walls_type_confirmed`, the walls whose type the native record confirms. `same-project gates` pass.
+- **`Length` on top** (run 43671576196, `22e4013e`, against the reads): 5 of 127 exports move, four of Revit 2023 and the held-out project of Revit 2021, and only by `Length`. `Qto_CurtainWallQuantities.Length` is written on 34 curtain walls of `rac_advanced` 2023, 9 of `rac_basic` 2023 and 33 of `rme_basic` 2023, and each project's 2023 save then agrees with its 2024 save on all of them (`save_pair_props.py`: the same value on every wall, none different, none only one of the two writes); Einhoven (Revit 2023) gains one such value; the held-out Revit 2021 project gains 8 `Length` values too, on ordinary walls and not on curtain walls (section 12), which its IFC2X3 export does not write and which are counted apart. `rme_basic` 2023 is otherwise as on `main`: its wall tops and `Height` are `main`'s (Measure run 43674102994). `same-project gates` pass.
+
+**Not written.** An ordinary wall's `Length`: the 2024 save writes one on 1 of `rac_advanced`'s 180 walls, 2 of `rst_basic`'s 9 and 10 of `rme_advanced`'s 166, where the wall's cut-back curve is as long as its curve, and the 2015 to 2023 sample saves write none of them (the held-out Revit 2021 project's save gets 8, section 12). `Length` of a curtain wall on the sample saves of 2015 to 2022: none gains one; why they do not is not decoded. The side areas, footprint and volumes (section 9) and the angled walls of 2015 to 2020 with their ends trimmed at the joins are not touched: no sample save of 2015 to 2020 moves, so the reads change no wall there.
+
+**Against Revit's export.** No untouched Revit IFC4 export of a 2015 to 2023 file holds a curtain wall's `Length` to compare: the 2023 values are held to the 2024 save's, which is measured against Revit's on the reference models, and what that cannot catch is an error the two saves share. The held-out project's improvement is on an IFC2X3 export, counted apart; it does not make the rule right.
+
+**Reproduce:**
+
+```bash
+gh workflow run measure.yml --ref main -f ref=e4aa07677f1d86888add3a9b25db29b29ccf1da8 -f base=f961f2aa7f69e75d59576f8827a27b4af320b5fe \
+  -f nordic=true -f r2025=true -f samples=true -f holdout=true -f racadv=true -f bimcollab=true
+gh workflow run measure.yml --ref main -f ref=22e4013eb8844ec133ecd5d27f26df6d643dae74 -f base=e4aa07677f1d86888add3a9b25db29b29ccf1da8 \
+  -f nordic=true -f r2025=true -f samples=true -f holdout=true -f racadv=true -f bimcollab=true
+# the kept exports of the 2023 and 2024 saves, held to each other:
+gh workflow run measure.yml --ref main -f ref=22e4013eb8844ec133ecd5d27f26df6d643dae74 -f base=none -f samples=true -f keep_ifc=true \
+  -f scorers=none -f models="sample-2023-rmebasicsampleproject sample-2024-rmebasicsampleproject"
+python3 tools/re/save_pair_props.py sample-2023-rmebasicsampleproject/model.ifc sample-2024-rmebasicsampleproject/model.ifc
+```
+
+The measured commits `e4aa07677f1d`, `22e4013eb884` and the first head `27f9090cbaa9` are archived under `refs/archive/2026-11-15/cited/` because the pull request is squashed.
+
+## 12. Correction, 2026-11-15: the 8 walls of the held-out Revit 2021 project are ordinary walls (#1584)
+
+Section 11 reads the 8 `Length` values the held-out Revit 2021 project gains as curtain walls'. They are ordinary walls'. In the release's Measure run (43721278321, `main` at `156e2b25` against v0.24.0, every model) that project's scorer lists them as `extra Qto_WallBaseQuantities.Length: 8`, the set the writer gives an ordinary wall, where its curtain-wall set is `Qto_CurtainWallQuantities`. The project's Revit export holds `IfcWall` 9 and `IfcWallStandardCase` 381 (which rvt-rs writes as `IfcWall`) and no `IfcCurtainWall`.
+
+What follows for the rule. `attach_wall_lengths` gives an ordinary wall its `Length` where the wall's cut-back curve is as long as its curve, and since section 11 let it run on 2015 to 2023 saves (#2037) it does so there too. On the Autodesk samples that gives none, as section 11 measured with `save_pair_props.py`: the 2024 saves write one and the 2015 to 2023 saves write none. On the held-out project it gives 8 of its 390 walls one. Its IFC2X3 export writes no base quantities, so the 8 are values rvt-rs writes that the export does not, counted apart, and no quantity of Revit's checks them: no untouched Revit IFC4 export of a 2015 to 2023 file holds an ordinary wall's `Length` to compare, and the rule is the one measured on 2024 and later (RE-252), run on a wall record read from the older save. The v0.25.0 release notes say they were checked by nothing.
+
+**The check that was missing (#2069).** In Revit's export a wall's `Axis` is its curve cut back at its joins (RE-252), and the rule writes a `Length` only where the cut-back curve is as long as the curve, so the length of Revit's own `Axis` for the same wall checks the `Length` with no base quantity. `qtos_vs_ifc.py` prints it since #2071: `walls rvt-rs gives a Length and Revit's export does not, against the length of Revit's Axis (within 1e-4 ft)`. On the held-out project it reads `equal 8; differ 0; no Axis 0` (Measure run 43733752273, counts only). On Core Interior, whose slim export carries no base quantities either, the 38 wall `Length` values rvt-rs writes read `equal 38; differ 0; no Axis 0`. So the ordinary-wall `Length` stays on Revit 2015 to 2023, checked against Revit's `Axis` and not against a quantity of Revit's, and on the older saves it rests on one project, 8 of its 390 walls.
+
+The curtain walls' `Length` of section 11 (34, 9 and 33 walls of the three 2023 samples that hold them, and Einhoven's one) and the sample saves of 2015 to 2022 that gain none are as that section has them.
+
+**Reproduce:**
+
+```bash
+gh workflow run measure.yml --ref main -f ref=156e2b257f610c8c57c82828571a892b687ebb77 -f base=v0.24.0 \
+  -f nordic=true -f r2025=true -f samples=true -f holdout=true -f bimcollab=true -f racadv=true
+# then holdout-bimwhale-advanced-2021/counts.txt of the measure-head artifact: the `extra` and `class sets` lines
+# the Axis check, with the scorer line of #2071 on main:
+gh workflow run measure.yml --ref main -f ref=v0.25.0 -f base=none -f holdout=true \
+  -f models="holdout-bimwhale-advanced-2021 core-interior" -f scorers=qtos_vs_ifc
+```

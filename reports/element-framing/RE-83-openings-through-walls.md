@@ -21,7 +21,7 @@ The element's rotation is not used to choose the axis: on Core Interior some wal
 | file | openings in both | within 0.26 ft, before | within 0.26 ft, now | within 1 ft, now | largest, before | largest, now |
 |---|---:|---:|---:|---:|---:|---:|
 | Core Interior (slim export) | 138 | 0 | 138 | 138 | 4.92 ft | 0.25 ft |
-| Snowdon Towers Architectural (local only, `--shared 26.0156,1370151.7953,258247.9762,780.5`) | 110 | 0 | 72 | 83 | 5.83 ft | 5.83 ft |
+| Snowdon Towers Architectural (local only, `--shared` set to its export's site placement) | 110 | 0 | 72 | 83 | 5.83 ft | 5.83 ft |
 
 None is within 0.01 ft. On Core Interior what remains is the frame margin: Revit's opening is the door's rough opening, rvt-rs's is the door's box, a few inches wider and taller. Width and Height are type parameters (3.0 and 8.0 appear in type 17333's value block) but their keys are not decoded, so they are not used.
 

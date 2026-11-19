@@ -23,6 +23,11 @@ same box, RE-380), the GlobalId, the Name, the PredefinedType, the
 openings rvt-rs writes that Revit's export does not, by kind, apart from those
 that a sibling file's export (another Revit export in the same directory with
 the same first four name words) holds, which are counted on their own line.
+Where Revit's export is IFC2X3, the openings rvt-rs writes that it lacks are
+counted on a line of their own too: an IFC2X3 view never removes a value (the
+maintainer's standing rule), and Revit's IFC2X3 Coordination View 2.0 exports of
+2018 and 2021 hold no door's cut in a second wall that its IFC4 exports of 2024
+do (#1165, #1994).
 
 Usage:
 
@@ -100,11 +105,20 @@ def unfilled(path, boxes=True):
     return out
 
 
+def schema_of(path):
+    """The FILE_SCHEMA a STEP file's header names, read from its first lines."""
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        head = handle.read(4096)
+    start = head.find("FILE_SCHEMA")
+    return head[start : head.find(";", start)].upper() if start >= 0 else ""
+
+
 def main(argv):
     args = [a for a in argv[1:] if a != "--list"]
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
+    revit_is_2x3 = "IFC2X3" in schema_of(args[1])
     ours, revit = unfilled(args[0]), unfilled(args[1])
     both = [key for key in revit if key in ours]
     print(f"unfilled openings in Revit's export: {len(revit)}; in rvt-rs's: {len(ours)}; both: {len(both)}")
@@ -166,11 +180,23 @@ def main(argv):
             sibling_keys.setdefault(key, os.path.basename(other))
     missing = {key: mine for key, mine in ours.items() if key not in revit}
     apart = {key: mine for key, mine in missing.items() if key in sibling_keys}
+    view_apart = (
+        {key: mine for key, mine in missing.items() if key not in apart} if revit_is_2x3 else {}
+    )
     extra = collections.Counter(
-        f"{mine['cutter']} in {mine['host']}" for key, mine in missing.items() if key not in apart
+        f"{mine['cutter']} in {mine['host']}"
+        for key, mine in missing.items()
+        if key not in apart and key not in view_apart
     )
     print(f"written that Revit's export does not: {sum(extra.values())}")
     for kind, count in sorted(extra.items()):
+        print(f"  {kind}: {count}")
+    view_kinds = collections.Counter(f"{mine['cutter']} in {mine['host']}" for mine in view_apart.values())
+    print(
+        "written that Revit's export does not, where its export is IFC2X3, counted apart "
+        f"(an IFC2X3 view removes no value): {len(view_apart)}"
+    )
+    for kind, count in sorted(view_kinds.items()):
         print(f"  {kind}: {count}")
     print(f"written that Revit's export does not but its export of a sibling file does, counted apart: {len(apart)}")
     for key, mine in sorted(apart.items()):
@@ -181,7 +207,8 @@ def main(argv):
         print(f"  volume differs by {error * 100:.3f} %: {kind}, Tag {key[0]} in {key[1]}")
     for key, mine in sorted(missing.items()):
         if key not in apart:
-            print(f"  extra: {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}")
+            label = "extra, IFC2X3 export" if key in view_apart else "extra"
+            print(f"  {label}: {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}")
     return 0
 
 

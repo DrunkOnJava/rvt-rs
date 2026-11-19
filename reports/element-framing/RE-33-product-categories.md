@@ -110,7 +110,7 @@ The overcounts that remain (doors, windows and panels on Snowdon) are plausibly 
 
 ## 4. Measured negative: Snowdon slab 2062318
 
-The one `OST_Floors` record on Snowdon Architectural that decodes under the first prologue is ElementId 2062318. It is a 23.05 × 1.54 ft plate, 0.33 ft thick, at internal z 59.67 ft, and it is not in Revit's IFC4 export under any entity.
+The one `OST_Floors` record on Snowdon Architectural that decodes under the first prologue is ElementId 2062318. It is a 23.05 × 1.54 ft plate, 0.33 ft thick, and it is not in Revit's IFC4 export under any entity.
 
 The nearest exported elements, after the internal-to-shared transform, are "Slab Edge:Bleacher Seating" proxies and 4-inch "Concrete Slab" steps with other `Tag`s, 0.9 to 7 ft away. It is one bleacher step that Revit did not export, for example one in a non-primary design option or a demolished phase. No field decoded so far separates it, so rvt-rs still exports it. This is the only false positive among the 43 first-prologue instances on Snowdon, and it predates this change. Tracked in #309.
 

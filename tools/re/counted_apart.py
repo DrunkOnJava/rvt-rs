@@ -150,6 +150,16 @@ CATEGORIES = [
         "Revit values known to be wrong, left out (RE-235 §5): Pset_StairFlightCommon.WalkingLineOffset 49",
         True),
     category(
+        "pset-not-in-file", "psets", "Property values the saved file does not decide",
+        "A column's `Slope`: Revit's export takes it from the model's geometry as its API returns it when the exporter runs, "
+        "which the saved file does not store (six columns with identical native records get it in one file of the BIM4LCA office and not the other). "
+        "rvt-rs leaves it out.",
+        "Griffin, 2026-11-14; RE-277, #1193",
+        ["Revit values the saved file does not decide, counted apart (RE-277, #1193): "],
+        r"^Revit values the saved file does not decide, counted apart \(RE-277, #1193\): \S+ (?P<n>\d+)$",
+        "Revit values the saved file does not decide, counted apart (RE-277, #1193): Pset_ColumnCommon.Slope 73",
+        True),
+    category(
         "pset-cache-defects", "psets", "Curtain members' IsExternal in an export made from the exporter's own cache",
         "In the exports of an exporter that caches element types (Revit 24.0's, which made the BIM4LCA office's exports, 24.0.5.432), a curtain mullion's or panel's `IsExternal`, and their type's, "
         "is the cache's value, not the model's; the scorer takes an export to be one when a curtain member's type object holds the property itself. "
@@ -242,7 +252,7 @@ NOT_KEPT = "not kept"
 KEPT_LINE = "counted apart: lines kept 1"
 NEW_IN_SCRUB = {
     "qto-setup-off", "qto-known-wrong", "qto-openings-unwritten", "qto-own-unit", "pset-sibling-openings",
-    "pset-known-wrong", "pset-cache-defects", "pset-property-set-file", "pset-openings-unwritten", "pset-no-standard-sets",
+    "pset-known-wrong", "pset-not-in-file", "pset-cache-defects", "pset-property-set-file", "pset-openings-unwritten", "pset-no-standard-sets",
 }
 NO_SCORE = "-"
 

@@ -181,6 +181,14 @@ pub const NESTED_DETAIL_FILTER_DIAGNOSTIC: &str =
 /// are exact).
 pub const VIEW_COMPONENT_DIAGNOSTIC: &str =
     "surface-bearing component requires qualified owner/view visibility";
+/// The diagnostic of an instance its symbol is resolved for in the view
+/// (`m_resolveSymInView`), which the walk does not follow. A wall's own solid
+/// is not such an instance: on every measured wall with this diagnostic and no
+/// other (49 of the 7,406 walls with a mesh over 47 models, all in Autodesk's
+/// `rac_advanced` and Snowdon Towers Architectural samples), the decoded mesh
+/// is one closed piece, and on the 17 checked against Revit's own drawn body it
+/// is that body's volume (#2020).
+pub const VIEW_RESOLVED_INSTANCE_DIAGNOSTIC: &str = "view-resolved instance is unsupported";
 
 /// The calls one curves-only check may make, as many as `Walker::visit`
 /// may (#1833). A node is reached once along each path to it, so a child
@@ -467,7 +475,7 @@ impl Walker<'_, '_> {
                     return Err("scaled instance mode is not qualified".into());
                 }
                 if obj.fields["m_resolveSymInView"].as_bool() != Some(false) {
-                    return Err("view-resolved instance is unsupported".into());
+                    return Err(VIEW_RESOLVED_INSTANCE_DIAGNOSTIC.into());
                 }
                 if obj.fields["m_forbiddenTarget"]["m_targets"].as_u64() != Some(0)
                     && !drawn_hidden_instance(&obj.class_name, &obj.fields)

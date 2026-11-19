@@ -39,7 +39,7 @@ A roof sketch line's data (RE-44's header and ElementId) holds this block, found
 On the tutorial house:
 - three roofs have `00 00 01 00` on all 16 of their edges and are flat. Their record boxes are 1.25 ft tall, their type's thickness.
 - roof 169835 has 8 edges. Seven hold the default 0.6435011 rad (9:12) and `00 00 01 00`.
-- edge 169841, the roof's low edge from (20.927, −7.627) to (−48.969, −7.627), holds 0.0831412 rad, which is atan(1/12). It carries `01 01 01 00`, and −0.0833333 at +0x3b.
+- edge 169841, the roof's low edge, 69.896 ft long, holds 0.0831412 rad, which is atan(1/12). It carries `01 01 01 00`, and −0.0833333 at +0x3b.
 
 `partition_roof_slopes::edge_slope` accepts a block only in this shape. On a defining edge it also requires the rise/run to equal −tan of the angle to 1e-9.
 
@@ -66,7 +66,7 @@ With the change, Snowdon's GLB is byte-identical and Core Interior's IFC is unch
 For roof 169835:
 - d reaches 20.458333 ft across its outline;
 - 20.458333 × tan θ + 1.25 / cos θ = 1.7048611 + 1.2543327 = 2.9591938797 ft;
-- the record box runs from 18.916666667 to 21.875860546 ft, 2.959193880 ft.
+- the record box is 2.959193880 ft tall.
 
 ## 4. End to end
 
@@ -74,7 +74,7 @@ For roof 169835:
 ./target/ci/rvt-ifc demo-01-Source_House_2024_tn2.rvt -o house.ifc
 ```
 
-IfcOpenShell 0.8.5 meshes roof 169835 as an `IfcFacetedBrep` from z 18.916667 to 21.875860 ft, spanning x −48.969 to 20.927 and y −7.627 to 12.831. Every point of its underside lies at the base plus its distance from the defining edge over 12, and its top 1.25/cos θ above, to 2e-6 ft. The other three roofs are unchanged extrusions, 1.25 ft tall.
+IfcOpenShell 0.8.5 meshes roof 169835 as an `IfcFacetedBrep` 2.959193 ft tall and 69.896 by 20.458 ft in plan. Every point of its underside lies at the base plus its distance from the defining edge over 12, and its top 1.25/cos θ above, to 2e-6 ft. The other three roofs are unchanged extrusions, 1.25 ft tall.
 
 ## 5. What this does not do
 

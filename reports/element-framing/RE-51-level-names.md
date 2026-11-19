@@ -45,7 +45,7 @@ On Snowdon Towers and the 2025 projects the same bytes are the start of the Leve
 RE-24's marker was `05 00 00 00 48 02 00 00`, with the elevation 55 bytes on:
 
 - The marker is the first six bytes: `05 00 00 00`, then a `u16` per release, `0x0248` on 2024 and `0x025d` on 2025.
-- Four plan extents follow it as `f64` feet, then the elevation. On Snowdon's L3 the extents are about −90.0, −114.0, 90.0 and 114.0.
+- Four plan extents follow it as `f64` feet, then the elevation. On Snowdon's L3 they span about 180 ft by 228 ft.
 - RE-24's last two bytes were the first extent's low bytes: zero on Core Interior, whose extents are round, and not zero on Snowdon.
 - The marker sits 347 to 367 bytes past the name: 347 or 363 on Core Interior (RE-24), 361 on Snowdon, and 363 and 367 on RE1.
 

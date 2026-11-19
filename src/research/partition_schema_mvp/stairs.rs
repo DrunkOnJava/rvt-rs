@@ -533,7 +533,12 @@ pub(super) fn attach_stair_dimensions(
 /// 2598405, on a run of a stair of the Basement and itself on Level_01. Only a
 /// stair that one of its runs, landings or stringers already names is a whole
 /// here: a stair carried by its parts has no body of its own, and a railing
-/// alone must not take the stair's away.
+/// alone must not take the stair's away. A ramp is a whole too, on Revit 2024
+/// ([`crate::native_stairs::RAMP_RAILING_REVIT_VERSIONS`], #1988), for the
+/// railings that name it and have no level of their own
+/// (`BaseRailing.m_assocLevelId`): the two of the BIM4LCA housing's ramp are
+/// Revit's, and the office's eight, which Revit leaves plain, each have a
+/// level. A ramp keeps its own body, which its railings do not double.
 pub(super) fn attach_railing_lengths(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -561,6 +566,16 @@ pub(super) fn attach_railing_lengths(
         .filter(|element| STAIR_PART_CLASSES.contains(&element.class.as_str()))
         .filter_map(whole_of)
         .collect();
+    let ramps: BTreeSet<u32> =
+        if crate::native_stairs::RAMP_RAILING_REVIT_VERSIONS.contains(&revit_version) {
+            products
+                .iter()
+                .filter(|element| element.class == "Ramp")
+                .filter_map(|element| element.id)
+                .collect()
+        } else {
+            BTreeSet::new()
+        };
     for element in products
         .iter_mut()
         .filter(|element| element.class == "Railing")
@@ -582,7 +597,10 @@ pub(super) fn attach_railing_lengths(
             .get(&id)
             .filter(|_| !records.on_components.contains(&id))
             .and_then(|stair| u32::try_from(*stair).ok())
-            .filter(|stair| carried_stairs.contains(stair));
+            .filter(|stair| {
+                carried_stairs.contains(stair)
+                    || (ramps.contains(stair) && !records.on_levels.contains(&id))
+            });
         if let Some(stair) = stair {
             element.fields.push((
                 AGGREGATE_WHOLE_FIELD.into(),
@@ -632,14 +650,15 @@ pub(super) fn attach_railing_heights(
     }
 }
 
-/// Name Revit 2025 stairs, runs and stringers as Revit's export names them
-/// (RE-65), from their native records
-/// ([`crate::native_stairs::native_stair_parts`], #323): each takes its
+/// Name Revit 2025 stairs, runs, landings and stringers as Revit's export
+/// names them (RE-65), from their native records
+/// ([`crate::native_stairs::native_stair_parts`], #323, #2046): each takes its
 /// type, its type's name and its family, a stair the name
 /// `Family:Stair:ElementId` and a part `<stair> Run 2`, numbered in
 /// ElementId order among the exported parts of its kind on its stair. A
 /// run's type is the one `OST_StairsRuns` type definition its element
-/// record names (RE-28). Measured on the five R2025 stair models.
+/// record names (RE-28), a landing's the one `OST_StairsLandings` one.
+/// Measured on the five R2025 stair models.
 pub(super) fn attach_native_stair_names(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -649,7 +668,7 @@ pub(super) fn attach_native_stair_names(
     if !crate::native_stairs::NATIVE_STAIR_NAME_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
-    let classes = ["Stair", "StairsRun", "StairsStringer"];
+    let classes = ["Stair", "StairsRun", "StairsLanding", "StairsStringer"];
     let parts: BTreeSet<u64> = products
         .iter()
         .filter(|element| classes.contains(&element.class.as_str()))
@@ -683,7 +702,55 @@ pub(super) fn attach_native_stair_names(
             runs.insert(u64::from(id), u64::from(type_id));
         }
     }
-    let Ok(native) = crate::native_stairs::native_stair_parts(rf, &parts, &runs) else {
+    // A landing's type is the one `OST_StairsLandings` type definition its
+    // element record names, and its stair the one it is aggregated under or
+    // the one stair that record names (#2046).
+    let landing_types = ptr::type_definition_ids(
+        &ptr::scan_type_records(
+            rf,
+            revit_version,
+            crate::partition_element_records::OST_STAIRS_LANDINGS,
+            &declared,
+        )
+        .unwrap_or_default(),
+    );
+    let stair_ids: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "Stair")
+        .filter_map(|element| element.id)
+        .collect();
+    let mut landings: BTreeMap<u64, (u64, u64)> = BTreeMap::new();
+    for element in products
+        .iter()
+        .filter(|element| element.class == "StairsLanding")
+    {
+        let (Some(id), Some((references, _))) = (element.id, record_references(rf, element)) else {
+            continue;
+        };
+        let aggregated = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == AGGREGATE_WHOLE_FIELD => Some(*id),
+            _ => None,
+        });
+        let named: BTreeSet<u32> = references
+            .iter()
+            .filter_map(|&slot| u32::try_from(slot).ok())
+            .filter(|stair| stair_ids.contains(stair) && *stair != id)
+            .collect();
+        let stair = aggregated.or_else(|| {
+            let mut stairs = named.iter();
+            match (stairs.next(), stairs.next()) {
+                (Some(stair), None) => Some(*stair),
+                _ => None,
+            }
+        });
+        if let (Some(stair), Some(type_id)) = (
+            stair,
+            ptr::unique_type_reference(&references, &landing_types),
+        ) {
+            landings.insert(u64::from(id), (u64::from(stair), u64::from(type_id)));
+        }
+    }
+    let Ok(native) = crate::native_stairs::native_stair_parts(rf, &parts, &runs, &landings) else {
         return;
     };
     let mut members: BTreeMap<(u64, &'static str), BTreeSet<u64>> = BTreeMap::new();
