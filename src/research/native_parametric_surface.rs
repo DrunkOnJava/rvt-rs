@@ -358,7 +358,8 @@ impl Curve {
         if !second.is_finite() {
             return SPLINE_STEP_CAP;
         }
-        let steps = (SAMPLES as f64 * (second / (8. * chord)).sqrt()).ceil();
+        // Experiment (#2094): a quarter of the chord, so twice the steps.
+        let steps = (SAMPLES as f64 * (second / (2. * chord)).sqrt()).ceil();
         (steps as usize).clamp(1, SPLINE_STEP_CAP)
     }
     /// The greatest length of the derivative at 65 equal steps from `lo` to
