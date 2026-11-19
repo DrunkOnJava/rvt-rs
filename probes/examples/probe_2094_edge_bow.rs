@@ -32,12 +32,13 @@
 //!     over_0.001=<n> largest=<ft>: the two flights' faces meshed as the export meshes them
 //!     (`graphics_with_resolver`), each face's open boundary vertices and how far each lies
 //!     from every other face, then the eight farthest with where they are: faces that part
-//!     along a shared edge show here as a gap. Each names its face as `face_object=<n>
-//!     surface=<class> chords=<n>` (the spans between saved points its grid draws
-//!     straight, `-` for a face with no grid), and a line per such face gives how many of
-//!     the vertices over 0.001 ft are on it:
-//!   mesh owner=<ElementId> over_0.001_on face_object=<n> surface=<class> chords=<n>
-//!     vertices=<n>;
+//!     along a shared edge show here as a gap. Each names its face as `geometry=<n>
+//!     face=<n> surface=<class> chords=<n>` (the `Geometry` object it was meshed from, the
+//!     face of it with the primitive's tag, and the spans between saved points its grid
+//!     draws straight, `-` for a face with no grid), and a line per such face gives how
+//!     many of the vertices over 0.001 ft are on it:
+//!   mesh owner=<ElementId> over_0.001_on geometry=<n> face=<n> surface=<class>
+//!     chords=<n> vertices=<n>;
 //!   tally faces=<a>/<b> edges=<n> gap_over_0.001=<n> largest=<ft>
 //! ElementIds, surface classes and distances in feet only.
 //!
@@ -564,23 +565,39 @@ fn main() -> Result<()> {
         }
         // The face a gap's vertex is on: its object, its surface's class, and how many
         // spans between saved points its grid draws straight (`-` where it has no grid).
+        // A primitive's `object_index` is the `Geometry` it was meshed from; its face is
+        // the one of that object's `m_pFaces` whose tag is the primitive's.
         let describe = |fi: usize| -> String {
             let face = faces[fi];
             let g = face
                 .source_owner_id
                 .and_then(|id| kept.get(&id))
                 .unwrap_or(graph);
-            let surface = g
+            let face_index = g
                 .objects
                 .get(face.object_index)
-                .and_then(|f| f.fields.get("m_pSurf"))
-                .and_then(|s| pointer(g, face.object_index, s).ok().flatten())
+                .and_then(|o| o.fields.get("m_pFaces"))
+                .and_then(|list| list.as_array())
+                .and_then(|list| {
+                    list.iter()
+                        .filter_map(|p| pointer(g, face.object_index, p).ok().flatten())
+                        .find(|i| {
+                            g.objects[*i].fields["m_GInfo"]["m_tag"].as_i64() == Some(face.face_tag)
+                        })
+                });
+            let Some(fx) = face_index else {
+                return format!("geometry={} face=- surface=- chords=-", face.object_index);
+            };
+            let surface = g.objects[fx]
+                .fields
+                .get("m_pSurf")
+                .and_then(|s| pointer(g, fx, s).ok().flatten())
                 .and_then(|si| g.objects.get(si))
                 .map_or("-", |s| s.class_name.as_str());
-            let chords = rvt::research::native_parametric_mesh::face_grid(g, face.object_index)
+            let chords = rvt::research::native_parametric_mesh::face_grid(g, fx)
                 .map_or_else(|_| "-".to_string(), |grid| grid.chords.len().to_string());
             format!(
-                "face_object={} surface={surface} chords={chords}",
+                "geometry={} face={fx} surface={surface} chords={chords}",
                 face.object_index
             )
         };
