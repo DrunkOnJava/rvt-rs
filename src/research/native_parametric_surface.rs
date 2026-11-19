@@ -125,8 +125,8 @@ fn spline_segment(nodes: &[SplineNode], t: f64) -> (SplineNode, SplineNode) {
 
 /// The point of a saved `GNurbSpline` (RE-311) at `t` in homogeneous
 /// coordinates, by de Boor's algorithm. `control` holds more than `degree`
-/// points and `knots` their count plus `degree + 1`, in rising order, as
-/// [`Curve::read`] checks. The knot span is found by halving, for the reason
+/// points and `knots` their count plus `degree + 1`, never falling (a
+/// clamped spline repeats its end knots), as [`Curve::read`] checks. The knot span is found by halving, for the reason
 /// [`spline_segment`] gives.
 fn nurbs_homogeneous(degree: usize, knots: &[f64], control: &[[f64; 4]], t: f64) -> [f64; 4] {
     let n = control.len();
