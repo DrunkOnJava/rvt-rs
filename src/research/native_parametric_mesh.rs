@@ -67,8 +67,7 @@ fn keeps_saved_chords(surface: &ParametricSurface) -> bool {
     matches!(
         surface,
         ParametricSurface::RuledSurf { profile1, profile2, .. }
-            if matches!(profile1, Curve::Hermite { .. } | Curve::Nurbs { .. })
-                || matches!(profile2, Curve::Hermite { .. } | Curve::Nurbs { .. })
+            if matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. })
     )
 }
 
