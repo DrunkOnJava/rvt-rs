@@ -46,7 +46,7 @@ use rvt::research::native_document::{self, Options};
 use rvt::research::native_family_forms::family_records_in;
 use rvt::research::native_form_geometry::{ExtrusionSolid, FormDocument, Frame};
 use rvt::research::native_parameters::ObjectGraph;
-use rvt::research::native_saved_mesh::graphics_with_resolver;
+use rvt::research::native_saved_mesh::{graphics_including_filtered, graphics_with_resolver};
 use rvt::research::partition_instance_transforms::{InstanceTransform, scan_instance_transforms};
 
 /// The refusals of a body the file holds nothing to draw from.
@@ -280,6 +280,10 @@ fn main() -> Result<()> {
         let mut why: BTreeMap<String, usize> = BTreeMap::new();
         let mut vertices: Vec<V3> = Vec::new();
         let mut triangles: Vec<[usize; 3]> = Vec::new();
+        // Where a whole mesh holds no triangle: what the walk left out, and how many
+        // triangles it holds with hidden and filtered branches read too.
+        let (mut visibility, mut filters, mut non_surface, mut primitives) = (0, 0, 0, 0);
+        let (mut hidden_triangles, mut instance_refs) = (0usize, 0usize);
         for instance in &nested {
             let Some(graph) = graphics.get(instance) else {
                 continue;
@@ -296,6 +300,24 @@ fn main() -> Result<()> {
                 continue;
             }
             whole += 1;
+            visibility += meshes.excluded_visibility_branches;
+            filters += meshes.rejected_filters;
+            non_surface += meshes.excluded_non_surface_branches;
+            primitives += meshes.primitives.len();
+            let wide =
+                graphics_including_filtered(graph, &|other| graphics.get(&other).copied(), 3);
+            hidden_triangles += wide
+                .primitives
+                .iter()
+                .map(|p| p.triangles.len())
+                .sum::<usize>();
+            // Instance references in the nested instance's graphics, which point to
+            // the nested family's own symbol graphics in another document.
+            instance_refs += graph
+                .objects
+                .iter()
+                .filter(|o| o.class_name == "InstanceInfo" || o.class_name == "GInstance")
+                .count();
             for primitive in meshes
                 .primitives
                 .iter()
@@ -318,7 +340,7 @@ fn main() -> Result<()> {
             .map(|(text, n)| format!("{text}:{n}"))
             .collect();
         println!(
-            "nested family={id} instances={} with_graphics={with_graphics} whole={whole} triangles={} refused={}",
+            "nested family={id} instances={} with_graphics={with_graphics} whole={whole} triangles={} primitives={primitives} excluded_visibility={visibility} rejected_filters={filters} non_surface={non_surface} triangles_with_hidden_and_filtered={hidden_triangles} instance_refs={instance_refs} refused={}",
             nested.len(),
             triangles.len(),
             if refused.is_empty() {
