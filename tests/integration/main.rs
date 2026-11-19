@@ -151,6 +151,8 @@ mod rvt_inspect_cli;
 mod rvt_schedule_cli;
 #[path = "../samples.rs"]
 mod samples;
+#[path = "../saved_batches.rs"]
+mod saved_batches;
 #[path = "../schema_bbox_marker.rs"]
 mod schema_bbox_marker;
 #[path = "../schema_registry_catalogs.rs"]
