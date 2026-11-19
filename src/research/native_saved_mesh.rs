@@ -1228,7 +1228,10 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             CylinderTessellationProfile::default(),
         )?));
     }
-    if matches!(p.class_name.as_str(), "SurfRev" | "RuledSurf" | "ConeSurf") {
+    if matches!(
+        p.class_name.as_str(),
+        "SurfRev" | "RuledSurf" | "ConeSurf" | "HermiteSurf"
+    ) {
         return Ok(Some(crate::native_parametric_mesh::face(g, fi)?));
     }
     ensure!(

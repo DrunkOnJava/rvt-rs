@@ -274,6 +274,28 @@ pub enum ParametricSurface {
         envelope: [[f64; 2]; 2],
         orient: bool,
     },
+    /// A bicubic Hermite spline surface (RE-460, `HermiteSurf`): `u` and `v` are
+    /// the parameters of its grid and `nodes` holds one node at each crossing, the
+    /// node of `(iu, iv)` at `iv * u.len() + iu`. Each cell is the bicubic Hermite
+    /// patch of its four nodes, and a parameter past the grid, which the envelope
+    /// bounds, takes the nearest cell's patch continued.
+    HermiteSurf {
+        envelope: [[f64; 2]; 2],
+        orient: bool,
+        u: Vec<f64>,
+        v: Vec<f64>,
+        nodes: Vec<HermiteNode>,
+    },
+}
+
+/// One node of a `HermiteSurf` (RE-460): the surface's point there, its tangents
+/// along `u` and along `v` in feet per unit of the parameter, and its mixed
+/// derivative.
+#[derive(Debug, Clone, Copy)]
+pub struct HermiteNode {
+    pub point: Point,
+    pub tangent: [Point; 2],
+    pub mixed: Point,
 }
 
 impl ParametricSurface {
@@ -360,6 +382,68 @@ impl ParametricSurface {
                         .context("surface orientation")?,
                 })
             }
+            "HermiteSurf" => {
+                let params = |name: &str| -> Result<Vec<f64>> {
+                    let items = s.fields[name]
+                        .as_array()
+                        .with_context(|| format!("{name} must be an array"))?;
+                    let values = items
+                        .iter()
+                        .map(|x| x.as_f64().context("hermite parameter"))
+                        .collect::<Result<Vec<_>>>()?;
+                    ensure!(
+                        values.len() >= 2
+                            && values.iter().all(|x| x.is_finite())
+                            && values.windows(2).all(|w| w[0] < w[1]),
+                        "invalid {name}"
+                    );
+                    Ok(values)
+                };
+                let (u, v) = (params("m_uParams")?, params("m_vParams")?);
+                // Neither direction is periodic on any of the 479 objects measured
+                // (RE-460); a periodic one is unmeasured, so it is refused.
+                let periodic = s.fields["m_periodic"]
+                    .as_array()
+                    .context("hermite periodic flags")?;
+                ensure!(
+                    periodic.len() == 2
+                        && periodic.iter().all(|flag| flag.as_bool() == Some(false)),
+                    "periodic HermiteSurf is unmeasured"
+                );
+                let list = s.fields["m_NodeArray"]
+                    .as_array()
+                    .context("hermite node array")?;
+                ensure!(
+                    u.len().checked_mul(v.len()) == Some(list.len()),
+                    "hermite node count is not the grid's"
+                );
+                let nodes = list
+                    .iter()
+                    .map(|node| -> Result<HermiteNode> {
+                        let tangents = node["m_iTangent"]
+                            .as_array()
+                            .context("hermite node tangents")?;
+                        ensure!(tangents.len() == 2, "hermite node needs two tangents");
+                        Ok(HermiteNode {
+                            point: p(&node["m_iPoint"], "hermite node point")?,
+                            tangent: [
+                                p(&tangents[0], "hermite u tangent")?,
+                                p(&tangents[1], "hermite v tangent")?,
+                            ],
+                            mixed: p(&node["m_iMixedDer"], "hermite mixed derivative")?,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(Self::HermiteSurf {
+                    envelope,
+                    orient: s.fields["m_orientFlag"]
+                        .as_bool()
+                        .context("surface orientation")?,
+                    u,
+                    v,
+                    nodes,
+                })
+            }
             name => bail!("unsupported parametric surface {name}"),
         }
     }
@@ -367,14 +451,16 @@ impl ParametricSurface {
         match self {
             Self::SurfRev { envelope, .. }
             | Self::RuledSurf { envelope, .. }
-            | Self::ConeSurf { envelope, .. } => *envelope,
+            | Self::ConeSurf { envelope, .. }
+            | Self::HermiteSurf { envelope, .. } => *envelope,
         }
     }
     pub fn orientation(&self) -> bool {
         match self {
             Self::SurfRev { orient, .. }
             | Self::RuledSurf { orient, .. }
-            | Self::ConeSurf { orient, .. } => *orient,
+            | Self::ConeSurf { orient, .. }
+            | Self::HermiteSurf { orient, .. } => *orient,
         }
     }
     pub fn evaluate(&self, u: f64, v: f64) -> Result<Point> {
@@ -431,6 +517,12 @@ impl ParametricSurface {
                 let radial = add(mul(*x, cu), mul(*y, su));
                 add(*apex, mul(add(mul(*z, ca), mul(radial, sa)), v))
             }
+            Self::HermiteSurf {
+                u: grid_u,
+                v: grid_v,
+                nodes,
+                ..
+            } => hermite_eval(grid_u, grid_v, nodes, u, v).0,
         })
     }
     pub fn normal(&self, u: f64, v: f64) -> Result<Point> {
@@ -507,6 +599,24 @@ impl ParametricSurface {
             ensure!(l > 1e-12, "surface normal is singular");
             return Ok(mul(n, if *orient { 1. / l } else { -1. / l }));
         }
+        if let Self::HermiteSurf {
+            u: grid_u,
+            v: grid_v,
+            nodes,
+            orient,
+            ..
+        } = self
+        {
+            let (_, tu, tv) = hermite_eval(grid_u, grid_v, nodes, u, v);
+            let n = cross(tu, tv);
+            ensure!(
+                n.iter().all(|value| value.is_finite()),
+                "nonfinite surface normal"
+            );
+            let l = len(n);
+            ensure!(l > 1e-12, "surface normal is singular");
+            return Ok(mul(n, if *orient { 1. / l } else { -1. / l }));
+        }
         let Self::RuledSurf {
             profile1,
             profile2,
@@ -543,8 +653,224 @@ impl ParametricSurface {
         ensure!(l > 1e-12, "surface normal is singular");
         Ok(mul(n, if *orient { 1. / l } else { -1. / l }))
     }
+
+    /// The knots a mesh of the part of a `HermiteSurf` inside `bounds` needs along `u`
+    /// and along `v` (RE-460): the grid's own parameters, where its patches meet, and
+    /// each patch cut into as many pieces as keep a triangle of a piece within `chord`
+    /// of it. The knots are shared by every strip of cells beside them, so a cell cut
+    /// finer along one axis cuts its whole strip. `None` for any other surface; an error
+    /// where a patch would need more than `HERMITE_MAX_PIECES` pieces along an axis.
+    pub fn hermite_knots(
+        &self,
+        bounds: [[f64; 2]; 2],
+        chord: f64,
+    ) -> Result<Option<[Vec<f64>; 2]>> {
+        let Self::HermiteSurf {
+            u: grid_u,
+            v: grid_v,
+            nodes,
+            ..
+        } = self
+        else {
+            return Ok(None);
+        };
+        // The cells of one axis that `bounds` meets with the part of each inside them, the
+        // end cells reaching to infinity where a patch is continued past the grid.
+        let strips = |params: &[f64], low: f64, high: f64| -> Vec<(usize, f64, f64)> {
+            let last = params.len() - 2;
+            (0..=last)
+                .filter_map(|i| {
+                    let start = if i == 0 { f64::NEG_INFINITY } else { params[i] };
+                    let end = if i == last {
+                        f64::INFINITY
+                    } else {
+                        params[i + 1]
+                    };
+                    let (a, b) = (start.max(low), end.min(high));
+                    (b > a).then_some((i, a, b))
+                })
+                .collect()
+        };
+        let cols = strips(grid_u, bounds[0][0], bounds[1][0]);
+        let rows = strips(grid_v, bounds[0][1], bounds[1][1]);
+        let mut along_u = vec![1usize; cols.len()];
+        let mut along_v = vec![1usize; rows.len()];
+        for (ci, &(i, ua, ub)) in cols.iter().enumerate() {
+            for (ri, &(j, va, vb)) in rows.iter().enumerate() {
+                let (du, dv) = (grid_u[i + 1] - grid_u[i], grid_v[j + 1] - grid_v[j]);
+                let ranges = (
+                    ((ua - grid_u[i]) / du, (ub - grid_u[i]) / du),
+                    ((va - grid_v[j]) / dv, (vb - grid_v[j]) / dv),
+                );
+                let [m_uu, m_vv, m_uv] =
+                    hermite_second_derivatives(grid_u, grid_v, nodes, (i, j), ranges);
+                // A triangle of a piece `hu` by `hv` leaves the patch by at most an eighth
+                // of the second difference along its sides and its diagonal.
+                let (width, height) = (ub - ua, vb - va);
+                let sag = |ku: usize, kv: usize| {
+                    let (hu, hv) = (width / ku as f64, height / kv as f64);
+                    (hu * hu * m_uu + 2. * hu * hv * m_uv + hv * hv * m_vv) / 8.
+                };
+                let mut best: Option<(usize, usize)> = None;
+                for ku in 1..=HERMITE_MAX_PIECES {
+                    let Some(kv) = (1..=HERMITE_MAX_PIECES).find(|kv| sag(ku, *kv) <= chord) else {
+                        continue;
+                    };
+                    if best.is_none_or(|(bu, bv)| ku * kv < bu * bv) {
+                        best = Some((ku, kv));
+                    }
+                }
+                let (ku, kv) = best.with_context(|| {
+                    format!("a hermite patch needs more than {HERMITE_MAX_PIECES} pieces")
+                })?;
+                along_u[ci] = along_u[ci].max(ku);
+                along_v[ri] = along_v[ri].max(kv);
+            }
+        }
+        let knots = |strips: &[(usize, f64, f64)], pieces: &[usize]| -> Vec<f64> {
+            strips
+                .iter()
+                .zip(pieces)
+                .flat_map(|(&(_, a, b), &k)| {
+                    (0..=k).map(move |m| a + (b - a) * m as f64 / k as f64)
+                })
+                .collect()
+        };
+        Ok(Some([knots(&cols, &along_u), knots(&rows, &along_v)]))
+    }
 }
 
 fn c_range(c: &Curve) -> [f64; 2] {
     c.range()
+}
+
+/// The most pieces one patch of a `HermiteSurf` is cut into along an axis (RE-460).
+const HERMITE_MAX_PIECES: usize = 64;
+
+/// The cubic Hermite basis of one end of a cell at `x`: the value, its slope, the
+/// tangent's basis and its slope.
+fn hermite_basis(end: usize, x: f64) -> [f64; 4] {
+    if end == 0 {
+        [
+            2. * x * x * x - 3. * x * x + 1.,
+            6. * x * x - 6. * x,
+            x * x * x - 2. * x * x + x,
+            3. * x * x - 4. * x + 1.,
+        ]
+    } else {
+        [
+            -2. * x * x * x + 3. * x * x,
+            -6. * x * x + 6. * x,
+            x * x * x - x * x,
+            3. * x * x - 2. * x,
+        ]
+    }
+}
+
+/// The patch of cell `(i, j)` at the local coordinates `(t, s)`, 0 to 1 across the cell
+/// and continued outside it: the point and its derivatives along `u` and along `v` per
+/// unit of the parameter. The patch is the nodes' points, their tangents scaled by the
+/// cell's width, and their mixed derivatives scaled by its area, each with its basis.
+fn hermite_cell_patch(
+    us: &[f64],
+    vs: &[f64],
+    nodes: &[HermiteNode],
+    (i, j): (usize, usize),
+    (t, s): (f64, f64),
+) -> (Point, Point, Point) {
+    let (du, dv) = (us[i + 1] - us[i], vs[j + 1] - vs[j]);
+    let (mut point, mut d_u, mut d_v) = ([0.; 3], [0.; 3], [0.; 3]);
+    for a in 0..2 {
+        let ta = hermite_basis(a, t);
+        for b in 0..2 {
+            let sb = hermite_basis(b, s);
+            let node = &nodes[(j + b) * us.len() + i + a];
+            for k in 0..3 {
+                let position = node.point[k];
+                let tangent_u = node.tangent[0][k] * du;
+                let tangent_v = node.tangent[1][k] * dv;
+                let twist = node.mixed[k] * du * dv;
+                point[k] += position * ta[0] * sb[0]
+                    + tangent_u * ta[2] * sb[0]
+                    + tangent_v * ta[0] * sb[2]
+                    + twist * ta[2] * sb[2];
+                d_u[k] += (position * ta[1] * sb[0]
+                    + tangent_u * ta[3] * sb[0]
+                    + tangent_v * ta[1] * sb[2]
+                    + twist * ta[3] * sb[2])
+                    / du;
+                d_v[k] += (position * ta[0] * sb[1]
+                    + tangent_u * ta[2] * sb[1]
+                    + tangent_v * ta[0] * sb[3]
+                    + twist * ta[2] * sb[3])
+                    / dv;
+            }
+        }
+    }
+    (point, d_u, d_v)
+}
+
+/// The patch of the cell that holds `(u, v)` (the nearest one, continued, past the grid)
+/// and its derivatives along `u` and `v`.
+fn hermite_eval(
+    us: &[f64],
+    vs: &[f64],
+    nodes: &[HermiteNode],
+    u: f64,
+    v: f64,
+) -> (Point, Point, Point) {
+    let cell = |params: &[f64], x: f64| {
+        params
+            .partition_point(|p| *p <= x)
+            .saturating_sub(1)
+            .min(params.len() - 2)
+    };
+    let (i, j) = (cell(us, u), cell(vs, v));
+    let t = (u - us[i]) / (us[i + 1] - us[i]);
+    let s = (v - vs[j]) / (vs[j + 1] - vs[j]);
+    hermite_cell_patch(us, vs, nodes, (i, j), (t, s))
+}
+
+/// The longest second derivatives of one cell's patch over the part of it in `ranges` (local
+/// coordinates, `u` then `v`): `|P_uu|`, `|P_vv|` and `|P_uv|` in feet per unit of the
+/// parameter squared, found on five samples along each axis by central differences, which are
+/// exact for the cubic along an axis, and a quarter more for what the samples miss.
+fn hermite_second_derivatives(
+    us: &[f64],
+    vs: &[f64],
+    nodes: &[HermiteNode],
+    cell: (usize, usize),
+    ranges: ((f64, f64), (f64, f64)),
+) -> [f64; 3] {
+    let (du, dv) = (us[cell.0 + 1] - us[cell.0], vs[cell.1 + 1] - vs[cell.1]);
+    let at = |t: f64, s: f64| hermite_cell_patch(us, vs, nodes, cell, (t, s)).0;
+    let h = 1e-2;
+    let mut largest = [0.0f64; 3];
+    for a in 0..5 {
+        for b in 0..5 {
+            let t = ranges.0.0 + (ranges.0.1 - ranges.0.0) * a as f64 / 4.;
+            let s = ranges.1.0 + (ranges.1.1 - ranges.1.0) * b as f64 / 4.;
+            let centre = at(t, s);
+            let (t_up, t_down) = (at(t + h, s), at(t - h, s));
+            let (s_up, s_down) = (at(t, s + h), at(t, s - h));
+            let corners = [
+                at(t + h, s + h),
+                at(t + h, s - h),
+                at(t - h, s + h),
+                at(t - h, s - h),
+            ];
+            let uu: Point =
+                std::array::from_fn(|k| (t_up[k] - 2. * centre[k] + t_down[k]) / (h * du).powi(2));
+            let vv: Point =
+                std::array::from_fn(|k| (s_up[k] - 2. * centre[k] + s_down[k]) / (h * dv).powi(2));
+            let uv: Point = std::array::from_fn(|k| {
+                (corners[0][k] - corners[1][k] - corners[2][k] + corners[3][k])
+                    / (4. * h * h * du * dv)
+            });
+            for (slot, value) in largest.iter_mut().zip([uu, vv, uv]) {
+                *slot = slot.max(len(value));
+            }
+        }
+    }
+    largest.map(|x| 1.25 * x)
 }
