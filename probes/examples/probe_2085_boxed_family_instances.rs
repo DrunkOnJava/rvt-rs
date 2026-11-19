@@ -20,6 +20,11 @@
 //!     does not draw: a rebuilt body of a family that has any is short of them;
 //!   - `volume`: the rebuilt solids' volumes summed (two that overlap are counted twice);
 //!   - `low` and `high`: the corners of the rebuilt solids' box in the model's frame, feet.
+//!   nested family=<ElementId> instances=<n> with_graphics=<n> whole=<n> triangles=<n>: for each
+//!     family with no form the rebuild knows, its nested instances, those its document saved
+//!     graphics for, and those whose graphics mesh whole. Where every one does, a boxed
+//!     instance of the family is drawn from those meshes placed by its transform
+//!     (`rebuilt=from_nested_graphics`), and its `volume`, `low` and `high` are that mesh's;
 //!   formless family=<ElementId> records=<n> drawing=<class:n,...> classes=<class:n,...>: for
 //!     each family with no
 //!     extrusion and no other form the rebuild knows, every record class its document holds,
@@ -40,6 +45,8 @@ use rvt::ifc::{ExportOptions, run_export};
 use rvt::research::native_document::{self, Options};
 use rvt::research::native_family_forms::family_records_in;
 use rvt::research::native_form_geometry::{ExtrusionSolid, FormDocument, Frame};
+use rvt::research::native_parameters::ObjectGraph;
+use rvt::research::native_saved_mesh::graphics_with_resolver;
 use rvt::research::partition_instance_transforms::{InstanceTransform, scan_instance_transforms};
 
 /// The refusals of a body the file holds nothing to draw from.
@@ -243,7 +250,68 @@ fn main() -> Result<()> {
         &Options::default().releases,
         None,
     )?;
+    // A formless family's nested instances, drawn from the graphics the family's own
+    // document saved for them, in the family's coordinates: (vertices, triangles),
+    // where every nested instance has graphics that mesh whole.
+    let mut nested_meshes: BTreeMap<u64, (Vec<V3>, Vec<[usize; 3]>)> = BTreeMap::new();
     for (id, items) in &everything {
+        let graphics: BTreeMap<u64, &ObjectGraph> = items
+            .iter()
+            .filter(|(_, graph)| {
+                graph
+                    .objects
+                    .first()
+                    .is_some_and(|root| root.class_name == "GElement")
+            })
+            .map(|(record, graph)| (*record, graph))
+            .collect();
+        let nested: Vec<u64> = items
+            .iter()
+            .filter(|(_, graph)| {
+                graph
+                    .objects
+                    .first()
+                    .is_some_and(|root| root.class_name == "FamilyInstance")
+            })
+            .map(|(record, _)| *record)
+            .collect();
+        let (mut with_graphics, mut whole) = (0usize, 0usize);
+        let mut vertices: Vec<V3> = Vec::new();
+        let mut triangles: Vec<[usize; 3]> = Vec::new();
+        for instance in &nested {
+            let Some(graph) = graphics.get(instance) else {
+                continue;
+            };
+            with_graphics += 1;
+            let meshes = graphics_with_resolver(graph, &|other| graphics.get(&other).copied());
+            if !meshes.diagnostics.is_empty() || meshes.unbounded_faces != 0 {
+                continue;
+            }
+            whole += 1;
+            for primitive in meshes
+                .primitives
+                .iter()
+                .filter(|p| !p.hidden && !p.filtered)
+            {
+                let base = vertices.len();
+                vertices.extend(primitive.vertices.iter().copied());
+                for t in &primitive.triangles {
+                    let corner = |i: u32| usize::try_from(i).ok().map(|i| base + i);
+                    if let (Some(a), Some(b), Some(c)) = (corner(t[0]), corner(t[1]), corner(t[2]))
+                    {
+                        triangles.push([a, b, c]);
+                    }
+                }
+            }
+        }
+        println!(
+            "nested family={id} instances={} with_graphics={with_graphics} whole={whole} triangles={}",
+            nested.len(),
+            triangles.len()
+        );
+        if !nested.is_empty() && whole == nested.len() && !triangles.is_empty() {
+            nested_meshes.insert(*id, (vertices, triangles));
+        }
         let mut classes: BTreeMap<&str, usize> = BTreeMap::new();
         for (_, graph) in items {
             if let Some(root) = graph.objects.first() {
@@ -315,7 +383,7 @@ fn main() -> Result<()> {
             .copied();
         let family = family_id.and_then(|f| read.get(&f));
         let transform = u32::try_from(*id).ok().and_then(|key| transforms.get(&key));
-        let (rebuilt, solids) = match (family_id, family) {
+        let (mut rebuilt, solids) = match (family_id, family) {
             (None, _) => ("no_family".to_string(), None),
             (Some(_), None) => ("family_document_not_read".to_string(), None),
             (Some(_), Some(family)) => match &family.solids {
@@ -323,6 +391,25 @@ fn main() -> Result<()> {
                 Err(why) => (reason(why), None),
             },
         };
+        // A formless family whose nested instances' saved graphics mesh whole: that
+        // mesh, placed by the project instance's transform.
+        let nested_mesh = family_id
+            .filter(|_| solids.is_none())
+            .and_then(|f| nested_meshes.get(&f))
+            .zip(transform)
+            .map(|((vertices, triangles), transform)| {
+                let carry = |v: V3| {
+                    [0usize, 1, 2].map(|i| {
+                        transform.origin[i]
+                            + (0..3).map(|j| transform.axes[j][i] * v[j]).sum::<f64>()
+                    })
+                };
+                let placed: Vec<V3> = vertices.iter().map(|v| carry(*v)).collect();
+                (placed, triangles)
+            });
+        if nested_mesh.is_some() {
+            rebuilt = "from_nested_graphics".to_string();
+        }
         *tally
             .entry(format!("{class} rebuilt {rebuilt}"))
             .or_default() += 1;
@@ -352,7 +439,41 @@ fn main() -> Result<()> {
                 let point = |p: V3| format!("{:.6},{:.6},{:.6}", p[0], p[1], p[2]);
                 (format!("{volume:.6}"), point(low), point(high))
             }
-            None => ("-".to_string(), "-".to_string(), "-".to_string()),
+            None => match &nested_mesh {
+                Some((vertices, triangles)) => {
+                    let mut low = [f64::INFINITY; 3];
+                    let mut high = [f64::NEG_INFINITY; 3];
+                    for v in vertices {
+                        for k in 0..3 {
+                            low[k] = low[k].min(v[k]);
+                            high[k] = high[k].max(v[k]);
+                        }
+                    }
+                    // The enclosed volume about the mesh's own centre, as the scorers take it.
+                    let n = vertices.len() as f64;
+                    let centre: V3 =
+                        [0usize, 1, 2].map(|k| vertices.iter().map(|v| v[k]).sum::<f64>() / n);
+                    let volume = triangles
+                        .iter()
+                        .map(|t| {
+                            let [a, b, c] = t.map(|i| {
+                                let v = vertices[i];
+                                [v[0] - centre[0], v[1] - centre[1], v[2] - centre[2]]
+                            });
+                            let cross = [
+                                b[1] * c[2] - b[2] * c[1],
+                                b[2] * c[0] - b[0] * c[2],
+                                b[0] * c[1] - b[1] * c[0],
+                            ];
+                            (a[0] * cross[0] + a[1] * cross[1] + a[2] * cross[2]) / 6.0
+                        })
+                        .sum::<f64>()
+                        .abs();
+                    let point = |p: V3| format!("{:.6},{:.6},{:.6}", p[0], p[1], p[2]);
+                    (format!("{volume:.6}"), point(low), point(high))
+                }
+                None => ("-".to_string(), "-".to_string(), "-".to_string()),
+            },
         };
         println!(
             "instance tag={id} class={class} refusal={refusal} family={} extrusions={} voids={} others={} rebuilt={rebuilt} transform={} volume={volume} low={low} high={high}",
