@@ -67,8 +67,8 @@ pub struct FaceGrid {
 ///   Towers and the BIM4LCA files (#2098);
 /// - a cone, on Snowdon Towers Plumbing (#2098).
 ///
-/// A ruled face between plain curves is left out: no body measured shows its faces
-/// part along such an edge, or meet any better for the rule.
+/// A ruled face between plain curves is left out: the one body measured with such an
+/// edge (on Snowdon Towers Architectural) meets no better for the rule.
 fn keeps_saved_chords(surface: &ParametricSurface) -> bool {
     use crate::native_parametric_surface::Curve;
     match surface {
