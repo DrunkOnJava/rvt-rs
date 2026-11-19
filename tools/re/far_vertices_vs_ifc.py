@@ -6,7 +6,7 @@
 Needs IfcOpenShell and numpy. A temporary diagnostic for #2094, run by Measure as an IFC
 scorer: not part of any scorer list.
 
-For every `IfcStairFlight`, `IfcRamp` and `IfcRampFlight` both exports hold (same `Tag`), meshed as
+For every `IfcStairFlight`, `IfcRamp`, `IfcRampFlight` and `IfcSanitaryTerminal` both exports hold (same `Tag`), meshed as
 `stair_bodies_vs_ifc.py` meshes it (each file's own site frame), this lists:
 
 - Revit's vertices more than 0.001 ft from rvt-rs's surface, and rvt-rs's more than
@@ -121,7 +121,7 @@ def main():
     if len(args) != 2:
         print(__doc__)
         return 2
-    for cls in ("IfcStairFlight", "IfcRamp", "IfcRampFlight"):
+    for cls in ("IfcStairFlight", "IfcRamp", "IfcRampFlight", "IfcSanitaryTerminal"):
         report(cls, bodies(args[0], cls), bodies(args[1], cls))
     return 0
 
