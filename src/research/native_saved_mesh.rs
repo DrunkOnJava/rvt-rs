@@ -592,6 +592,16 @@ fn refined_plane_edge(
     if !matches!(kind, "CylSurf" | "SurfRev" | "RuledSurf" | "ConeSurf") {
         return Ok(original);
     }
+    // Experiment (#2094): along an edge that crosses both parameters of a ruled face whose
+    // profile is a spline, a plane keeps its saved points, as Revit's export of the BIM4LCA
+    // timber office's flights does there.
+    let spline_neighbour = kind == "RuledSurf"
+        && matches!(
+            crate::native_parametric_surface::ParametricSurface::read(g, other_surface),
+            Ok(crate::native_parametric_surface::ParametricSurface::RuledSurf { profile1, profile2, .. })
+                if matches!(profile1, crate::native_parametric_surface::Curve::Hermite { .. })
+                    || matches!(profile2, crate::native_parametric_surface::Curve::Hermite { .. })
+        );
     type SurfaceEval = Box<dyn Fn([f64; 2]) -> Result<[f64; 3]>>;
     let (u_values, v_values, evaluate): (Vec<f64>, Vec<f64>, SurfaceEval) = if kind == "CylSurf" {
         let profile = CylinderTessellationProfile::default();
@@ -702,6 +712,9 @@ fn refined_plane_edge(
         );
     }
     let Some(axis) = axis else {
+        if spline_neighbour {
+            return Ok(original);
+        }
         // An edge that runs across both parameters of the curved face (a slanted
         // plane through a cylinder is an ellipse in its parameters) has no grid
         // line to follow: the polygon takes the points of the edge itself that
