@@ -12,15 +12,18 @@ For every `IfcStairFlight`, `IfcRamp`, `IfcRampFlight` and `IfcSanitaryTerminal`
 - Revit's vertices more than 0.001 ft from rvt-rs's surface, and rvt-rs's more than
   0.01 ft from Revit's (the bars `mesh_bodies_vs_ifc.py` scores), the 12 farthest of each;
 - how many of rvt-rs's vertices are more than 0.001 ft from Revit's surface, and where by
-  facing and crease, so that a move of rvt-rs's faces under 0.01 ft shows;
+  facing and crease, so that a move of rvt-rs's faces under 0.01 ft shows, and the farthest
+  vertex of each body from the other's surface, both ways;
 - for each: its distance, where it sits in the flight's box (each axis as a fraction from
   the low face, 0, to the high one, 1), the facing of the nearest triangle of the other
   body (`up`, `down`, `side`, or `slope` with its angle from the vertical), and whether it
   lies on a crease of its own body (two triangles meeting at it more than 10 degrees
   apart, a boundary between faces) or inside a smooth stretch (`smooth`).
 
-Only flights with such a vertex are listed, each vertex with its position as fractions of
-the flight's box and in rvt-rs's frame, feet (the BIM4LCA models are openly licensed).
+Every body has its summary line, with its farthest vertex both ways, so a body that moves under
+the bars still shows; the vertices themselves are listed only where one passes a bar, each with
+its position as fractions of the body's box and in rvt-rs's frame, feet (the BIM4LCA models are
+openly licensed).
 """
 
 import math
@@ -100,8 +103,10 @@ def creases(triangles):
 
 
 def listed(points, triangles_self, triangles_other, bar, low, high):
-    """The vertices of one body farther than `bar` from the other's surface, farthest first."""
+    """The vertices of one body farther than `bar` from the other's surface, farthest first, and the
+    farthest distance of any vertex."""
     found = nearest(points, triangles_other)
+    farthest = max((distance for distance, _ in found), default=0.0)
     crease = creases(triangles_self)
     rows = []
     for point, (distance, unit) in zip(points, found):
@@ -113,7 +118,7 @@ def listed(points, triangles_self, triangles_other, bar, low, high):
         kind = "crease" if angle > CREASE_DEGREES else "smooth"
         rows.append((distance, where, facing(unit), kind, tuple(round(x, 4) for x in point)))
     rows.sort(reverse=True)
-    return rows
+    return rows, farthest
 
 
 def main():
@@ -136,15 +141,14 @@ def report(cls, ours, ref):
         everything = our_vertices + ref_vertices
         low = [min(v[k] for v in everything) for k in range(3)]
         high = [max(v[k] for v in everything) for k in range(3)]
-        revit = listed(ref_vertices, ref_triangles, our_triangles, REVIT_BAR, low, high)
-        mine_fine = listed(our_vertices, our_triangles, ref_triangles, REVIT_BAR, low, high)
+        revit, revit_farthest = listed(ref_vertices, ref_triangles, our_triangles, REVIT_BAR, low, high)
+        mine_fine, mine_farthest = listed(our_vertices, our_triangles, ref_triangles, REVIT_BAR, low, high)
         mine = [row for row in mine_fine if row[0] > OURS_BAR]
-        if not revit and not mine_fine:
-            continue
         print(
             f"far vertices: {tag}: Revit's beyond {REVIT_BAR} ft of ours {len(revit)} of {len(ref_vertices)}; "
             f"ours beyond {OURS_BAR} ft of Revit's {len(mine)} of {len(our_vertices)}; "
-            f"ours beyond {REVIT_BAR} ft of Revit's {len(mine_fine)}"
+            f"ours beyond {REVIT_BAR} ft of Revit's {len(mine_fine)}; "
+            f"farthest Revit's from ours {revit_farthest:.6f} ft, ours from Revit's {mine_farthest:.6f} ft"
         )
         fine = {}
         for _, _, face, kind, _ in mine_fine:
