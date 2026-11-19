@@ -17,7 +17,7 @@ Where a plane shares an edge with one of these ruled faces, and the edge's sampl
 Now both faces draw such an edge straight between its saved points (`115d224a`):
 - The ruled face decides which edges these are (`FaceGrid::chord_edges`: its profile a spline, its neighbour's surface a `Plane`, the edge's samples changing both parameters), and the plane reads that set.
 - The plane keeps the edge's saved points.
-- The ruled face's grid vertices along each span between two saved points are put on the line between the span's ends. The trimmed mesher tags each point with the span it is made on (`trimmed_cells_on`), so the step reads each point once and needs no work budget.
+- The ruled face's grid vertices along each span between two saved points are put on the line between the span's ends. The trimmed mesher tags each point with the span it is made on (`trimmed_cells_on`), so the step reads each point once and needs no work budget. It replaced a search for the points on each span, which every run below measured; the two give the same exports, byte for byte, on all 120 models (Measure [44549221722](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44549221722), `35d04301` against `115d224a`: `ifc.sha256` 120 of 120 and `diagnostics.json` 102 of 102 identical).
 - That is kept only where every triangle keeps its area. Otherwise the face's points stay on the surface, so the step refuses no face.
 
 Two steps of evidence led there:
