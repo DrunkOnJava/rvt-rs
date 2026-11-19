@@ -41,7 +41,7 @@ only identifiers that exist in `src/`.
 
 | Project the rules rest on | Rules |
 |---|---:|
-| BIM4LCA office | 49 |
+| BIM4LCA office | 50 |
 | Snowdon Towers (local only) | 38 |
 | RE1 (IFC-ECS) | 12 |
 | Core Interior | 6 |
@@ -100,6 +100,7 @@ runs, would test the largest share of the rules below.
 | [RE-480](../reports/element-framing/RE-480-ceiling-saved-face-gross-area.md) | `coverings_without_area`, `one_piece_face_area`, `add_covering_areas` | BIM4LCA office | 2024 | yes | "The cut ceilings it reaches are those of the BIM4LCA office" |
 | [RE-486](../reports/element-framing/RE-486-ceiling-pieces-first-face-gross-area.md) | `coverings_without_area`, `first_piece_face_area`, `add_covering_areas` | BIM4LCA office | 2024 | yes | "four saves of one building by Revit 2024" |
 | [RE-488](../reports/element-framing/RE-488-omitted-target-flat-stop.md) | `butt_joins`, `NativeWall`, `WallLine` | BIM4LCA housing | 2024 | yes | "one save of one building by Revit 2024" |
+| [RE-492](../reports/element-framing/RE-492-hermite-spline-profiles-drawn.md) | `keeps_saved_chords`, `on_chords`, `trimmed_cells_on` | BIM4LCA office | 2024 | yes | "all on one building, the BIM4LCA office" |
 | [RE-188](../reports/element-framing/RE-188-curtain-wall-export-as.md) | `export_override_applies`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "On both BIM4LCA office files (Revit 2024), 124 curtain walls carry their own "Export to IFC As" (`IFC_EXPORT_ELEMENT_AS`) of `IfcShadingDevice`, read by RE-45 on a `Walls` record." |
 | [RE-190](../reports/element-framing/RE-190-office-export-values.md) | `EXPORT_OVERRIDE_TARGETS`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "positive on both office files: 185 elements of the as-built file and 165 of the permit file now have the class Revit gives them" |
 | [RE-192](../reports/element-framing/RE-192-wall-sweep-export-as.md) | `export_override_applies`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "On both BIM4LCA office files (Revit 2024), 9 wall sweeps each carry their own "Export to IFC As" (`IFC_EXPORT_ELEMENT_AS`) of `IfcCovering`, with predefined type `ROOFING`." |

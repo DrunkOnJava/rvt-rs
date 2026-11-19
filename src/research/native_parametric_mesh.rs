@@ -88,8 +88,7 @@ fn ruled_surface_component(
     // Edge instead; pointer() also covers token-only references.  Malformed
     // disconnected edges are ignored while building this component index so
     // they cannot taint an otherwise resolvable ruled-surface component.
-    let mut adjacency: std::collections::BTreeMap<usize, std::collections::BTreeSet<usize>> =
-        std::collections::BTreeMap::new();
+    let mut adjacency: BTreeMap<usize, std::collections::BTreeSet<usize>> = BTreeMap::new();
     let mut invalid_by_face = std::collections::BTreeSet::new();
     for (edge_index, edge) in g
         .objects
@@ -1053,10 +1052,12 @@ const CUT_BUDGET_EXCEEDED: &str = "trim cut budget exceeded";
 const TRIANGLE_BUDGET: usize = 4_000_000;
 
 /// The points of a trimmed face in (u, v) and its triangles, by their indices.
+#[cfg(test)]
 type Cells = (Vec<[f64; 2]>, Vec<[u32; 3]>);
 /// A trim loop's edge between two of its points: the loop, and the edge's first point.
 type Span = (usize, usize);
-/// [`Cells`], and beside each point the span of [`trimmed_cells_on`]'s `spans` it lies on.
+/// The points of a trimmed face in (u, v), its triangles by their indices, and beside
+/// each point the span of [`trimmed_cells_on`]'s `spans` it lies on.
 type TaggedCells = (Vec<[f64; 2]>, Vec<[u32; 3]>, Vec<Option<Span>>);
 /// A span's two ends in the surface's parameters, as `FaceGrid::chords` holds them.
 type Chord = [[f64; 2]; 2];
@@ -1188,6 +1189,14 @@ fn point_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     (p[0] - (a[0] + t * dx)).hypot(p[1] - (a[1] + t * dy))
 }
 
+/// [`trimmed_cells_on`] with no spans asked about: the cells alone.
+#[cfg(test)]
+fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> Result<Cells> {
+    let (points, triangles, _) =
+        trimmed_cells_on(loops, u_knots, v_knots, &std::collections::BTreeSet::new())?;
+    Ok((points, triangles))
+}
+
 /// The cells of a face whose trim is not the rectangle of its grid: the region
 /// inside `loops` (every loop closed and its last point not repeated; the holes
 /// are loops inside the first), cut by the grid's `u_knots` into strips and by
@@ -1202,13 +1211,8 @@ fn point_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
 /// runs straight past a vertex of the next strip's, a crack inside the face. The
 /// triangles must cover the area the loops enclose, or the loops cross each other
 /// or themselves. Returns the points in (u, v) and the triangles (#1706).
-fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> Result<Cells> {
-    let (points, triangles, _) =
-        trimmed_cells_on(loops, u_knots, v_knots, &std::collections::BTreeSet::new())?;
-    Ok((points, triangles))
-}
-
-/// [`trimmed_cells`], and beside each point the span of `spans` it lies on, strictly
+///
+/// Beside each point it returns the span of `spans` it lies on, strictly
 /// between the span's ends: each point is made on the trapezoid edges of the segments
 /// that bound its cells, so the segment it lies on is known when it is made, and no
 /// search is run (#2094). A span along a strip's edge (its two ends at one `u`) holds
