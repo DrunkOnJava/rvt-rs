@@ -32,7 +32,12 @@
 //!     over_0.001=<n> largest=<ft>: the two flights' faces meshed as the export meshes them
 //!     (`graphics_with_resolver`), each face's open boundary vertices and how far each lies
 //!     from every other face, then the eight farthest with where they are: faces that part
-//!     along a shared edge show here as a gap;
+//!     along a shared edge show here as a gap. Each names its face as `face_object=<n>
+//!     surface=<class> chords=<n>` (the spans between saved points its grid draws
+//!     straight, `-` for a face with no grid), and a line per such face gives how many of
+//!     the vertices over 0.001 ft are on it:
+//!   mesh owner=<ElementId> over_0.001_on face_object=<n> surface=<class> chords=<n>
+//!     vertices=<n>;
 //!   tally faces=<a>/<b> edges=<n> gap_over_0.001=<n> largest=<ft>
 //! ElementIds, surface classes and distances in feet only.
 //!
@@ -554,9 +559,31 @@ fn main() -> Result<()> {
                         best = best.min(triangle_distance(p, a, b, c));
                     }
                 }
-                gaps.push((best, p, face.object_index));
+                gaps.push((best, p, fi));
             }
         }
+        // The face a gap's vertex is on: its object, its surface's class, and how many
+        // spans between saved points its grid draws straight (`-` where it has no grid).
+        let describe = |fi: usize| -> String {
+            let face = faces[fi];
+            let g = face
+                .source_owner_id
+                .and_then(|id| kept.get(&id))
+                .unwrap_or(graph);
+            let surface = g
+                .objects
+                .get(face.object_index)
+                .and_then(|f| f.fields.get("m_pSurf"))
+                .and_then(|s| pointer(g, face.object_index, s).ok().flatten())
+                .and_then(|si| g.objects.get(si))
+                .map_or("-", |s| s.class_name.as_str());
+            let chords = rvt::research::native_parametric_mesh::face_grid(g, face.object_index)
+                .map_or_else(|_| "-".to_string(), |grid| grid.chords.len().to_string());
+            format!(
+                "face_object={} surface={surface} chords={chords}",
+                face.object_index
+            )
+        };
         gaps.sort_by(|a, b| b.0.total_cmp(&a.0));
         let over = |bar: f64| gaps.iter().filter(|g| g.0 > bar).count();
         println!(
@@ -568,11 +595,22 @@ fn main() -> Result<()> {
             over(1e-3),
             gaps.first().map_or(0., |g| g.0)
         );
-        for (d, p, face) in gaps.iter().take(8) {
+        for (d, p, fi) in gaps.iter().take(8) {
             println!(
-                "mesh owner={owner} gap={d:.6} at={:.4},{:.4},{:.4} face_object={face}",
-                p[0], p[1], p[2]
+                "mesh owner={owner} gap={d:.6} at={:.4},{:.4},{:.4} {}",
+                p[0],
+                p[1],
+                p[2],
+                describe(*fi)
             );
+        }
+        // Where the vertices over 0.001 ft lie, by their face's surface and spans.
+        let mut by_face: BTreeMap<String, usize> = BTreeMap::new();
+        for (_, _, fi) in gaps.iter().filter(|g| g.0 > 1e-3) {
+            *by_face.entry(describe(*fi)).or_default() += 1;
+        }
+        for (face, n) in &by_face {
+            println!("mesh owner={owner} over_0.001_on {face} vertices={n}");
         }
     }
     // Per element, the edges that border a ruled face with a spline profile: how many,
