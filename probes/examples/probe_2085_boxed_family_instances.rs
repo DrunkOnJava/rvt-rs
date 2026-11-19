@@ -20,7 +20,8 @@
 //!     does not draw: a rebuilt body of a family that has any is short of them;
 //!   - `volume`: the rebuilt solids' volumes summed (two that overlap are counted twice);
 //!   - `low` and `high`: the corners of the rebuilt solids' box in the model's frame, feet.
-//!   formless family=<ElementId> records=<n> classes=<class:n,...>: for each family with no
+//!   formless family=<ElementId> records=<n> drawing=<class:n,...> classes=<class:n,...>: for
+//!     each family with no
 //!     extrusion and no other form the rebuild knows, every record class its document holds,
 //!     most first (12 at most), so that what draws such a family (a nested instance, a
 //!     free-form solid, an import) can be told;
@@ -256,14 +257,38 @@ fn main() -> Result<()> {
             .take(12)
             .map(|(class, n)| format!("{class}:{n}"))
             .collect();
+        // The classes that would draw such a family, counted whatever their rank.
+        let drawing: Vec<String> = [
+            "FamilyInstance",
+            "FreeFormElement",
+            "ImportInstance",
+            "Text3dElem",
+            "ExtrusionElem",
+            "SweepElem",
+            "BlendElem",
+            "RevolutionElem",
+            "SweptBlendElem",
+        ]
+        .iter()
+        .map(|class| {
+            format!(
+                "{class}:{}",
+                ranked
+                    .iter()
+                    .find(|(c, _)| c == class)
+                    .map_or(0, |(_, n)| *n)
+            )
+        })
+        .collect();
         println!(
-            "formless family={id} records={} classes={}",
+            "formless family={id} records={} drawing={} classes={}",
             items.len(),
+            drawing.join(","),
             listed.join(",")
         );
     }
     for id in formless.difference(&everything.keys().copied().collect()) {
-        println!("formless family={id} records=0 classes=-");
+        println!("formless family={id} records=0 drawing=- classes=-");
     }
     let wanted: BTreeSet<u32> = ids
         .iter()
