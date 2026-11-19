@@ -86,11 +86,15 @@ It also repeats the probe's `outlines` and `turncheck` lines: the probe turns th
 and says on how many ends the line fields come out the same. A probe output without the fields prints none
 of this, and every other line is as before.
 
-S6 offsets ask, for each end whose line extent comes from the column's saved mesh and is off the chord by more
-than 1 per cent, whether the extent is the chord of Revit's column along another line parallel to Revit's beam
-line, offset across the column in plan (41 lines over the column's plan diagonal). Where it is, the column's
-outline is right and the two lines cross the column at different places; the offset of the nearest such line
-is binned. Where it is not, the outline itself differs from Revit's column at the beam.
+S6 middle line sets the same extents over the chord of Revit's column along the beam's middle line: its
+longest direction, through the middle of its extent across in plan and up. The line through the end caps'
+centres leaves the middle where an end is cut obliquely, as Revit cuts a beam back to the face of a column
+turned against it: the vertices at the end of the axis are then on one side of the beam. For each end read
+from a column's saved mesh and off the caps' chord by more than 1 per cent, S6 offsets says how far the caps'
+line is from the middle line at that end, and whether the extent is longer than the longest chord of the
+column along any line parallel to the middle line (101 lines across the column's plan diagonal): where it is,
+the outline itself differs from Revit's column; where it is not, the extent is consistent with a line that
+crosses the column elsewhere, which does not show that the outline is right.
 """
 
 import collections
@@ -626,24 +630,39 @@ LINE_SOURCES = {"m": "column's saved mesh", "s": "column's section", "b": "colum
 
 
 OFFSET_BINS = (("under 0.05 ft", 0.05), ("0.05 to 0.2 ft", 0.2), ("0.2 to 0.5 ft", 0.5), ("over 0.5 ft", math.inf))
-OFFSET_STEPS = 20
+OFFSET_STEPS = 50
 
 
-def parallel_chords(triangles, origin, axis, half_width):
-    """The chords of a mesh along lines parallel to `axis`, offset from `origin` across it in plan by up to
-    `half_width` either way in OFFSET_STEPS steps a side: (offset, chord length) for each line that crosses it."""
-    across = numpy.array([-axis[1], axis[0], 0.0])
+def middle_line(corners, axis):
+    """A beam's middle line, as (origin, unit direction, unit plan direction across it): along its
+    longest direction (signed as `axis`), through the middle of its extent across in plan and up.
+    None for a vertical beam."""
+    points = corners.reshape(-1, 3)
+    centre = points.mean(axis=0)
+    _, _, axes = numpy.linalg.svd(points - centre, full_matrices=False)
+    direction = axes[0] if float(axes[0] @ axis) >= 0 else -axes[0]
+    across = numpy.array([-direction[1], direction[0], 0.0])
     norm = numpy.linalg.norm(across)
-    if norm == 0:
-        return []
+    if norm < 1e-9:
+        return None
     across = across / norm
-    out = []
+    up = numpy.cross(across, direction)
+    origin = centre.copy()
+    for basis in (across, up):
+        values = points @ basis
+        origin = origin + ((values.min() + values.max()) / 2 - float(centre @ basis)) * basis
+    return origin, direction, across
+
+
+def longest_parallel_chord(triangles, origin, axis, across, half_width):
+    """The longest chord of a mesh along the lines parallel to `axis` through `origin` offset across
+    it by up to `half_width` either way, in OFFSET_STEPS steps a side; 0 where none crosses it."""
+    longest = 0.0
     for i in range(-OFFSET_STEPS, OFFSET_STEPS + 1):
-        offset = half_width * i / OFFSET_STEPS
-        crossing = chord(triangles, origin + offset * across, axis)
+        crossing = chord(triangles, origin + half_width * i / OFFSET_STEPS * across, axis)
         if crossing is not None:
-            out.append((offset, crossing[1] - crossing[0]))
-    return out
+            longest = max(longest, crossing[1] - crossing[0])
+    return longest
 
 
 def offset_bin(feet):
@@ -672,6 +691,7 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
         return
     ratios = collections.Counter()
     offsets = collections.Counter()
+    middles = collections.Counter()
     joint = collections.defaultdict(collections.Counter)
     seen = collections.Counter()
     for tag, fields in beams.items():
@@ -701,31 +721,38 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
         }
         placed = assign_caps(caps, centres)
         kind = alignment(fields)
+        mid = middle_line(meshes[beam][2], axis)
         for end, (column, t_line, extent, source) in found.items():
+            where = LINE_SOURCES.get(source, source)
+            middle_ratio = CHORD_NONE
+            if mid is not None:
+                along_middle = chord(meshes[column][2], mid[0], mid[1])
+                if along_middle is not None:
+                    middle_ratio = ratio_bin(extent, (along_middle[1] - along_middle[0]) * factor)
+            middles[(kind, "all", middle_ratio)] += 1
+            middles[(kind, where, middle_ratio)] += 1
             crossing = chord(meshes[column][2], caps[0], axis)
             if crossing is None:
                 seen["of those, ends whose line crosses no face of Revit's column"] += 1
                 continue
             start = float(caps[0] @ axis)
             low, high = start + crossing[0], start + crossing[1]
-            where = LINE_SOURCES.get(source, source)
             ratio = ratio_bin(extent, (high - low) * factor)
             ratios[(kind, "all", ratio)] += 1
             ratios[(kind, where, ratio)] += 1
-            if source == "m" and ratio != "within 1 per cent" and ratio != CHORD_NONE:
-                offsets[(kind, "ends off the chord by more than 1 per cent")] += 1
+            if source == "m" and ratio != "within 1 per cent" and ratio != CHORD_NONE and mid is not None:
+                offsets[(kind, "ends")] += 1
+                apart = float((caps[placed[end]] - mid[0]) @ mid[2]) * factor
+                offsets[(kind, f"the caps' line from the middle line at the end {offset_bin(apart)}")] += 1
+                if middle_ratio == "within 1 per cent":
+                    offsets[(kind, "within 1 per cent of the middle line's chord")] += 1
                 box_low, box_high = meshes[column][4]
                 half = float(numpy.linalg.norm((box_high - box_low)[:2])) / 2
-                matches = [
-                    offset
-                    for offset, length in parallel_chords(meshes[column][2], caps[0], axis, half)
-                    if length * factor > 0 and abs(extent / (length * factor) - 1) <= 0.01
-                ]
-                if matches:
-                    nearest = min(matches, key=abs) * factor
-                    offsets[(kind, f"within 1 per cent of a parallel line's chord, offset {offset_bin(nearest)}")] += 1
+                longest = longest_parallel_chord(meshes[column][2], mid[0], mid[1], mid[2], half) * factor
+                if longest > 0 and extent > longest * 1.01:
+                    offsets[(kind, "longer than every parallel line's chord by over 1 per cent")] += 1
                 else:
-                    offsets[(kind, "within 1 per cent of no parallel line's chord")] += 1
+                    offsets[(kind, "no longer than the longest parallel line's chord")] += 1
             near, far = (low, high) if abs(low - middle) < abs(high - middle) else (high, low)
             if far == near:
                 continue
@@ -745,17 +772,22 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 label = "" if where == "all" else f", outline from the {where}"
                 print(f"beam ends:   S6, beams {kind}, the line's extent over the chord{label}: {'; '.join(parts)}")
     for kind in ("in line with a plan axis", "oblique to the plan axes", "of unknown direction"):
-        total = offsets[(kind, "ends off the chord by more than 1 per cent")]
+        for where in ("all", *LINE_SOURCES.values()):
+            parts = [f"{name} {middles[(kind, where, name)]}" for name in ratio_names if middles[(kind, where, name)]]
+            if parts:
+                label = "" if where == "all" else f", outline from the {where}"
+                print(
+                    f"beam ends:   S6 middle line, beams {kind}, the line's extent over the chord of the beam's "
+                    f"middle line{label}: {'; '.join(parts)}"
+                )
+    for kind in ("in line with a plan axis", "oblique to the plan axes", "of unknown direction"):
+        total = offsets[(kind, "ends")]
         if not total:
             continue
-        parts = [
-            f"{what} {n}"
-            for (k, what), n in sorted(offsets.items())
-            if k == kind and what != "ends off the chord by more than 1 per cent"
-        ]
+        parts = [f"{what} {n}" for (k, what), n in sorted(offsets.items()) if k == kind and what != "ends"]
         print(
             f"beam ends:   S6 offsets, beams {kind}, outline from the column's saved mesh, {total} ends off "
-            f"the chord by more than 1 per cent: {'; '.join(parts)}"
+            f"the caps' chord by more than 1 per cent: {'; '.join(parts)}"
         )
     order = {name: i for i, name in enumerate(FRACTION_BINS)}
     for stands in ("shorter", "same", "longer"):
