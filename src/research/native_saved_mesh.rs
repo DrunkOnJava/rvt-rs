@@ -283,7 +283,7 @@ const EDGE_ON_PLANE: f64 = 1e-9;
 
 /// The parameter an edge's samples run along, `0` for `u` and `1` for `v`, where
 /// the other is constant to 1e-7 along all of them; None where they change both.
-fn isoparametric_axis(samples: &[[f64; 2]]) -> Option<usize> {
+pub(crate) fn isoparametric_axis(samples: &[[f64; 2]]) -> Option<usize> {
     let (start, end) = (*samples.first()?, *samples.last()?);
     let axis = if (start[1] - end[1]).abs() < 1e-7 && (start[0] - end[0]).abs() > 1e-7 {
         0
@@ -593,6 +593,9 @@ fn refined_plane_edge(
         return Ok(original);
     }
     type SurfaceEval = Box<dyn Fn([f64; 2]) -> Result<[f64; 3]>>;
+    // Whether the curved face draws this edge straight between its saved points
+    // (`FaceGrid::chord_edges`), which the plane's side then does too.
+    let mut saved_chords = false;
     let (u_values, v_values, evaluate): (Vec<f64>, Vec<f64>, SurfaceEval) = if kind == "CylSurf" {
         let profile = CylinderTessellationProfile::default();
         let mesh = cylinder_face(g, other, profile)?;
@@ -635,6 +638,7 @@ fn refined_plane_edge(
         (us, vs, eval)
     } else {
         let grid = crate::native_parametric_mesh::face_grid(g, other)?;
+        saved_chords = grid.chord_edges.contains(&edge_index);
         (
             grid.u,
             grid.v,
@@ -702,6 +706,13 @@ fn refined_plane_edge(
         );
     }
     let Some(axis) = axis else {
+        // Along an edge that crosses both parameters of a ruled face with a spline
+        // profile, the plane keeps the edge's saved points, as Revit's export of the
+        // BIM4LCA timber office's flights does there (#2094): refined onto the cut
+        // curve, two of Revit's vertices a flight missed rvt-rs's surface by 0.00125 ft.
+        if saved_chords {
+            return Ok(original);
+        }
         // An edge that runs across both parameters of the curved face (a slanted
         // plane through a cylinder is an ellipse in its parameters) has no grid
         // line to follow: the polygon takes the points of the edge itself that

@@ -48,6 +48,26 @@ pub struct FaceGrid {
     /// parameters (the first is the outer one, the others holes), its last point not
     /// repeated; the face is the part of the grid inside them (#1706).
     pub loops: Vec<Vec<[f64; 2]>>,
+    /// The edges, by object index, that this face and the plane beside it both draw
+    /// straight between the edge's saved points (`keeps_saved_chords`, #2094).
+    pub chord_edges: std::collections::BTreeSet<usize>,
+    /// Each span between two saved points of those edges, in the surface's parameters:
+    /// a trimmed face's vertices along one lie on the line between its ends.
+    pub chords: Vec<[[f64; 2]; 2]>,
+}
+
+/// Whether a face on `surface` and a plane draw an edge they share that crosses both
+/// of the surface's parameters straight between the edge's saved points: a ruled face
+/// with a spline profile (#2094). There Revit's export of the BIM4LCA timber office's
+/// flights puts the plane's vertices on those lines, and the curved face's side, drawn
+/// straight in its parameters between them, bows off the plane by up to 0.0027 ft.
+fn keeps_saved_chords(surface: &ParametricSurface) -> bool {
+    use crate::native_parametric_surface::Curve;
+    matches!(
+        surface,
+        ParametricSurface::RuledSurf { profile1, profile2, .. }
+            if matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. })
+    )
 }
 
 // A face whose trim is the complete rectangle of its parameters (including analytic
@@ -149,16 +169,25 @@ fn ruled_surface_component(
 /// The most trim loops a face may hold.
 const MAX_TRIM_LOOPS: usize = 64;
 
+/// A loop's edges' samples, and beside each the edge's object index where it is drawn
+/// straight between its saved points.
+type LoopSegments = (Vec<Vec<[f64; 2]>>, Vec<Option<usize>>);
+
 /// The samples of each edge of the loop at `li` of the face `fi`, edge by edge, in the
 /// face's parameters and clamped to the surface's envelope `env`. A loop has at least
-/// `least` edges.
+/// `least` edges. Beside each, where `saved_chords` (the face's surface
+/// `keeps_saved_chords`), the edge's object index if it is one the face draws straight
+/// between its saved points: its other face's surface is a plane, and its samples,
+/// before they are clamped, change both parameters (as the plane's side reads them,
+/// `native_saved_mesh::isoparametric_axis`).
 fn loop_segments(
     g: &ObjectGraph,
     fi: usize,
     li: usize,
     env: [[f64; 2]; 2],
     least: usize,
-) -> Result<Vec<Vec<[f64; 2]>>> {
+    saved_chords: bool,
+) -> Result<LoopSegments> {
     use crate::native_saved_mesh::pointer;
     let l = &g.objects[li];
     ensure!(
@@ -173,6 +202,7 @@ fn loop_segments(
     let mut cur = pointer(g, li, &l.fields["m_next"])?.context("empty trim")?;
     let mut seen = std::collections::BTreeSet::new();
     let mut segments = Vec::new();
+    let mut chord_edges = Vec::new();
     while cur != li {
         ensure!(seen.insert(cur), "trim edge cycle");
         let e = &g.objects[cur];
@@ -199,6 +229,19 @@ fn loop_segments(
             points.push(uv_point(&p["uv"][side])?);
         }
         points.push(uv_point(&ends[1]["uv"][side])?);
+        // An edge whose other face does not resolve to a plane is not one: nothing
+        // here refuses a face that is drawn without it.
+        let chord = saved_chords
+            && crate::native_saved_mesh::isoparametric_axis(&points).is_none()
+            && pointer(g, cur, &faces[1 - side])
+                .ok()
+                .flatten()
+                .and_then(|other| {
+                    let surface = g.objects.get(other)?.fields.get("m_pSurf")?;
+                    pointer(g, other, surface).ok().flatten()
+                })
+                .is_some_and(|si| g.objects.get(si).is_some_and(|s| s.class_name == "Plane"));
+        chord_edges.push(chord.then_some(cur));
         segments.push(points);
         cur = pointer(g, cur, &e.fields["m_next"][side])?.context("null trim next")?;
     }
@@ -218,7 +261,7 @@ fn loop_segments(
             }
         }
     }
-    Ok(segments)
+    Ok((segments, chord_edges))
 }
 
 /// Whether the edges of a loop join end to end in model coordinates, either way
@@ -462,15 +505,27 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     // surface's parameters.
     let mut loops: Vec<Vec<Vec<[f64; 2]>>> = Vec::new();
     let mut seen_loops = std::collections::BTreeSet::new();
+    let saved_chords = keeps_saved_chords(&surface);
+    let mut chord_edges = std::collections::BTreeSet::new();
+    let mut chords = Vec::new();
     let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
     while let Some(li) = next {
         ensure!(seen_loops.insert(li), "trim loop cycle");
         ensure!(loops.len() < MAX_TRIM_LOOPS, "too many trim loops");
-        let segments = loop_segments(g, fi, li, env, if loops.is_empty() { 2 } else { 1 })?;
+        let least = if loops.is_empty() { 2 } else { 1 };
+        let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
         ensure!(
             loop_closes(&surface, &segments)?,
             "disconnected parametric trim in model coordinates"
         );
+        // The spans come from the clamped samples the loop's polygon is made of, so
+        // that a vertex the cells put on one lies on it exactly.
+        for (points, edge) in segments.iter().zip(&edges) {
+            if let Some(edge) = edge {
+                chord_edges.insert(*edge);
+                chords.extend(points.windows(2).map(|w| [w[0], w[1]]));
+            }
+        }
         loops.push(segments);
         next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
     }
@@ -736,6 +791,8 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         bounds: [min, max],
         rectangular,
         loops: polygons,
+        chord_edges,
+        chords,
     })
 }
 
@@ -759,6 +816,7 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
             &grid.loops,
             &grid.u,
             &grid.v,
+            &grid.chords,
             orient,
             2_000_000,
         )?
@@ -1282,13 +1340,70 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
     Ok((points, triangles))
 }
 
-/// The face's cells inside its trim loops (`trimmed_cells`), on the surface. The
-/// triangles turn the way the grid's do for the same orientation.
+/// The tests of a point against a span that [`on_chords`] may make for one face before
+/// it leaves the face's points on the surface.
+const CHORD_BUDGET: usize = 250_000_000;
+
+/// `vertices`, the model points of a trimmed face's `points`, with every point that lies
+/// on a span of `chords` (to [`KNOT_TOLERANCE`] in the parameters, and not at either
+/// end) moved onto the straight line between the span's ends on the surface, at the
+/// same fraction of the span (#2094). `None` where no point moves, or where the tests
+/// would pass [`CHORD_BUDGET`].
+fn on_chords(
+    surface: &ParametricSurface,
+    points: &[[f64; 2]],
+    vertices: &[[f64; 3]],
+    chords: &[[[f64; 2]; 2]],
+) -> Result<Option<Vec<[f64; 3]>>> {
+    if chords.is_empty() {
+        return Ok(None);
+    }
+    let mut order: Vec<usize> = (0..points.len()).collect();
+    order.sort_by(|a, b| points[*a][0].total_cmp(&points[*b][0]));
+    let mut placed = vertices.to_vec();
+    let mut moved = false;
+    let mut work = 0usize;
+    for &[a, b] in chords {
+        let d = [b[0] - a[0], b[1] - a[1]];
+        let length = d[0] * d[0] + d[1] * d[1];
+        if length.is_nan() || length <= 0. {
+            continue;
+        }
+        let lo = a[0].min(b[0]) - KNOT_TOLERANCE;
+        let hi = a[0].max(b[0]) + KNOT_TOLERANCE;
+        let start = order.partition_point(|i| points[*i][0] < lo);
+        let end = order.partition_point(|i| points[*i][0] <= hi);
+        work = work.saturating_add(end - start);
+        if work > CHORD_BUDGET {
+            return Ok(None);
+        }
+        let (from, to) = (surface.evaluate(a[0], a[1])?, surface.evaluate(b[0], b[1])?);
+        let apart = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]);
+        for &i in &order[start..end] {
+            let p = points[i];
+            if apart(p, a) <= KNOT_TOLERANCE || apart(p, b) <= KNOT_TOLERANCE {
+                continue;
+            }
+            let t = ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / length;
+            if t <= 0. || t >= 1. || apart(p, [a[0] + t * d[0], a[1] + t * d[1]]) > KNOT_TOLERANCE {
+                continue;
+            }
+            placed[i] = std::array::from_fn(|k| from[k] + t * (to[k] - from[k]));
+            moved = true;
+        }
+    }
+    Ok(moved.then_some(placed))
+}
+
+/// The face's cells inside its trim loops (`trimmed_cells`), on the surface, with the
+/// points on `chords` moved onto them where every triangle keeps its area
+/// ([`on_chords`]). The triangles turn the way the grid's do for the same orientation.
 fn tessellate_trimmed(
     surface: &ParametricSurface,
     loops: &[Vec<[f64; 2]>],
     u_knots: &[f64],
     v_knots: &[f64],
+    chords: &[[[f64; 2]; 2]],
     orient: bool,
     max_vertices: usize,
 ) -> Result<ParametricMesh> {
@@ -1310,18 +1425,35 @@ fn tessellate_trimmed(
         normals.push(n);
     }
     let winding = surface.orientation() == orient;
-    let mut triangles = Vec::with_capacity(cells.len());
-    for [a, b, c] in cells {
-        match keep_triangle(
-            vertices[a as usize],
-            vertices[b as usize],
-            vertices[c as usize],
-        ) {
-            Some(true) => triangles.push(if winding { [a, b, c] } else { [a, c, b] }),
-            Some(false) => {}
-            None => anyhow::bail!("noncollapsed degenerate parametric triangle"),
+    // The cells' triangles on `vertices`, or `None` where one is a needle.
+    let triangulate = |vertices: &[[f64; 3]]| -> Option<Vec<[u32; 3]>> {
+        let mut triangles = Vec::with_capacity(cells.len());
+        for &[a, b, c] in &cells {
+            if keep_triangle(
+                vertices[a as usize],
+                vertices[b as usize],
+                vertices[c as usize],
+            )? {
+                triangles.push(if winding { [a, b, c] } else { [a, c, b] });
+            }
         }
-    }
+        Some(triangles)
+    };
+    // Points moved onto their spans (`on_chords`) are kept only where every triangle
+    // still has area; anything else in that step leaves the face's points on the
+    // surface, as they were before it, so that it never refuses a face.
+    let placed = on_chords(surface, &points, &vertices, chords)
+        .ok()
+        .flatten()
+        .and_then(|placed| triangulate(&placed).map(|triangles| (placed, triangles)));
+    let (vertices, triangles) = match placed {
+        Some(drawn) => drawn,
+        None => {
+            let triangles =
+                triangulate(&vertices).context("noncollapsed degenerate parametric triangle")?;
+            (vertices, triangles)
+        }
+    };
     ensure!(
         !triangles.is_empty(),
         "parametric surface produced no triangles"
