@@ -25,8 +25,9 @@
 //!     mesh's hull, feet (`-` without a mesh or for a circle);
 //!   - `turned`: the same with the section turned about its centre by `angle` less the export's
 //!     rotation, the outline the fix would draw.
-//!   tally <key> <n>
-//! ElementIds, angles and distances in feet only.
+//!
+//! and one `tally <key> <n>` line per turn and section kind. ElementIds, angles and distances in
+//! feet only.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_2096_turned_columns -- MODEL.rvt
