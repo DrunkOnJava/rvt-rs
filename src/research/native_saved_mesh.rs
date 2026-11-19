@@ -706,10 +706,12 @@ fn refined_plane_edge(
         );
     }
     let Some(axis) = axis else {
-        // Along an edge that crosses both parameters of a ruled face with a spline
-        // profile, the plane keeps the edge's saved points, as Revit's export of the
-        // BIM4LCA timber office's flights does there (#2094): refined onto the cut
-        // curve, two of Revit's vertices a flight missed rvt-rs's surface by 0.00125 ft.
+        // Along an edge that crosses both parameters of a face that draws it straight
+        // between its saved points (`FaceGrid::chord_edges`: a ruled face with a spline
+        // profile, a surface of revolution), the plane keeps the edge's saved points, as
+        // Revit's export of the BIM4LCA timber office's flights does on the spline faces
+        // (#2094): refined onto the cut curve, two of Revit's vertices a flight missed
+        // rvt-rs's surface by 0.00125 ft, and the two faces parted (#2098).
         if saved_chords {
             return Ok(original);
         }

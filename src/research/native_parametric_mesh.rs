@@ -59,16 +59,21 @@ pub struct FaceGrid {
 
 /// Whether a face on `surface` and a plane draw an edge they share that crosses both
 /// of the surface's parameters straight between the edge's saved points: a ruled face
-/// with a spline profile (#2094). There Revit's export of the BIM4LCA timber office's
-/// flights puts the plane's vertices on those lines, and the curved face's side, drawn
-/// straight in its parameters between them, bows off the plane by up to 0.0027 ft.
+/// with a spline profile (#2094), and a surface of revolution (#2098). On a ruled face
+/// with a spline profile, Revit's export of the BIM4LCA timber office's flights puts
+/// the plane's vertices on those lines, and the curved face's side, drawn straight in
+/// its parameters between them, bowed off the plane by up to 0.0027 ft. On a surface of
+/// revolution the plane, drawn through the curve it cuts from the surface, parted from
+/// the curved face by up to 0.006 ft on Snowdon Towers and the BIM4LCA files.
 fn keeps_saved_chords(surface: &ParametricSurface) -> bool {
     use crate::native_parametric_surface::Curve;
-    matches!(
-        surface,
-        ParametricSurface::RuledSurf { profile1, profile2, .. }
-            if matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. })
-    )
+    match surface {
+        ParametricSurface::RuledSurf {
+            profile1, profile2, ..
+        } => matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. }),
+        ParametricSurface::SurfRev { .. } => true,
+        _ => false,
+    }
 }
 
 // A face whose trim is the complete rectangle of its parameters (including analytic
