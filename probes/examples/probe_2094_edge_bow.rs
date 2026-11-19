@@ -574,6 +574,33 @@ fn main() -> Result<()> {
                 p[0], p[1], p[2]
             );
         }
+        // Every gap over 0.001 ft, by the faces of the saved edge whose sides pass nearest
+        // it: an edge the probe does not read (a cylinder's) shows as a distant nearest one.
+        let mut by_edge: BTreeMap<String, (usize, f64)> = BTreeMap::new();
+        for (d, p, _) in gaps.iter().filter(|g| g.0 > 1e-3) {
+            let nearest = bows
+                .iter()
+                .filter(|b| b.owner == owner)
+                .map(|b| {
+                    let near =
+                        polyline_distance(*p, &b.lines[0]).min(polyline_distance(*p, &b.lines[1]));
+                    (near, b)
+                })
+                .min_by(|a, b| a.0.total_cmp(&b.0));
+            let key = match nearest {
+                Some((near, b)) if near < 0.01 => format!("{} object={}", b.axes, b.object),
+                Some((near, _)) => format!("no read edge within 0.01 ft (nearest {near:.4})"),
+                None => "no read edge".to_string(),
+            };
+            let entry = by_edge.entry(key).or_default();
+            entry.0 += 1;
+            entry.1 = entry.1.max(*d);
+        }
+        for (key, (n, largest)) in &by_edge {
+            println!(
+                "mesh owner={owner} gaps_over_0.001={n} largest={largest:.6} nearest_edge={key}"
+            );
+        }
     }
     // Per element, the edges that border a ruled face with a spline profile: how many,
     // how many bow more than 0.001 ft from their saved points' straight lines, the most.
