@@ -962,6 +962,58 @@ fn ring_impl(
     Ok(out)
 }
 
+/// What a cylinder face's two loops are when its envelope is part of a turn, as the
+/// reason it is refused: a hole inside the other loop, two separate regions, or a
+/// loop that does not close in the surface's parameters (#2102: the probe that says
+/// which shape the BIM4LCA files' two-loop cylinders are).
+fn part_turn_pair(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    loops: [usize; 2],
+) -> String {
+    let rings: Vec<_> = loops
+        .iter()
+        .map(|&li| ring(g, index, face, li).ok())
+        .collect();
+    let boxes: Vec<Option<[f64; 4]>> = rings
+        .iter()
+        .map(|ring| {
+            ring.as_ref().map(|points| {
+                points.iter().fold(
+                    [
+                        f64::INFINITY,
+                        f64::INFINITY,
+                        f64::NEG_INFINITY,
+                        f64::NEG_INFINITY,
+                    ],
+                    |b, p| {
+                        [
+                            b[0].min(p[0]),
+                            b[1].min(p[1]),
+                            b[2].max(p[0]),
+                            b[3].max(p[1]),
+                        ]
+                    },
+                )
+            })
+        })
+        .collect();
+    let inside =
+        |a: [f64; 4], b: [f64; 4]| a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3];
+    let apart = |a: [f64; 4], b: [f64; 4]| a[2] < b[0] || b[2] < a[0] || a[3] < b[1] || b[3] < a[1];
+    match (boxes[0], boxes[1]) {
+        (Some(a), Some(b)) if inside(a, b) || inside(b, a) => {
+            "two cylinder trim loops on part of a turn: a hole".into()
+        }
+        (Some(a), Some(b)) if apart(a, b) => {
+            "two cylinder trim loops on part of a turn: two separate regions".into()
+        }
+        (Some(_), Some(_)) => "two cylinder trim loops on part of a turn: crossing boxes".into(),
+        _ => "two cylinder trim loops on part of a turn: a loop does not close".into(),
+    }
+}
+
 /// The trim of a cylinder face bounded by two loops, each a full turn at one height: a
 /// tube between two circles, with no seam edge. Joined as the one loop a tube with a
 /// seam edge has, the lower circle forward and the upper back, the
@@ -976,10 +1028,9 @@ fn tube_trim(
     u_range: [f64; 2],
 ) -> Result<Vec<[f64; 2]>> {
     const TOL: f64 = 1e-7;
-    ensure!(
-        (u_range[1] - u_range[0] - std::f64::consts::TAU).abs() <= TOL,
-        "two cylinder trim loops on part of a turn"
-    );
+    if (u_range[1] - u_range[0] - std::f64::consts::TAU).abs() > TOL {
+        bail!(part_turn_pair(g, index, face, loops));
+    }
     let mut ends: Vec<(f64, Vec<[f64; 2]>)> = Vec::with_capacity(2);
     for li in loops {
         // Labelled as this reader's, so that a refusal says which pair of loops it
