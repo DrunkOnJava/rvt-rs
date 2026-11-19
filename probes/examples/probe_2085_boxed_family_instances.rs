@@ -276,6 +276,8 @@ fn main() -> Result<()> {
             .map(|(record, _)| *record)
             .collect();
         let (mut with_graphics, mut whole) = (0usize, 0usize);
+        // Why a nested instance's graphics do not mesh whole, digits as `#`, counted.
+        let mut why: BTreeMap<String, usize> = BTreeMap::new();
         let mut vertices: Vec<V3> = Vec::new();
         let mut triangles: Vec<[usize; 3]> = Vec::new();
         for instance in &nested {
@@ -285,6 +287,12 @@ fn main() -> Result<()> {
             with_graphics += 1;
             let meshes = graphics_with_resolver(graph, &|other| graphics.get(&other).copied());
             if !meshes.diagnostics.is_empty() || meshes.unbounded_faces != 0 {
+                for diagnostic in &meshes.diagnostics {
+                    *why.entry(reason(diagnostic)).or_default() += 1;
+                }
+                if meshes.unbounded_faces != 0 {
+                    *why.entry("unbounded_faces".to_string()).or_default() += 1;
+                }
                 continue;
             }
             whole += 1;
@@ -304,10 +312,20 @@ fn main() -> Result<()> {
                 }
             }
         }
+        let refused: Vec<String> = why
+            .iter()
+            .take(6)
+            .map(|(text, n)| format!("{text}:{n}"))
+            .collect();
         println!(
-            "nested family={id} instances={} with_graphics={with_graphics} whole={whole} triangles={}",
+            "nested family={id} instances={} with_graphics={with_graphics} whole={whole} triangles={} refused={}",
             nested.len(),
-            triangles.len()
+            triangles.len(),
+            if refused.is_empty() {
+                "-".to_string()
+            } else {
+                refused.join("|")
+            }
         );
         if !nested.is_empty() && whole == nested.len() && !triangles.is_empty() {
             nested_meshes.insert(*id, (vertices, triangles));
