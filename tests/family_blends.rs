@@ -91,12 +91,13 @@ fn blends_agree_with_their_saved_meshes() {
         let document = nfg::open(&mut file).expect("opens");
         let mut forms = FormDocument::default();
         nfg::walk(&mut file, &document, &[102], |entry| {
-            if matches!(
+            if !matches!(
                 entry.class,
                 Some("BlendElem" | "CurveElem" | "SketchPlane" | "VarSketch")
-            ) && let Ok(graph) =
-                decode_graph_with_limits(entry.body, &document.registry, &LIMITS)
-            {
+            ) {
+                return Ok(());
+            }
+            if let Ok(graph) = decode_graph_with_limits(entry.body, &document.registry, &LIMITS) {
                 forms.insert(entry.id, graph);
             }
             Ok(())
@@ -107,10 +108,10 @@ fn blends_agree_with_their_saved_meshes() {
         let wanted: BTreeSet<u64> = ids.iter().copied().collect();
         let mut meshes = std::collections::BTreeMap::new();
         nfg::walk(&mut file, &document, &[103], |entry| {
-            if entry.class == Some("GElement")
-                && wanted.contains(&entry.id)
-                && let Ok(graph) = decode_graph_with_limits(entry.body, &document.registry, &LIMITS)
-            {
+            if entry.class != Some("GElement") || !wanted.contains(&entry.id) {
+                return Ok(());
+            }
+            if let Ok(graph) = decode_graph_with_limits(entry.body, &document.registry, &LIMITS) {
                 meshes.insert(entry.id, graph);
             }
             Ok(())
