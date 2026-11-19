@@ -17,8 +17,8 @@ For every `IfcStairFlight` both exports hold (same `Tag`), meshed as
   lies on a crease of its own body (two triangles meeting at it more than 10 degrees
   apart, a boundary between faces) or inside a smooth stretch (`smooth`).
 
-Only flights with such a vertex are listed. Positions are fractions of a flight's own
-box, not model coordinates.
+Only flights with such a vertex are listed, each vertex with its position as fractions of
+the flight's box and in rvt-rs's frame, feet (the BIM4LCA models are openly licensed).
 """
 
 import math
@@ -109,7 +109,7 @@ def listed(points, triangles_self, triangles_other, bar, low, high):
         where = ",".join(f"{(p - lo) / s:.2f}" for p, lo, s in zip(point, low, span))
         angle = crease.get(tuple(round(x, 6) for x in point), 0.0)
         kind = "crease" if angle > CREASE_DEGREES else "smooth"
-        rows.append((distance, where, facing(unit), kind))
+        rows.append((distance, where, facing(unit), kind, tuple(round(x, 4) for x in point)))
     rows.sort(reverse=True)
     return rows
 
@@ -140,13 +140,13 @@ def main():
         )
         for who, rows in (("Revit", revit), ("rvt-rs", mine)):
             kinds = {}
-            for _, _, face, kind in rows:
+            for _, _, face, kind, _ in rows:
                 kinds[(face, kind)] = kinds.get((face, kind), 0) + 1
             if kinds:
                 summary = "; ".join(f"{face} {kind} {n}" for (face, kind), n in sorted(kinds.items()))
                 print(f"far vertices:   {who}'s, by the other's facing and own crease: {summary}")
-            for distance, where, face, kind in rows[:LISTED]:
-                print(f"far vertices:     {who} {distance:.5f} ft at {where} facing {face} {kind}")
+            for distance, where, face, kind, xyz in rows[:LISTED]:
+                print(f"far vertices:     {who} {distance:.5f} ft at {where} facing {face} {kind} xyz {xyz}")
     return 0
 
 
