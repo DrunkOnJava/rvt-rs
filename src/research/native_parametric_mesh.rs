@@ -511,7 +511,8 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             .map(|segments| loop_polygon(&surface, segments))
             .collect::<Result<Vec<_>>>()?
     };
-    const CHORD: f64 = 0.001;
+    // Experiment (#2094): a quarter of the chord bound for every face grid.
+    const CHORD: f64 = 0.00025;
     let length = |p: [f64; 3]| p.iter().map(|x| x * x).sum::<f64>().sqrt();
     let angular = |r: f64| {
         (4. * (CHORD / (2. * r.max(CHORD))).min(1.).sqrt().asin()).min(std::f64::consts::FRAC_PI_2)
