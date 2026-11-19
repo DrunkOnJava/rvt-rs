@@ -45,6 +45,7 @@ const STAGES = [
   'candidate-scan',
   'element-decode',
   'partition-scan',
+  'partition-recovery',
   'saved-graphics',
   'saved-meshes',
 ];
@@ -116,7 +117,7 @@ async function announced(page: Page): Promise<string[]> {
  * The stages whose last report hands over to something the decoder reports
  * nothing in, so the card names that and sweeps (AFTER_STAGE in main.ts).
  */
-const HAS_AFTER = ['partition-scan', 'saved-meshes'];
+const HAS_AFTER = ['partition-scan', 'partition-recovery', 'saved-meshes'];
 
 /**
  * A report the card gives a determinate bar: a total above one, and not the end
@@ -291,10 +292,22 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
     expect(event.card!.hint).toMatch(new RegExp(`^\\d+% · ${event.done} of ${event.total} streams$`));
   }
 
-  // The stretch after the last stream is inflated reports nothing until the
-  // saved graphics. The card names it, and says so once: #status is a live
-  // region, and the page told it "Building the model" a single time, though two
-  // reports left the card there (the last stream, and the end of the walk).
+  // After the last stream the recovery counts its steps over the element
+  // records (#1195): the last stream hands straight over to it, so the card goes
+  // from the streams to the steps without naming what comes after them.
+  const recovery = counted.filter((event) => event.stage === 'partition-recovery');
+  expect(recovery.length, 'the recovery steps are counted').toBeGreaterThanOrEqual(2);
+  const steps = recovery.map((event) => event.card!.value!);
+  expect([...steps].sort((a, b) => a - b), 'the recovery bar rises').toEqual(steps);
+  for (const event of recovery) {
+    expect(event.card!.step).toBe('Reading element records');
+    expect(event.card!.hint).toMatch(new RegExp(`^\\d+% · ${event.done} of ${event.total} steps$`));
+  }
+
+  // The stretch after the recovery reports nothing until the saved graphics.
+  // The card names it, and says so once: #status is a live region, and the page
+  // told it "Building the model" a single time, though two reports left the
+  // card there (the recovery's end, and the end of the walk).
   const building = reports.filter((event) => event.card!.step === 'Building the model');
   expect(building.length, 'reports that left the card on Building the model').toBeGreaterThanOrEqual(2);
   for (const event of building) expect(event.card!.value).toBeNull();
@@ -307,7 +320,12 @@ coreInteriorTest('the loading card fills while Core Interior decodes', async ({ 
     if (i > 0) expect(text, `announced twice in a row: ${text}`).not.toBe(said[i - 1]);
   });
   expect(said, 'the stages in the order they ran').toEqual(
-    expect.arrayContaining(['Reading partition streams', 'Building the model']),
+    expect.arrayContaining([
+      'Reading partition streams',
+      'Reading element records',
+      'Building the model',
+    ]),
   );
-  expect(said.indexOf('Reading partition streams')).toBeLessThan(said.indexOf('Building the model'));
+  expect(said.indexOf('Reading partition streams')).toBeLessThan(said.indexOf('Reading element records'));
+  expect(said.indexOf('Reading element records')).toBeLessThan(said.indexOf('Building the model'));
 });

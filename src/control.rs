@@ -75,6 +75,10 @@ pub enum Stage {
     SavedGraphics,
     /// Meshing each element's saved graphics; `done`/`total` are elements.
     SavedMeshes,
+    /// Recovering elements from the partitions' element records, after every
+    /// `Partitions/*` stream is inflated; `done`/`total` are the recovery's
+    /// sections (#1195).
+    PartitionRecovery,
 }
 
 impl Stage {
@@ -86,6 +90,7 @@ impl Stage {
             Self::PartitionScan => "partition-scan",
             Self::SavedGraphics => "saved-graphics",
             Self::SavedMeshes => "saved-meshes",
+            Self::PartitionRecovery => "partition-recovery",
         }
     }
 }

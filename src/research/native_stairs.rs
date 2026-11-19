@@ -1149,17 +1149,19 @@ fn element_id(v: &Fv, name: &str) -> Option<u64> {
 ///   `Monolithic Run` or `Non-Monolithic Run`;
 /// - a `StairsLanding`'s stair and type are the ones `landings` gives (its
 ///   element record's, as Revit 2024 reads them, #2046), a `StairsLandingType`
-///   whose `m_hasMonolithicSupport` is false: `Non-Monolithic Landing`, as the
-///   type byte of Revit 2024's landings gives (RE-65). A monolithic landing
-///   type's family is not measured on any release;
+///   whose `m_hasMonolithicSupport` names the family `Monolithic Landing` or
+///   `Non-Monolithic Landing`, as the type byte of Revit 2024's landings gives
+///   (RE-65, RE-491);
 /// - a `StairsSupport`'s stair is its host's (`m_hostCompId`, a run) and its
 ///   type its `m_typeId`; its family is `Stringer` where every side of its
 ///   stair's type that uses that type (`m_leftSideSupportTypeId`,
 ///   `m_rightSideSupportTypeId`) has support style 1.
 ///
 /// Each type's name is its `SymbolInfo.m_name`. Any other construction or
-/// support style, a monolithic landing, and a part whose stair or type is not
-/// read is left out: none is measured.
+/// support style, and a part whose stair or type is not read, is left out:
+/// none is measured. The family words are the ones an English Revit's export
+/// writes: the file does not hold them, and a Revit in another language
+/// writes its own (RE-491).
 pub fn native_stair_parts(
     rf: &mut RevitFile,
     parts: &BTreeSet<u64>,
@@ -1308,10 +1310,12 @@ pub fn native_stair_parts(
         };
         part(id, stair, type_id, family);
     }
-    // A monolithic landing type's family is not measured, so only a landing
-    // type that is not monolithic names its landing.
     for (&id, &(stair, type_id)) in landings {
-        let family = (monolithic.get(&type_id) == Some(&false)).then_some("Non-Monolithic Landing");
+        let family = match monolithic.get(&type_id) {
+            Some(true) => Some("Monolithic Landing"),
+            Some(false) => Some("Non-Monolithic Landing"),
+            None => None,
+        };
         part(id, stair, type_id, family);
     }
     for (&id, &(host, type_id)) in &supports {
