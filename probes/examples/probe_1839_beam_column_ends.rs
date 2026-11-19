@@ -81,10 +81,12 @@
 //!   by 4 degrees about its origin (lines, mesh outlines and sections turn as they are; a record
 //!   box becomes the axis-aligned box of the turned one, as a file of a turned structure holds it)
 //!   and reads every end again:
-//!     - `line ends=<n> same=<n> largest_t=<d> largest_extent=<d> mesh=<n>/<n> section=<n>/<n>
-//!       box=<n>/<n>`: the ends read both ways, those with the same column, `t` and `extent`
-//!       within 1e-6, and the same count over the total by the outline's source. A mesh outline
-//!       must give the same answer however the model is turned; a record box cannot.
+//!     - `line ends=<n> same=<n> largest_t=<d> largest_extent=<d> mesh=<n>/<n>
+//!       mesh_largest_t=<d> mesh_largest_extent=<d> section=<n>/<n> box=<n>/<n>`: the ends read
+//!       both ways, those with the same column, `t` and `extent` within 1e-6, the largest
+//!       differences over every end with the same column and over the mesh ends alone, and the
+//!       same count over the total by the outline's source. A mesh outline must give the same
+//!       answer however the model is turned; a record box cannot.
 //!     - `s5 extent over the chord: ...`: what `endcol_*` would read as the extent on the turned
 //!       model (the column's turned record box, cut along a plan axis), over the chord `line_*`
 //!       reads from the mesh outline, in the scorer's bins.
@@ -745,6 +747,9 @@ struct TurnCheck {
     same: usize,
     largest_t: f64,
     largest_extent: f64,
+    /// The same, over the ends whose outline is a saved mesh alone: a box has to change.
+    mesh_largest_t: f64,
+    mesh_largest_extent: f64,
     /// By the outline's source without the turn (`m`, `s`, `b`): same, total.
     by_source: BTreeMap<char, (usize, usize)>,
     /// `endcol_*`'s extent on the turned model over the chord of the mesh outline, in the scorer's
@@ -798,6 +803,10 @@ impl TurnCheck {
                 if plain.column == again.column {
                     self.largest_t = self.largest_t.max(dt);
                     self.largest_extent = self.largest_extent.max(de);
+                    if plain.source == 'm' {
+                        self.mesh_largest_t = self.mesh_largest_t.max(dt);
+                        self.mesh_largest_extent = self.mesh_largest_extent.max(de);
+                    }
                 }
             }
             let Some(plain) = plain.filter(|end| end.source == 'm') else {
@@ -830,12 +839,14 @@ impl TurnCheck {
             format!("{same}/{total}")
         };
         println!(
-            "turncheck degrees={TURN_CHECK_DEGREES} line ends={} same={} largest_t={:.9} largest_extent={:.9} mesh={} section={} box={}",
+            "turncheck degrees={TURN_CHECK_DEGREES} line ends={} same={} largest_t={:.9} largest_extent={:.9} mesh={} mesh_largest_t={:.9} mesh_largest_extent={:.9} section={} box={}",
             self.ends,
             self.same,
             self.largest_t,
             self.largest_extent,
             of('m'),
+            self.mesh_largest_t,
+            self.mesh_largest_extent,
             of('s'),
             of('b'),
         );
