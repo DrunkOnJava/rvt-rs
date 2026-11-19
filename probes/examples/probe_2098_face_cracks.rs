@@ -17,6 +17,10 @@
 //!   - `crossing`: the plane-to-parametric edges whose curved side changes both parameters;
 //!   - `over_*` and `largest`: boundary vertices farther than that from every other face.
 //!
+//! then, for a meshed body, a line per pair of surface classes holding a vertex over 0.001 ft:
+//!   far owner=<ElementId> own=<class> nearest=<class> vertices=<n> largest=<ft>
+//!   - `own`: the surface of the vertex's face; `nearest`: that of the face nearest it.
+//!
 //! and last `total bodies=<n> refused=<n> triangles=<n> over_0.001=<n> largest=<ft>`.
 //! ElementIds, counts and distances in feet only.
 //!
@@ -35,6 +39,8 @@ use rvt::research::native_saved_mesh::{graphics_with_resolver, pointer};
 type V3 = [f64; 3];
 /// A mesh edge by its two ends, rounded to a millionth of a foot, the lower first.
 type EdgeKey = ([i64; 3], [i64; 3]);
+/// Vertices far from every other face, by their face's and the nearest face's surface class.
+type Far = BTreeMap<(String, String), (usize, f64)>;
 
 const CURVED: [&str; 3] = ["RuledSurf", "SurfRev", "ConeSurf"];
 
@@ -180,6 +186,43 @@ struct Body {
     faces: usize,
     triangles: usize,
     gaps: Vec<f64>,
+    /// The boundary vertices more than 0.001 ft from every other face, by the surface class
+    /// of their own face and of the face nearest them: how many, and the farthest.
+    far: Far,
+}
+
+/// The class of the surface of the face a primitive was meshed from: its `object_index` is
+/// the `Geometry`, and the face is the one of that object's `m_pFaces` with its tag.
+fn face_surface(
+    graph: &ObjectGraph,
+    kept: &BTreeMap<u64, ObjectGraph>,
+    p: &rvt::research::native_saved_mesh::Primitive,
+) -> String {
+    let g = p
+        .source_owner_id
+        .and_then(|id| kept.get(&id))
+        .unwrap_or(graph);
+    g.objects
+        .get(p.object_index)
+        .and_then(|o| o.fields.get("m_pFaces"))
+        .and_then(Fv::as_array)
+        .and_then(|list| {
+            list.iter()
+                .filter_map(|f| pointer(g, p.object_index, f).ok().flatten())
+                .find(|i| {
+                    g.objects[*i]
+                        .fields
+                        .get("m_GInfo")
+                        .and_then(|info| info.get("m_tag"))
+                        .and_then(Fv::as_i64)
+                        == Some(p.face_tag)
+                })
+        })
+        .and_then(|fi| {
+            let si = pointer(g, fi, g.objects[fi].fields.get("m_pSurf")?).ok()??;
+            Some(g.objects[si].class_name.clone())
+        })
+        .unwrap_or_else(|| "-".to_string())
 }
 
 fn body(graph: &ObjectGraph, kept: &BTreeMap<u64, ObjectGraph>) -> Result<Body, String> {
@@ -193,7 +236,9 @@ fn body(graph: &ObjectGraph, kept: &BTreeMap<u64, ObjectGraph>) -> Result<Body, 
         .filter(|p| !p.hidden && !p.filtered)
         .collect();
     let triangles = faces.iter().map(|f| f.triangles.len()).sum();
+    let classes: Vec<String> = faces.iter().map(|f| face_surface(graph, kept, f)).collect();
     let mut gaps = Vec::new();
+    let mut far: Far = BTreeMap::new();
     for (fi, face) in faces.iter().enumerate() {
         let key = |i: u32| face.vertices[i as usize].map(|x| (x * 1e6).round() as i64);
         let mut uses: BTreeMap<EdgeKey, usize> = BTreeMap::new();
@@ -215,14 +260,26 @@ fn body(graph: &ObjectGraph, kept: &BTreeMap<u64, ObjectGraph>) -> Result<Body, 
         for k in &boundary {
             let p: V3 = k.map(|x| x as f64 / 1e6);
             let mut best = f64::INFINITY;
+            let mut nearest = fi;
             for (gi, other) in faces.iter().enumerate() {
                 if gi == fi {
                     continue;
                 }
                 for t in &other.triangles {
                     let [a, b, c] = t.map(|i| other.vertices[i as usize]);
-                    best = best.min(triangle_distance(p, a, b, c));
+                    let d = triangle_distance(p, a, b, c);
+                    if d < best {
+                        best = d;
+                        nearest = gi;
+                    }
                 }
+            }
+            if best > 1e-3 {
+                let entry = far
+                    .entry((classes[fi].clone(), classes[nearest].clone()))
+                    .or_default();
+                entry.0 += 1;
+                entry.1 = entry.1.max(best);
             }
             gaps.push(best);
         }
@@ -231,6 +288,7 @@ fn body(graph: &ObjectGraph, kept: &BTreeMap<u64, ObjectGraph>) -> Result<Body, 
         faces: faces.len(),
         triangles,
         gaps,
+        far,
     })
 }
 
@@ -356,6 +414,11 @@ fn main() -> Result<()> {
                     over(1e-4),
                     over(1e-3)
                 );
+                for ((own, near), (n, most)) in &b.far {
+                    println!(
+                        "far owner={owner} own={own} nearest={near} vertices={n} largest={most:.6}"
+                    );
+                }
             }
             Err(why) => {
                 refused += 1;
