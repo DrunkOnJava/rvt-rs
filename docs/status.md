@@ -755,6 +755,18 @@ records (RE-65 §6): on puzzbobb's five R2025 stair models every stair,
 flight and stringer has Revit's name and `ObjectType` and a type object
 with Revit's GlobalId, where none had either
 (`reports/element-framing/RE-65-stair-names.md`).
+**RE-491 (2026-11-19)** names the family of a landing whose type is
+monolithic, `Monolithic Landing`, where only a landing of a type that is not
+monolithic was named: on the eight BIM4LCA office and housing files (Revit
+2024) 86 landings gain Revit's `ObjectType` and a type object, 86 of 86, and
+`rac_basic`'s one landing the same family and type on its 2024 to 2027 saves.
+The family words of a stair and its parts are the ones an English Revit's
+export writes. The file does not hold them (the office's files never hold
+`Monolithic Landing` as a word of its own, though Revit's export of each
+writes it), and a Revit in another language writes its own, so on a model
+exported by such a Revit the type object is written and its family word
+differs from that export's
+(`reports/element-framing/RE-491-monolithic-landing-family.md`).
 **RE-66 (2026-09-24)** reads a railing type's name from its type object
 when the type has no element data. On Snowdon all 131 railings now carry
 Revit's name, up from 101
