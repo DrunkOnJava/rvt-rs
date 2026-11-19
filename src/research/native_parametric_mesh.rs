@@ -151,11 +151,17 @@ const MAX_TRIM_LOOPS: usize = 64;
 
 /// The samples of each edge of the loop at `li` of the face `fi`, edge by edge, in the
 /// face's parameters and clamped to the surface's envelope `env`. A loop has at least
-/// `least` edges.
+/// `least` edges. An edge the face shares with a plane that runs across both of the
+/// face's parameters takes the points the plane's side of it takes
+/// (`native_saved_mesh::refined_plane_edge`, #1706): the saved samples with the points
+/// between them where the plane cuts `surface`, so that the two faces share one boundary.
+/// Straight steps in this face's parameters between the saved samples alone leave the
+/// plane's boundary by the edge's bow.
 fn loop_segments(
     g: &ObjectGraph,
     fi: usize,
     li: usize,
+    surface: &ParametricSurface,
     env: [[f64; 2]; 2],
     least: usize,
 ) -> Result<Vec<Vec<[f64; 2]>>> {
@@ -199,6 +205,24 @@ fn loop_segments(
             points.push(uv_point(&p["uv"][side])?);
         }
         points.push(uv_point(&ends[1]["uv"][side])?);
+        let points = match shared_plane(g, cur, 1 - side)? {
+            Some((origin, normal))
+                if crate::native_saved_mesh::isoparametric_axis(&points).is_none() =>
+            {
+                let limits = crate::native_saved_mesh::EdgeLimits {
+                    depth: crate::native_saved_mesh::EDGE_REFINEMENT_DEPTH,
+                    points: crate::native_saved_mesh::EDGE_POINT_BUDGET,
+                };
+                crate::native_saved_mesh::refine_crossing_edge_within(
+                    &|uv: [f64; 2]| surface.evaluate(uv[0], uv[1]),
+                    origin,
+                    normal,
+                    &points,
+                    &limits,
+                )?
+            }
+            _ => points,
+        };
         segments.push(points);
         cur = pointer(g, cur, &e.fields["m_next"][side])?.context("null trim next")?;
     }
@@ -219,6 +243,36 @@ fn loop_segments(
         }
     }
     Ok(segments)
+}
+
+/// The plane of the face on side `side` of the edge at `ei`, as its origin and unit
+/// normal, where that face's surface is a `Plane`; None for any other face.
+fn shared_plane(g: &ObjectGraph, ei: usize, side: usize) -> Result<Option<([f64; 3], [f64; 3])>> {
+    use crate::native_saved_mesh::pointer;
+    let faces = g.objects[ei].fields["m_pFace"]
+        .as_array()
+        .context("edge face pair")?;
+    let Some(face) = pointer(g, ei, &faces[side])? else {
+        return Ok(None);
+    };
+    let Some(si) = pointer(g, face, &g.objects[face].fields["m_pSurf"])? else {
+        return Ok(None);
+    };
+    let plane = &g.objects[si];
+    if plane.class_name != "Plane" {
+        return Ok(None);
+    }
+    let point = |name: &str| -> Result<[f64; 3]> {
+        let a = plane.fields[name].as_array().context("plane vector")?;
+        ensure!(a.len() == 3, "plane vector dimension");
+        Ok([
+            a[0].as_f64().context("plane number")?,
+            a[1].as_f64().context("plane number")?,
+            a[2].as_f64().context("plane number")?,
+        ])
+    };
+    let normal = crate::native_saved_mesh::unit_normal(point("m_xVec")?, point("m_yVec")?)?;
+    Ok(Some((point("m_origin")?, normal)))
 }
 
 /// Whether the edges of a loop join end to end in model coordinates, either way
@@ -466,7 +520,14 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     while let Some(li) = next {
         ensure!(seen_loops.insert(li), "trim loop cycle");
         ensure!(loops.len() < MAX_TRIM_LOOPS, "too many trim loops");
-        let segments = loop_segments(g, fi, li, env, if loops.is_empty() { 2 } else { 1 })?;
+        let segments = loop_segments(
+            g,
+            fi,
+            li,
+            &surface,
+            env,
+            if loops.is_empty() { 2 } else { 1 },
+        )?;
         ensure!(
             loop_closes(&surface, &segments)?,
             "disconnected parametric trim in model coordinates"

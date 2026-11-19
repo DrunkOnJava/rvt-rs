@@ -261,14 +261,14 @@ const EDGE_SAGITTA: f64 = 2.5e-4;
 /// chord's deviation (a half, not three quarters, where the point found splits a steep
 /// span unevenly), so a smooth edge settles in a dozen; one still above the bound at
 /// the limit never settles.
-const EDGE_REFINEMENT_DEPTH: u32 = 32;
+pub(crate) const EDGE_REFINEMENT_DEPTH: u32 = 32;
 /// The most points one edge may be given, so that a hostile file cannot ask for more.
-const EDGE_POINT_BUDGET: usize = 100_000;
+pub(crate) const EDGE_POINT_BUDGET: usize = 100_000;
 
 /// What a crossing edge's refinement may spend: halvings of one span, and points in all.
-struct EdgeLimits {
-    depth: u32,
-    points: usize,
+pub(crate) struct EdgeLimits {
+    pub(crate) depth: u32,
+    pub(crate) points: usize,
 }
 #[cfg(test)]
 const EDGE_LIMITS: EdgeLimits = EdgeLimits {
@@ -283,7 +283,7 @@ const EDGE_ON_PLANE: f64 = 1e-9;
 
 /// The parameter an edge's samples run along, `0` for `u` and `1` for `v`, where
 /// the other is constant to 1e-7 along all of them; None where they change both.
-fn isoparametric_axis(samples: &[[f64; 2]]) -> Option<usize> {
+pub(crate) fn isoparametric_axis(samples: &[[f64; 2]]) -> Option<usize> {
     let (start, end) = (*samples.first()?, *samples.last()?);
     let axis = if (start[1] - end[1]).abs() < 1e-7 && (start[0] - end[0]).abs() > 1e-7 {
         0
@@ -299,7 +299,7 @@ fn isoparametric_axis(samples: &[[f64; 2]]) -> Option<usize> {
 }
 
 /// The unit normal of a plane with the basis `x`, `y`.
-fn unit_normal(x: [f64; 3], y: [f64; 3]) -> Result<[f64; 3]> {
+pub(crate) fn unit_normal(x: [f64; 3], y: [f64; 3]) -> Result<[f64; 3]> {
     let normal = [
         x[1] * y[2] - x[2] * y[1],
         x[2] * y[0] - x[0] * y[2],
@@ -363,7 +363,7 @@ fn refine_crossing_edge(
 /// edge keeps being refused as it was. The plane's polygon and the cylinder's loop
 /// both take this list (less the points beyond the cylinder's envelope, which both
 /// leave out), so their vertices along the edge are the same.
-fn refine_crossing_edge_within(
+pub(crate) fn refine_crossing_edge_within(
     evaluate: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
     plane_origin: [f64; 3],
     plane_normal: [f64; 3],
