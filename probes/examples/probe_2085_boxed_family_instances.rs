@@ -32,13 +32,20 @@
 //!     its symbol and each symbol its graphics' instance records name, that id's record
 //!     classes in the family's document (`absent` where it has none) and what its graphics
 //!     draw (`-` where it has none);
+//!   nested_family family=<ElementId> instances=<n> documents=<n> extrusions=<n> voids=<n>
+//!     others=<n> rebuilt=<yes:solids|why not>: for a family with no form the rebuild knows
+//!     that nests instances, their families' own documents found and what those hold; where
+//!     every nested family's extrusions rebuild by the same rules, they are placed in the
+//!     family by the transform each nested instance's saved graphics hold, and a boxed
+//!     instance is drawn from them placed by its own (`rebuilt=from_nested_family`, and
+//!     `nested=` on its line says how its family's nested families went);
 //!   formless family=<ElementId> records=<n> drawing=<class:n,...> classes=<class:n,...>: for
 //!     each family with no
 //!     extrusion and no other form the rebuild knows, every record class its document holds,
 //!     most first (12 at most), so that what draws such a family (a nested instance, a
 //!     free-form solid, an import) can be told;
 //!   tally <key> <n>
-//! Nested families are not followed, as the export does not follow them.
+//! The export follows no nested family; the probe does, to count what following one would draw.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_2085_boxed_family_instances -- MODEL.rvt
@@ -51,7 +58,9 @@ use rvt::ifc::entities::{IfcEntity, PropertyValue};
 use rvt::ifc::{ExportOptions, run_export};
 use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Options};
-use rvt::research::native_family_forms::family_records_in;
+use rvt::research::native_family_forms::{
+    FamilyRecords, family_records_in, nested_family_records_in,
+};
 use rvt::research::native_form_geometry::{ExtrusionSolid, FormDocument, Frame};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::{
@@ -261,6 +270,124 @@ fn empty_nested<'a>(
     )
 }
 
+/// The transform a nested instance's saved graphics place its symbol by
+/// (`InstanceInfo.m_Trf`): the 3x3 matrix and the origin, in the family's coordinates.
+fn nested_transform(graph: &ObjectGraph) -> Option<([V3; 3], V3)> {
+    let trf = graph
+        .objects
+        .iter()
+        .find(|o| o.class_name == "InstanceInfo")?
+        .fields
+        .get("m_Trf")?;
+    let triple = |v: &Fv| -> Option<V3> {
+        let items = v.as_array().filter(|items| items.len() == 3)?;
+        let mut out = [0.; 3];
+        for (k, item) in items.iter().enumerate() {
+            out[k] = item.as_f64().filter(|x| x.is_finite())?;
+        }
+        Some(out)
+    };
+    let rows = trf
+        .get("m_3x3")?
+        .as_array()
+        .filter(|rows| rows.len() == 3)?;
+    let matrix = [triple(&rows[0])?, triple(&rows[1])?, triple(&rows[2])?];
+    Some((matrix, triple(trf.get("m_or")?)?))
+}
+
+/// The extrusions of a formless family's nested families, each rebuilt by the rules of
+/// [`family`] from its own document and placed in the formless family's coordinates by
+/// its nested instance's saved transform, where every nested instance's are; else why
+/// not. With a summary line's fields: nested instances, their families' documents found,
+/// and those documents' extrusions, voids and other forms.
+fn nested_family_solids(
+    nested: &[u64],
+    items: &[(u64, ObjectGraph)],
+    graphics: &BTreeMap<u64, &ObjectGraph>,
+    documents: FamilyRecords,
+) -> (String, Result<Vec<ExtrusionSolid>, String>) {
+    let root = |id: u64, class: &str| {
+        items
+            .iter()
+            .filter(|(record, _)| *record == id)
+            .filter_map(|(_, graph)| graph.objects.first())
+            .find(|root| root.class_name == class)
+    };
+    let mut read: BTreeMap<u64, Family> = BTreeMap::new();
+    for (family_id, records) in documents {
+        let others = records
+            .iter()
+            .filter(|(_, graph)| {
+                graph
+                    .objects
+                    .first()
+                    .is_some_and(|root| OTHER_FORMS.contains(&root.class_name.as_str()))
+            })
+            .count();
+        let mut document = FormDocument::default();
+        for (record, graph) in records {
+            document.insert(record, graph);
+        }
+        read.insert(family_id, family(&document, others));
+    }
+    let (mut found, mut extrusions, mut voids, mut others) = (0, 0, 0, 0);
+    let mut solids = Vec::new();
+    let mut refused: Option<String> = None;
+    for instance in nested {
+        let family_id = root(*instance, "FamilyInstance")
+            .and_then(|r| r.fields.get("m_masterSymbolId"))
+            .and_then(element_id)
+            .and_then(|symbol| root(symbol, "FamilySymbol"))
+            .and_then(|r| r.fields.get("m_familyId"))
+            .and_then(element_id);
+        let Some(nested_family) = family_id.and_then(|f| read.get(&f)) else {
+            refused.get_or_insert("nested family document not found".to_string());
+            continue;
+        };
+        found += 1;
+        extrusions += nested_family.extrusions;
+        voids += nested_family.voids;
+        others += nested_family.others;
+        let Some((matrix, origin)) = graphics.get(instance).copied().and_then(nested_transform)
+        else {
+            refused.get_or_insert("no nested transform".to_string());
+            continue;
+        };
+        match &nested_family.solids {
+            Ok(own) => {
+                let carry = |v: V3| {
+                    [0usize, 1, 2].map(|i| (0..3).map(|j| matrix[i][j] * v[j]).sum::<f64>())
+                };
+                for solid in own {
+                    let moved = carry(solid.frame.origin);
+                    solids.push(ExtrusionSolid {
+                        profile: solid.profile.clone(),
+                        frame: Frame {
+                            origin: [0usize, 1, 2].map(|i| origin[i] + moved[i]),
+                            axes: solid.frame.axes.map(carry),
+                        },
+                        low: solid.low,
+                        high: solid.high,
+                    });
+                }
+            }
+            Err(why) => {
+                refused.get_or_insert(format!("nested {why}"));
+            }
+        }
+    }
+    let summary = format!(
+        "instances={} documents={found} extrusions={extrusions} voids={voids} others={others}",
+        nested.len()
+    );
+    let result = match refused {
+        Some(why) => Err(why),
+        None if solids.is_empty() => Err("nested no extrusion".to_string()),
+        None => Ok(solids),
+    };
+    (summary, result)
+}
+
 /// A why-not with its digits written as `#`, so that reasons that differ only in a number are
 /// one tally, and its spaces as `_`, so that it is one field.
 fn reason(text: &str) -> String {
@@ -362,6 +489,11 @@ fn main() -> Result<()> {
     // document saved for them, in the family's coordinates: (vertices, triangles),
     // where every nested instance has graphics that mesh whole.
     let mut nested_meshes: BTreeMap<u64, (Vec<V3>, Vec<[usize; 3]>)> = BTreeMap::new();
+    // A formless family's nested families' own extrusions, each read from its own
+    // document and placed by its nested instance's saved transform.
+    let mut nested_records =
+        nested_family_records_in(&mut rf, &formless, &classes, &Options::default().releases)?;
+    let mut nested_solids: BTreeMap<u64, Result<Vec<ExtrusionSolid>, String>> = BTreeMap::new();
     for (id, items) in &everything {
         let graphics: BTreeMap<u64, &ObjectGraph> = items
             .iter()
@@ -469,6 +601,22 @@ fn main() -> Result<()> {
         if !nested.is_empty() && whole == nested.len() && !triangles.is_empty() {
             nested_meshes.insert(*id, (vertices, triangles));
         }
+        if !nested.is_empty() {
+            let (summary, result) = nested_family_solids(
+                &nested,
+                items,
+                &graphics,
+                nested_records.remove(id).unwrap_or_default(),
+            );
+            println!(
+                "nested_family family={id} {summary} rebuilt={}",
+                match &result {
+                    Ok(solids) => format!("yes:{}", solids.len()),
+                    Err(why) => reason(why),
+                }
+            );
+            nested_solids.insert(*id, result);
+        }
         let mut classes: BTreeMap<&str, usize> = BTreeMap::new();
         for (_, graph) in items {
             if let Some(root) = graph.objects.first() {
@@ -567,10 +715,20 @@ fn main() -> Result<()> {
         if nested_mesh.is_some() {
             rebuilt = "from_nested_graphics".to_string();
         }
+        // A formless family whose nested families' extrusions all rebuild: those,
+        // placed by the project instance's transform.
+        let nested_state = family_id.and_then(|f| nested_solids.get(&f));
+        let from_nested = nested_state
+            .filter(|_| solids.is_none() && nested_mesh.is_none())
+            .and_then(|r| r.as_ref().ok());
+        if from_nested.is_some() {
+            rebuilt = "from_nested_family".to_string();
+        }
         *tally
             .entry(format!("{class} rebuilt {rebuilt}"))
             .or_default() += 1;
         let placed_solids: Option<Vec<ExtrusionSolid>> = solids
+            .or(from_nested)
             .zip(transform)
             .map(|(solids, transform)| solids.iter().map(|s| placed(s, transform)).collect());
         if solids.is_some() {
@@ -633,12 +791,17 @@ fn main() -> Result<()> {
             },
         };
         println!(
-            "instance tag={id} class={class} refusal={refusal} family={} extrusions={} voids={} others={} rebuilt={rebuilt} transform={} volume={volume} low={low} high={high}",
+            "instance tag={id} class={class} refusal={refusal} family={} extrusions={} voids={} others={} rebuilt={rebuilt} transform={} nested={} volume={volume} low={low} high={high}",
             family_id.map_or_else(|| "-".to_string(), |f| f.to_string()),
             family.map_or(0, |f| f.extrusions),
             family.map_or(0, |f| f.voids),
             family.map_or(0, |f| f.others),
             if transform.is_some() { "yes" } else { "no" },
+            match nested_state {
+                None => "-".to_string(),
+                Some(Ok(solids)) => format!("yes:{}", solids.len()),
+                Some(Err(why)) => reason(why),
+            },
         );
     }
     for (key, n) in &tally {

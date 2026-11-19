@@ -724,6 +724,100 @@ pub fn family_records_at(
     Ok((out, places))
 }
 
+/// The records of the families nested in each of `families`' documents whose
+/// class is one of `classes` (every record when it is empty), each as its
+/// decoded graph: by the outer family's ElementId, then by the nested family's
+/// ElementId in the outer document (#2085). A nested family's document is a
+/// block of the project named by the `Family` record the outer document holds
+/// of it, as [`family_forms_in`] reads it (RE-206); only the families of the
+/// outer document's nested instances are read. A family that nests none, or
+/// whose nested documents are not found, is left out.
+pub fn nested_family_records_in(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+    classes: &BTreeSet<String>,
+    releases: &std::ops::RangeInclusive<u32>,
+) -> anyhow::Result<BTreeMap<u64, FamilyRecords>> {
+    let mut out: BTreeMap<u64, FamilyRecords> = BTreeMap::new();
+    let Some(loaded) = load(rf, families, releases)? else {
+        return Ok(out);
+    };
+    // Each nested document's block by its key: (outer family, nested family).
+    // Ids are the outer document's own, so each outer document is matched
+    // against its own `Family` records alone.
+    let mut blocks: BTreeMap<[u8; 16], (u64, u64)> = BTreeMap::new();
+    for (outer, document) in &loaded.documents {
+        let nested: BTreeSet<u64> = document
+            .nested
+            .iter()
+            .filter_map(|instance| document.symbols.get(&instance.symbol))
+            .map(|(family, _)| *family)
+            .collect();
+        for (key, family) in blocks_of(&document.families, &nested, &loaded.keys) {
+            // An outer document's own block is not a nested one.
+            if !loaded.blocks.contains_key(&key) {
+                blocks.entry(key).or_insert((*outer, family));
+            }
+        }
+    }
+    if blocks.is_empty() {
+        return Ok(out);
+    }
+    let tags: BTreeSet<u16> = classes
+        .iter()
+        .filter_map(|name| loaded.registry.named(name).map(|class| class.tag))
+        .collect();
+    if !classes.is_empty() && tags.is_empty() {
+        return Ok(out);
+    }
+    let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
+    for name in &loaded.streams {
+        let prepared = rf.read_prepared_stream(name)?;
+        let inflated = rf.inflated_partition(name).ok();
+        native_segments::walk_inflated(
+            &prepared,
+            inflated.as_deref(),
+            &loaded.registry,
+            native_document::partition_budget(
+                budget,
+                native_document::DEFAULT_MAX_GROUP_BYTES,
+                inflated.as_deref(),
+            ),
+            |source, bytes| {
+                let Some((outer, family)) = source.content_key.and_then(|key| blocks.get(&key))
+                else {
+                    return Ok(());
+                };
+                if !CHANNELS.contains(&source.channel) {
+                    return Ok(());
+                }
+                let Ok(records) = native_document::group_records(source, bytes, loaded.version)
+                else {
+                    return Ok(());
+                };
+                for (id, _, start, end) in records {
+                    let body = &bytes[start..end];
+                    let Some(class) = le_bytes::u16_at(body, 0) else {
+                        continue;
+                    };
+                    if !tags.is_empty() && !tags.contains(&class) {
+                        continue;
+                    }
+                    if let Ok(graph) = native_parameters::decode_graph(body, &loaded.registry) {
+                        out.entry(*outer)
+                            .or_default()
+                            .entry(*family)
+                            .or_default()
+                            .push((id, graph));
+                    }
+                }
+                Ok(())
+            },
+        )?;
+    }
+    Ok(out)
+}
+
 /// Each selected record's graph, by ElementId.
 fn read_graphs(
     rf: &mut RevitFile,
