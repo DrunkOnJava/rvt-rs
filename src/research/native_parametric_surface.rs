@@ -123,6 +123,39 @@ fn spline_segment(nodes: &[SplineNode], t: f64) -> (SplineNode, SplineNode) {
     (nodes[i], nodes[i + 1])
 }
 
+/// The point of a saved `GNurbSpline` (RE-311) at `t` in homogeneous
+/// coordinates, by de Boor's algorithm. `control` holds more than `degree`
+/// points and `knots` their count plus `degree + 1`, in rising order, as
+/// [`Curve::read`] checks. The knot span is found by halving, for the reason
+/// [`spline_segment`] gives.
+fn nurbs_homogeneous(degree: usize, knots: &[f64], control: &[[f64; 4]], t: f64) -> [f64; 4] {
+    let n = control.len();
+    // The last knot at or before `t`, kept within the curve's domain
+    // `knots[degree]..knots[n]`.
+    let span = knots[..n]
+        .partition_point(|knot| *knot <= t)
+        .saturating_sub(1)
+        .clamp(degree, n - 1);
+    let mut d: Vec<[f64; 4]> = (0..=degree).map(|j| control[span - degree + j]).collect();
+    for r in 1..=degree {
+        for j in (r..=degree).rev() {
+            let i = span - degree + j;
+            let denominator = knots[i + degree - r + 1] - knots[i];
+            // A repeated knot leaves a span of no length, which takes no share.
+            let a = if denominator.abs() < 1e-300 {
+                0.
+            } else {
+                (t - knots[i]) / denominator
+            };
+            let previous = d[j - 1];
+            for (value, before) in d[j].iter_mut().zip(previous) {
+                *value = (1. - a) * before + a * *value;
+            }
+        }
+    }
+    d[degree]
+}
+
 #[derive(Debug, Clone)]
 pub enum Curve {
     /// RE-443: a null ruled-profile pointer's separately saved point.
@@ -154,6 +187,14 @@ pub enum Curve {
     /// their parameter.
     Hermite {
         nodes: Vec<SplineNode>,
+        range: [f64; 2],
+    },
+    /// Revit's `GNurbSpline` (RE-311): a rational B-spline of degree 1 to 5,
+    /// its control points held as `(w x, w y, w z, w)`.
+    Nurbs {
+        degree: usize,
+        knots: Vec<f64>,
+        control: Vec<[f64; 4]>,
         range: [f64; 2],
     },
 }
@@ -255,6 +296,51 @@ impl Curve {
                 );
                 Ok(Self::Hermite { nodes, range })
             }
+            "GNurbSpline" => {
+                let degree = o.fields["m_Degree"].as_u64().context("spline degree")?;
+                ensure!((1..=5).contains(&degree), "unsupported spline degree");
+                let degree = degree as usize;
+                // A closed spline is unmeasured, so it is refused.
+                ensure!(
+                    o.fields["m_Closed"].as_bool() == Some(false),
+                    "closed spline profile is unmeasured"
+                );
+                let knots = o.fields["m_Knots"]
+                    .as_array()
+                    .context("spline knots")?
+                    .iter()
+                    .map(|k| k.as_f64().filter(|k| k.is_finite()).context("spline knot"))
+                    .collect::<Result<Vec<_>>>()?;
+                let points = o.fields["m_ctrlPoints"]
+                    .as_array()
+                    .context("spline control points")?;
+                let mut control = Vec::with_capacity(points.len());
+                for c in points {
+                    let q = p(&c["m_Point"], "spline control point")?;
+                    let w = c["m_w"].as_f64().context("spline weight")?;
+                    ensure!(w.is_finite() && w > 0., "invalid spline weight");
+                    control.push([q[0] * w, q[1] * w, q[2] * w, w]);
+                }
+                ensure!(
+                    control.len() > degree && knots.len() == control.len() + degree + 1,
+                    "spline knot count"
+                );
+                ensure!(
+                    knots.windows(2).all(|w| w[1] >= w[0]),
+                    "spline knots decrease"
+                );
+                let range = range(&o.fields["m_endParams"], "spline range")?;
+                ensure!(
+                    range[0] >= knots[degree] - 1e-9 && range[1] <= knots[control.len()] + 1e-9,
+                    "spline range outside its knots"
+                );
+                Ok(Self::Nurbs {
+                    degree,
+                    knots,
+                    control,
+                    range,
+                })
+            }
             name => bail!("unsupported parametric profile curve {name}"),
         }
     }
@@ -303,6 +389,18 @@ impl Curve {
                         + h11 * d * b.tangent[k]
                 })
             }
+            Self::Nurbs {
+                degree,
+                knots,
+                control,
+                range,
+            } => {
+                let t = t.clamp(range[0], range[1]);
+                // The weight is a sum of positive weights with shares that
+                // sum to one, so it is never zero.
+                let h = nurbs_homogeneous(*degree, knots, control, t);
+                [h[0] / h[3], h[1] / h[3], h[2] / h[3]]
+            }
         }
     }
     /// The parameter range.
@@ -312,7 +410,8 @@ impl Curve {
             Self::Line { range, .. }
             | Self::Arc { range, .. }
             | Self::Ellipse { range, .. }
-            | Self::Hermite { range, .. } => *range,
+            | Self::Hermite { range, .. }
+            | Self::Nurbs { range, .. } => *range,
         }
     }
     fn derivative(&self, t: f64) -> Point {
@@ -341,13 +440,20 @@ impl Curve {
                         + h11 * b.tangent[k]
                 })
             }
+            // A central difference over a millionth of the range, kept inside it.
+            Self::Nurbs { range, .. } => {
+                let [lo, hi] = *range;
+                let h = (hi - lo) * 1e-6;
+                let (a, b) = ((t - h).max(lo), (t + h).min(hi));
+                mul(sub(self.eval(b), self.eval(a)), 1. / (b - a).max(1e-300))
+            }
         }
     }
     /// How many equal parameter steps between `lo` and `hi` hold a spline's
     /// chord error to `chord` feet (one for any other curve): by the largest
     /// second difference of 64 samples, at most 128 (`SPLINE_STEP_CAP`).
     pub fn spline_steps(&self, lo: f64, hi: f64, chord: f64) -> usize {
-        if !matches!(self, Self::Hermite { .. }) {
+        if !matches!(self, Self::Hermite { .. } | Self::Nurbs { .. }) {
             return 1;
         }
         const SAMPLES: usize = 64;
