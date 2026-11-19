@@ -915,7 +915,10 @@ fn ring_impl(
     // for a closed ring, closure, nonzero area, and connected ordering below
     // remain mandatory. An open ring may be one edge, a whole circle, and needs
     // only the connected ordering.
-    ensure!(segments.len() >= 2 || !closed, "too few boundary edges");
+    ensure!(
+        segments.len() >= if closed { 2 } else { 1 },
+        "too few boundary edges"
+    );
     ensure!(
         segments.iter().all(|s: &Vec<_>| !s.is_empty()),
         "empty boundary edge"
@@ -979,6 +982,8 @@ fn tube_trim(
     );
     let mut ends: Vec<(f64, Vec<[f64; 2]>)> = Vec::with_capacity(2);
     for li in loops {
+        // Labelled as this reader's, so that a refusal says which pair of loops it
+        // is; running out of points stays the one budget error.
         let mut points = ring_impl(
             g,
             index,
@@ -987,8 +992,17 @@ fn tube_trim(
             EdgeSide::Cylinder,
             CYLINDER_RING_POINT_BUDGET / 2,
             false,
-        )?;
-        let height = points[0][1];
+        )
+        .map_err(|error| {
+            if error.to_string() == CYLINDER_BUDGET_EXCEEDED {
+                error
+            } else {
+                anyhow!("two cylinder trim loops: {error}")
+            }
+        })?;
+        let height = points
+            .first()
+            .context("two cylinder trim loops: empty loop")?[1];
         ensure!(
             points.iter().all(|p| (p[1] - height).abs() <= TOL),
             "two cylinder trim loops, one not at one height"
@@ -1002,7 +1016,23 @@ fn tube_trim(
             (lo - u_range[0]).abs() <= TOL && (hi - u_range[1]).abs() <= TOL,
             "two cylinder trim loops, one not a full turn"
         );
+        // Each ring is put exactly at its height and the envelope's two ends, as the
+        // rectangle the mesher tests for is (to the same tolerance, from its corners).
         points.sort_by(|a, b| a[0].total_cmp(&b[0]));
+        points.dedup_by(|a, b| (a[0] - b[0]).abs() <= TOL);
+        for point in &mut points {
+            point[1] = height;
+        }
+        if let Some(first) = points.first_mut() {
+            first[0] = u_range[0];
+        }
+        if let Some(last) = points.last_mut() {
+            last[0] = u_range[1];
+        }
+        ensure!(
+            points.len() >= 2,
+            "two cylinder trim loops: a loop of one point"
+        );
         ends.push((height, points));
     }
     ends.sort_by(|a, b| a.0.total_cmp(&b.0));
