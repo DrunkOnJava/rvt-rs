@@ -7,7 +7,9 @@ For every object drawn by triangulated face sets in both exports whose fingerpri
 (`tools/re/ifc_body_diff.py`'s pairing by GlobalId), the farthest a vertex of the head's
 mesh lies from the base's surface (its triangles), in the file's own coordinates (each
 face set's points as written, which `ifc_body_diff` also compares), and the same the
-other way. Prints one line per body and the largest of each over all of them.
+other way. Bodies with the same pair of before-and-after fingerprints are measured once.
+Prints one line per shape measured, how many bodies each shape covers, and the largest of
+each distance over all of them.
 """
 import os
 import re
@@ -92,8 +94,15 @@ def main():
     moved = moved[:limit]
     bm, hm = meshes(base_path, set(moved)), meshes(head_path, set(moved))
     largest = [0.0, 0.0]
+    # Bodies drawn the same before and after (an instance of one family placed many times) move
+    # alike, so each pair of fingerprints is measured once and its instances counted.
+    shapes = {}
     for gid in moved:
         if not bm.get(gid) or not hm.get(gid):
+            continue
+        key = (base[gid][4], head[gid][4])
+        if key in shapes:
+            shapes[key][0] += 1
             continue
         tri = lambda sets: numpy.concatenate([p[i] for p, i in sets])
         bt, ht = tri(bm[gid]), tri(hm[gid])
@@ -102,8 +111,11 @@ def main():
         out_ = farthest(hp, bt)
         in_ = farthest(bp, ht)
         largest = [max(largest[0], out_), max(largest[1], in_)]
+        shapes[key] = [1, gid]
         print(f"moved {gid} tag={head[gid][1]} class={head[gid][0]} head_to_base={out_:.6g} base_to_head={in_:.6g}", flush=True)
-    print(f"bodies {len(moved)} largest head_to_base={largest[0]:.6g} base_to_head={largest[1]:.6g}")
+    for count, gid in shapes.values():
+        print(f"shape of {gid} tag={head[gid][1]}: {count} bodies")
+    print(f"bodies {len(moved)} shapes {len(shapes)} largest head_to_base={largest[0]:.6g} base_to_head={largest[1]:.6g}")
 
 
 if __name__ == "__main__":
