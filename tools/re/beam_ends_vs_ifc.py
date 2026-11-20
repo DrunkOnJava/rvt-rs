@@ -95,6 +95,15 @@ line is from the middle line at that end, and whether the extent is longer than 
 column along any line parallel to the middle line (101 lines across the column's plan diagonal): where it is,
 the outline itself differs from Revit's column; where it is not, the extent is consistent with a line that
 crosses the column elsewhere, which does not show that the outline is right.
+
+S6 middle line ends asks where Revit stops the beam on the same middle line. Revit's end is where the middle
+line leaves the beam's own mesh, at the end nearer the column, and it is set as a fraction of the chord of
+Revit's column along that line, as `line_*`'s `t` is of rvt-rs's line through the column's own outline. The
+ends are counted by where the line ends and where Revit's beam ends, by Revit's length against the record box's
+and by where the outline is from; for the outlines from a column's saved mesh, also by whether the beam is
+narrower than, about as wide as or wider than the column across the line and by how far the column's plan
+rectangle is turned from the beam, with how many of Revit's ends are at the column's near face. The caps' line
+of the S6 table above puts an obliquely cut end off the beam's middle; this one does not.
 """
 
 import collections
@@ -695,6 +704,9 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
     offsets = collections.Counter()
     middles = collections.Counter()
     joint = collections.defaultdict(collections.Counter)
+    middle_ends = collections.defaultdict(collections.Counter)  # (stands, where[, width, turn]) -> (line, Revit)
+    middle_seen = collections.Counter()
+    outlines = {}
     seen = collections.Counter()
     for tag, fields in beams.items():
         stands = stands_by_tag.get(tag)
@@ -736,6 +748,15 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                     middle_ratio = ratio_bin(extent, (along_middle[1] - along_middle[0]) * factor)
             middles[(kind, "all", middle_ratio)] += 1
             middles[(kind, where, middle_ratio)] += 1
+            if mid is not None and along_middle is not None:
+                place = middle_end(meshes, beam, column, mid, along_middle, outlines)
+                if isinstance(place, str):
+                    middle_seen[(stands, where, place)] += 1
+                else:
+                    t_middle, width, turn = place
+                    cell = (fraction_bin(t_line), fraction_bin(t_middle))
+                    middle_ends[(stands, where)][cell] += 1
+                    middle_ends[(stands, where, width, turn)][cell] += 1
             crossing = chord(meshes[column][2], caps[0], axis)
             if crossing is None:
                 seen["of those, ends whose line crosses no face of Revit's column"] += 1
@@ -809,6 +830,87 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 f"beam ends:   S6, Revit {stands:<8} beam, outline from the {where}, {sum(cells.values())} ends, "
                 f"the line's end -> Revit's end in the chord: {text}"
             )
+    print_middle_ends(middle_ends, middle_seen, order)
+
+
+MIDDLE_END_NONE = "ends whose middle line crosses no face of Revit's beam"
+MIDDLE_CHORD_NONE = "ends whose middle line's chord through Revit's column is under 1 mm"
+TURN_LABELS = {name: ("column in line with the beam" if name == "in line" else f"column turned from the beam {name}") for name, _ in TURN_BINS}
+NOT_RECTANGLE = "column not a rectangle in plan"
+
+
+def middle_end(meshes, beam, column, mid, along_middle, outlines):
+    """S6 middle line ends (#1839): where Revit's beam ends on its middle line, as a fraction of the chord of
+    Revit's column along that line from the face toward the beam's middle (0) to the face away from it (1),
+    with whether the beam is narrower than, about as wide as or wider than the column across the line and how
+    far the column's plan rectangle is turned from the beam. Revit's end is where the middle line leaves the
+    beam's own mesh, the end of that span nearer the column: a cap's centre leaves the middle where Revit cuts
+    an end obliquely. A string names why an end is not placed."""
+    beam_span = chord(meshes[beam][2], mid[0], mid[1])
+    if beam_span is None:
+        return MIDDLE_END_NONE
+    low, high = along_middle
+    if high - low <= TOLERANCE_UNITS[0]:
+        return MIDDLE_CHORD_NONE
+    beam_middle = (beam_span[0] + beam_span[1]) / 2
+    column_middle = (low + high) / 2
+    end_at = min(beam_span, key=lambda s: abs(s - column_middle))
+    near, far = (low, high) if abs(low - beam_middle) < abs(high - beam_middle) else (high, low)
+    column_points = meshes[column][2].reshape(-1, 3)
+    beam_points = meshes[beam][2].reshape(-1, 3)
+    width = width_bin(float(numpy.ptp(beam_points @ mid[2])), float(numpy.ptp(column_points @ mid[2]))) or "unknown"
+    if column not in outlines:
+        outlines[column] = outline_of(column_points[:, :2])
+    outline = outlines[column]
+    if outline is None or outline[1] < RECTANGLE_FILL:
+        turn = NOT_RECTANGLE
+    else:
+        beam_theta = math.degrees(math.atan2(mid[1][1], mid[1][0])) % 90.0
+        delta = abs(beam_theta - outline[0]) % 90.0
+        turn = TURN_LABELS[turn_bin(min(delta, 90.0 - delta))]
+    return (end_at - near) / (far - near), width, turn
+
+
+def print_middle_ends(middle_ends, middle_seen, order):
+    """Print S6 middle line ends: by Revit's length against the record box's and where the column's outline is
+    from, then, for the outlines from a column's saved mesh, by width and turn, with how many of Revit's ends
+    are at the column's near face."""
+    if not middle_ends and not middle_seen:
+        return
+    widths = dict(WIDTHS)
+
+    def text(cells):
+        return "; ".join(
+            f"{ours} -> {revit} {n}"
+            for (ours, revit), n in sorted(cells.items(), key=lambda item: (order[item[0][0]], order[item[0][1]]))
+        )
+
+    for (stands, where, why), n in sorted(middle_seen.items()):
+        print(f"beam ends:   S6 middle line ends, Revit {stands:<8} beam, outline from the {where}: {n} {why}")
+    for stands in ("shorter", "same", "longer"):
+        for where in LINE_SOURCES.values():
+            cells = middle_ends.get((stands, where))
+            if not cells:
+                continue
+            total = sum(cells.values())
+            print(
+                f"beam ends:   S6 middle line ends, Revit {stands:<8} beam, outline from the {where}, {total} ends, "
+                f"the line's end -> Revit's end in the middle line's chord: {text(cells)}"
+            )
+            if where != LINE_SOURCES["m"]:
+                continue
+            at_near = sum(n for (_, revit), n in cells.items() if revit == "near")
+            print(
+                f"beam ends:   S6 middle line ends, Revit {stands:<8} beam, outline from the {where}: Revit's end at "
+                f"the column's near face (within 2 per cent of its chord) on {at_near} of {total}"
+            )
+            for key in sorted(k for k in middle_ends if len(k) == 4 and k[:2] == (stands, where)):
+                width, turn = key[2], key[3]
+                split = middle_ends[key]
+                print(
+                    f"beam ends:   S6 middle line ends, Revit {stands:<8} beam, outline from the {where}, beam "
+                    f"{widths.get(width, width)} the column, {turn}, {sum(split.values())} ends: {text(split)}"
+                )
 
 
 def print_ends(model, stands_by_tag, factor, beams):
