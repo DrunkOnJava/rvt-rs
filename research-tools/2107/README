@@ -1,0 +1,1 @@
+#2107 (#2104) reads: row5.py (both-way distances of moved bodies against Revit's export), row5_where.py (where new misses lie), row3_2107.py (moved bodies against the probe's lists), with place.py and ifc_body_diff.py they import. Paths resolve beside each other.
