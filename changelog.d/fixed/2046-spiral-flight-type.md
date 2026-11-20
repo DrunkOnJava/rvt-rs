@@ -8,5 +8,8 @@
   where its treads pass the spiral test the 2024 spiral treads are drawn with
   (one centre, one pair of radii, each tread beside and above the one before),
   and its flight and stair keep `NOTDEFINED` otherwise. On every open model it
-  changes nothing, and both measured spiral runs keep `SPIRAL` (RE-217 §13);
-  whether the reporter's three now come out `NOTDEFINED` is not yet measured.
+  changes nothing, and both measured spiral runs keep `SPIRAL` (RE-217 §13).
+  On the reporter's model the three now come out `NOTDEFINED`, and its flight
+  types number 3, as many as Revit's export holds, measured by the reporter on a
+  build of this change; Revit writes those types `USERDEFINED` where rvt-rs
+  writes `NOTDEFINED` (#2110).
