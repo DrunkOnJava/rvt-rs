@@ -2000,7 +2000,12 @@ fn band_mesh(
                 if lo[0] > w0 + TOL || hi[0] < w1 - TOL || lo[0] >= mid || hi[0] <= mid {
                     continue;
                 }
-                let at = |u: f64| lo[1] + (hi[1] - lo[1]) * (u - lo[0]) / (hi[0] - lo[0]);
+                // A strip edge can fall up to the grid's 1e-12 join outside the ring edge,
+                // which on an edge that narrow in U is a large share of its height: the
+                // crossing is kept on the edge.
+                let at = |u: f64| {
+                    lo[1] + (hi[1] - lo[1]) * ((u - lo[0]) / (hi[0] - lo[0])).clamp(0., 1.)
+                };
                 crossings.push([at(w0), at(w1)]);
             }
         }
@@ -3295,6 +3300,32 @@ mod tests {
             (covered - 3.000_000_000_6).abs() < 1e-10,
             "covered area {covered}"
         );
+    }
+
+    #[test]
+    fn a_ring_edge_narrower_than_the_tolerance_is_drawn_inside_the_ring() {
+        // Its right edge is 3e-12 wide in U, and its lower knot is joined to the grid's
+        // 1.0, so the strip starts 0.5e-12 before the edge does. The midpoint rule counts
+        // the edge there; a crossing not kept on the edge would put a vertex a sixth of
+        // the edge's height below the ring.
+        let ring = vec![[0., 0.], [1. + 0.5e-12, 0.], [1. + 3.5e-12, 1.], [0., 1.]];
+        let mut u_values: Vec<f64> = [0., 0.5, 1., 1.5, 2.]
+            .into_iter()
+            .chain(ring.iter().map(|p| p[0]))
+            .collect();
+        u_values.sort_by(f64::total_cmp);
+        u_values.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
+        let (vertices, _, triangles) = band_mesh(
+            std::slice::from_ref(&ring),
+            &u_values,
+            true,
+            1.,
+            |u, v| [u, v, 0.],
+            [[1., 0., 0.], [0., 1., 0.]],
+        )
+        .unwrap();
+        assert!(!triangles.is_empty());
+        assert!(vertices.iter().all(|v| (-1e-9..=1. + 1e-9).contains(&v[1])));
     }
 
     #[test]
