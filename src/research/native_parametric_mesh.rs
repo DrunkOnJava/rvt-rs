@@ -628,9 +628,20 @@ fn trim_is_rectangle(
 
 /// A loop as a closed polygon in the surface's parameters: each edge's samples in the
 /// direction that continues the one before, and the last point (the first again)
-/// dropped. A join that meets in model coordinates but not in the parameters (the
-/// seam of a revolution, a pole) is refused.
-fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<Vec<[f64; 2]>> {
+/// dropped. At `STRICT_JOIN`, a join that meets in model coordinates but not in the
+/// parameters (the seam of a revolution, a pole) is refused. At a looser `bound`
+/// (#2085 candidate), edges join at their nearer end within it, and where the
+/// parameters do not meet the polygon steps across the gap: only where the gap is
+/// within `JUMP` of the surface's parameter range, or the point halfway across it is
+/// the same point (a side that collapses); a seam is still refused.
+fn loop_polygon(
+    surface: &ParametricSurface,
+    segments: &[Vec<[f64; 2]>],
+    bound: f64,
+) -> Result<Vec<[f64; 2]>> {
+    if bound > STRICT_JOIN {
+        return loop_polygon_within(surface, segments, bound);
+    }
     let same =
         |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
     for reverse in [false, true] {
@@ -672,6 +683,94 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
             ) < 1e-7
         {
             ring.pop();
+            ensure!(ring.len() >= 3, "a trim loop needs three points");
+            return Ok(ring);
+        }
+    }
+    anyhow::bail!("a trim loop does not close in the surface's parameters")
+}
+
+/// The join of the strict path, in model units (feet).
+const STRICT_JOIN: f64 = 1e-7;
+
+/// #2085 candidate: the smallest of `JOIN_BOUNDS` within which the loop's edges join
+/// whole, each at its nearer end; `None` where none does, or where an edge is shorter
+/// than that bound, so that either of its ends would join.
+fn loop_join_bound(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<Option<f64>> {
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    for bound in JOIN_BOUNDS {
+        if joins_within(&at, segments, bound)? {
+            for seg in segments {
+                if distance(at(seg[0])?, at(*seg.last().unwrap())?) < bound {
+                    return Ok(None);
+                }
+            }
+            return Ok(Some(bound));
+        }
+    }
+    Ok(None)
+}
+
+/// `loop_polygon` at a bound looser than `STRICT_JOIN` (#2085 candidate).
+fn loop_polygon_within(
+    surface: &ParametricSurface,
+    segments: &[Vec<[f64; 2]>],
+    bound: f64,
+) -> Result<Vec<[f64; 2]>> {
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    let env = surface.bounds();
+    let range = [
+        (env[1][0] - env[0][0]).abs().max(1e-12),
+        (env[1][1] - env[0][1]).abs().max(1e-12),
+    ];
+    let same =
+        |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
+    // Whether the polygon may step from `p` to `q` in the parameters: the same point
+    // there, a gap within `JUMP` of the range, or a side that collapses between them.
+    let steps = |p: [f64; 2], q: [f64; 2]| -> Result<bool> {
+        if same(p, q) {
+            return Ok(true);
+        }
+        let gap = ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1]);
+        if gap <= JUMP {
+            return Ok(true);
+        }
+        let half = [(p[0] + q[0]) / 2., (p[1] + q[1]) / 2.];
+        Ok(distance(at(half)?, at(p)?) < bound)
+    };
+    for reverse in [false, true] {
+        let mut ring: Vec<[f64; 2]> = if reverse {
+            segments[0].iter().rev().copied().collect()
+        } else {
+            segments[0].clone()
+        };
+        let mut joined = true;
+        for seg in &segments[1..] {
+            let last = *ring.last().unwrap();
+            let p = at(last)?;
+            let (a, b) = (seg[0], *seg.last().unwrap());
+            let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+            let forward = da <= db;
+            let (gap, near) = if forward { (da, a) } else { (db, b) };
+            if gap >= bound || !steps(last, near)? {
+                joined = false;
+                break;
+            }
+            let skip = usize::from(same(last, near));
+            if forward {
+                ring.extend(seg.iter().skip(skip).copied());
+            } else {
+                ring.extend(seg.iter().rev().skip(skip).copied());
+            }
+        }
+        if !joined {
+            continue;
+        }
+        let (first, last) = (ring[0], *ring.last().unwrap());
+        if distance(at(first)?, at(last)?) < bound && steps(last, first)? {
+            if same(first, last) {
+                ring.pop();
+            }
             ensure!(ring.len() >= 3, "a trim loop needs three points");
             return Ok(ring);
         }
@@ -760,16 +859,23 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     let saved_chords = keeps_saved_chords(&surface);
     let mut chord_edges = std::collections::BTreeSet::new();
     let mut chords = Vec::new();
+    let mut bounds = Vec::new();
     let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
     while let Some(li) = next {
         ensure!(seen_loops.insert(li), "trim loop cycle");
         ensure!(loops.len() < MAX_TRIM_LOOPS, "too many trim loops");
         let least = if loops.is_empty() { 2 } else { 1 };
         let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
-        ensure!(
-            loop_closes(&surface, &segments)?,
-            "disconnected parametric trim in model coordinates"
-        );
+        // #2085 (candidate, `research/2085-chairs` only): a loop that does not join within
+        // 1e-7 joins at the smallest of `JOIN_BOUNDS` that closes it whole; a loop that
+        // already closes keeps the strict path unchanged.
+        let bound = if loop_closes(&surface, &segments)? {
+            STRICT_JOIN
+        } else {
+            loop_join_bound(&surface, &segments)?
+                .context("disconnected parametric trim in model coordinates")?
+        };
+        bounds.push(bound);
         // The spans come from the clamped samples the loop's polygon is made of, so
         // that a vertex the cells put on one lies on it exactly.
         for (points, edge) in segments.iter().zip(&edges) {
@@ -815,7 +921,8 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     } else {
         loops
             .iter()
-            .map(|segments| loop_polygon(&surface, segments))
+            .zip(&bounds)
+            .map(|(segments, bound)| loop_polygon(&surface, segments, *bound))
             .collect::<Result<Vec<_>>>()?
     };
     const CHORD: f64 = 0.001;
