@@ -555,7 +555,8 @@ pub fn attach_scoped_with_control(
             .chain(instances.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
-        max_graph_values: 1_000_000,
+        // research/2085-chairs only: a symbol graph of 1,789,525 values (#2085) decodes.
+        max_graph_values: 4_000_000,
         max_graph_objects: 1_000_000,
         value_source: Some("saved_graphics"),
         ..Default::default()
