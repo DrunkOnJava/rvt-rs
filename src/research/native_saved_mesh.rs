@@ -1985,6 +1985,7 @@ fn band_mesh(
     let mut triangles = Vec::new();
     for w in u_values.windows(2) {
         let (w0, w1) = (w[0], w[1]);
+        let mid = w0 + (w1 - w0) / 2.;
         let mut crossings: Vec<[f64; 2]> = Vec::new();
         for ring in rings {
             for (a, b) in ring
@@ -1993,7 +1994,10 @@ fn band_mesh(
                 .take(ring.len())
             {
                 let (lo, hi) = if a[0] <= b[0] { (*a, *b) } else { (*b, *a) };
-                if lo[0] > w0 + TOL || hi[0] < w1 - TOL || hi[0] - lo[0] <= TOL {
+                // Endpoint tolerance checks that the edge spans the strip.
+                // The midpoint keeps nearby edges outside a narrow strip from
+                // contributing a crossing through that tolerance.
+                if lo[0] > w0 + TOL || hi[0] < w1 - TOL || lo[0] >= mid || hi[0] <= mid {
                     continue;
                 }
                 let at = |u: f64| lo[1] + (hi[1] - lo[1]) * (u - lo[0]) / (hi[0] - lo[0]);
