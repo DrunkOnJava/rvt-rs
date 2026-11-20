@@ -57,6 +57,29 @@
 //!     (`native_saved_mesh::face`), and the refused ones;
 //!   ringwhy surface=<Plane|CylSurf> faces=<n> why=<reason, digits masked>: the eight most
 //!     common reasons, so one a neighbour's grid raises shows apart from the ring's own;
+//!   gap surface=<Plane|CylSurf> graph=<ElementId> face=<n> loop=<n> edges=<n>
+//!     stored=<d>/<ft>ft/<n> refined=<d>/<ft>ft/<n> du=<d> dv=<d>: for a face refused as
+//!     `disconnected UV boundary`, each of its rings whose own join fails
+//!     (`native_saved_mesh::ring_gaps`): the largest gap between neighbouring edges' ends
+//!     in the surface's parameters, the same gaps' largest in feet and how many are not
+//!     within the join's 1e-7, with the edges as the graph stores them and as refined, and
+//!     the largest refined gap's difference in each parameter (a gap near 2π in `du` with
+//!     no feet is a seam, not noise);
+//!   gapfrom surface=Plane graph=<ElementId> face=<n> loop=<n> neighbours=[<n>, ...]
+//!     why=<reason>: a ring whose refinement fails, with the cylinder faces beside it whose
+//!     own ring is refused as `disconnected UV boundary` (a plane meshes such a neighbour to
+//!     share their edge, so the cylinder's refusal becomes the plane's);
+//!   gapnone, gapunread surface=<class> graph=<ElementId> face=<n>: no ring found failing,
+//!     or the read itself refused;
+//!   ringreach owner=<ElementId> graphs=[<ElementId>, ...]: an element whose graphics reach
+//!     a graph holding such a face; then by class:
+//!   gapsrc surface=<class> disconnected=<n> own=<n> neighbour=<n> other=<n> neither=<n>
+//!     unread=<n>: the faces by where their first failing ring fails, which add up;
+//!   gaploops surface=<class> loops=<n> stored_open=<n> seam_like=<n>: the rings whose own
+//!     join fails, those whose stored edges already leave a gap open, and those with a gap of
+//!     1e-2 or more in the parameters but under 1e-4 ft;
+//!   gaphist surface=<class> unit=<parameters|feet> under_1e-7=<n> ... 1e-2_or_more=<n>:
+//!     those rings by their largest refined gap, by decade;
 //!   chords surface=<class> ends=<n> moved=<n> largest=<ft>: the ends of chord edges (drawn
 //!     straight to a plane) the polygons hold, those a merged join moved off the edge's own end,
 //!     which the plane beside it keeps, and the largest move
@@ -76,7 +99,7 @@ use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Record};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_parametric_mesh::{JOIN_BOUNDS, face_grid, polygon_breaks, trim_breaks};
-use rvt::research::native_saved_mesh::pointer;
+use rvt::research::native_saved_mesh::{pointer, ring_gaps};
 
 const DISCONNECTED: &str = "disconnected parametric trim in model coordinates";
 const POLYGON: &str = "a trim loop does not close in the surface's parameters";
@@ -135,11 +158,104 @@ struct Tally {
     chord_ends: usize,
     chord_moved: usize,
     chord_largest: f64,
+    gap_disconnected: usize,
+    gap_own: usize,
+    gap_neighbour: usize,
+    gap_other: usize,
+    gap_neither: usize,
+    gap_unread: usize,
+    gap_loops: usize,
+    gap_stored_open: usize,
+    gap_seam_like: usize,
+    gap_parameters: [usize; 7],
+    gap_feet: [usize; 7],
 }
 
-/// The faces of one graph: prints its breaks and adds to the tally; whether it holds one.
-fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> bool {
+/// The decade a gap falls in: under 1e-7, then up to 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, beyond.
+fn decade(x: f64) -> usize {
+    [1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2]
+        .iter()
+        .filter(|t| x >= **t)
+        .count()
+}
+
+/// The rings of a face refused as `disconnected UV boundary`: prints where each fails.
+fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally) {
+    let short = |text: &str| text.chars().take(160).collect::<String>();
+    let rings = match ring_gaps(graph, fi) {
+        Ok(rings) => rings,
+        Err(error) => {
+            t.gap_unread += 1;
+            println!(
+                "gapunread surface={class} graph={id} face={fi} why={}",
+                short(format!("{error:#}").as_str())
+            );
+            return;
+        }
+    };
+    let mut first = None;
+    for r in &rings {
+        match &r.refined {
+            Ok(j) if j.open > 0 => {
+                println!(
+                    "gap surface={class} graph={id} face={fi} loop={} edges={} stored={:e}/{:e}ft/{} refined={:e}/{:e}ft/{} du={:e} dv={:e}",
+                    r.loop_index,
+                    r.edges,
+                    r.stored.parameters,
+                    r.stored.feet,
+                    r.stored.open,
+                    j.parameters,
+                    j.feet,
+                    j.open,
+                    j.components[0],
+                    j.components[1]
+                );
+                t.gap_loops += 1;
+                t.gap_parameters[decade(j.parameters)] += 1;
+                t.gap_feet[decade(j.feet)] += 1;
+                if r.stored.open > 0 {
+                    t.gap_stored_open += 1;
+                }
+                if j.parameters >= 1e-2 && j.feet < 1e-4 {
+                    t.gap_seam_like += 1;
+                }
+                first.get_or_insert("own");
+            }
+            Ok(_) => {}
+            Err(why) => {
+                println!(
+                    "gapfrom surface={class} graph={id} face={fi} loop={} neighbours={:?} why={}",
+                    r.loop_index,
+                    r.disconnected_neighbours,
+                    short(why.as_str())
+                );
+                first.get_or_insert(if r.disconnected_neighbours.is_empty() {
+                    "other"
+                } else {
+                    "neighbour"
+                });
+            }
+        }
+    }
+    match first {
+        Some("own") => t.gap_own += 1,
+        Some("neighbour") => t.gap_neighbour += 1,
+        Some(_) => t.gap_other += 1,
+        None => {
+            t.gap_neither += 1;
+            println!(
+                "gapnone surface={class} graph={id} face={fi} loops={}",
+                rings.len()
+            );
+        }
+    }
+}
+
+/// The faces of one graph: prints its breaks and adds to the tally; whether it holds one,
+/// and whether it holds a plane or cylinder face refused as `disconnected UV boundary`.
+fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (bool, bool) {
     let mut any = false;
+    let mut ringed = false;
     for (fi, object) in graph.objects.iter().enumerate() {
         if object.class_name != "Face" {
             continue;
@@ -158,12 +274,18 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> bo
             let t = tally.entry(class.clone()).or_default();
             t.ring_faces += 1;
             if let Err(error) = rvt::research::native_saved_mesh::face(graph, fi) {
-                let text: String = format!("{error:#}")
+                let full = format!("{error:#}");
+                let text: String = full
                     .chars()
                     .map(|c| if c.is_ascii_digit() { '#' } else { c })
                     .take(200)
                     .collect();
                 *t.ring_refused.entry(text).or_default() += 1;
+                if full.contains("disconnected UV boundary") {
+                    t.gap_disconnected += 1;
+                    ringed = true;
+                    read_gaps(id, fi, &class, graph, t);
+                }
             }
             continue;
         }
@@ -275,7 +397,7 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> bo
             }
         }
     }
-    any
+    (any, ringed)
 }
 
 fn main() -> Result<()> {
@@ -311,6 +433,7 @@ fn main() -> Result<()> {
     };
     let mut tally: BTreeMap<String, Tally> = BTreeMap::new();
     let mut broken: BTreeSet<u64> = BTreeSet::new();
+    let mut ringed: BTreeSet<u64> = BTreeSet::new();
     let mut scanned: BTreeSet<u64> = BTreeSet::new();
     let mut symbols_of: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut owners: BTreeSet<u64> = BTreeSet::new();
@@ -327,8 +450,12 @@ fn main() -> Result<()> {
         }
         if let Some(graph) = &r.graph {
             symbols_of.insert(id, instance_symbols(graph));
-            if scan(id, graph, tally) {
+            let (any, ring) = scan(id, graph, tally);
+            if any {
                 broken.insert(id);
+            }
+            if ring {
+                ringed.insert(id);
             }
         }
     };
@@ -370,6 +497,10 @@ fn main() -> Result<()> {
         if !graphs.is_empty() {
             println!("reach owner={owner} graphs={graphs:?}");
         }
+        let graphs: Vec<u64> = seen.intersection(&ringed).copied().collect();
+        if !graphs.is_empty() {
+            println!("ringreach owner={owner} graphs={graphs:?}");
+        }
     }
     for (class, t) in &tally {
         if t.ring_faces > 0 {
@@ -382,6 +513,25 @@ fn main() -> Result<()> {
             reasons.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
             for (why, n) in reasons.into_iter().take(8) {
                 println!("ringwhy surface={class} faces={n} why={why}");
+            }
+            println!(
+                "gapsrc surface={class} disconnected={} own={} neighbour={} other={} neither={} unread={}",
+                t.gap_disconnected,
+                t.gap_own,
+                t.gap_neighbour,
+                t.gap_other,
+                t.gap_neither,
+                t.gap_unread
+            );
+            println!(
+                "gaploops surface={class} loops={} stored_open={} seam_like={}",
+                t.gap_loops, t.gap_stored_open, t.gap_seam_like
+            );
+            for (unit, bins) in [("parameters", t.gap_parameters), ("feet", t.gap_feet)] {
+                println!(
+                    "gaphist surface={class} unit={unit} under_1e-7={} 1e-7_to_1e-6={} 1e-6_to_1e-5={} 1e-5_to_1e-4={} 1e-4_to_1e-3={} 1e-3_to_1e-2={} 1e-2_or_more={}",
+                    bins[0], bins[1], bins[2], bins[3], bins[4], bins[5], bins[6]
+                );
             }
             continue;
         }
