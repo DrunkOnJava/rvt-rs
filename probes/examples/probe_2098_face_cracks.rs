@@ -300,6 +300,32 @@ fn body(graph: &ObjectGraph, kept: &BTreeMap<u64, ObjectGraph>) -> Result<Body, 
     })
 }
 
+/// The cylinder faces of `g` with two or more trim loops (#2102 selects the bodies with one).
+fn two_loop_cylinders(g: &ObjectGraph) -> usize {
+    g.objects
+        .iter()
+        .enumerate()
+        .filter(|(_, o)| o.class_name == "Face")
+        .filter(|(fi, o)| {
+            let surface = o
+                .fields
+                .get("m_pSurf")
+                .and_then(|p| pointer(g, *fi, p).ok().flatten());
+            let first = o
+                .fields
+                .get("m_pFirstLoop")
+                .and_then(|p| pointer(g, *fi, p).ok().flatten());
+            let second = first.and_then(|l| {
+                g.objects[l]
+                    .fields
+                    .get("m_nextLoop")
+                    .and_then(|p| pointer(g, l, p).ok().flatten())
+            });
+            surface.is_some_and(|si| g.objects[si].class_name == "CylSurf") && second.is_some()
+        })
+        .count()
+}
+
 fn main() -> Result<()> {
     let path = std::env::args()
         .skip(1)
@@ -334,12 +360,14 @@ fn main() -> Result<()> {
     let mut crossing_of: BTreeMap<u64, ByClass> = BTreeMap::new();
     let mut symbols_of: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut owners: BTreeSet<u64> = BTreeSet::new();
-    let note = |r: &Record,
-                crossing_of: &mut BTreeMap<u64, ByClass>,
-                symbols_of: &mut BTreeMap<u64, Vec<u64>>| {
+    let mut two_loop_of: BTreeMap<u64, usize> = BTreeMap::new();
+    let mut note = |r: &Record,
+                    crossing_of: &mut BTreeMap<u64, ByClass>,
+                    symbols_of: &mut BTreeMap<u64, Vec<u64>>| {
         if let Some(graph) = &r.graph {
             crossing_of.insert(r.identity.element_id, crossing_edges(graph));
             symbols_of.insert(r.identity.element_id, instance_symbols(graph));
+            two_loop_of.insert(r.identity.element_id, two_loop_cylinders(graph));
         }
     };
     native_document::extract_graphs(&mut rf, &options, |r| {
@@ -392,7 +420,8 @@ fn main() -> Result<()> {
                 crossing[k] += n;
             }
         }
-        if crossing.iter().sum::<usize>() > 0 {
+        let two_loop: usize = reach.iter().filter_map(|id| two_loop_of.get(id)).sum();
+        if crossing.iter().sum::<usize>() > 0 || two_loop > 0 {
             crossing_total.insert(*owner, crossing);
             wanted.extend(reach);
         }
