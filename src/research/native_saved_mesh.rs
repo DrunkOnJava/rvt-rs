@@ -1170,6 +1170,9 @@ pub struct JointGaps {
     pub feet: f64,
     /// The gaps not within 1e-7.
     pub open: usize,
+    /// Of those, the ones that run back along the edge before them in feet, so that the
+    /// next edge starts behind where the last one ended (an overshoot, not a gap).
+    pub backward: usize,
 }
 
 /// One ring of a plane or cylinder face as its reader builds it, read for #2085.
@@ -1275,16 +1278,30 @@ fn joint_gaps(segments: &[Vec<[f64; 2]>], surface: &dyn Fn([f64; 2]) -> [f64; 3]
     let span = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]);
     let mut best: Option<JointGaps> = None;
     for reverse in [false, true] {
-        let (start, mut last) = if reverse {
-            (first[first.len() - 1], first[0])
-        } else {
-            (first[0], first[first.len() - 1])
+        // Each edge's last point and the one before it, the way round it is taken.
+        let ends = |s: &[[f64; 2]], forward: bool| {
+            let n = s.len();
+            if forward {
+                (s[n.saturating_sub(2)], s[n - 1])
+            } else {
+                (s[1.min(n - 1)], s[0])
+            }
         };
+        let start = if reverse {
+            first[first.len() - 1]
+        } else {
+            first[0]
+        };
+        let (mut before, mut last) = ends(first.as_slice(), !reverse);
         let mut gaps = JointGaps::default();
-        let mut note = |a: [f64; 2], b: [f64; 2]| {
+        let mut note = |before: [f64; 2], a: [f64; 2], b: [f64; 2]| {
             let d = span(a, b);
             if !close(a, b) {
                 gaps.open += 1;
+                let (p, q, r) = (surface(before), surface(a), surface(b));
+                if (0..3).map(|k| (q[k] - p[k]) * (r[k] - q[k])).sum::<f64>() < 0. {
+                    gaps.backward += 1;
+                }
             }
             if d > gaps.parameters {
                 gaps.parameters = d;
@@ -1296,15 +1313,12 @@ fn joint_gaps(segments: &[Vec<[f64; 2]>], surface: &dyn Fn([f64; 2]) -> [f64; 3]
         };
         for s in &segments[1..] {
             let (head, tail) = (s[0], s[s.len() - 1]);
-            let (near, far) = if span(last, head) <= span(last, tail) {
-                (head, tail)
-            } else {
-                (tail, head)
-            };
-            note(last, near);
-            last = far;
+            let forward = span(last, head) <= span(last, tail);
+            let near = if forward { head } else { tail };
+            note(before, last, near);
+            (before, last) = ends(s.as_slice(), forward);
         }
-        note(last, start);
+        note(before, last, start);
         if best.is_none_or(|b| gaps.parameters < b.parameters) {
             best = Some(gaps);
         }

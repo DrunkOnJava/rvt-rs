@@ -64,7 +64,8 @@
 //!     in the surface's parameters, the same gaps' largest in feet and how many are not
 //!     within the join's 1e-7, with the edges as the graph stores them and as refined, and
 //!     the largest refined gap's difference in each parameter (a gap near 2π in `du` with
-//!     no feet is a seam, not noise);
+//!     no feet is a seam, not noise), and `back=<n>`, the refined gaps that run back along
+//!     the edge before them (an overshoot);
 //!   gapfrom surface=Plane graph=<ElementId> face=<n> loop=<n> neighbours=[<n>, ...]
 //!     why=<reason>: a ring whose refinement fails, with the cylinder faces beside it whose
 //!     own ring is refused as `disconnected UV boundary` (a plane meshes such a neighbour to
@@ -75,9 +76,10 @@
 //!     a graph holding such a face; then by class:
 //!   gapsrc surface=<class> disconnected=<n> own=<n> neighbour=<n> other=<n> neither=<n>
 //!     unread=<n>: the faces by where their first failing ring fails, which add up;
-//!   gaploops surface=<class> loops=<n> stored_open=<n> seam_like=<n>: the rings whose own
-//!     join fails, those whose stored edges already leave a gap open, and those with a gap of
-//!     1e-2 or more in the parameters but under 1e-4 ft;
+//!   gaploops surface=<class> loops=<n> stored_open=<n> seam_like=<n> backward=<n>: the rings
+//!     whose own join fails, those whose stored edges already leave a gap open, those with a
+//!     gap of 1e-2 or more in the parameters but under 1e-4 ft, and those with a gap that runs
+//!     back along the edge before it;
 //!   gaphist surface=<class> unit=<parameters|feet> under_1e-7=<n> ... 1e-2_or_more=<n>:
 //!     those rings by their largest refined gap, by decade;
 //!   chords surface=<class> ends=<n> moved=<n> largest=<ft>: the ends of chord edges (drawn
@@ -169,6 +171,7 @@ struct Tally {
     gap_loops: usize,
     gap_stored_open: usize,
     gap_seam_like: usize,
+    gap_backward: usize,
     gap_parameters: [usize; 7],
     gap_feet: [usize; 7],
 }
@@ -200,7 +203,7 @@ fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally
         match &r.refined {
             Ok(j) if j.open > 0 => {
                 println!(
-                    "gap surface={class} graph={id} face={fi} loop={} edges={} stored={:e}/{:e}ft/{} refined={:e}/{:e}ft/{} du={:e} dv={:e}",
+                    "gap surface={class} graph={id} face={fi} loop={} edges={} stored={:e}/{:e}ft/{} refined={:e}/{:e}ft/{} du={:e} dv={:e} back={}",
                     r.loop_index,
                     r.edges,
                     r.stored.parameters,
@@ -210,8 +213,12 @@ fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally
                     j.feet,
                     j.open,
                     j.components[0],
-                    j.components[1]
+                    j.components[1],
+                    j.backward
                 );
+                if j.backward > 0 {
+                    t.gap_backward += 1;
+                }
                 t.gap_loops += 1;
                 t.gap_parameters[decade(j.parameters)] += 1;
                 t.gap_feet[decade(j.feet)] += 1;
@@ -532,8 +539,8 @@ fn main() -> Result<()> {
                 t.gap_unread
             );
             println!(
-                "gaploops surface={class} loops={} stored_open={} seam_like={}",
-                t.gap_loops, t.gap_stored_open, t.gap_seam_like
+                "gaploops surface={class} loops={} stored_open={} seam_like={} backward={}",
+                t.gap_loops, t.gap_stored_open, t.gap_seam_like, t.gap_backward
             );
             for (unit, bins) in [("parameters", t.gap_parameters), ("feet", t.gap_feet)] {
                 println!(
