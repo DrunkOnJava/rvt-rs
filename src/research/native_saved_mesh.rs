@@ -614,7 +614,7 @@ impl CylinderFrame {
 /// the two cylinders meet between the samples, as [`refine_crossing_edge_within`] puts
 /// the points where a cylinder meets a plane: bisected in the parameters of the edge's
 /// side 0, each point solved onto the side 1 cylinder, until the chord between
-/// neighbours is within the faces' own chord (`CylinderTessellationProfile::chord_error`)
+/// neighbours is within half the faces' own chord (`CylinderTessellationProfile::chord_error`)
 /// of the edge. Side 1 takes the same points in
 /// its own parameters, so both faces hold one list, and every point lies on both
 /// surfaces: neither face's vertices leave its own cylinder (#2107, row 5). A point
@@ -668,9 +668,10 @@ fn refined_cylinder_pair_edge(
     let limits = EdgeLimits {
         depth: EDGE_REFINEMENT_DEPTH,
         points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
-        // The faces' own chord: the shared points need be no finer than the strips
-        // that hold them (#2111).
-        sagitta: CylinderTessellationProfile::default().chord_error,
+        // Half the faces' own chord: at the whole chord, two BIM4LCA downspouts' faces
+        // part by up to 0.0019 ft between the shared points, past the 0.001 ft they
+        // are held to (#2111).
+        sagitta: CylinderTessellationProfile::default().chord_error / 2.,
     };
     // Side 0's points, each with the index of the saved sample it is, if it is one.
     let mut refined = vec![first[0]];
