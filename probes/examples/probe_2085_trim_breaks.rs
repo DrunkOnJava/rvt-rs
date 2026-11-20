@@ -53,6 +53,13 @@
 //!     point (a side that collapses); then by surface class:
 //!   polygons surface=<class> faces=<n> loops=<n> relative_under_1e-6=<n> 1e-6_to_1e-4=<n>
 //!     1e-4_to_1e-2=<n> 1e-2_or_more=<n> closing=<n> bounded=<n> meets=<n> halfway_same=<n>
+//!   ring surface=<Plane|CylSurf> faces=<n> refused=<n>: those faces put to their own ring
+//!     (`native_saved_mesh::face`), and the refused ones;
+//!   ringwhy surface=<Plane|CylSurf> faces=<n> why=<reason, digits masked>: the eight most
+//!     common reasons, so one a neighbour's grid raises shows apart from the ring's own;
+//!   chords surface=<class> ends=<n> moved=<n> largest=<ft>: the ends of chord edges (drawn
+//!     straight to a plane) the polygons hold, those a merged join moved off the edge's own end,
+//!     which the plane beside it keeps, and the largest move
 //! ```
 //! ElementIds, counts and distances in feet only.
 //!
@@ -104,6 +111,8 @@ fn instance_symbols(graph: &ObjectGraph) -> Vec<u64> {
 /// loops by gap bin, closing and other-meets.
 #[derive(Default)]
 struct Tally {
+    ring_faces: usize,
+    ring_refused: BTreeMap<String, usize>,
     meshed: usize,
     disconnected: usize,
     other: usize,
@@ -123,6 +132,9 @@ struct Tally {
     polygon_bounded: usize,
     polygon_meets: usize,
     polygon_halfway: usize,
+    chord_ends: usize,
+    chord_moved: usize,
+    chord_largest: f64,
 }
 
 /// The faces of one graph: prints its breaks and adds to the tally; whether it holds one.
@@ -141,6 +153,18 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> bo
             .map(|s| s.class_name.to_string())
             .unwrap_or_else(|| "unknown".to_string());
         if class == "Plane" || class == "CylSurf" {
+            // Their own ring (`native_saved_mesh::face`): what each refused face says, digits
+            // masked, so a reason a neighbour's grid raised can be told from the ring's own.
+            let t = tally.entry(class.clone()).or_default();
+            t.ring_faces += 1;
+            if let Err(error) = rvt::research::native_saved_mesh::face(graph, fi) {
+                let text: String = format!("{error:#}")
+                    .chars()
+                    .map(|c| if c.is_ascii_digit() { '#' } else { c })
+                    .take(200)
+                    .collect();
+                *t.ring_refused.entry(text).or_default() += 1;
+            }
             continue;
         }
         let why = face_grid(graph, fi).err().map(|e| format!("{e:#}"));
@@ -348,10 +372,29 @@ fn main() -> Result<()> {
         }
     }
     for (class, t) in &tally {
+        if t.ring_faces > 0 {
+            let refused: usize = t.ring_refused.values().sum();
+            println!(
+                "ring surface={class} faces={} refused={refused}",
+                t.ring_faces
+            );
+            let mut reasons: Vec<(&String, &usize)> = t.ring_refused.iter().collect();
+            reasons.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            for (why, n) in reasons.into_iter().take(8) {
+                println!("ringwhy surface={class} faces={n} why={why}");
+            }
+            continue;
+        }
         println!(
             "faces surface={class} meshed={} disconnected={} other={}",
             t.meshed, t.disconnected, t.other
         );
+        if t.chord_ends > 0 {
+            println!(
+                "chords surface={class} ends={} moved={} largest={:.9}",
+                t.chord_ends, t.chord_moved, t.chord_largest
+            );
+        }
         if t.polygon_loops > 0 {
             println!(
                 "polygons surface={class} faces={} loops={} relative_under_1e-6={} 1e-6_to_1e-4={} 1e-4_to_1e-2={} 1e-2_or_more={} closing={} bounded={} meets={} halfway_same={}",
