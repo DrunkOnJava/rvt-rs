@@ -421,6 +421,14 @@ fn main() -> Result<()> {
             }
         }
         let two_loop: usize = reach.iter().filter_map(|id| two_loop_of.get(id)).sum();
+        if two_loop > 0 {
+            let graphs: Vec<u64> = reach
+                .iter()
+                .filter(|id| two_loop_of.get(id).is_some_and(|n| *n > 0))
+                .copied()
+                .collect();
+            println!("reach owner={owner} two_loop_graphs={graphs:?}");
+        }
         if crossing.iter().sum::<usize>() > 0 || two_loop > 0 {
             crossing_total.insert(*owner, crossing);
             wanted.extend(reach);
