@@ -12,6 +12,7 @@
 //! its saved graphics is put to `native_parametric_mesh::face_grid`; for a face refused with
 //! that reason, `native_parametric_mesh::trim_breaks` says where each loop that does not
 //! close stops. It prints:
+//! ```text
 //!   break graph=<ElementId> face=<n> surface=<class> loop=<n> edges=<n> chained=<n>
 //!     gap=<ft> closing=<true|false> other_meets=<true|false>
 //!   - `chained`: the edges the attempt that joins the most joined; `closing` where every
@@ -52,10 +53,13 @@
 //!     point (a side that collapses); then by surface class:
 //!   polygons surface=<class> faces=<n> loops=<n> relative_under_1e-6=<n> 1e-6_to_1e-4=<n>
 //!     1e-4_to_1e-2=<n> 1e-2_or_more=<n> closing=<n> bounded=<n> meets=<n> halfway_same=<n>
+//! ```
 //! ElementIds, counts and distances in feet only.
 //!
 //! Usage:
+//! ```text
 //!   cargo run --profile ci -p rvt-probes --example probe_2085_trim_breaks -- MODEL.rvt
+//! ```
 
 use std::collections::{BTreeMap, BTreeSet};
 
