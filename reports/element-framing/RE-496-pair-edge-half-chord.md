@@ -4,19 +4,19 @@
 **Issues:** #2111 (this change, #2116); #2107 (RE-495), #2104, #2114.
 **Artefacts:** the BIM4LCA office and housing files (VTT, CC BY-SA 4.0; Revit 2024), each with Revit's own IFC4 export; RE1 Architecture and Plumbing (Revit 2025, MIT); the held-out house; Autodesk's sample projects of Revit 2015 to 2027 and Snowdon Towers' 2024 models, which have no Revit export in Measure. Outside Measure, kept local: Revit's IFC4 export of Snowdon Towers Architectural (bldrs-ai/test-models, no licence).
 **Probes:** `probe_2098_face_cracks` with the cylinder standoff of #2111 (`cylsag`), on each bound and on `main` at `26a6b0e1` (`e1f9649d`); `probe_2111_sliver_faces`. Not landed; kept as `refs/archive/2026-11-20/measure-2111-chord-cand`, `-chord-cand2`, `-head`, `-base`, `-sliver` and `-sliver-base`. The local reads are `research-tools/2111/` on `refs/archive/2026-11-20/measure-2111-reads`.
-**Status:** positive. At half the faces' chord every boundary vertex between two cylinders stays within 0.001 ft on the 77 files the crack probe reads, and 182,090 of the 297,784 cylinder triangles #2107 added go (each graph counted once), 48 to 100 per cent of its rise by file. On 147 graphs the farthest cylinder standoff rises, by at most 0.000318 ft, within 0.001 ft. Griffin chose this over #2107's finer edge (2026-11-20). The rows were registered on #2111 before each run was read.
+**Status:** positive. At half the faces' chord every boundary vertex between two cylinders stays within 0.001 ft on the 77 files the crack probe reads, and 182,090 of the 297,784 cylinder triangles #2107 added go (each graph counted once); on the 13 files where #2107 added the most, 48 to 100 per cent of its rise goes. On 147 graphs the farthest cylinder standoff rises, by at most 0.000318 ft, within 0.001 ft. Griffin chose this over #2107's finer edge (2026-11-20). The rows were registered on #2111 before each run was read.
 
 ## 1. The rule
 
 #2107 refined an edge two cylinder faces share until the chord between neighbouring points was within `EDGE_SAGITTA` (0.00025 ft), a quarter of the 0.001 ft chord the cylinder faces are meshed to (`CylinderTessellationProfile::chord_error`, the default profile both callers of `cylinder_face` use). It is now refined to half that chord, 0.0005 ft. `EdgeLimits` carries the bound, so `bisect_crossing_edge` takes it from its caller; the edges a cylinder shares with a plane keep `EDGE_SAGITTA`.
 
-At the whole chord (`42cf34ad`), two downpipes on each BIM4LCA housing file (`Syöksytorvi:HLV-3.ST70`) kept two vertices over 0.001 ft between the shared points, the farthest 0.001871 ft; before #2107 22 of their vertices were over, with the same farthest. Halving the bound closes them.
+At the whole chord (`42cf34ad`), two downpipes on each BIM4LCA housing file (`Syöksytorvi:HLV-3.ST70`) kept two vertices over 0.001 ft between the shared points, the farthest 0.001871 ft; on the concrete files, before #2107, 22 of their vertices were over, with the same farthest. Halving the bound closes them.
 
 Read before this change ([#2111](https://github.com/DrunkOnJava/rvt-rs/issues/2111#issuecomment-7048394440)): on the Snowdon Towers toilet's and sink's cylinder faces, #2107's slivers stand off their cylinder by at most 0.000080 and 0.000098 ft, where the triangles `main` drew nearest the same Revit vertices stood off 0.000714 and 0.000950 ft; the ratios fit the squares of the strip widths. So a coarser edge trades closeness to the cylinder for triangles.
 
 ## 2. Measured
 
-**At the whole chord** ([reading](https://github.com/DrunkOnJava/rvt-rs/issues/2111#issuecomment-7049619398); probe 44793236259, Measure 44793243838): row 1 failed on the downpipes above; rows 3, 4, 5, 7 and 8 held, and the triangles fell almost to where they were before #2107.
+**At the whole chord** ([reading](https://github.com/DrunkOnJava/rvt-rs/issues/2111#issuecomment-7049619398); probe 44793236259, Measure 44793243838): rows 1 and 2 failed on the downpipes above; rows 3, 4, 5, 7 and 8 held, and the triangles fell almost to where they were before #2107.
 
 **At half the chord** ([reading](https://github.com/DrunkOnJava/rvt-rs/issues/2111#issuecomment-7050804405); probe [44801424565](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44801424565), Measure [44807747546](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44807747546), against `26a6b0e1`): every row holds.
 
