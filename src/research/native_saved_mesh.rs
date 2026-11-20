@@ -795,6 +795,8 @@ enum EdgeSide {
     /// The loop of a cylinder: an edge it shares with a plane that crosses it
     /// takes the points the plane's side takes ([`refined_curved_edge`]).
     Cylinder,
+    /// Neither: each edge keeps the points the graph stores, for [`ring_gaps`] (#2085).
+    Stored,
 }
 /// The trim ring of the cylinder face `face`, its loop `li`, held to
 /// [`CYLINDER_RING_POINT_BUDGET`] points (#1815).
@@ -834,6 +836,18 @@ fn ring_impl(
     refine: EdgeSide,
     limit: usize,
 ) -> Result<Vec<[f64; 2]>> {
+    joined_ring(ring_segments(g, index, face, li, refine, limit)?)
+}
+/// The edges of the loop `li` of `face` in the loop's order, each as its points in the
+/// surface's parameters, refined as `refine` says and bounded as [`ring_impl`] says.
+fn ring_segments(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    li: usize,
+    refine: EdgeSide,
+    limit: usize,
+) -> Result<Vec<Vec<[f64; 2]>>> {
     let l = &g.objects[li];
     ensure!(
         ["EdgeLoop", "EdgeLoopWithChainEnvelopes"].contains(&l.class_name.as_str()),
@@ -852,7 +866,7 @@ fn ring_impl(
     let mut segments = Vec::new();
     let mut held = 0usize;
     let exceeded = match refine {
-        EdgeSide::Plane => PLANAR_BUDGET_EXCEEDED,
+        EdgeSide::Plane | EdgeSide::Stored => PLANAR_BUDGET_EXCEEDED,
         EdgeSide::Cylinder => CYLINDER_BUDGET_EXCEEDED,
     };
     while cur != li {
@@ -898,6 +912,7 @@ fn ring_impl(
                     Err(_) => pts,
                 }
             }
+            EdgeSide::Stored => pts,
         };
         held = ring_points_with(held, pts.len(), limit).context(exceeded)?;
         segments.push(pts);
@@ -905,6 +920,12 @@ fn ring_impl(
             .resolve(cur, &e.fields["m_next"][side])?
             .context("null next edge")?;
     }
+    Ok(segments)
+}
+/// One ring from a loop's edges, each joined to the ring at whichever of its ends lies
+/// within 1e-7 of the ring's last point in the surface's parameters ([`close`]), and the
+/// last edge's far end back at the first point.
+fn joined_ring(segments: Vec<Vec<[f64; 2]>>) -> Result<Vec<[f64; 2]>> {
     // Saved circular loops can be represented by two connected arc edges
     // (typically two semicircles). A third edge is not a topology invariant;
     // closure, nonzero area, and connected ordering below remain mandatory.
@@ -943,6 +964,213 @@ fn ring_impl(
         out.len() >= 3 && area(&out).abs() > 1e-12,
         "degenerate boundary"
     );
+    Ok(out)
+}
+
+/// How far apart neighbouring edges' ends lie in one ring of a plane or cylinder face,
+/// which the ring's join joins only within 1e-7 in the surface's parameters (#2085).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct JointGaps {
+    /// The largest gap, from the ring's last point to the next edge's nearer end or from
+    /// the last edge's far end back to the first point, in the surface's parameters; of
+    /// the two ways round the first edge can be taken, the one whose largest gap is
+    /// smaller.
+    pub parameters: f64,
+    /// That gap's difference in each parameter, from the ring's point to the edge's.
+    pub components: [f64; 2],
+    /// The largest of the same gaps in feet, through the surface.
+    pub feet: f64,
+    /// The gaps not within 1e-7.
+    pub open: usize,
+}
+
+/// One ring of a plane or cylinder face as its reader builds it, read for #2085.
+#[derive(Debug, Clone)]
+pub struct RingGaps {
+    /// The loop's place in the face's loop list, from 0.
+    pub loop_index: usize,
+    /// The loop's edges.
+    pub edges: usize,
+    /// Its edges with the points the graph stores.
+    pub stored: JointGaps,
+    /// Its edges as the reader refines them, or the refinement's error.
+    pub refined: std::result::Result<JointGaps, String>,
+    /// Where the refinement failed: the cylinder faces beside the loop whose own ring is
+    /// refused as a disconnected UV boundary. A plane meshes such a neighbour to share
+    /// their edge (`refined_plane_edge`), so its refusal becomes the plane's.
+    pub disconnected_neighbours: Vec<usize>,
+}
+
+/// The rings of the plane or cylinder face `fi` as [`face`] builds them, with how far
+/// apart their edges' ends lie (#2085). A plane's every loop is read, each with the
+/// whole face's point budget rather than what the loops before it leave; a cylinder's
+/// one or two loops with the budget [`cylinder_face`] gives them.
+pub fn ring_gaps(g: &ObjectGraph, fi: usize) -> Result<Vec<RingGaps>> {
+    let index = PointerIndex::new(g);
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    let si = index
+        .resolve(fi, &f.fields["m_pSurf"])?
+        .context("face surface")?;
+    let s = &g.objects[si];
+    type Surface = Box<dyn Fn([f64; 2]) -> [f64; 3]>;
+    let (refine, surface): (EdgeSide, Surface) = match s.class_name.as_str() {
+        "Plane" => {
+            let origin = point::<3>(&s.fields["m_origin"])?;
+            let x = point::<3>(&s.fields["m_xVec"])?;
+            let y = point::<3>(&s.fields["m_yVec"])?;
+            (
+                EdgeSide::Plane,
+                Box::new(move |uv: [f64; 2]| -> [f64; 3] {
+                    std::array::from_fn(|k| origin[k] + uv[0] * x[k] + uv[1] * y[k])
+                }),
+            )
+        }
+        "CylSurf" => {
+            let center = point::<3>(&s.fields["m_center"])?;
+            let x = point::<3>(&s.fields["m_xVec"])?;
+            let y = point::<3>(&s.fields["m_yVec"])?;
+            let z = point::<3>(&s.fields["m_zVec"])?;
+            let r = s.fields["m_radius"].as_f64().context("cylinder radius")?;
+            (
+                EdgeSide::Cylinder,
+                Box::new(move |uv: [f64; 2]| -> [f64; 3] {
+                    let (sn, cs) = uv[0].sin_cos();
+                    std::array::from_fn(|k| center[k] + r * (cs * x[k] + sn * y[k]) + uv[1] * z[k])
+                }),
+            )
+        }
+        other => bail!("unsupported surface {other}"),
+    };
+    let mut loops = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut next = index.resolve(fi, &f.fields["m_pFirstLoop"])?;
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "loop-list cycle");
+        loops.push(li);
+        next = index.resolve(li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    let limit = match (refine, loops.len()) {
+        (EdgeSide::Cylinder, 1) => CYLINDER_RING_POINT_BUDGET,
+        (EdgeSide::Cylinder, 2) => CYLINDER_RING_POINT_BUDGET / 2,
+        (EdgeSide::Cylinder, _) => bail!("multiple cylinder trim loops unsupported"),
+        _ => PLANAR_FACE_POINT_BUDGET,
+    };
+    let mut out = Vec::new();
+    for (loop_index, &li) in loops.iter().enumerate() {
+        let stored = ring_segments(g, &index, fi, li, EdgeSide::Stored, usize::MAX)?;
+        let (refined, disconnected_neighbours) =
+            match ring_segments(g, &index, fi, li, refine, limit) {
+                Ok(segments) => (Ok(joint_gaps(&segments, &*surface)), Vec::new()),
+                Err(error) => (
+                    Err(format!("{error:#}")),
+                    disconnected_cylinders_beside(g, &index, fi, li)?,
+                ),
+            };
+        out.push(RingGaps {
+            loop_index,
+            edges: stored.len(),
+            stored: joint_gaps(&stored, &*surface),
+            refined,
+            disconnected_neighbours,
+        });
+    }
+    Ok(out)
+}
+
+/// The gaps [`joined_ring`] meets joining `segments`, each edge at its nearer end.
+fn joint_gaps(segments: &[Vec<[f64; 2]>], surface: &dyn Fn([f64; 2]) -> [f64; 3]) -> JointGaps {
+    let segments: Vec<&Vec<[f64; 2]>> = segments.iter().filter(|s| !s.is_empty()).collect();
+    let Some(first) = segments.first() else {
+        return JointGaps::default();
+    };
+    let span = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]);
+    let mut best: Option<JointGaps> = None;
+    for reverse in [false, true] {
+        let (start, mut last) = if reverse {
+            (first[first.len() - 1], first[0])
+        } else {
+            (first[0], first[first.len() - 1])
+        };
+        let mut gaps = JointGaps::default();
+        let mut note = |a: [f64; 2], b: [f64; 2]| {
+            let d = span(a, b);
+            if !close(a, b) {
+                gaps.open += 1;
+            }
+            if d > gaps.parameters {
+                gaps.parameters = d;
+                gaps.components = [b[0] - a[0], b[1] - a[1]];
+            }
+            let (p, q) = (surface(a), surface(b));
+            let feet = (0..3).map(|k| (p[k] - q[k]).powi(2)).sum::<f64>().sqrt();
+            gaps.feet = gaps.feet.max(feet);
+        };
+        for s in &segments[1..] {
+            let (head, tail) = (s[0], s[s.len() - 1]);
+            let (near, far) = if span(last, head) <= span(last, tail) {
+                (head, tail)
+            } else {
+                (tail, head)
+            };
+            note(last, near);
+            last = far;
+        }
+        note(last, start);
+        if best.is_none_or(|b| gaps.parameters < b.parameters) {
+            best = Some(gaps);
+        }
+    }
+    best.unwrap_or_default()
+}
+
+/// The cylinder faces across the edges of the loop `li` of `face` whose own ring is
+/// refused as a disconnected UV boundary.
+fn disconnected_cylinders_beside(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    li: usize,
+) -> Result<Vec<usize>> {
+    let mut beside = BTreeSet::new();
+    let mut seen = BTreeSet::new();
+    let mut cur = index
+        .resolve(li, &g.objects[li].fields["m_next"])?
+        .context("empty loop")?;
+    while cur != li && seen.insert(cur) {
+        let e = &g.objects[cur];
+        let faces = e.fields["m_pFace"].as_array().context("edge face pair")?;
+        let mut side = None;
+        for (i, p) in faces.iter().enumerate() {
+            if index.resolve(cur, p)? == Some(face) {
+                side = Some(i);
+            }
+        }
+        let side = side.context("edge face side")?;
+        for p in faces
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != side)
+            .map(|(_, p)| p)
+        {
+            if let Some(other) = index.resolve(cur, p)? {
+                beside.insert(other);
+            }
+        }
+        cur = index
+            .resolve(cur, &e.fields["m_next"][side])?
+            .context("null next edge")?;
+    }
+    let mut out = Vec::new();
+    for other in beside {
+        let surface = index.resolve(other, &g.objects[other].fields["m_pSurf"])?;
+        if surface.is_some_and(|si| g.objects[si].class_name == "CylSurf")
+            && cylinder_face(g, other, CylinderTessellationProfile::default())
+                .is_err_and(|e| format!("{e:#}").contains("disconnected UV boundary"))
+        {
+            out.push(other);
+        }
+    }
     Ok(out)
 }
 
