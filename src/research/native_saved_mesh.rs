@@ -1026,6 +1026,40 @@ fn ring_impl(
 ) -> Result<Vec<[f64; 2]>> {
     joined_ring(ring_segments(g, index, face, li, refine, limit)?)
 }
+/// The length on a plane or cylinder face's surface of a straight step between two points
+/// of its parameters: a chord on a plane, a helix on a cylinder. A step across a cylinder's
+/// seam is so a whole turn long, not the distance between its ends (#2085).
+type StepLength = Box<dyn Fn([f64; 2], [f64; 2]) -> f64>;
+fn step_length(g: &ObjectGraph, index: &PointerIndex<'_>, face: usize) -> Result<StepLength> {
+    let si = index
+        .resolve(face, &g.objects[face].fields["m_pSurf"])?
+        .context("face surface")?;
+    let s = &g.objects[si];
+    match s.class_name.as_str() {
+        "Plane" => {
+            let x = point::<3>(&s.fields["m_xVec"])?;
+            let y = point::<3>(&s.fields["m_yVec"])?;
+            Ok(Box::new(move |a: [f64; 2], b: [f64; 2]| -> f64 {
+                let (du, dv) = (b[0] - a[0], b[1] - a[1]);
+                (0..3)
+                    .map(|k| (du * x[k] + dv * y[k]).powi(2))
+                    .sum::<f64>()
+                    .sqrt()
+            }))
+        }
+        "CylSurf" => {
+            // `cylinder_face` holds the basis orthonormal, so a straight step in the
+            // parameters is a helix of radius `r`.
+            let r = s.fields["m_radius"].as_f64().context("cylinder radius")?;
+            let z = point::<3>(&s.fields["m_zVec"])?;
+            let height = (0..3).map(|k| z[k] * z[k]).sum::<f64>().sqrt();
+            Ok(Box::new(move |a: [f64; 2], b: [f64; 2]| -> f64 {
+                (r * (b[0] - a[0])).hypot(height * (b[1] - a[1]))
+            }))
+        }
+        other => bail!("unsupported surface {other}"),
+    }
+}
 /// The edges of the loop `li` of `face` in the loop's order, each as its points in the
 /// surface's parameters, refined as `refine` says and bounded as [`ring_impl`] says.
 fn ring_segments(
@@ -1168,6 +1202,9 @@ pub struct JointGaps {
     pub components: [f64; 2],
     /// The largest of the same gaps in feet, through the surface.
     pub feet: f64,
+    /// The largest of the same gaps as a straight step in the parameters measures along
+    /// the surface: a chord on a plane, a helix on a cylinder, a whole turn across a seam.
+    pub step: f64,
     /// The gaps not within 1e-7.
     pub open: usize,
     /// Of those, the ones that run back along the edge before them in feet, so that the
@@ -1184,6 +1221,8 @@ pub struct RingGaps {
     pub edges: usize,
     /// Its edges with the points the graph stores.
     pub stored: JointGaps,
+    /// The shortest step along the surface between one stored edge's own two ends.
+    pub shortest_edge: f64,
     /// Its edges as the reader refines them, or the refinement's error.
     pub refined: std::result::Result<JointGaps, String>,
     /// Where the refinement failed: the cylinder faces beside the loop whose own ring is
@@ -1247,12 +1286,13 @@ pub fn ring_gaps(g: &ObjectGraph, fi: usize) -> Result<Vec<RingGaps>> {
         (EdgeSide::Cylinder, _) => bail!("multiple cylinder trim loops unsupported"),
         _ => PLANAR_FACE_POINT_BUDGET,
     };
+    let step = step_length(g, &index, fi)?;
     let mut out = Vec::new();
     for (loop_index, &li) in loops.iter().enumerate() {
         let stored = ring_segments(g, &index, fi, li, EdgeSide::Stored, usize::MAX)?;
         let (refined, disconnected_neighbours) =
             match ring_segments(g, &index, fi, li, refine, limit) {
-                Ok(segments) => (Ok(joint_gaps(&segments, &*surface)), Vec::new()),
+                Ok(segments) => (Ok(joint_gaps(&segments, &*surface, &*step)), Vec::new()),
                 Err(error) => (
                     Err(format!("{error:#}")),
                     disconnected_cylinders_beside(g, &index, fi, li)?,
@@ -1261,7 +1301,12 @@ pub fn ring_gaps(g: &ObjectGraph, fi: usize) -> Result<Vec<RingGaps>> {
         out.push(RingGaps {
             loop_index,
             edges: stored.len(),
-            stored: joint_gaps(&stored, &*surface),
+            stored: joint_gaps(&stored, &*surface, &*step),
+            shortest_edge: stored
+                .iter()
+                .filter(|s| !s.is_empty())
+                .map(|s| step(s[0], s[s.len() - 1]))
+                .fold(f64::INFINITY, f64::min),
             refined,
             disconnected_neighbours,
         });
@@ -1270,7 +1315,11 @@ pub fn ring_gaps(g: &ObjectGraph, fi: usize) -> Result<Vec<RingGaps>> {
 }
 
 /// The gaps [`joined_ring`] meets joining `segments`, each edge at its nearer end.
-fn joint_gaps(segments: &[Vec<[f64; 2]>], surface: &dyn Fn([f64; 2]) -> [f64; 3]) -> JointGaps {
+fn joint_gaps(
+    segments: &[Vec<[f64; 2]>],
+    surface: &dyn Fn([f64; 2]) -> [f64; 3],
+    step: &dyn Fn([f64; 2], [f64; 2]) -> f64,
+) -> JointGaps {
     let segments: Vec<&Vec<[f64; 2]>> = segments.iter().filter(|s| !s.is_empty()).collect();
     let Some(first) = segments.first() else {
         return JointGaps::default();
@@ -1310,6 +1359,7 @@ fn joint_gaps(segments: &[Vec<[f64; 2]>], surface: &dyn Fn([f64; 2]) -> [f64; 3]
             let (p, q) = (surface(a), surface(b));
             let feet = (0..3).map(|k| (p[k] - q[k]).powi(2)).sum::<f64>().sqrt();
             gaps.feet = gaps.feet.max(feet);
+            gaps.step = gaps.step.max(step(a, b));
         };
         for s in &segments[1..] {
             let (head, tail) = (s[0], s[s.len() - 1]);

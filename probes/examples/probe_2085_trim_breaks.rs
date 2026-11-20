@@ -64,12 +64,16 @@
 //!     in the surface's parameters, the same gaps' largest in feet and how many are not
 //!     within the join's 1e-7, with the edges as the graph stores them and as refined, and
 //!     the largest refined gap's difference in each parameter (a gap near 2π in `du` with
-//!     no feet is a seam, not noise), and `back=<n>`, the refined gaps that run back along
-//!     the edge before them (an overshoot);
+//!     no feet is a seam, not noise), `back=<n>`, the refined gaps with a component back
+//!     along the edge before them, `step=<ft>`, the largest refined gap as a straight step in
+//!     the parameters measures along the surface (a chord on a plane, a helix on a cylinder),
+//!     and `shortest=<ft>`, the shortest step between one stored edge's own ends;
 //!   gapfrom surface=Plane graph=<ElementId> face=<n> loop=<n> neighbours=[<n>, ...]
 //!     why=<reason>: a ring whose refinement fails, with the cylinder faces beside it whose
 //!     own ring is refused as `disconnected UV boundary` (a plane meshes such a neighbour to
 //!     share their edge, so the cylinder's refusal becomes the plane's);
+//!   refused surface=<Plane|CylSurf> graph=<ElementId> face=<n> why=<reason, digits masked>:
+//!     every refused plane or cylinder face, so two commits' faces pair by graph and face;
 //!   gapnone, gapunread surface=<class> graph=<ElementId> face=<n>: no ring found failing,
 //!     or the read itself refused;
 //!   ringreach owner=<ElementId> graphs=[<ElementId>, ...]: an element whose graphics reach
@@ -203,7 +207,7 @@ fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally
         match &r.refined {
             Ok(j) if j.open > 0 => {
                 println!(
-                    "gap surface={class} graph={id} face={fi} loop={} edges={} stored={:e}/{:e}ft/{} refined={:e}/{:e}ft/{} du={:e} dv={:e} back={}",
+                    "gap surface={class} graph={id} face={fi} loop={} edges={} stored={:e}/{:e}ft/{} refined={:e}/{:e}ft/{} du={:e} dv={:e} back={} step={:e} shortest={:e}",
                     r.loop_index,
                     r.edges,
                     r.stored.parameters,
@@ -214,7 +218,9 @@ fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally
                     j.open,
                     j.components[0],
                     j.components[1],
-                    j.backward
+                    j.backward,
+                    j.step,
+                    r.shortest_edge
                 );
                 if j.backward > 0 {
                     t.gap_backward += 1;
@@ -289,6 +295,10 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (b
                     .map(|c| if c.is_ascii_digit() { '#' } else { c })
                     .take(200)
                     .collect();
+                println!(
+                    "refused surface={class} graph={id} face={fi} why={}",
+                    text.chars().take(120).collect::<String>()
+                );
                 *t.ring_refused.entry(text).or_default() += 1;
                 if full.contains("disconnected UV boundary") {
                     t.gap_disconnected += 1;
