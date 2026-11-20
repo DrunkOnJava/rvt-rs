@@ -228,7 +228,19 @@ fn face_surface(
         })
         .and_then(|fi| {
             let si = pointer(g, fi, g.objects[fi].fields.get("m_pSurf")?).ok()??;
-            Some(g.objects[si].class_name.clone())
+            // #2102: say which faces hold two trim loops, to tell band_mesh's faces apart.
+            let first = g.objects[fi]
+                .fields
+                .get("m_pFirstLoop")
+                .and_then(|l| pointer(g, fi, l).ok().flatten());
+            let second = first.and_then(|l| {
+                g.objects[l]
+                    .fields
+                    .get("m_nextLoop")
+                    .and_then(|n| pointer(g, l, n).ok().flatten())
+            });
+            let loops = if second.is_some() { "+2loops" } else { "" };
+            Some(format!("{}{loops}", g.objects[si].class_name))
         })
         .unwrap_or_else(|| "-".to_string())
 }
