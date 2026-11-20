@@ -42,6 +42,16 @@
 //!   params surface=<class> small_under_1e-6=<n> 1e-6_to_1e-4=<n> 1e-4_to_1e-2=<n>
 //!     loops_with_pole_joins=<n> loops_with_seam_joins=<n>: the joined loops by `small_gap`
 //!     and by their jumps.
+//!   polygon graph=<ElementId> face=<n> surface=<class> loop=<n> edges=<n> joined=<n>
+//!     closing=<bool> bounded=<bool> meets=<bool> param_gap=<d> relative_gap=<d>
+//!     halfway_same=<bool>: for a face refused as `a trim loop does not close in the
+//!     surface's parameters`, where its polygon fails on the attempt that gets furthest:
+//!     `bounded` where the loop joins only within a bound looser than 1e-7, `meets` where the
+//!     two points meet in model coordinates within that bound, the parameters' difference
+//!     there and over the surface's range, and whether the point halfway across is the same
+//!     point (a side that collapses); then by surface class:
+//!   polygons surface=<class> faces=<n> loops=<n> relative_under_1e-6=<n> 1e-6_to_1e-4=<n>
+//!     1e-4_to_1e-2=<n> 1e-2_or_more=<n> closing=<n> bounded=<n> meets=<n> halfway_same=<n>
 //! ElementIds, counts and distances in feet only.
 //!
 //! Usage:
@@ -54,10 +64,11 @@ use rvt::RevitFile;
 use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Record};
 use rvt::research::native_parameters::ObjectGraph;
-use rvt::research::native_parametric_mesh::{JOIN_BOUNDS, face_grid, trim_breaks};
+use rvt::research::native_parametric_mesh::{JOIN_BOUNDS, face_grid, polygon_breaks, trim_breaks};
 use rvt::research::native_saved_mesh::pointer;
 
 const DISCONNECTED: &str = "disconnected parametric trim in model coordinates";
+const POLYGON: &str = "a trim loop does not close in the surface's parameters";
 
 fn identifier(value: &Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
@@ -101,6 +112,13 @@ struct Tally {
     small: [usize; 3],
     with_poles: usize,
     with_seams: usize,
+    polygon_faces: usize,
+    polygon_loops: usize,
+    polygon_bins: [usize; 4],
+    polygon_closing: usize,
+    polygon_bounded: usize,
+    polygon_meets: usize,
+    polygon_halfway: usize,
 }
 
 /// The faces of one graph: prints its breaks and adds to the tally; whether it holds one.
@@ -127,6 +145,47 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> bo
             None => t.meshed += 1,
             Some(w) if w.contains(DISCONNECTED) => t.disconnected += 1,
             Some(_) => t.other += 1,
+        }
+        if why.as_deref().is_some_and(|w| w.contains(POLYGON)) {
+            match polygon_breaks(graph, fi) {
+                Ok((_, breaks)) => {
+                    let t = tally.entry(class.clone()).or_default();
+                    t.polygon_faces += 1;
+                    for b in breaks {
+                        any = true;
+                        t.polygon_loops += 1;
+                        let bin = match b.relative_gap {
+                            g if g < 1e-6 => 0,
+                            g if g < 1e-4 => 1,
+                            g if g < 1e-2 => 2,
+                            _ => 3,
+                        };
+                        t.polygon_bins[bin] += 1;
+                        let closing = b.joined == b.edges;
+                        t.polygon_closing += usize::from(closing);
+                        t.polygon_bounded += usize::from(b.bounded);
+                        t.polygon_meets += usize::from(b.meets);
+                        t.polygon_halfway += usize::from(b.halfway_same);
+                        println!(
+                            "polygon graph={id} face={fi} surface={class} loop={} edges={} joined={} closing={closing} bounded={} meets={} param_gap={:.3e} relative_gap={:.3e} halfway_same={}",
+                            b.loop_index,
+                            b.edges,
+                            b.joined,
+                            b.bounded,
+                            b.meets,
+                            b.param_gap,
+                            b.relative_gap,
+                            b.halfway_same
+                        );
+                    }
+                }
+                Err(e) => {
+                    println!(
+                        "unread graph={id} face={fi} why={}",
+                        format!("{e:#}").replace(' ', "_")
+                    );
+                }
+            }
         }
         if !why.as_deref().is_some_and(|w| w.contains(DISCONNECTED)) {
             continue;
@@ -289,6 +348,21 @@ fn main() -> Result<()> {
             "faces surface={class} meshed={} disconnected={} other={}",
             t.meshed, t.disconnected, t.other
         );
+        if t.polygon_loops > 0 {
+            println!(
+                "polygons surface={class} faces={} loops={} relative_under_1e-6={} 1e-6_to_1e-4={} 1e-4_to_1e-2={} 1e-2_or_more={} closing={} bounded={} meets={} halfway_same={}",
+                t.polygon_faces,
+                t.polygon_loops,
+                t.polygon_bins[0],
+                t.polygon_bins[1],
+                t.polygon_bins[2],
+                t.polygon_bins[3],
+                t.polygon_closing,
+                t.polygon_bounded,
+                t.polygon_meets,
+                t.polygon_halfway
+            );
+        }
         if t.loops > 0 {
             println!(
                 "gaps surface={class} loops={} under_1e-6={} 1e-6_to_1e-4={} 1e-4_to_0.01={} over_0.01={} closing={} other_meets={}",

@@ -692,6 +692,130 @@ fn loop_polygon(
 /// The join of the strict path, in model units (feet).
 const STRICT_JOIN: f64 = 1e-7;
 
+/// #2085, on `research/2085-chairs` only: where a loop's polygon in the surface's
+/// parameters fails, on the attempt (first edge either way round) that gets furthest.
+#[derive(Debug, Clone)]
+pub struct PolygonBreak {
+    /// The loop's place in its face, 0 for the first.
+    pub loop_index: usize,
+    /// The loop's edges.
+    pub edges: usize,
+    /// The edges joined before the join that fails; `edges` where it is the closing step.
+    pub joined: usize,
+    /// Whether the loop joins only within a bound looser than 1e-7 (the candidate's path).
+    pub bounded: bool,
+    /// Whether the two points meet in model coordinates within the loop's bound; where
+    /// they do not, the polygon fails as `loop_closes` would.
+    pub meets: bool,
+    /// The larger of the two parameters' differences across the failing join.
+    pub param_gap: f64,
+    /// That difference over the surface's parameter range on its axis.
+    pub relative_gap: f64,
+    /// Whether the point halfway across the join in the parameters is the same point in
+    /// model coordinates, within the loop's bound (a side that collapses).
+    pub halfway_same: bool,
+}
+
+/// #2085, on `research/2085-chairs` only: the face's surface class and, for each loop of
+/// the face whose polygon in the parameters fails (as `face_grid` builds it), where.
+pub fn polygon_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<PolygonBreak>)> {
+    use crate::native_saved_mesh::pointer;
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
+    let class = g.objects[si].class_name.to_string();
+    let surface = ParametricSurface::read(g, si)?;
+    let env = surface.bounds();
+    let range = [
+        (env[1][0] - env[0][0]).abs().max(1e-12),
+        (env[1][1] - env[0][1]).abs().max(1e-12),
+    ];
+    let saved_chords = keeps_saved_chords(&surface);
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    let same =
+        |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
+    let mut breaks = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
+    let mut loop_index = 0;
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "trim loop cycle");
+        ensure!(loop_index < MAX_TRIM_LOOPS, "too many trim loops");
+        let least = if loop_index == 0 { 2 } else { 1 };
+        let (segments, _) = loop_segments(g, fi, li, env, least, saved_chords)?;
+        let strict = loop_closes(&surface, &segments)?;
+        let bound = if strict {
+            Some(STRICT_JOIN)
+        } else {
+            loop_join_bound(&surface, &segments)?
+        };
+        let failing = match bound {
+            Some(bound) => loop_polygon(&surface, &segments, bound)
+                .is_err()
+                .then_some(bound),
+            None => None,
+        };
+        if let Some(bound) = failing {
+            // Where the attempt that gets furthest fails, judged as the polygon judges a
+            // join on its path: the strict path asks the same point in the parameters.
+            let mut best: Option<PolygonBreak> = None;
+            for reverse in [false, true] {
+                let (first, mut last) = if reverse {
+                    (*segments[0].last().unwrap(), segments[0][0])
+                } else {
+                    (segments[0][0], *segments[0].last().unwrap())
+                };
+                let mut joined = 1;
+                let mut failed: Option<([f64; 2], [f64; 2], bool)> = None;
+                for seg in &segments[1..] {
+                    let p = at(last)?;
+                    let (a, b) = (seg[0], *seg.last().unwrap());
+                    let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+                    let (gap, near, other) = if da <= db { (da, a, b) } else { (db, b, a) };
+                    let ok = gap < bound
+                        && (same(last, near)
+                            || (bound > STRICT_JOIN
+                                && ((last[0] - near[0]).abs() / range[0])
+                                    .max((last[1] - near[1]).abs() / range[1])
+                                    <= JUMP));
+                    if !ok {
+                        failed = Some((last, near, gap < bound));
+                        break;
+                    }
+                    last = other;
+                    joined += 1;
+                }
+                let (p, q, meets) = match failed {
+                    Some(f) => f,
+                    None => (last, first, distance(at(first)?, at(last)?) < bound),
+                };
+                let param_gap = (p[0] - q[0]).abs().max((p[1] - q[1]).abs());
+                let relative_gap =
+                    ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1]);
+                let half = [(p[0] + q[0]) / 2., (p[1] + q[1]) / 2.];
+                let halfway_same = distance(at(half)?, at(p)?) < bound.max(1e-7);
+                let found = PolygonBreak {
+                    loop_index,
+                    edges: segments.len(),
+                    joined,
+                    bounded: !strict,
+                    meets,
+                    param_gap,
+                    relative_gap,
+                    halfway_same,
+                };
+                if best.as_ref().is_none_or(|b| found.joined > b.joined) {
+                    best = Some(found);
+                }
+            }
+            breaks.extend(best);
+        }
+        loop_index += 1;
+        next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    Ok((class, breaks))
+}
+
 /// #2085 candidate: the smallest of `JOIN_BOUNDS` within which the loop's edges join
 /// whole, each at its nearer end; `None` where none does, or where an edge is shorter
 /// than that bound, so that either of its ends would join.
