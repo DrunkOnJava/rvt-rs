@@ -14,13 +14,13 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
+sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 import place  # noqa: E402
 from place import body, distance  # noqa: E402
 
 place.ifcopenshell.open = functools.lru_cache(maxsize=4)(place.ifcopenshell.open)
 spec = importlib.util.spec_from_file_location(
-    "bd", __file__.rsplit("/", 1)[0] + "/ifc_body_diff.py")
+    "bd", __import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "ifc_body_diff.py"))
 bd = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bd)
 

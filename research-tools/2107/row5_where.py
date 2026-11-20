@@ -8,7 +8,7 @@ nearest head vertex that did not; and how far the moved vertices moved.
 """
 import functools, sys
 import numpy as np
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
+sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 import place
 from place import body, distance
 place.ifcopenshell.open = functools.lru_cache(maxsize=4)(place.ifcopenshell.open)

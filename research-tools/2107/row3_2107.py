@@ -15,7 +15,7 @@ import os
 import sys
 
 spec = importlib.util.spec_from_file_location(
-    "bd", __file__.rsplit("/", 1)[0] + "/ifc_body_diff.py")
+    "bd", __import__("os").path.join(__import__("os").path.dirname(__import__("os").path.abspath(__file__)), "ifc_body_diff.py"))
 bd = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bd)
 
