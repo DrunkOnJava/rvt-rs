@@ -249,6 +249,17 @@ The native reference is not shared because redistribution terms are not
 established; these accuracy figures are local measurements, separate from
 the maintainer's Measure of the body-source changes.
 
+A cylinder face bounded by two trim loops on part of a turn, a hole or two
+separate regions, is drawn from the saved graphics too; a full turn and three
+or more loops stay refused. The BIM4LCA housing's sauna doors and the
+held-out house's doors are within 0.01 ft of Revit's export and 1 per cent
+of its volume. Revit's export draws the round legs of the BIM4LCA office's 30
+`Stay_Wall_Mounted_:VAR-1` grab bars a file as a square, so those bodies,
+drawn round as the file saves them, are 1.11 of Revit's volume and miss the
+0.01 ft bar. [RE-494](../reports/element-framing/RE-494-cylinder-two-trim-loops.md)
+has the reads, and those of the 1,153 bodies on Autodesk's samples, which
+have no Revit export in Measure.
+
 ## Finding history
 
 The paragraphs below record, finding by finding, how that came to be. They
