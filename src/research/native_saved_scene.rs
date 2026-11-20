@@ -228,6 +228,29 @@ fn mesh_elements(
                     .unwrap_or_else(|| "graphics graph unavailable".into()),
             )
         }
+        // #2085: a symbol whose record was read but whose graph was refused (over
+        // the graph value budget, say) is not missing from the file; say why it
+        // is not there, so the two read apart.
+        const MISSING: &str = "missing current symbol graphics ";
+        for diagnostic in &mut meshes.diagnostics {
+            let Some(at) = diagnostic.find(MISSING) else {
+                continue;
+            };
+            let digits: String = diagnostic[at + MISSING.len()..]
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect();
+            let Ok(symbol) = digits.parse::<u64>() else {
+                continue;
+            };
+            if let Some(record) = records.get(symbol).filter(|record| record.graph.is_none()) {
+                *diagnostic = format!(
+                    "{}current symbol graphics {symbol} not decoded: {}",
+                    &diagnostic[..at],
+                    record.diagnostic.as_deref().unwrap_or("graph unavailable")
+                );
+            }
+        }
         let refs: BTreeSet<_> = meshes
             .primitives
             .iter()

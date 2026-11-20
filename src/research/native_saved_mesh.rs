@@ -2141,6 +2141,7 @@ fn band_mesh(
     let mut triangles = Vec::new();
     for w in u_values.windows(2) {
         let (w0, w1) = (w[0], w[1]);
+        let mid = w0 + (w1 - w0) / 2.;
         let mut crossings: Vec<[f64; 2]> = Vec::new();
         for ring in rings {
             for (a, b) in ring
@@ -2149,10 +2150,18 @@ fn band_mesh(
                 .take(ring.len())
             {
                 let (lo, hi) = if a[0] <= b[0] { (*a, *b) } else { (*b, *a) };
-                if lo[0] > w0 + TOL || hi[0] < w1 - TOL || hi[0] - lo[0] <= TOL {
+                // Endpoint tolerance checks that the edge spans the strip.
+                // The midpoint keeps nearby edges outside a narrow strip from
+                // contributing a crossing through that tolerance.
+                if lo[0] > w0 + TOL || hi[0] < w1 - TOL || lo[0] >= mid || hi[0] <= mid {
                     continue;
                 }
-                let at = |u: f64| lo[1] + (hi[1] - lo[1]) * (u - lo[0]) / (hi[0] - lo[0]);
+                // A strip edge can fall up to the grid's 1e-12 join outside the ring edge,
+                // which on an edge that narrow in U is a large share of its height: the
+                // crossing is kept on the edge.
+                let at = |u: f64| {
+                    lo[1] + (hi[1] - lo[1]) * ((u - lo[0]) / (hi[0] - lo[0])).clamp(0., 1.)
+                };
                 crossings.push([at(w0), at(w1)]);
             }
         }
@@ -2633,8 +2642,8 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, cross,
-        distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
+        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, band_mesh,
+        cross, distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
         refine_crossing_edge, refine_crossing_edge_within, regions_tile, regions_tile_within,
         retain_boundary_points_within, ring_points_with, split_pinched_rings, within_envelope,
     };
@@ -3397,5 +3406,88 @@ mod tests {
         assert_eq!(error.to_string(), "planar face budget exceeded");
         let rings = split(&[ring]).unwrap();
         assert_eq!(rings.len(), 5);
+    }
+
+    // `band_mesh` (#2102, #2106) is a pure 2D transform of a cylinder face's rings into
+    // strips. The ways its crossing count can fail, each tested below:
+    // - a ring edge that ends within the endpoint tolerance of a strip narrower than that
+    //   tolerance is counted for it, an odd count, and the face is refused;
+    // - a ring edge along a strip's own edge (constant u) is counted as a crossing.
+    // The rings are in the surface's parameters, drawn flat (`eval` is the identity), so
+    // the triangles' area is the area the strips cover.
+    fn band_area(rings: &[Vec<[f64; 2]>], step: f64, end: f64) -> Result<f64> {
+        let mut u_values: Vec<f64> = (0..)
+            .map(|i| f64::from(i) * step)
+            .take_while(|u| *u <= end + 1e-12)
+            .chain(rings.iter().flatten().map(|p| p[0]))
+            .collect();
+        u_values.sort_by(f64::total_cmp);
+        u_values.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
+        let (vertices, _, triangles) = band_mesh(
+            rings,
+            &u_values,
+            true,
+            1.,
+            |u, v| [u, v, 0.],
+            [[1., 0., 0.], [0., 1., 0.]],
+        )?;
+        Ok(triangles
+            .iter()
+            .map(|t| {
+                let [a, b, c] = t.map(|i| vertices[i as usize]);
+                cross([a[0], a[1]], [b[0], b[1]], [c[0], c[1]]).abs() / 2.
+            })
+            .sum())
+    }
+
+    #[test]
+    fn a_ring_knot_beside_a_narrow_strip_keeps_the_hole() {
+        // shifatrHtH's synthetic rings (#2106): the hole's left edges sit 0.3e-9 and
+        // 1.5e-9 before the strip that starts at 0.4999999997 and ends at 0.5.
+        let outer = vec![[0., 0.], [2., 0.], [2., 2.], [0., 2.]];
+        let hole = vec![
+            [0.5 - 1.5e-9, 0.5],
+            [1.5 - 1.5e-9, 0.5],
+            [1.5 - 1.5e-9, 1.5],
+            [0.5 - 0.3e-9, 1.5],
+        ];
+        let covered = band_area(&[outer, hole], 0.125, 2.).unwrap();
+        assert!(
+            (covered - 3.000_000_000_6).abs() < 1e-10,
+            "covered area {covered}"
+        );
+    }
+
+    #[test]
+    fn a_ring_edge_narrower_than_the_tolerance_is_drawn_inside_the_ring() {
+        // Its right edge is 3e-12 wide in U, and its lower knot is joined to the grid's
+        // 1.0, so the strip starts 0.5e-12 before the edge does. The midpoint rule counts
+        // the edge there; a crossing not kept on the edge would put a vertex a sixth of
+        // the edge's height below the ring.
+        let ring = vec![[0., 0.], [1. + 0.5e-12, 0.], [1. + 3.5e-12, 1.], [0., 1.]];
+        let mut u_values: Vec<f64> = [0., 0.5, 1., 1.5, 2.]
+            .into_iter()
+            .chain(ring.iter().map(|p| p[0]))
+            .collect();
+        u_values.sort_by(f64::total_cmp);
+        u_values.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
+        let (vertices, _, triangles) = band_mesh(
+            std::slice::from_ref(&ring),
+            &u_values,
+            true,
+            1.,
+            |u, v| [u, v, 0.],
+            [[1., 0., 0.], [0., 1., 0.]],
+        )
+        .unwrap();
+        assert!(!triangles.is_empty());
+        assert!(vertices.iter().all(|v| (-1e-9..=1. + 1e-9).contains(&v[1])));
+    }
+
+    #[test]
+    fn a_ring_edge_along_a_strip_edge_is_no_crossing() {
+        let square = vec![[0.5, 0.5], [1.5, 0.5], [1.5, 1.5], [0.5, 1.5]];
+        let covered = band_area(&[square], 0.5, 2.).unwrap();
+        assert!((covered - 1.).abs() < 1e-12, "covered area {covered}");
     }
 }
