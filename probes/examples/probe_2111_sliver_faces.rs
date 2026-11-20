@@ -11,7 +11,9 @@
 //! ```text
 //! element id=<ElementId> graphs=<n> faces=<n> meshed=<n>
 //! refused id=<ElementId> faces=<n> why=<reason>
-//! match id=<ElementId> graph=<ElementId> face=<n> surface=<class> loops=<n> triangles=<n> edges=<ft,ft,ft>
+//! match id=<ElementId> graph=<ElementId> face=<n> surface=<class> loops=<n> triangles=<n> edges=<ft,ft,ft> standoff=<ft|->
+//!   - `standoff`: for a cylinder face, the farthest of the triangle's edge midpoints, centroid
+//!     and 25 interior points from the face's own cylinder
 //! ```
 //!
 //! With no `ID:L1,L2,L3` given, as in Measure, it reads the slivers #2111 found on Snowdon Towers
@@ -180,12 +182,37 @@ fn main() -> Result<()> {
                         .iter()
                         .any(|w| (0..3).all(|k| (w[k] - e[k]).abs() <= 5e-5))
                     {
+                        // How far the triangle stands off its own cylinder, at points spread
+                        // over it as well as its edge midpoints and centroid.
+                        let standoff = mesh.analytic_surface.as_ref().map(|cyl| {
+                            let off = |p: [f64; 3]| {
+                                let q: [f64; 3] = std::array::from_fn(|k| p[k] - cyl.center[k]);
+                                let along: f64 = (0..3).map(|k| q[k] * cyl.z_vec[k]).sum();
+                                let radial: f64 = (0..3)
+                                    .map(|k| (q[k] - along * cyl.z_vec[k]).powi(2))
+                                    .sum::<f64>()
+                                    .sqrt();
+                                (radial - cyl.radius).abs()
+                            };
+                            let mut worst = 0.0_f64;
+                            for i in 0..=6 {
+                                for j in 0..=(6 - i) {
+                                    let (u, v) = (i as f64 / 6.0, j as f64 / 6.0);
+                                    let w = 1.0 - u - v;
+                                    let p: [f64; 3] =
+                                        std::array::from_fn(|k| w * a[k] + u * b[k] + v * c[k]);
+                                    worst = worst.max(off(p));
+                                }
+                            }
+                            worst
+                        });
                         println!(
-                            "match id={id} graph={graph_id} face={fi} surface={class} loops={loops} triangles={} edges={:.5},{:.5},{:.5}",
+                            "match id={id} graph={graph_id} face={fi} surface={class} loops={loops} triangles={} edges={:.5},{:.5},{:.5} standoff={}",
                             mesh.triangles.len(),
                             e[0],
                             e[1],
-                            e[2]
+                            e[2],
+                            standoff.map_or("-".to_string(), |x| format!("{x:.6}"))
                         );
                     }
                 }
