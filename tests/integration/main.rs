@@ -35,8 +35,6 @@ mod curtain_part_materials;
 mod curtain_wall_doors;
 #[path = "../curtain_walls.rs"]
 mod curtain_walls;
-#[path = "../cylinder_trim_contract.rs"]
-mod cylinder_trim_contract;
 #[path = "../design_options.rs"]
 mod design_options;
 #[path = "../door_overall_sizes.rs"]

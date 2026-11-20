@@ -122,7 +122,6 @@ cli       rvt_inspect_cli
 cli       rvt_schedule_cli
 
 contract  binary_inventory
-contract  cylinder_trim_contract
 contract  field_type_coverage
 contract  ifc_synthetic_project
 contract  ifc_synthetic_structural

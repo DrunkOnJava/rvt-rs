@@ -2481,8 +2481,8 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, cross,
-        distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
+        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, band_mesh,
+        cross, distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
         refine_crossing_edge, refine_crossing_edge_within, regions_tile, regions_tile_within,
         retain_boundary_points_within, ring_points_with, split_pinched_rings, within_envelope,
     };
@@ -3245,5 +3245,62 @@ mod tests {
         assert_eq!(error.to_string(), "planar face budget exceeded");
         let rings = split(&[ring]).unwrap();
         assert_eq!(rings.len(), 5);
+    }
+
+    // `band_mesh` (#2102, #2106) is a pure 2D transform of a cylinder face's rings into
+    // strips. The ways its crossing count can fail, each tested below:
+    // - a ring edge that ends within the endpoint tolerance of a strip narrower than that
+    //   tolerance is counted for it, an odd count, and the face is refused;
+    // - a ring edge along a strip's own edge (constant u) is counted as a crossing.
+    // The rings are in the surface's parameters, drawn flat (`eval` is the identity), so
+    // the triangles' area is the area the strips cover.
+    fn band_area(rings: &[Vec<[f64; 2]>], step: f64, end: f64) -> Result<f64> {
+        let mut u_values: Vec<f64> = (0..)
+            .map(|i| f64::from(i) * step)
+            .take_while(|u| *u <= end + 1e-12)
+            .chain(rings.iter().flatten().map(|p| p[0]))
+            .collect();
+        u_values.sort_by(f64::total_cmp);
+        u_values.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
+        let (vertices, _, triangles) = band_mesh(
+            rings,
+            &u_values,
+            true,
+            1.,
+            |u, v| [u, v, 0.],
+            [[1., 0., 0.], [0., 1., 0.]],
+        )?;
+        Ok(triangles
+            .iter()
+            .map(|t| {
+                let [a, b, c] = t.map(|i| vertices[i as usize]);
+                cross([a[0], a[1]], [b[0], b[1]], [c[0], c[1]]).abs() / 2.
+            })
+            .sum())
+    }
+
+    #[test]
+    fn a_ring_knot_beside_a_narrow_strip_keeps_the_hole() {
+        // shifatrHtH's synthetic rings (#2106): the hole's left edges sit 0.3e-9 and
+        // 1.5e-9 before the strip that starts at 0.4999999997 and ends at 0.5.
+        let outer = vec![[0., 0.], [2., 0.], [2., 2.], [0., 2.]];
+        let hole = vec![
+            [0.5 - 1.5e-9, 0.5],
+            [1.5 - 1.5e-9, 0.5],
+            [1.5 - 1.5e-9, 1.5],
+            [0.5 - 0.3e-9, 1.5],
+        ];
+        let covered = band_area(&[outer, hole], 0.125, 2.).unwrap();
+        assert!(
+            (covered - 3.000_000_000_6).abs() < 1e-10,
+            "covered area {covered}"
+        );
+    }
+
+    #[test]
+    fn a_ring_edge_along_a_strip_edge_is_no_crossing() {
+        let square = vec![[0.5, 0.5], [1.5, 0.5], [1.5, 1.5], [0.5, 1.5]];
+        let covered = band_area(&[square], 0.5, 2.).unwrap();
+        assert!((covered - 1.).abs() < 1e-12, "covered area {covered}");
     }
 }
