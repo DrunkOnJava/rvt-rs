@@ -668,9 +668,9 @@ fn refined_cylinder_pair_edge(
     let limits = EdgeLimits {
         depth: EDGE_REFINEMENT_DEPTH,
         points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
-        // Half the faces' own chord: at the whole chord, two BIM4LCA downspouts' faces
-        // part by up to 0.0019 ft between the shared points, past the 0.001 ft they
-        // are held to (#2111).
+        // Half the faces' own chord: at the whole chord, two downpipes on each BIM4LCA
+        // housing file part by up to 0.0019 ft between the shared points, past the
+        // 0.001 ft they are held to (#2111, RE-496).
         sagitta: CylinderTessellationProfile::default().chord_error / 2.,
     };
     // Side 0's points, each with the index of the saved sample it is, if it is one.
