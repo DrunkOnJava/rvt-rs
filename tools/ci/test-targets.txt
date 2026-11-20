@@ -123,6 +123,7 @@ cli       rvt_schedule_cli
 
 contract  binary_inventory
 contract  field_type_coverage
+contract  gltf_element_alpha
 contract  ifc_synthetic_project
 contract  ifc_synthetic_structural
 contract  json_schema_contracts
