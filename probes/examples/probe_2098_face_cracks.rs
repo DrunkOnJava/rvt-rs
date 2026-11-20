@@ -259,6 +259,7 @@ fn body(graph: &ObjectGraph, kept: &BTreeMap<u64, ObjectGraph>) -> Result<Body, 
     let classes: Vec<String> = faces.iter().map(|f| face_surface(graph, kept, f)).collect();
     let mut gaps = Vec::new();
     let mut far: Far = BTreeMap::new();
+    let mut pairs: BTreeMap<(String, String), (usize, usize, usize, usize)> = BTreeMap::new();
     for (fi, face) in faces.iter().enumerate() {
         let key = |i: u32| face.vertices[i as usize].map(|x| (x * 1e6).round() as i64);
         let mut uses: BTreeMap<EdgeKey, usize> = BTreeMap::new();
@@ -294,6 +295,26 @@ fn body(graph: &ObjectGraph, kept: &BTreeMap<u64, ObjectGraph>) -> Result<Body, 
                     }
                 }
             }
+            // #2104: whether this boundary point is one the nearest face also holds.
+            if nearest != fi {
+                let shared = faces[nearest]
+                    .vertices
+                    .iter()
+                    .any(|q| (0..3).map(|j| (q[j] - p[j]).powi(2)).sum::<f64>().sqrt() <= 1e-6);
+                let entry = pairs
+                    .entry((classes[fi].clone(), classes[nearest].clone()))
+                    .or_default();
+                entry.0 += 1;
+                if shared {
+                    entry.1 += 1;
+                }
+                if best > 1e-3 {
+                    entry.2 += 1;
+                    if shared {
+                        entry.3 += 1;
+                    }
+                }
+            }
             if best > 1e-3 {
                 let entry = far
                     .entry((classes[fi].clone(), classes[nearest].clone()))
@@ -302,6 +323,13 @@ fn body(graph: &ObjectGraph, kept: &BTreeMap<u64, ObjectGraph>) -> Result<Body, 
                 entry.1 = entry.1.max(best);
             }
             gaps.push(best);
+        }
+    }
+    for ((own, near), (n, shared, over, over_shared)) in &pairs {
+        if *over > 0 {
+            println!(
+                "pair own={own} nearest={near} boundary={n} shared={shared} over_0.001={over} over_0.001_shared={over_shared}"
+            );
         }
     }
     Ok(Body {
