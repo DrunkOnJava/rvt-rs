@@ -773,7 +773,7 @@ pub fn types_without_visible_body(
     const MAX_ROUNDS: usize = 128;
     let mut options = native_document::Options {
         channels: BTreeSet::from([GRAPHICS_CHANNEL]),
-        max_graph_values: 4_000_000,
+        max_graph_values: 1_000_000,
         max_graph_objects: 1_000_000,
         releases: native_document::NATIVE_RELEASES,
         ..native_document::Options::default()
