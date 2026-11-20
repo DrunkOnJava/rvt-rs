@@ -643,6 +643,33 @@ fn loop_polygon(
     }
     let same =
         |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
+    // #2085 candidate: two ends that meet within 1e-7 in model coordinates join as one
+    // point where their parameters are within `STRICT_PARAMETER_GAP` of the surface's
+    // range, the point halfway between them, checked against both ends. A wider gap
+    // (a pole, a seam) is still refused.
+    let env = surface.bounds();
+    let range = [
+        (env[1][0] - env[0][0]).abs().max(1e-12),
+        (env[1][1] - env[0][1]).abs().max(1e-12),
+    ];
+    let near = |p: [f64; 2], q: [f64; 2]| {
+        same(p, q)
+            || ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1])
+                <= STRICT_PARAMETER_GAP
+    };
+    let meet = |p: [f64; 2], q: [f64; 2]| -> Result<[f64; 2]> {
+        if same(p, q) {
+            return Ok(p);
+        }
+        let middle = [p[0].midpoint(q[0]), p[1].midpoint(q[1])];
+        let point = surface.evaluate(middle[0], middle[1])?;
+        ensure!(
+            distance(point, surface.evaluate(p[0], p[1])?) < STRICT_JOIN
+                && distance(point, surface.evaluate(q[0], q[1])?) < STRICT_JOIN,
+            "merged trim join exceeds model-space bound"
+        );
+        Ok(middle)
+    };
     for reverse in [false, true] {
         let mut ring: Vec<[f64; 2]> = if reverse {
             segments[0].iter().rev().copied().collect()
@@ -655,16 +682,18 @@ fn loop_polygon(
             let p = surface.evaluate(last[0], last[1])?;
             let (a, b) = (seg[0], *seg.last().unwrap());
             if distance(p, surface.evaluate(a[0], a[1])?) < 1e-7 {
-                if !same(last, a) {
+                if !near(last, a) {
                     joined = false;
                     break;
                 }
+                *ring.last_mut().unwrap() = meet(last, a)?;
                 ring.extend(seg.iter().skip(1).copied());
             } else if distance(p, surface.evaluate(b[0], b[1])?) < 1e-7 {
-                if !same(last, b) {
+                if !near(last, b) {
                     joined = false;
                     break;
                 }
+                *ring.last_mut().unwrap() = meet(last, b)?;
                 ring.extend(seg.iter().rev().skip(1).copied());
             } else {
                 joined = false;
@@ -675,12 +704,13 @@ fn loop_polygon(
             continue;
         }
         let (first, last) = (ring[0], *ring.last().unwrap());
-        if same(first, last)
+        if near(first, last)
             && distance(
                 surface.evaluate(first[0], first[1])?,
                 surface.evaluate(last[0], last[1])?,
             ) < 1e-7
         {
+            ring[0] = meet(first, last)?;
             ring.pop();
             ensure!(ring.len() >= 3, "a trim loop needs three points");
             return Ok(ring);
@@ -691,6 +721,12 @@ fn loop_polygon(
 
 /// The join of the strict path, in model units (feet).
 const STRICT_JOIN: f64 = 1e-7;
+
+/// #2085 candidate: the largest parameter gap, over the surface's range on its axis, across
+/// which the strict path's polygon joins two ends that meet in model coordinates. On the
+/// open models and shifatrHtH's save every failing join is under 6e-5 of the range or a
+/// jump of 1 per cent or more (#2085).
+const STRICT_PARAMETER_GAP: f64 = 1e-4;
 
 /// #2085, on `research/2085-chairs` only: where a loop's polygon in the surface's
 /// parameters fails, on the attempt (first edge either way round) that gets furthest.
@@ -1288,11 +1324,9 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         .iter()
         .map(|p| p[0])
         .chain(
-            polygons
-                .iter()
-                .zip(&bounds)
-                .filter(|(_, bound)| **bound > STRICT_JOIN)
-                .flat_map(|(ring, _)| ring.iter().map(|p| p[0])),
+            // Every polygon's, since the strict path merges joins too (#2085 candidate);
+            // a point not merged is a segment's own, already in `trim`.
+            polygons.iter().flatten().map(|p| p[0]),
         )
         .chain(hermite_u.iter().copied())
         .collect();
