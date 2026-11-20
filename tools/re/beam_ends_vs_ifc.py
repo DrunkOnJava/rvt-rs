@@ -103,7 +103,11 @@ ends are counted by where the line ends and where Revit's beam ends, by Revit's 
 and by where the outline is from; for the outlines from a column's saved mesh, also by whether the beam is
 narrower than, about as wide as or wider than the column across the line and by how far the column's plan
 rectangle is turned from the beam, with how many of Revit's ends are at the column's near face. The caps' line
-of the S6 table above puts an obliquely cut end off the beam's middle; this one does not.
+of the S6 table above puts an obliquely cut end off the beam's middle; this one does not. Where the middle line
+crosses no face of Revit's beam (a hollow or channel section), Revit's end is read where the beam's mesh crosses the
+middle line's vertical plane instead, and counted. The row (S6 middle line row) counts the ends by where rvt-rs's line
+ends (inside the column, short of it, past it), since a beam Revit shortens also has the end it does not cut, and
+says how many of Revit's ends lie at the column's near face within 2 per cent of the chord and within 1 mm.
 """
 
 import collections
@@ -705,6 +709,7 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
     middles = collections.Counter()
     joint = collections.defaultdict(collections.Counter)
     middle_ends = collections.defaultdict(collections.Counter)  # (stands, where[, width, turn]) -> (line, Revit)
+    middle_rows = collections.defaultdict(collections.Counter)  # (where, line_at[, width, turn]) -> counts
     middle_seen = collections.Counter()
     outlines = {}
     seen = collections.Counter()
@@ -753,10 +758,18 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 if isinstance(place, str):
                     middle_seen[(stands, where, place)] += 1
                 else:
-                    t_middle, width, turn = place
+                    t_middle, width, turn, offset, by_plane = place
                     cell = (fraction_bin(t_line), fraction_bin(t_middle))
                     middle_ends[(stands, where)][cell] += 1
                     middle_ends[(stands, where, width, turn)][cell] += 1
+                    # The row (#1839): by where rvt-rs's line ends, since a beam Revit shortens
+                    # also has the end it does not cut.
+                    line_at = LINE_AT.get(fraction_bin(t_line), "inside the column")
+                    for key in ((where, line_at), (where, line_at, width, turn)):
+                        middle_rows[key]["ends"] += 1
+                        middle_rows[key]["near face within 2 per cent of the chord"] += fraction_bin(t_middle) == "near"
+                        middle_rows[key]["near face within 1 mm"] += abs(offset) * factor <= TOLERANCE_FEET
+                        middle_rows[key]["Revit's end read in the middle line's vertical plane"] += by_plane
             crossing = chord(meshes[column][2], caps[0], axis)
             if crossing is None:
                 seen["of those, ends whose line crosses no face of Revit's column"] += 1
@@ -831,9 +844,35 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                 f"the line's end -> Revit's end in the chord: {text}"
             )
     print_middle_ends(middle_ends, middle_seen, order)
+    print_middle_rows(middle_rows)
 
 
-MIDDLE_END_NONE = "ends whose middle line crosses no face of Revit's beam"
+MIDDLE_END_NONE = "ends whose middle line and its vertical plane cross no face of Revit's beam"
+LINE_AT = {"short": "short of the column", "beyond": "past the column"}
+ROW_COUNTS = (
+    "near face within 2 per cent of the chord",
+    "near face within 1 mm",
+    "Revit's end read in the middle line's vertical plane",
+)
+
+
+def plane_span(triangles, origin, direction, across):
+    """The extent along `direction` of where a mesh crosses the vertical plane through `origin` that holds
+    `direction` (its normal `across`): the first and last parameter of the points where the plane cuts the
+    mesh's triangles, or None where it cuts none. A hollow or channel section has no material on its middle
+    line, but its walls or flanges cross this plane."""
+    side = (triangles - origin) @ across
+    along = (triangles - origin) @ direction
+    values = []
+    for k in range(3):
+        a, b = k, (k + 1) % 3
+        crosses = side[:, a] * side[:, b] < 0
+        on = side[:, a] == 0
+        t = side[crosses, a] / (side[crosses, a] - side[crosses, b])
+        values.append(along[crosses, a] + t * (along[crosses, b] - along[crosses, a]))
+        values.append(along[on, a])
+    joined = numpy.concatenate(values)
+    return (float(joined.min()), float(joined.max())) if joined.size else None
 MIDDLE_CHORD_NONE = "ends whose middle line's chord through Revit's column is under 1 mm"
 TURN_LABELS = {name: ("column in line with the beam" if name == "in line" else f"column turned from the beam {name}") for name, _ in TURN_BINS}
 NOT_RECTANGLE = "column not a rectangle in plan"
@@ -847,6 +886,9 @@ def middle_end(meshes, beam, column, mid, along_middle, outlines):
     beam's own mesh, the end of that span nearer the column: a cap's centre leaves the middle where Revit cuts
     an end obliquely. A string names why an end is not placed."""
     beam_span = chord(meshes[beam][2], mid[0], mid[1])
+    by_plane = beam_span is None
+    if by_plane:
+        beam_span = plane_span(meshes[beam][2], mid[0], mid[1], mid[2])
     if beam_span is None:
         return MIDDLE_END_NONE
     low, high = along_middle
@@ -868,7 +910,33 @@ def middle_end(meshes, beam, column, mid, along_middle, outlines):
         beam_theta = math.degrees(math.atan2(mid[1][1], mid[1][0])) % 90.0
         delta = abs(beam_theta - outline[0]) % 90.0
         turn = TURN_LABELS[turn_bin(min(delta, 90.0 - delta))]
-    return (end_at - near) / (far - near), width, turn
+    return (end_at - near) / (far - near), width, turn, (end_at - near) * (1 if far > near else -1), by_plane
+
+
+def print_middle_rows(middle_rows):
+    """Print the row of S6 middle line ends: for each outline source and where rvt-rs's line ends (inside the
+    column, short of it or past it), how many of Revit's ends are at the column's near face, within 2 per cent
+    of the chord and within 1 mm, and, for the outlines from a column's saved mesh, the same by width and turn."""
+    widths = dict(WIDTHS)
+    for where in LINE_SOURCES.values():
+        for line_at in ("inside the column", "short of the column", "past the column"):
+            counts = middle_rows.get((where, line_at))
+            if not counts:
+                continue
+            parts = "; ".join(f"{name} {counts[name]}" for name in ROW_COUNTS)
+            print(
+                f"beam ends:   S6 middle line row, outline from the {where}, the line ending {line_at}, "
+                f"{counts['ends']} ends: Revit's end at the {parts}"
+            )
+            if where != LINE_SOURCES["m"]:
+                continue
+            for key in sorted(k for k in middle_rows if len(k) == 4 and k[:2] == (where, line_at)):
+                split = middle_rows[key]
+                parts = "; ".join(f"{name} {split[name]}" for name in ROW_COUNTS)
+                print(
+                    f"beam ends:   S6 middle line row, outline from the {where}, the line ending {line_at}, beam "
+                    f"{widths.get(key[2], key[2])} the column, {key[3]}, {split['ends']} ends: Revit's end at the {parts}"
+                )
 
 
 def print_middle_ends(middle_ends, middle_seen, order):
