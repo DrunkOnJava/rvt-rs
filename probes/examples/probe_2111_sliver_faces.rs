@@ -10,6 +10,7 @@
 //!
 //! ```text
 //! element id=<ElementId> graphs=<n> faces=<n> meshed=<n>
+//! refused id=<ElementId> faces=<n> why=<reason>
 //! match id=<ElementId> graph=<ElementId> face=<n> surface=<class> loops=<n> triangles=<n> edges=<ft,ft,ft>
 //! ```
 //!
@@ -55,10 +56,13 @@ fn symbols(graph: &ObjectGraph) -> Vec<u64> {
 
 fn graphs(rf: &mut RevitFile, ids: &BTreeSet<u64>) -> BTreeMap<u64, ObjectGraph> {
     let mut out = BTreeMap::new();
+    // The saved graphics' channel, as `probe_2098_face_cracks` reads it.
     let options = Options {
         selected_ids: ids.clone(),
+        channels: BTreeSet::from([103]),
         max_graph_values: 1_000_000,
         max_graph_objects: 1_000_000,
+        record_extras: true,
         ..Options::default()
     };
     let read = extract_graphs(rf, &options, |record| {
@@ -124,14 +128,24 @@ fn main() -> Result<()> {
             }
         }
         let (mut faces, mut meshed) = (0usize, 0usize);
+        let mut refusals: BTreeMap<String, usize> = BTreeMap::new();
         for (graph_id, g) in &all {
             for fi in 0..g.objects.len() {
                 if g.objects[fi].class_name != "Face" {
                     continue;
                 }
                 faces += 1;
-                let Ok(Some(mesh)) = face(g, fi) else {
-                    continue;
+                let mesh = match face(g, fi) {
+                    Ok(Some(mesh)) => mesh,
+                    Ok(None) => {
+                        *refusals.entry("none".into()).or_default() += 1;
+                        continue;
+                    }
+                    Err(error) => {
+                        let why: String = format!("{error:#}").chars().take(80).collect();
+                        *refusals.entry(why).or_default() += 1;
+                        continue;
+                    }
                 };
                 meshed += 1;
                 let class = g.objects[fi]
@@ -181,6 +195,9 @@ fn main() -> Result<()> {
             "element id={id} graphs={} faces={faces} meshed={meshed}",
             all.len()
         );
+        for (why, n) in &refusals {
+            println!("refused id={id} faces={n} why={why}");
+        }
     }
     Ok(())
 }
