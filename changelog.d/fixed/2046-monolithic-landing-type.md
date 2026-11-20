@@ -10,4 +10,7 @@
   an English Revit writes: the file does not hold them, and a Revit in another
   language writes its own (a Spanish Revit 2027 writes `Descansillo
   monolítico`), so on such a model the type object is there and its family
-  word differs from that export's.
+  word differs from that export's. On Revit 2026 and 2027 a landing's
+  `ObjectType` stays empty (#1472), as Revit's own export of the reporter's
+  Revit 2027 model leaves it, and its type object is written: 14 of 14
+  landings there, measured by the reporter.
