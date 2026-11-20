@@ -863,6 +863,20 @@ fn loop_polygon_within(
         let gap = ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1]);
         Ok(gap <= JUMP)
     };
+    // A loose join contributes one vertex. Keeping both ends can leave the
+    // adjacent segments crossing inside a strip.
+    let meet = |p: [f64; 2], q: [f64; 2]| -> Result<[f64; 2]> {
+        if same(p, q) {
+            return Ok(p);
+        }
+        let middle = [p[0].midpoint(q[0]), p[1].midpoint(q[1])];
+        let point = at(middle)?;
+        ensure!(
+            distance(point, at(p)?) < bound && distance(point, at(q)?) < bound,
+            "merged trim join exceeds model-space bound"
+        );
+        Ok(middle)
+    };
     for reverse in [false, true] {
         let mut ring: Vec<[f64; 2]> = if reverse {
             segments[0].iter().rev().copied().collect()
@@ -881,11 +895,11 @@ fn loop_polygon_within(
                 joined = false;
                 break;
             }
-            let skip = usize::from(same(last, near));
+            *ring.last_mut().unwrap() = meet(last, near)?;
             if forward {
-                ring.extend(seg.iter().skip(skip).copied());
+                ring.extend(seg.iter().skip(1).copied());
             } else {
-                ring.extend(seg.iter().rev().skip(skip).copied());
+                ring.extend(seg.iter().rev().skip(1).copied());
             }
         }
         if !joined {
@@ -893,9 +907,8 @@ fn loop_polygon_within(
         }
         let (first, last) = (ring[0], *ring.last().unwrap());
         if distance(at(first)?, at(last)?) < bound && steps(last, first)? {
-            if same(first, last) {
-                ring.pop();
-            }
+            ring[0] = meet(first, last)?;
+            ring.pop();
             ensure!(ring.len() >= 3, "a trim loop needs three points");
             return Ok(ring);
         }
@@ -1274,6 +1287,13 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     let trim_u: Vec<f64> = trim
         .iter()
         .map(|p| p[0])
+        .chain(
+            polygons
+                .iter()
+                .zip(&bounds)
+                .filter(|(_, bound)| **bound > STRICT_JOIN)
+                .flat_map(|(ring, _)| ring.iter().map(|p| p[0])),
+        )
         .chain(hermite_u.iter().copied())
         .collect();
     let trim_v: Vec<f64> = if rectangular {
@@ -2066,10 +2086,10 @@ fn tessellate_trimmed(
 #[cfg(test)]
 mod tests {
     use super::{
-        CUT_BUDGET, CUT_BUDGET_EXCEEDED, inside_polygon, keep_triangle, profile_reach, trim_steps,
-        trimmed_cells,
+        CUT_BUDGET, CUT_BUDGET_EXCEEDED, inside_polygon, keep_triangle, loop_polygon_within,
+        profile_reach, trim_steps, trimmed_cells,
     };
-    use crate::native_parametric_surface::Curve;
+    use crate::native_parametric_surface::{Curve, ParametricSurface};
 
     // How a trimmed face's cutting can run away: many trapezoids each scanning every knot
     // of v, though no knot lies inside any of them and no triangle is made; the count of
@@ -2237,6 +2257,37 @@ mod tests {
             [2., 0.],
         ]];
         check(&cw, &[0., 1., 2.], &[0., 1., 2.], 3.0);
+    }
+
+    #[test]
+    fn a_near_trim_join_does_not_leave_two_crossing_segments() {
+        let surface = ParametricSurface::RuledSurf {
+            envelope: [[0., 0.], [1., 1.]],
+            orient: true,
+            profile1: Curve::line([0., 0., 0.], [1., 0., 0.], [0., 1.]),
+            profile2: Curve::line([0., 1., 0.], [1., 0., 0.], [0., 1.]),
+        };
+        // On the two sloping edges of the trim, the first ends to the right of
+        // where the next begins. Keeping both points makes the edges cross.
+        let apex = 0.5 + 2e-7;
+        let left = 0.5 - 2e-7;
+        let mut segments = vec![
+            vec![[0., 0.], [apex, apex]],
+            vec![[left, apex], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1., 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ];
+        for _ in 0..2 {
+            let ring = loop_polygon_within(&surface, &segments, 1e-6).unwrap();
+            let mut knots = vec![0., 0.25, left, apex, 0.75, 1.];
+            knots.extend(ring.iter().map(|p| p[0]));
+            knots.sort_by(f64::total_cmp);
+            knots.dedup();
+            check(&[ring], &knots, &[0., 1.], 1. - apex / 2.);
+            // The same near join is now the closing step.
+            segments.rotate_left(1);
+        }
     }
 
     #[test]
