@@ -52,6 +52,9 @@
 //!     point (a side that collapses); then by surface class:
 //!   polygons surface=<class> faces=<n> loops=<n> relative_under_1e-6=<n> 1e-6_to_1e-4=<n>
 //!     1e-4_to_1e-2=<n> 1e-2_or_more=<n> closing=<n> bounded=<n> meets=<n> halfway_same=<n>
+//!   chords surface=<class> ends=<n> moved=<n> largest=<ft>: the ends of chord edges (drawn
+//!     straight to a plane) the polygons hold, those a merged join moved off the edge's own end,
+//!     which the plane beside it keeps, and the largest move
 //! ElementIds, counts and distances in feet only.
 //!
 //! Usage:
@@ -64,7 +67,9 @@ use rvt::RevitFile;
 use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Record};
 use rvt::research::native_parameters::ObjectGraph;
-use rvt::research::native_parametric_mesh::{JOIN_BOUNDS, face_grid, polygon_breaks, trim_breaks};
+use rvt::research::native_parametric_mesh::{
+    JOIN_BOUNDS, face_grid, merged_chord_ends, polygon_breaks, trim_breaks,
+};
 use rvt::research::native_saved_mesh::pointer;
 
 const DISCONNECTED: &str = "disconnected parametric trim in model coordinates";
@@ -119,6 +124,9 @@ struct Tally {
     polygon_bounded: usize,
     polygon_meets: usize,
     polygon_halfway: usize,
+    chord_ends: usize,
+    chord_moved: usize,
+    chord_largest: f64,
 }
 
 /// The faces of one graph: prints its breaks and adds to the tally; whether it holds one.
@@ -138,6 +146,12 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> bo
             .unwrap_or_else(|| "unknown".to_string());
         if class == "Plane" || class == "CylSurf" {
             continue;
+        }
+        if let Ok((_, ends, moved, largest)) = merged_chord_ends(graph, fi) {
+            let t = tally.entry(class.clone()).or_default();
+            t.chord_ends += ends;
+            t.chord_moved += moved;
+            t.chord_largest = t.chord_largest.max(largest);
         }
         let why = face_grid(graph, fi).err().map(|e| format!("{e:#}"));
         let t = tally.entry(class.clone()).or_default();
@@ -348,6 +362,12 @@ fn main() -> Result<()> {
             "faces surface={class} meshed={} disconnected={} other={}",
             t.meshed, t.disconnected, t.other
         );
+        if t.chord_ends > 0 {
+            println!(
+                "chords surface={class} ends={} moved={} largest={:.9}",
+                t.chord_ends, t.chord_moved, t.chord_largest
+            );
+        }
         if t.polygon_loops > 0 {
             println!(
                 "polygons surface={class} faces={} loops={} relative_under_1e-6={} 1e-6_to_1e-4={} 1e-4_to_1e-2={} 1e-2_or_more={} closing={} bounded={} meets={} halfway_same={}",

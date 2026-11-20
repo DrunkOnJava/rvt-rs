@@ -766,6 +766,66 @@ pub struct PolygonBreak {
 
 /// #2085, on `research/2085-chairs` only: the face's surface class and, for each loop of
 /// the face whose polygon in the parameters fails (as `face_grid` builds it), where.
+/// #2085, on the research branches only: for a face whose surface keeps saved chords at a
+/// plane, how many ends of its chord edges (edges drawn straight to a plane) its polygon
+/// holds, how many of those a merged join moved off the edge's own end (the plane beside it
+/// keeps that end), and the largest such move in model coordinates.
+pub fn merged_chord_ends(g: &ObjectGraph, fi: usize) -> Result<(String, usize, usize, f64)> {
+    use crate::native_saved_mesh::pointer;
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
+    let class = g.objects[si].class_name.to_string();
+    let surface = ParametricSurface::read(g, si)?;
+    let env = surface.bounds();
+    let saved_chords = keeps_saved_chords(&surface);
+    let (mut ends, mut moved, mut largest) = (0usize, 0usize, 0.0_f64);
+    if !saved_chords {
+        return Ok((class, ends, moved, largest));
+    }
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    let mut seen = std::collections::BTreeSet::new();
+    let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
+    let mut loop_index = 0;
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "trim loop cycle");
+        ensure!(loop_index < MAX_TRIM_LOOPS, "too many trim loops");
+        let least = if loop_index == 0 { 2 } else { 1 };
+        let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
+        let bound = if loop_closes(&surface, &segments)? {
+            Some(STRICT_JOIN)
+        } else {
+            loop_join_bound(&surface, &segments)?
+        };
+        if let Some(ring) = bound.and_then(|b| loop_polygon(&surface, &segments, b).ok()) {
+            for (seg, edge) in segments.iter().zip(&edges) {
+                if edge.is_none() {
+                    continue;
+                }
+                for end in [seg[0], *seg.last().unwrap()] {
+                    ends += 1;
+                    let nearest = ring
+                        .iter()
+                        .copied()
+                        .min_by(|a, b| {
+                            let da = (a[0] - end[0]).hypot(a[1] - end[1]);
+                            let db = (b[0] - end[0]).hypot(b[1] - end[1]);
+                            da.total_cmp(&db)
+                        })
+                        .context("empty polygon")?;
+                    if (nearest[0] - end[0]).hypot(nearest[1] - end[1]) > 1e-12 {
+                        moved += 1;
+                        largest = largest.max(distance(at(nearest)?, at(end)?));
+                    }
+                }
+            }
+        }
+        loop_index += 1;
+        next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    Ok((class, ends, moved, largest))
+}
+
 pub fn polygon_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<PolygonBreak>)> {
     use crate::native_saved_mesh::pointer;
     let f = g.objects.get(fi).context("face index")?;
