@@ -5,7 +5,9 @@
   0.0016 ft and on 3,170 vertices over 0.001 ft across the open models.
   The edge now takes the points where the two cylinders meet, solved onto both
   and held by both faces, and none is left over 0.001 ft on the 77 files read.
-  The cost: on the plumbing and HVAC samples the bodies with such faces hold
-  up to 1.35 times the triangles (exports at most 6.6 MiB larger), and on Snowdon Towers
-  Architectural more of Revit's vertices lie beyond 0.001 ft of the bodies that
-  move (23,243 to 23,511); whether that is a worse fit is not shown (#2111).
+  With #2111's half-chord bound (RE-496), the cost against the release before,
+  on the files read: the bodies with such faces hold up to 1.13 times the
+  triangles (Snowdon Towers HVAC; exports at most 2.0 MiB larger, on Autodesk's
+  `rme_basic`), and on Snowdon Towers Architectural more of Revit's vertices lie
+  beyond 0.001 ft of the bodies that move (23,243 to 23,427); whether that is a
+  worse fit is not shown (#2111).

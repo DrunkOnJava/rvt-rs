@@ -265,15 +265,18 @@ const EDGE_REFINEMENT_DEPTH: u32 = 32;
 /// The most points one edge may be given, so that a hostile file cannot ask for more.
 const EDGE_POINT_BUDGET: usize = 100_000;
 
-/// What a crossing edge's refinement may spend: halvings of one span, and points in all.
+/// What a crossing edge's refinement may spend: halvings of one span, and points in all;
+/// and how far the chord between two neighbouring points may leave the edge.
 struct EdgeLimits {
     depth: u32,
     points: usize,
+    sagitta: f64,
 }
 #[cfg(test)]
 const EDGE_LIMITS: EdgeLimits = EdgeLimits {
     depth: EDGE_REFINEMENT_DEPTH,
     points: EDGE_POINT_BUDGET,
+    sagitta: EDGE_SAGITTA,
 };
 /// The text a crossing edge's refinement is refused with when it would give the edge
 /// more points than its limits allow.
@@ -397,7 +400,7 @@ fn bisect_crossing_edge(
     let chord = point_distance(point_a, point_b);
     ensure!(chord.is_finite(), "edge refinement left the surface");
     // Two samples closer than the bound hold the edge between them within it.
-    if chord <= EDGE_SAGITTA {
+    if chord <= limits.sagitta {
         return Ok(());
     }
     let chord_middle: [f64; 3] = std::array::from_fn(|k| (point_a[k] + point_b[k]) / 2.);
@@ -439,7 +442,7 @@ fn bisect_crossing_edge(
     );
     let deviation = distance_to_chord(point, point_a, point_b);
     ensure!(deviation.is_finite(), "edge refinement left the surface");
-    if deviation <= EDGE_SAGITTA {
+    if deviation <= limits.sagitta {
         return Ok(());
     }
     ensure!(
@@ -535,6 +538,7 @@ fn refined_curved_edge(
     let limits = EdgeLimits {
         depth: EDGE_REFINEMENT_DEPTH,
         points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
+        sagitta: EDGE_SAGITTA,
     };
     let refined = refine_crossing_edge_within(&evaluate, origin, normal, original, &limits)
         .map_err(|error| {
@@ -610,13 +614,14 @@ impl CylinderFrame {
 /// the two cylinders meet between the samples, as [`refine_crossing_edge_within`] puts
 /// the points where a cylinder meets a plane: bisected in the parameters of the edge's
 /// side 0, each point solved onto the side 1 cylinder, until the chord between
-/// neighbours is within [`EDGE_SAGITTA`] of the edge. Side 1 takes the same points in
+/// neighbours is within half the faces' own chord (`CylinderTessellationProfile::chord_error`)
+/// of the edge. Side 1 takes the same points in
 /// its own parameters, so both faces hold one list, and every point lies on both
 /// surfaces: neither face's vertices leave its own cylinder (#2107, row 5). A point
 /// beyond either face's envelope is left out by both. Where the samples do not run
 /// across both parameters on both sides, or the two sides' sample counts differ, the
-/// loop keeps the samples the graph stored; a refinement error refuses nothing here
-/// either, and keeps them too.
+/// loop keeps the samples the graph stored, and so does a refinement that fails, apart
+/// from the cylinder's point budget, which refuses as it does at a plane.
 fn refined_cylinder_pair_edge(
     g: &ObjectGraph,
     edge_index: usize,
@@ -663,6 +668,10 @@ fn refined_cylinder_pair_edge(
     let limits = EdgeLimits {
         depth: EDGE_REFINEMENT_DEPTH,
         points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
+        // Half the faces' own chord: at the whole chord, two downpipes on each BIM4LCA
+        // housing file part by up to 0.0019 ft between the shared points, past the
+        // 0.001 ft they are held to (#2111, RE-496).
+        sagitta: CylinderTessellationProfile::default().chord_error / 2.,
     };
     // Side 0's points, each with the index of the saved sample it is, if it is one.
     let mut refined = vec![first[0]];
@@ -900,6 +909,7 @@ fn refined_plane_edge(
         let limits = EdgeLimits {
             depth: EDGE_REFINEMENT_DEPTH,
             points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
+            sagitta: EDGE_SAGITTA,
         };
         let mut refined =
             refine_crossing_edge_within(evaluate.as_ref(), origin, normal, &samples, &limits)
@@ -3135,6 +3145,7 @@ mod tests {
         let limits = EdgeLimits {
             depth: 2,
             points: 1_000,
+            sagitta: EDGE_SAGITTA,
         };
         let error =
             refine_crossing_edge_within(&cylinder, plane.0, plane.1, &cut(2), &limits).unwrap_err();
@@ -3149,6 +3160,7 @@ mod tests {
         let limits = EdgeLimits {
             depth: 32,
             points: 3,
+            sagitta: EDGE_SAGITTA,
         };
         let error =
             refine_crossing_edge_within(&cylinder, plane.0, plane.1, &cut(2), &limits).unwrap_err();
