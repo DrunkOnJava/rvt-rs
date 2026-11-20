@@ -18,7 +18,13 @@
 //!     edge joined and only the step back to the first point fails;
 //!   - `gap`: from the last joined point to the nearer end of the next edge (or back to the
 //!     first point), in feet;
-//!   - `other_meets`: an edge further on in the loop meets the last point instead.
+//!   - `other_meets`: an edge further on in the loop meets the last point instead, within
+//!     the same 1e-7 every join fails, so its zeros do not show that the edges are in order;
+//!   - then `param_gap=<d>`: the larger parameter difference across that gap;
+//!     `joins_within=<ft|none>`: the smallest of 1e-6, 1e-5, 1e-4 and 1e-3 ft within which the
+//!     whole loop joins, each edge at its nearer end and back to the first point, either way
+//!     round; `shortest_edge=<ft>`: the shortest edge's span between its ends (an edge shorter
+//!     than a bound joins at either end).
 //!   unread graph=<ElementId> face=<n> why=<reason>: a refused face `trim_breaks` cannot read.
 //!   reach owner=<ElementId> graphs=[<ElementId>, ...]: an element whose graphics reach a
 //!     graph with a break.
@@ -26,6 +32,9 @@
 //!   faces surface=<class> meshed=<n> disconnected=<n> other=<n>
 //!   gaps surface=<class> loops=<n> under_1e-6=<n> 1e-6_to_1e-4=<n> 1e-4_to_0.01=<n>
 //!     over_0.01=<n> closing=<n> other_meets=<n>
+//!   joins surface=<class> within_1e-6=<n> within_1e-5=<n> within_1e-4=<n> within_1e-3=<n>
+//!     none=<n> shortest_edge_under_bound=<n>: the loops by `joins_within`, and those whose
+//!     shortest edge is shorter than the bound they join within.
 //! ElementIds, counts and distances in feet only.
 //!
 //! Usage:
@@ -38,7 +47,7 @@ use rvt::RevitFile;
 use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Record};
 use rvt::research::native_parameters::ObjectGraph;
-use rvt::research::native_parametric_mesh::{face_grid, trim_breaks};
+use rvt::research::native_parametric_mesh::{JOIN_BOUNDS, face_grid, trim_breaks};
 use rvt::research::native_saved_mesh::pointer;
 
 const DISCONNECTED: &str = "disconnected parametric trim in model coordinates";
@@ -80,6 +89,8 @@ struct Tally {
     bins: [usize; 4],
     closing: usize,
     other_meets: usize,
+    joins: [usize; 5],
+    short: usize,
 }
 
 /// The faces of one graph: prints its breaks and adds to the tally; whether it holds one.
@@ -126,9 +137,23 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> bo
                     let closing = b.chained == b.edges;
                     t.closing += usize::from(closing);
                     t.other_meets += usize::from(b.other_meets);
+                    let within = JOIN_BOUNDS.iter().position(|x| Some(*x) == b.joins_within);
+                    t.joins[within.unwrap_or(4)] += 1;
+                    if b.joins_within.is_some_and(|x| b.shortest_edge < x) {
+                        t.short += 1;
+                    }
+                    let shown = b
+                        .joins_within
+                        .map_or_else(|| "none".to_string(), |x| format!("{x:e}"));
                     println!(
-                        "break graph={id} face={fi} surface={class} loop={} edges={} chained={} gap={:.9} closing={closing} other_meets={}",
-                        b.loop_index, b.edges, b.chained, b.gap, b.other_meets
+                        "break graph={id} face={fi} surface={class} loop={} edges={} chained={} gap={:.9} closing={closing} other_meets={} param_gap={:.3e} joins_within={shown} shortest_edge={:.9}",
+                        b.loop_index,
+                        b.edges,
+                        b.chained,
+                        b.gap,
+                        b.other_meets,
+                        b.param_gap,
+                        b.shortest_edge
                     );
                 }
             }
@@ -245,6 +270,10 @@ fn main() -> Result<()> {
             println!(
                 "gaps surface={class} loops={} under_1e-6={} 1e-6_to_1e-4={} 1e-4_to_0.01={} over_0.01={} closing={} other_meets={}",
                 t.loops, t.bins[0], t.bins[1], t.bins[2], t.bins[3], t.closing, t.other_meets
+            );
+            println!(
+                "joins surface={class} within_1e-6={} within_1e-5={} within_1e-4={} within_1e-3={} none={} shortest_edge_under_bound={}",
+                t.joins[0], t.joins[1], t.joins[2], t.joins[3], t.joins[4], t.short
             );
         }
     }

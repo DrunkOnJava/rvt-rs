@@ -331,6 +331,49 @@ pub struct TrimBreak {
     /// Whether an edge of the loop not yet joined, other than the next, has an end within
     /// 1e-7 of the last joined point.
     pub other_meets: bool,
+    /// The larger of the two parameters' differences across that gap.
+    pub param_gap: f64,
+    /// The smallest of `JOIN_BOUNDS` within which the whole loop joins, each edge at its
+    /// nearer end and back to the first point, either way round; `None` within none.
+    pub joins_within: Option<f64>,
+    /// The shortest edge's span between its two ends, in model coordinates: an edge shorter
+    /// than a bound has both ends within it of the same point.
+    pub shortest_edge: f64,
+}
+
+/// #2085: the bounds `TrimBreak::joins_within` tries, in model units (feet).
+pub const JOIN_BOUNDS: [f64; 4] = [1e-6, 1e-5, 1e-4, 1e-3];
+
+/// Whether the loop's edges join end to end within `bound` in model coordinates, each edge
+/// at its nearer end, and close, either way round.
+fn joins_within(
+    at: &impl Fn([f64; 2]) -> Result<[f64; 3]>,
+    segments: &[Vec<[f64; 2]>],
+    bound: f64,
+) -> Result<bool> {
+    for reverse in [false, true] {
+        let (first, mut last) = if reverse {
+            (*segments[0].last().unwrap(), segments[0][0])
+        } else {
+            (segments[0][0], *segments[0].last().unwrap())
+        };
+        let mut joined = true;
+        for seg in &segments[1..] {
+            let p = at(last)?;
+            let (a, b) = (seg[0], *seg.last().unwrap());
+            let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+            let (gap, other) = if da <= db { (da, b) } else { (db, a) };
+            if gap >= bound {
+                joined = false;
+                break;
+            }
+            last = other;
+        }
+        if joined && distance(at(first)?, at(last)?) < bound {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// #2085, on `research/2085-chairs` only: the face's surface class and, for each loop of
@@ -374,15 +417,20 @@ pub fn trim_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<TrimBreak>
                     } else if db < 1e-7 {
                         last = a;
                     } else {
-                        gap = Some(da.min(db));
+                        let near = if da <= db { a } else { b };
+                        let param_gap = (near[0] - last[0]).abs().max((near[1] - last[1]).abs());
+                        gap = Some((da.min(db), param_gap));
                         break;
                     }
                     chained += 1;
                 }
                 let p = at(last)?;
-                let gap = match gap {
+                let (gap, param_gap) = match gap {
                     Some(gap) => gap,
-                    None => distance(at(first)?, p),
+                    None => (
+                        distance(at(first)?, p),
+                        (first[0] - last[0]).abs().max((first[1] - last[1]).abs()),
+                    ),
                 };
                 let mut other_meets = false;
                 for seg in segments.iter().skip(chained + 1) {
@@ -398,6 +446,9 @@ pub fn trim_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<TrimBreak>
                     chained,
                     gap,
                     other_meets,
+                    param_gap,
+                    joins_within: None,
+                    shortest_edge: 0.,
                 };
                 if best.as_ref().is_none_or(|b| {
                     found.chained > b.chained || (found.chained == b.chained && found.gap < b.gap)
@@ -405,7 +456,20 @@ pub fn trim_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<TrimBreak>
                     best = Some(found);
                 }
             }
-            breaks.extend(best);
+            if let Some(mut b) = best {
+                for bound in JOIN_BOUNDS {
+                    if joins_within(&at, &segments, bound)? {
+                        b.joins_within = Some(bound);
+                        break;
+                    }
+                }
+                let mut shortest = f64::INFINITY;
+                for seg in &segments {
+                    shortest = shortest.min(distance(at(seg[0])?, at(*seg.last().unwrap())?));
+                }
+                b.shortest_edge = shortest;
+                breaks.push(b);
+            }
         }
         loop_index += 1;
         next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
