@@ -1024,7 +1024,8 @@ fn ring_impl(
     refine: EdgeSide,
     limit: usize,
 ) -> Result<Vec<[f64; 2]>> {
-    joined_ring(ring_segments(g, index, face, li, refine, limit)?)
+    let segments = ring_segments(g, index, face, li, refine, limit)?;
+    joined_ring(segments, || step_length(g, index, face))
 }
 /// The length on a plane or cylinder face's surface of a straight step between two points
 /// of its parameters: a chord on a plane, a helix on a cylinder. A step across a cylinder's
@@ -1147,7 +1148,17 @@ fn ring_segments(
 /// One ring from a loop's edges, each joined to the ring at whichever of its ends lies
 /// within 1e-7 of the ring's last point in the surface's parameters ([`close`]), and the
 /// last edge's far end back at the first point.
-fn joined_ring(segments: Vec<Vec<[f64; 2]>>) -> Result<Vec<[f64; 2]>> {
+///
+/// #2085 (candidate): a ring whose edges do not all meet so joins at the smallest of
+/// `JOIN_BOUNDS` within which every gap's step along the surface (`length`) lies, keeping
+/// both of the edges' own ends: the face across each edge holds those ends, so a point
+/// moved between them would part the two faces; two ends within [`RING_SAME_POINT`] are one
+/// vertex, as [`close`] makes them. A ring with an edge whose ends lie within that bound of
+/// each other, or of the ring's last point, which could join at either end, stays refused.
+fn joined_ring(
+    segments: Vec<Vec<[f64; 2]>>,
+    length: impl FnOnce() -> Result<StepLength>,
+) -> Result<Vec<[f64; 2]>> {
     // Saved circular loops can be represented by two connected arc edges
     // (typically two semicircles). A third edge is not a topology invariant;
     // closure, nonzero area, and connected ordering below remain mandatory.
@@ -1156,28 +1167,21 @@ fn joined_ring(segments: Vec<Vec<[f64; 2]>>) -> Result<Vec<[f64; 2]>> {
         segments.iter().all(|s: &Vec<_>| !s.is_empty()),
         "empty boundary edge"
     );
-    let mut output = None;
-    for reverse in [false, true] {
-        let mut out = segments[0].clone();
-        if reverse {
-            out.reverse()
-        };
-        let mut valid = true;
-        for s in &segments[1..] {
-            let last = *out.last().unwrap();
-            if close(last, s[0]) {
-                out.extend_from_slice(&s[1..])
-            } else if close(last, *s.last().unwrap()) {
-                out.extend(s.iter().rev().skip(1).copied())
-            } else {
-                valid = false;
-                break;
+    let mut output = joined_within(&segments, None);
+    if output.is_none() {
+        // A surface whose steps cannot be measured keeps the strict join's refusal.
+        if let Ok(length) = length() {
+            for bound in crate::native_parametric_mesh::JOIN_BOUNDS {
+                if let Some(out) = joined_within(&segments, Some((bound, &*length))) {
+                    if segments
+                        .iter()
+                        .all(|s| length(s[0], s[s.len() - 1]) >= bound)
+                    {
+                        output = Some(out);
+                    }
+                    break;
+                }
             }
-        }
-        if valid && close(out[0], *out.last().unwrap()) {
-            out.pop();
-            output = Some(out);
-            break;
         }
     }
     let mut out = output.context("disconnected UV boundary")?;
@@ -1187,6 +1191,67 @@ fn joined_ring(segments: Vec<Vec<[f64; 2]>>) -> Result<Vec<[f64; 2]>> {
         "degenerate boundary"
     );
     Ok(out)
+}
+
+/// Two ends of a ring's edges this close along the surface, in feet, are one vertex.
+const RING_SAME_POINT: f64 = 1e-7;
+/// A bound on a ring's gaps, with how a gap's step along the surface is measured.
+type Loose<'a> = Option<(f64, &'a dyn Fn([f64; 2], [f64; 2]) -> f64)>;
+/// The ring `segments` make, each edge joined at its end within 1e-7 of the ring's last
+/// point in the parameters ([`close`]). With `loose`, an edge whose nearer end's step
+/// along the surface is under its bound joins too, with both its ends kept, and so may
+/// the last edge's far end and the first point. `None` where neither way round the
+/// first edge closes.
+fn joined_within(segments: &[Vec<[f64; 2]>], loose: Loose<'_>) -> Option<Vec<[f64; 2]>> {
+    for reverse in [false, true] {
+        let mut out = segments[0].clone();
+        if reverse {
+            out.reverse()
+        };
+        let mut valid = true;
+        for s in &segments[1..] {
+            let last = *out.last().unwrap();
+            let tail = *s.last().unwrap();
+            if close(last, s[0]) {
+                out.extend_from_slice(&s[1..])
+            } else if close(last, tail) {
+                out.extend(s.iter().rev().skip(1).copied())
+            } else if let Some((bound, length)) = loose {
+                let (head_step, tail_step) = (length(last, s[0]), length(last, tail));
+                if head_step.min(tail_step) >= bound || head_step.max(tail_step) < bound {
+                    valid = false;
+                    break;
+                }
+                let skip = usize::from(head_step.min(tail_step) < RING_SAME_POINT);
+                if head_step < tail_step {
+                    out.extend_from_slice(&s[skip..])
+                } else {
+                    out.extend(s.iter().rev().skip(skip).copied())
+                }
+            } else {
+                valid = false;
+                break;
+            }
+        }
+        if !valid {
+            continue;
+        }
+        let (first, last) = (out[0], *out.last().unwrap());
+        if close(first, last) {
+            out.pop();
+            return Some(out);
+        }
+        if let Some((bound, length)) = loose {
+            let step = length(last, first);
+            if step < bound {
+                if step < RING_SAME_POINT {
+                    out.pop();
+                }
+                return Some(out);
+            }
+        }
+    }
+    None
 }
 
 /// How far apart neighbouring edges' ends lie in one ring of a plane or cylinder face,
