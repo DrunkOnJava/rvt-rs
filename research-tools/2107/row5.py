@@ -5,7 +5,9 @@
 The moved bodies are those whose mesh differs between base and head (ifc_body_diff.read). For
 each, both directions (pair.py's `far`, in place.body's far_vertices frame, feet) on base and on
 head: Revit's vertices beyond 0.001 and 0.01 ft of our surface, and ours beyond those of Revit's.
-Prints totals, by family, and every body where head is worse than base on any of the four counts.
+Prints totals, by family, and every body worse on head: more of Revit's vertices beyond 0.001 or 0.01 ft
+of rvt-rs's surface (Revit's vertices are fixed, so their count is the measure), or rvt-rs's farthest
+vertex from Revit's surface farther (rvt-rs's vertex count moves with its own mesh, so its count is not).
 """
 import collections
 import functools
@@ -61,7 +63,7 @@ for tag in moved:
                     ("ours>0.001", ob[1], oh[1]), ("ours>0.01", ob[2], oh[2])):
         totals[k + " base"] += x
         totals[k + " head"] += y
-    if rh[1] > rb[1] or rh[2] > rb[2] or oh[1] > ob[1] or oh[2] > ob[2]:
+    if rh[1] > rb[1] or rh[2] > rb[2] or oh[0] > ob[0] + 1e-6:
         worse.append((tag, rb, rh, ob, oh))
 print("not in Revit's export:", len(missing), missing[:10])
 for k, n in families.most_common():
@@ -69,5 +71,5 @@ for k, n in families.most_common():
 for k in ("revit>0.001", "revit>0.01", "ours>0.001", "ours>0.01"):
     print(f"{k:12} base {totals[k + ' base']:7} head {totals[k + ' head']:7}")
 print(f"bodies worse on head: {len(worse)}")
-for w in worse[:20]:
+for w in worse:
     print(f"  {w[0]}: Revit's off ours base {w[1]} head {w[2]} | ours off Revit's base {w[3]} head {w[4]}")
