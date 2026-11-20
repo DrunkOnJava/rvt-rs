@@ -12,6 +12,7 @@
 //! its saved graphics is put to `native_parametric_mesh::face_grid`; for a face refused with
 //! that reason, `native_parametric_mesh::trim_breaks` says where each loop that does not
 //! close stops. It prints:
+//! ```text
 //!   break graph=<ElementId> face=<n> surface=<class> loop=<n> edges=<n> chained=<n>
 //!     gap=<ft> closing=<true|false> other_meets=<true|false>
 //!   - `chained`: the edges the attempt that joins the most joined; `closing` where every
@@ -55,10 +56,13 @@
 //!   chords surface=<class> ends=<n> moved=<n> largest=<ft>: the ends of chord edges (drawn
 //!     straight to a plane) the polygons hold, those a merged join moved off the edge's own end,
 //!     which the plane beside it keeps, and the largest move
+//! ```
 //! ElementIds, counts and distances in feet only.
 //!
 //! Usage:
+//! ```text
 //!   cargo run --profile ci -p rvt-probes --example probe_2085_trim_breaks -- MODEL.rvt
+//! ```
 
 use std::collections::{BTreeMap, BTreeSet};
 
