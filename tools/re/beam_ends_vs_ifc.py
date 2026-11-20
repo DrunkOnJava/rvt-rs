@@ -106,8 +106,10 @@ rectangle is turned from the beam, with how many of Revit's ends are at the colu
 of the S6 table above puts an obliquely cut end off the beam's middle; this one does not. Where the middle line
 crosses no face of Revit's beam (a hollow or channel section), Revit's end is read where the beam's mesh crosses the
 middle line's vertical plane instead, and counted. The row (S6 middle line row) counts the ends by where rvt-rs's line
-ends (inside the column, short of it, past it), since a beam Revit shortens also has the end it does not cut, and
-says how many of Revit's ends lie at the column's near face within 2 per cent of the chord and within 1 mm.
+ends (inside the column, already at its near face, short of it, past it), since a beam Revit shortens also has the
+end it does not cut, and says how many of Revit's ends lie at the column's near face within 2 per cent of the chord
+and within 1 mm; for the outlines from a column's saved mesh it splits them by how many of the beam's named columns
+hold the end (the probe's `held_*`, from their record boxes), which is what an exporter can test from the file.
 """
 
 import collections
@@ -765,7 +767,11 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                     # The row (#1839): by where rvt-rs's line ends, since a beam Revit shortens
                     # also has the end it does not cut.
                     line_at = LINE_AT.get(fraction_bin(t_line), "inside the column")
-                    for key in ((where, line_at), (where, line_at, width, turn)):
+                    # What the file says of the end, which an exporter can test: how many of the
+                    # beam's named columns hold it (by their record boxes, the probe's `held_*`).
+                    held = fields.get(f"held_{end}", "?")
+                    rule = HELD.get(held, "several named columns hold it")
+                    for key in ((where, line_at), (where, line_at, "held", rule), (where, line_at, width, turn)):
                         middle_rows[key]["ends"] += 1
                         middle_rows[key]["near face within 2 per cent of the chord"] += fraction_bin(t_middle) == "near"
                         middle_rows[key]["near face within 1 mm"] += abs(offset) * factor <= TOLERANCE_FEET
@@ -848,7 +854,9 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
 
 
 MIDDLE_END_NONE = "ends whose middle line and its vertical plane cross no face of Revit's beam"
-LINE_AT = {"short": "short of the column", "beyond": "past the column"}
+LINE_AT = {"short": "short of the column", "near": "at the column's near face", "beyond": "past the column"}
+LINE_GROUPS = ("inside the column", "at the column's near face", "short of the column", "past the column")
+HELD = {"0": "no named column holds it", "1": "one named column holds it", "?": "the probe gives no count"}
 ROW_COUNTS = (
     "near face within 2 per cent of the chord",
     "near face within 1 mm",
@@ -919,7 +927,7 @@ def print_middle_rows(middle_rows):
     of the chord and within 1 mm, and, for the outlines from a column's saved mesh, the same by width and turn."""
     widths = dict(WIDTHS)
     for where in LINE_SOURCES.values():
-        for line_at in ("inside the column", "short of the column", "past the column"):
+        for line_at in LINE_GROUPS:
             counts = middle_rows.get((where, line_at))
             if not counts:
                 continue
@@ -930,7 +938,14 @@ def print_middle_rows(middle_rows):
             )
             if where != LINE_SOURCES["m"]:
                 continue
-            for key in sorted(k for k in middle_rows if len(k) == 4 and k[:2] == (where, line_at)):
+            for key in sorted(k for k in middle_rows if len(k) == 4 and k[:3] == (where, line_at, "held")):
+                split = middle_rows[key]
+                parts = "; ".join(f"{name} {split[name]}" for name in ROW_COUNTS)
+                print(
+                    f"beam ends:   S6 middle line row, outline from the {where}, the line ending {line_at}, "
+                    f"{key[3]}, {split['ends']} ends: Revit's end at the {parts}"
+                )
+            for key in sorted(k for k in middle_rows if len(k) == 4 and k[:2] == (where, line_at) and k[2] != "held"):
                 split = middle_rows[key]
                 parts = "; ".join(f"{name} {split[name]}" for name in ROW_COUNTS)
                 print(
