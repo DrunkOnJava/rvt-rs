@@ -1629,13 +1629,39 @@ pub fn cylinder_face(
     let loop_index = index
         .resolve(fi, &face.fields["m_pFirstLoop"])?
         .context("cylinder trim loop")?;
-    ensure!(
-        index
-            .resolve(loop_index, &g.objects[loop_index].fields["m_nextLoop"])?
-            .is_none(),
-        "multiple cylinder trim loops unsupported"
-    );
-    let trim_uv = ring(g, &index, fi, loop_index)?;
+    // Two loops on part of a turn are rings meshed band by band (`band_mesh`), whose
+    // points are all the face's, for its steps and for the plane beside it
+    // (`refined_plane_edge`). Two making a full turn, a tube with no seam edge, are
+    // refused: no saved file read so far has one to check a reader against.
+    let (trim_uv, rings) =
+        match index.resolve(loop_index, &g.objects[loop_index].fields["m_nextLoop"])? {
+            None => (ring(g, &index, fi, loop_index)?, None),
+            Some(second) => {
+                ensure!(
+                    index
+                        .resolve(second, &g.objects[second].fields["m_nextLoop"])?
+                        .is_none(),
+                    "multiple cylinder trim loops unsupported"
+                );
+                ensure!(
+                    (u_range[1] - u_range[0] - std::f64::consts::TAU).abs() > 1e-7,
+                    "two cylinder trim loops on a full turn unsupported"
+                );
+                let pair = [loop_index, second].map(|li| {
+                    ring_impl(
+                        g,
+                        &index,
+                        fi,
+                        li,
+                        EdgeSide::Cylinder,
+                        CYLINDER_RING_POINT_BUDGET / 2,
+                    )
+                });
+                let [first, other] = pair;
+                let pair = vec![first?, other?];
+                (pair.iter().flatten().copied().collect(), Some(pair))
+            }
+        };
     ensure!(!trim_uv.is_empty(), "empty cylinder trim");
     let mut trim_min = [f64::INFINITY; 2];
     let mut trim_max = [f64::NEG_INFINITY; 2];
@@ -1778,6 +1804,21 @@ pub fn cylinder_face(
         u_range,
         v_range,
     });
+    if let Some(rings) = rings {
+        let (vertices, normals, triangles) =
+            band_mesh(&rings, &u_values, orient, handed, eval, [x_vec, y_vec])?;
+        return Ok(FaceMesh {
+            face_index: fi,
+            face_tag: face.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
+            render_style_id: crate::native_metadata::identifier(&face.fields["m_renderStyleId"])?,
+            vertices,
+            triangles,
+            normal: normals[0],
+            normals,
+            analytic_surface,
+            trim_uv,
+        });
+    }
     if !rectangular {
         let (vertices, normals, triangles) = strip_mesh(
             &trim_uv,
@@ -1916,6 +1957,89 @@ fn strip_mesh(
         !triangles.is_empty() && (covered - expected).abs() <= 1e-6 * expected.max(1e-6),
         "self-intersecting cylinder trim"
     );
+    Ok((vertices, normals, triangles))
+}
+
+/// A cylinder face's mesh from several trim rings, strip by strip across U. The steps
+/// fall on every ring point (`tessellation_axis` takes them), so each ring edge crosses
+/// a strip whole or not at all, and the strip is covered between its crossings taken
+/// in pairs by height (even-odd): a hole and separate regions alike.
+fn band_mesh(
+    rings: &[Vec<[f64; 2]>],
+    u_values: &[f64],
+    orient: bool,
+    handed: f64,
+    eval: impl Fn(f64, f64) -> [f64; 3],
+    [x_vec, y_vec]: [[f64; 3]; 2],
+) -> Result<CylinderStrips> {
+    const TOL: f64 = 1e-9;
+    let edges: usize = rings.iter().map(Vec::len).sum();
+    // Each strip reads every edge: bound the work a hostile file can ask.
+    ensure!(
+        u_values.len().saturating_mul(edges) <= 20_000_000,
+        "cylinder trim strip budget exceeded"
+    );
+    let sign = if orient { handed } else { -handed };
+    let mut vertices = Vec::new();
+    let mut normals = Vec::new();
+    let mut triangles = Vec::new();
+    for w in u_values.windows(2) {
+        let (w0, w1) = (w[0], w[1]);
+        let mut crossings: Vec<[f64; 2]> = Vec::new();
+        for ring in rings {
+            for (a, b) in ring
+                .iter()
+                .zip(ring.iter().cycle().skip(1))
+                .take(ring.len())
+            {
+                let (lo, hi) = if a[0] <= b[0] { (*a, *b) } else { (*b, *a) };
+                if lo[0] > w0 + TOL || hi[0] < w1 - TOL || hi[0] - lo[0] <= TOL {
+                    continue;
+                }
+                let at = |u: f64| lo[1] + (hi[1] - lo[1]) * (u - lo[0]) / (hi[0] - lo[0]);
+                crossings.push([at(w0), at(w1)]);
+            }
+        }
+        ensure!(
+            crossings.len().is_multiple_of(2),
+            "cylinder trim rings cross a strip an odd number of times"
+        );
+        crossings.sort_by(|a, b| (a[0] + a[1]).total_cmp(&(b[0] + b[1])));
+        for pair in crossings.chunks_exact(2) {
+            let (below, above) = (pair[0], pair[1]);
+            if (above[0] - below[0]).abs() <= TOL && (above[1] - below[1]).abs() <= TOL {
+                continue;
+            }
+            let base = u32::try_from(vertices.len()).context("cylinder vertex count overflow")?;
+            for [u, v] in [
+                [w0, below[0]],
+                [w1, below[1]],
+                [w1, above[1]],
+                [w0, above[0]],
+            ] {
+                vertices.push(eval(u, v));
+                let (s, c) = u.sin_cos();
+                normals.push(std::array::from_fn(|k| {
+                    sign * (c * x_vec[k] + s * y_vec[k])
+                }));
+            }
+            // The corners run counterclockwise in (u, v), as `strip_mesh` keeps them
+            // where the face faces that way.
+            let quad = if orient {
+                [[0, 1, 2], [0, 2, 3]]
+            } else {
+                [[0, 2, 1], [0, 3, 2]]
+            };
+            for t in quad {
+                triangles.push([base + t[0], base + t[1], base + t[2]]);
+            }
+        }
+        ensure!(
+            triangles.len() <= 4_000_000,
+            "cylinder triangle count overflow"
+        );
+    }
+    ensure!(!triangles.is_empty(), "empty cylinder trim");
     Ok((vertices, normals, triangles))
 }
 
