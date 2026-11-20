@@ -314,6 +314,105 @@ fn loop_closes(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resul
     Ok(false)
 }
 
+/// #2085, on `research/2085-chairs` only: where a loop's edges stop joining, as
+/// `loop_closes` reads them.
+#[derive(Debug, Clone)]
+pub struct TrimBreak {
+    /// The loop's place in its face, 0 for the first.
+    pub loop_index: usize,
+    /// The loop's edges.
+    pub edges: usize,
+    /// The edges the attempt that joined the most joined before it broke; `edges` where
+    /// only the step back to the first point fails.
+    pub chained: usize,
+    /// From the last joined point to the nearer end of the next edge, or back to the first
+    /// point where every edge joined, in model coordinates.
+    pub gap: f64,
+    /// Whether an edge of the loop not yet joined, other than the next, has an end within
+    /// 1e-7 of the last joined point.
+    pub other_meets: bool,
+}
+
+/// #2085, on `research/2085-chairs` only: the face's surface class and, for each loop of
+/// the face whose edges do not join end to end within 1e-7 in model coordinates, where
+/// they stop, on the attempt (the first edge either way round) that joins the most.
+pub fn trim_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<TrimBreak>)> {
+    use crate::native_saved_mesh::pointer;
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
+    let class = g.objects[si].class_name.to_string();
+    let surface = ParametricSurface::read(g, si)?;
+    let env = surface.bounds();
+    let saved_chords = keeps_saved_chords(&surface);
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    let mut breaks = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
+    let mut loop_index = 0;
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "trim loop cycle");
+        ensure!(loop_index < MAX_TRIM_LOOPS, "too many trim loops");
+        let least = if loop_index == 0 { 2 } else { 1 };
+        let (segments, _) = loop_segments(g, fi, li, env, least, saved_chords)?;
+        if !loop_closes(&surface, &segments)? {
+            let mut best: Option<TrimBreak> = None;
+            for reverse in [false, true] {
+                let (first, mut last) = if reverse {
+                    (*segments[0].last().unwrap(), segments[0][0])
+                } else {
+                    (segments[0][0], *segments[0].last().unwrap())
+                };
+                let mut chained = 1;
+                let mut gap = None;
+                for seg in &segments[1..] {
+                    let p = at(last)?;
+                    let (a, b) = (seg[0], *seg.last().unwrap());
+                    let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+                    if da < 1e-7 {
+                        last = b;
+                    } else if db < 1e-7 {
+                        last = a;
+                    } else {
+                        gap = Some(da.min(db));
+                        break;
+                    }
+                    chained += 1;
+                }
+                let p = at(last)?;
+                let gap = match gap {
+                    Some(gap) => gap,
+                    None => distance(at(first)?, p),
+                };
+                let mut other_meets = false;
+                for seg in segments.iter().skip(chained + 1) {
+                    if distance(p, at(seg[0])?) < 1e-7
+                        || distance(p, at(*seg.last().unwrap())?) < 1e-7
+                    {
+                        other_meets = true;
+                    }
+                }
+                let found = TrimBreak {
+                    loop_index,
+                    edges: segments.len(),
+                    chained,
+                    gap,
+                    other_meets,
+                };
+                if best.as_ref().is_none_or(|b| {
+                    found.chained > b.chained || (found.chained == b.chained && found.gap < b.gap)
+                }) {
+                    best = Some(found);
+                }
+            }
+            breaks.extend(best);
+        }
+        loop_index += 1;
+        next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    Ok((class, breaks))
+}
+
 /// Whether the one loop of a face is the rectangle `min`..`max` of its own
 /// parameters: every edge along one of its sides, and the sides covered whole (a
 /// revolution's side may collapse to a pole). `Ok(false)` where an edge crosses
