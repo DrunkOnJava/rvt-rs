@@ -1804,9 +1804,23 @@ pub fn cylinder_face(
         u_range,
         v_range,
     });
+    // #2104: the point of a cylinder's mesh back in the surface's parameters, `u` in
+    // (-π, π], for the spans of an edge it shares with another cylinder.
+    let uv_of = |p: [f64; 3]| {
+        let q = [p[0] - center[0], p[1] - center[1], p[2] - center[2]];
+        let v = dot(q, z_vec);
+        let r = [
+            q[0] - v * z_vec[0],
+            q[1] - v * z_vec[1],
+            q[2] - v * z_vec[2],
+        ];
+        [dot(r, y_vec).atan2(dot(r, x_vec)), v]
+    };
+    let spans = cylinder_saved_chord_spans(g, &index, fi, loop_index);
     if let Some(rings) = rings {
-        let (vertices, normals, triangles) =
+        let (mut vertices, normals, triangles) =
             band_mesh(&rings, &u_values, orient, handed, eval, [x_vec, y_vec])?;
+        onto_saved_chords(&mut vertices, &triangles, &spans, eval, uv_of);
         return Ok(FaceMesh {
             face_index: fi,
             face_tag: face.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
@@ -1820,7 +1834,7 @@ pub fn cylinder_face(
         });
     }
     if !rectangular {
-        let (vertices, normals, triangles) = strip_mesh(
+        let (mut vertices, normals, triangles) = strip_mesh(
             &trim_uv,
             &u_values,
             radius,
@@ -1829,6 +1843,7 @@ pub fn cylinder_face(
             eval,
             [x_vec, y_vec],
         )?;
+        onto_saved_chords(&mut vertices, &triangles, &spans, eval, uv_of);
         return Ok(FaceMesh {
             face_index: fi,
             face_tag: face.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
@@ -1882,6 +1897,147 @@ pub fn cylinder_face(
         analytic_surface,
         trim_uv,
     })
+}
+
+/// #2104: the spans between consecutive saved points of each edge the cylinder face
+/// `face` shares with another cylinder, in the face's parameters, where the edge's
+/// samples change both parameters on each side (as `isoparametric_axis` reads them).
+/// Both faces read the same edges, so they move the same spans. An edge or loop that
+/// does not read gives none: nothing here refuses a face that is drawn without it.
+fn cylinder_saved_chord_spans(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    first_loop: usize,
+) -> Vec<([f64; 2], [f64; 2])> {
+    let read = || -> Result<Vec<([f64; 2], [f64; 2])>> {
+        let is_cylinder = |f: usize| -> bool {
+            g.objects
+                .get(f)
+                .and_then(|o| o.fields.get("m_pSurf"))
+                .and_then(|p| index.resolve(f, p).ok().flatten())
+                .and_then(|si| g.objects.get(si))
+                .is_some_and(|s| s.class_name == "CylSurf")
+        };
+        let mut spans = Vec::new();
+        let mut li = Some(first_loop);
+        let mut loops = 0;
+        while let Some(l) = li {
+            loops += 1;
+            ensure!(loops <= 2, "more than two loops");
+            let mut cur = index
+                .resolve(l, &g.objects[l].fields["m_next"])?
+                .context("empty loop")?;
+            let mut seen = BTreeSet::new();
+            while cur != l {
+                ensure!(seen.insert(cur), "edge chain cycle");
+                let e = &g.objects[cur];
+                ensure!(e.class_name == "Edge", "nonedge loop member");
+                let faces = e.fields["m_pFace"].as_array().context("edge face pair")?;
+                ensure!(faces.len() == 2, "edge face pair length");
+                let mut side = None;
+                for (i, p) in faces.iter().enumerate() {
+                    if index.resolve(cur, p)? == Some(face) {
+                        side = Some(i);
+                    }
+                }
+                let side = side.context("edge does not belong to face")?;
+                let other = index.resolve(cur, &faces[1 - side])?;
+                let ends = e.fields["m_firstAndLastEdgePnts"]
+                    .as_array()
+                    .context("edge endpoints")?;
+                ensure!(ends.len() == 2, "edge endpoint count");
+                let interior = e.fields["m_interiorEdgePnts"]
+                    .as_array()
+                    .context("edge interior points")?;
+                let samples = |k: usize| -> Result<Vec<[f64; 2]>> {
+                    let mut pts = vec![point::<2>(&ends[0]["uv"][k])?];
+                    for p in interior {
+                        pts.push(point::<2>(&p["uv"][k])?);
+                    }
+                    pts.push(point::<2>(&ends[1]["uv"][k])?);
+                    Ok(pts)
+                };
+                if other.is_some_and(|o| o != face && is_cylinder(o)) {
+                    let own = samples(side)?;
+                    if isoparametric_axis(&own).is_none()
+                        && isoparametric_axis(&samples(1 - side)?).is_none()
+                    {
+                        spans.extend(own.windows(2).map(|w| (w[0], w[1])));
+                    }
+                }
+                cur = index
+                    .resolve(cur, &e.fields["m_next"][side])?
+                    .context("null loop next")?;
+            }
+            li = index.resolve(l, &g.objects[l].fields["m_nextLoop"])?;
+        }
+        Ok(spans)
+    };
+    read().unwrap_or_default()
+}
+
+/// #2104: where two cylinders share an edge, each face puts points of its own on it
+/// between the edge's saved points, at its own steps, and the two part by the edge's
+/// bow. A vertex of this face's mesh that lies inside one of `spans` is moved onto the
+/// straight line between the span's saved points, where the other face puts its own,
+/// as RE-492 does for a ruled face at a plane. Kept only where every triangle keeps its
+/// area; otherwise the face keeps the points it had.
+fn onto_saved_chords(
+    vertices: &mut [[f64; 3]],
+    triangles: &[[u32; 3]],
+    spans: &[([f64; 2], [f64; 2])],
+    eval: impl Fn(f64, f64) -> [f64; 3],
+    uv_of: impl Fn([f64; 3]) -> [f64; 2],
+) {
+    const TOL: f64 = 1e-9;
+    // Each vertex reads every span: bound the work a hostile file can ask.
+    if spans.is_empty() || vertices.len().saturating_mul(spans.len()) > 20_000_000 {
+        return;
+    }
+    let ends: Vec<([f64; 3], [f64; 3])> = spans
+        .iter()
+        .map(|(a, b)| (eval(a[0], a[1]), eval(b[0], b[1])))
+        .collect();
+    let mut moved = vertices.to_vec();
+    for (vertex, slot) in vertices.iter().zip(moved.iter_mut()) {
+        let p = uv_of(*vertex);
+        for ((a, b), (from, to)) in spans.iter().zip(&ends) {
+            // The span's own turn, so a span across u = ±π reads its points.
+            let mid = (a[0] + b[0]) / 2.;
+            let u = p[0] + std::f64::consts::TAU * ((mid - p[0]) / std::f64::consts::TAU).round();
+            let d = [b[0] - a[0], b[1] - a[1]];
+            let length = d[0] * d[0] + d[1] * d[1];
+            if length <= TOL * TOL {
+                continue;
+            }
+            let t = ((u - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / length;
+            let off = (u - (a[0] + t * d[0])).hypot(p[1] - (a[1] + t * d[1]));
+            if t > TOL && t < 1. - TOL && off <= TOL {
+                *slot = std::array::from_fn(|k| from[k] + t * (to[k] - from[k]));
+                break;
+            }
+        }
+    }
+    let area = |v: &[[f64; 3]], t: &[u32; 3]| {
+        let [a, b, c] = t.map(|i| v[i as usize]);
+        let (e, f) = (
+            [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+            [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
+        );
+        let n = [
+            e[1] * f[2] - e[2] * f[1],
+            e[2] * f[0] - e[0] * f[2],
+            e[0] * f[1] - e[1] * f[0],
+        ];
+        (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt()
+    };
+    if triangles
+        .iter()
+        .all(|t| area(&moved, t) > 1e-20 || area(vertices, t) <= 1e-20)
+    {
+        vertices.copy_from_slice(&moved);
+    }
 }
 
 /// Vertices, normals and triangles of a cylinder face.
