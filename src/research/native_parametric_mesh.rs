@@ -652,11 +652,7 @@ fn loop_polygon(
         (env[1][0] - env[0][0]).abs().max(1e-12),
         (env[1][1] - env[0][1]).abs().max(1e-12),
     ];
-    let near = |p: [f64; 2], q: [f64; 2]| {
-        same(p, q)
-            || ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1])
-                <= STRICT_PARAMETER_GAP
-    };
+    let near = |p: [f64; 2], q: [f64; 2]| parameters_join(p, q, range, STRICT_JOIN);
     let meet = |p: [f64; 2], q: [f64; 2]| -> Result<[f64; 2]> {
         if same(p, q) {
             return Ok(p);
@@ -724,9 +720,25 @@ const STRICT_JOIN: f64 = 1e-7;
 
 /// #2085 candidate: the largest parameter gap, over the surface's range on its axis, across
 /// which the strict path's polygon joins two ends that meet in model coordinates. On the
-/// open models and shifatrHtH's save every failing join is under 6e-5 of the range or a
-/// jump of 1 per cent or more (#2085).
+/// open models every failing join is under 6e-5 of the range or a jump of 1 per cent or
+/// more, and on shifatrHtH's save every one is under 1e-4 (#2085).
 const STRICT_PARAMETER_GAP: f64 = 1e-4;
+
+/// Whether the polygon may join `p` and `q` in the parameters, on the path a loop's
+/// `bound` puts it on: the same point there, or a gap over the surface's `range` within
+/// `STRICT_PARAMETER_GAP` on the strict path and within `JUMP` on the bounded one. The
+/// polygon and the probe's replay of it (`polygon_breaks`) both ask this.
+fn parameters_join(p: [f64; 2], q: [f64; 2], range: [f64; 2], bound: f64) -> bool {
+    if (p[0] - q[0]).abs() <= 1e-9 && (p[1] - q[1]).abs() <= 1e-9 {
+        return true;
+    }
+    let gap = ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1]);
+    gap <= if bound > STRICT_JOIN {
+        JUMP
+    } else {
+        STRICT_PARAMETER_GAP
+    }
+}
 
 /// #2085, on `research/2085-chairs` only: where a loop's polygon in the surface's
 /// parameters fails, on the attempt (first edge either way round) that gets furthest.
@@ -768,8 +780,6 @@ pub fn polygon_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<Polygon
     ];
     let saved_chords = keeps_saved_chords(&surface);
     let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
-    let same =
-        |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
     let mut breaks = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
@@ -793,7 +803,7 @@ pub fn polygon_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<Polygon
         };
         if let Some(bound) = failing {
             // Where the attempt that gets furthest fails, judged as the polygon judges a
-            // join on its path: the strict path asks the same point in the parameters.
+            // join on its path, as `parameters_join` judges it.
             let mut best: Option<PolygonBreak> = None;
             for reverse in [false, true] {
                 let (first, mut last) = if reverse {
@@ -808,12 +818,7 @@ pub fn polygon_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<Polygon
                     let (a, b) = (seg[0], *seg.last().unwrap());
                     let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
                     let (gap, near, other) = if da <= db { (da, a, b) } else { (db, b, a) };
-                    let ok = gap < bound
-                        && (same(last, near)
-                            || (bound > STRICT_JOIN
-                                && ((last[0] - near[0]).abs() / range[0])
-                                    .max((last[1] - near[1]).abs() / range[1])
-                                    <= JUMP));
+                    let ok = gap < bound && parameters_join(last, near, range, bound);
                     if !ok {
                         failed = Some((last, near, gap < bound));
                         break;
