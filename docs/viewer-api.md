@@ -349,7 +349,9 @@ Every material carries `extras: { colourSource, alphaSource }`
 `userData`. Each says where its value comes from:
 
 - `"file"`: the Revit material's own colour, or one minus its own
-  transparency (RE-53).
+  transparency (RE-53). An element drawn in its category's colour whose
+  materials are all transparent takes that alpha too, the least transparent
+  one's, in a material named `Category <class> transparent` (#2109).
 - `"rvt-rs"`: rvt-rs chose it. That covers the category colours above,
   translucent windows and faint rooms included, the mid-grey of a material
   whose colour was not read, and the opaque alpha of one whose transparency
