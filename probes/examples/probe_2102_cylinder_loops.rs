@@ -10,7 +10,9 @@
 //!
 //! For the graphs of the elements named with `--owners=<id>,<id>` (all exported
 //! elements without it) and every symbol they reach, it prints:
-//!   cyl graph=<ElementId> face=<index> loops=<n> env_u=<lo>..<hi> env_v=<lo>..<hi>
+//!   cyl graph=<ElementId> face=<index> loops=<n> orient=<yes|no> env_u=<lo>..<hi> env_v=<lo>..<hi>
+//!   (`orient` is the cylinder mesher's: the surface's `m_orientFlag`, flipped by bit 2 of
+//!   the face's `m_faceFlags_v9`)
 //!   loop graph=<ElementId> face=<index> k=<n> edges=<n> points=<n> closes=<yes|no>
 //!     u=<lo>..<hi> v=<lo>..<hi> area=<signed, in the parameters> err=<why|->
 //! then `total faces=<n>`. Parameters are radians along u and feet along v.
@@ -124,19 +126,30 @@ fn read_loop(
             .ok_or("null next")?;
     }
     let edges = segments.len();
-    let mut out = segments.first().cloned().ok_or("no edges")?;
-    for s in &segments[1..] {
-        let last = *out.last().unwrap_or(&[f64::NAN; 2]);
-        if close(last, s[0]) {
-            out.extend_from_slice(&s[1..]);
-        } else if close(last, s[s.len() - 1]) {
-            out.extend(s.iter().rev().skip(1).copied());
-        } else {
-            return Err("disconnected".into());
+    // As `ring_impl` does: the first edge either way round.
+    for reverse in [false, true] {
+        let mut out = segments.first().cloned().ok_or("no edges")?;
+        if reverse {
+            out.reverse();
+        }
+        let mut joined = true;
+        for s in &segments[1..] {
+            let last = *out.last().unwrap_or(&[f64::NAN; 2]);
+            if close(last, s[0]) {
+                out.extend_from_slice(&s[1..]);
+            } else if close(last, s[s.len() - 1]) {
+                out.extend(s.iter().rev().skip(1).copied());
+            } else {
+                joined = false;
+                break;
+            }
+        }
+        if joined {
+            let closes = out.len() > 2 && close(out[0], out[out.len() - 1]);
+            return Ok((edges, out, closes));
         }
     }
-    let closes = out.len() > 2 && close(out[0], out[out.len() - 1]);
-    Ok((edges, out, closes))
+    Err("disconnected".into())
 }
 
 fn report(id: u64, g: &ObjectGraph, faces: &mut usize) {
@@ -181,8 +194,19 @@ fn report(id: u64, g: &ObjectGraph, faces: &mut usize) {
                 .and_then(Fv::as_f64)
                 .unwrap_or(f64::NAN)
         };
+        // The mesher's orientation: the surface's flag, flipped by bit 2 of the face's.
+        let surface_flag = g.objects[si]
+            .fields
+            .get("m_orientFlag")
+            .and_then(Fv::as_bool);
+        let face_flags = face.fields.get("m_faceFlags_v9").and_then(Fv::as_u64);
+        let orient = match (surface_flag, face_flags) {
+            (Some(o), Some(f)) if o ^ (f & 2 != 0) => "yes",
+            (Some(_), Some(_)) => "no",
+            _ => "-",
+        };
         println!(
-            "cyl graph={id} face={fi} loops={} env_u={:.6}..{:.6} env_v={:.6}..{:.6}",
+            "cyl graph={id} face={fi} loops={} orient={orient} env_u={:.6}..{:.6} env_v={:.6}..{:.6}",
             loops.len(),
             corner(0, 0),
             corner(1, 0),
