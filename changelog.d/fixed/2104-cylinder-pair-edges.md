@@ -7,5 +7,5 @@
   and held by both faces, and none is left over 0.001 ft on the 77 files read.
   The cost: on the plumbing and HVAC samples the bodies with such faces hold
   up to 1.35 times the triangles (exports at most 6.6 MiB larger), and on Snowdon Towers
-  Architectural 45 of the 62 bodies that move fit Revit's own export slightly
-  worse, as does one toilet on RE1 Architecture; why is not yet read (#2111).
+  Architectural more of Revit's vertices lie beyond 0.001 ft of the bodies that
+  move (23,243 to 23,511); whether that is a worse fit is not shown (#2111).
