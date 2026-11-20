@@ -1,7 +1,9 @@
-- **glTF keeps the transparency of an element drawn whole (#1812).** An
-  element whose body the exporter draws as one piece (a glass door or light
-  fixture whose type draws in several materials) keeps its category colour but
-  now takes the opacity of its most transparent material, instead of the
-  category's opaque alpha; a single material or profile whose colour was not
-  read contributes its alpha too. All-opaque or unread materials stay opaque,
-  and the material still marks the alpha `"rvt-rs"` in its `extras`.
+- **glTF draws an element made only of transparent materials see-through
+  (#2109).** An element drawn in its category's colour, as one body, whose
+  materials were all read as transparent now takes their alpha, the least
+  transparent one's, in a material named `Category <class> transparent` whose
+  `alphaSource` is `"file"`. One that also holds an opaque material, or a
+  material whose transparency was not read, keeps its category's alpha: drawn
+  at its glass's, a door with a glass panel would look all glass, and which part
+  of a saved mesh is the glass is not read. Windows and curtain panels keep
+  their translucent category colour.
