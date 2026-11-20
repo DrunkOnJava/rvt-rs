@@ -804,7 +804,12 @@ pub fn polygon_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<Polygon
                     relative_gap,
                     halfway_same,
                 };
-                if best.as_ref().is_none_or(|b| found.joined > b.joined) {
+                // The attempt the polygon fails on is one whose edges meet up to there: the
+                // wrong way round breaks at the first join, apart in model coordinates.
+                if best
+                    .as_ref()
+                    .is_none_or(|b| (found.meets, found.joined) > (b.meets, b.joined))
+                {
                     best = Some(found);
                 }
             }
