@@ -631,9 +631,8 @@ fn trim_is_rectangle(
 /// dropped. At `STRICT_JOIN`, a join that meets in model coordinates but not in the
 /// parameters (the seam of a revolution, a pole) is refused. At a looser `bound`
 /// (#2085 candidate), edges join at their nearer end within it, and where the
-/// parameters do not meet the polygon steps across the gap: only where the gap is
-/// within `JUMP` of the surface's parameter range, or the point halfway across it is
-/// the same point (a side that collapses); a seam is still refused.
+/// parameters do not meet the polygon steps across the gap only where it is within
+/// `JUMP` of the surface's parameter range; a pole and a seam are still refused.
 fn loop_polygon(
     surface: &ParametricSurface,
     segments: &[Vec<[f64; 2]>],
@@ -726,17 +725,14 @@ fn loop_polygon_within(
     let same =
         |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
     // Whether the polygon may step from `p` to `q` in the parameters: the same point
-    // there, a gap within `JUMP` of the range, or a side that collapses between them.
+    // there, or a gap within `JUMP` of the range. A pole and a seam are refused, as on
+    // the strict path.
     let steps = |p: [f64; 2], q: [f64; 2]| -> Result<bool> {
         if same(p, q) {
             return Ok(true);
         }
         let gap = ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1]);
-        if gap <= JUMP {
-            return Ok(true);
-        }
-        let half = [(p[0] + q[0]) / 2., (p[1] + q[1]) / 2.];
-        Ok(distance(at(half)?, at(p)?) < bound)
+        Ok(gap <= JUMP)
     };
     for reverse in [false, true] {
         let mut ring: Vec<[f64; 2]> = if reverse {
