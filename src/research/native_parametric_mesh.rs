@@ -339,6 +339,78 @@ pub struct TrimBreak {
     /// The shortest edge's span between its two ends, in model coordinates: an edge shorter
     /// than a bound has both ends within it of the same point.
     pub shortest_edge: f64,
+    /// At the bound the loop joins within: each join's parameter gap over the surface's
+    /// parameter range, the largest of those that are not a pole or a seam.
+    pub small_gap: f64,
+    /// Joins whose parameters jump by more than `JUMP` of their range where the point halfway
+    /// between them in the parameters is the same point too (a side that collapses: a pole).
+    pub pole_joins: usize,
+    /// Joins whose parameters jump by more than `JUMP` of their range where the point halfway
+    /// between them is not the same point (a seam or another jump).
+    pub seam_joins: usize,
+}
+
+/// #2085: a join's parameter gap over the surface's range above which it is a jump (a pole
+/// or a seam) rather than an edge's end read a little off.
+pub const JUMP: f64 = 1e-2;
+
+/// The joins of a loop at `bound`, as `joins_within` makes them on the first way round that
+/// joins: the largest relative parameter gap that is not a jump, the pole joins and the
+/// seam joins.
+fn join_kinds(
+    at: &impl Fn([f64; 2]) -> Result<[f64; 3]>,
+    segments: &[Vec<[f64; 2]>],
+    env: [[f64; 2]; 2],
+    bound: f64,
+) -> Result<(f64, usize, usize)> {
+    let range = [
+        (env[1][0] - env[0][0]).abs().max(1e-12),
+        (env[1][1] - env[0][1]).abs().max(1e-12),
+    ];
+    let relative = |p: [f64; 2], q: [f64; 2]| {
+        ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1])
+    };
+    for reverse in [false, true] {
+        let (first, mut last) = if reverse {
+            (*segments[0].last().unwrap(), segments[0][0])
+        } else {
+            (segments[0][0], *segments[0].last().unwrap())
+        };
+        let mut pairs = Vec::new();
+        let mut joined = true;
+        for seg in &segments[1..] {
+            let p = at(last)?;
+            let (a, b) = (seg[0], *seg.last().unwrap());
+            let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+            let (gap, near, other) = if da <= db { (da, a, b) } else { (db, b, a) };
+            if gap >= bound {
+                joined = false;
+                break;
+            }
+            pairs.push((last, near));
+            last = other;
+        }
+        if !joined || distance(at(first)?, at(last)?) >= bound {
+            continue;
+        }
+        pairs.push((last, first));
+        let (mut small, mut poles, mut seams) = (0.0_f64, 0, 0);
+        for (p, q) in pairs {
+            let gap = relative(p, q);
+            if gap <= JUMP {
+                small = small.max(gap);
+                continue;
+            }
+            let half = [(p[0] + q[0]) / 2., (p[1] + q[1]) / 2.];
+            if distance(at(half)?, at(p)?) < bound {
+                poles += 1;
+            } else {
+                seams += 1;
+            }
+        }
+        return Ok((small, poles, seams));
+    }
+    Ok((f64::NAN, 0, 0))
 }
 
 /// #2085: the bounds `TrimBreak::joins_within` tries, in model units (feet).
@@ -449,6 +521,9 @@ pub fn trim_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<TrimBreak>
                     param_gap,
                     joins_within: None,
                     shortest_edge: 0.,
+                    small_gap: f64::NAN,
+                    pole_joins: 0,
+                    seam_joins: 0,
                 };
                 if best.as_ref().is_none_or(|b| {
                     found.chained > b.chained || (found.chained == b.chained && found.gap < b.gap)
@@ -468,6 +543,10 @@ pub fn trim_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<TrimBreak>
                     shortest = shortest.min(distance(at(seg[0])?, at(*seg.last().unwrap())?));
                 }
                 b.shortest_edge = shortest;
+                if let Some(bound) = b.joins_within {
+                    (b.small_gap, b.pole_joins, b.seam_joins) =
+                        join_kinds(&at, &segments, env, bound)?;
+                }
                 breaks.push(b);
             }
         }

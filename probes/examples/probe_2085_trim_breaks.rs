@@ -24,7 +24,11 @@
 //!     `joins_within=<ft|none>`: the smallest of 1e-6, 1e-5, 1e-4 and 1e-3 ft within which the
 //!     whole loop joins, each edge at its nearer end and back to the first point, either way
 //!     round; `shortest_edge=<ft>`: the shortest edge's span between its ends (an edge shorter
-//!     than a bound joins at either end).
+//!     than a bound joins at either end);
+//!   - then, at that bound: `small_gap=<d>`, the largest of the joins' parameter gaps over the
+//!     surface's parameter range that is not over 1e-2; `pole_joins=<n>`, the joins over it
+//!     whose point halfway between in the parameters is the same point too (a pole);
+//!     `seam_joins=<n>`, those over it where that point is not (a seam or another jump).
 //!   unread graph=<ElementId> face=<n> why=<reason>: a refused face `trim_breaks` cannot read.
 //!   reach owner=<ElementId> graphs=[<ElementId>, ...]: an element whose graphics reach a
 //!     graph with a break.
@@ -35,6 +39,9 @@
 //!   joins surface=<class> within_1e-6=<n> within_1e-5=<n> within_1e-4=<n> within_1e-3=<n>
 //!     none=<n> shortest_edge_under_bound=<n>: the loops by `joins_within`, and those whose
 //!     shortest edge is shorter than the bound they join within.
+//!   params surface=<class> small_under_1e-6=<n> 1e-6_to_1e-4=<n> 1e-4_to_1e-2=<n>
+//!     loops_with_pole_joins=<n> loops_with_seam_joins=<n>: the joined loops by `small_gap`
+//!     and by their jumps.
 //! ElementIds, counts and distances in feet only.
 //!
 //! Usage:
@@ -91,6 +98,9 @@ struct Tally {
     other_meets: usize,
     joins: [usize; 5],
     short: usize,
+    small: [usize; 3],
+    with_poles: usize,
+    with_seams: usize,
 }
 
 /// The faces of one graph: prints its breaks and adds to the tally; whether it holds one.
@@ -142,18 +152,31 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> bo
                     if b.joins_within.is_some_and(|x| b.shortest_edge < x) {
                         t.short += 1;
                     }
+                    if b.joins_within.is_some() {
+                        let bin = match b.small_gap {
+                            g if g < 1e-6 => 0,
+                            g if g < 1e-4 => 1,
+                            _ => 2,
+                        };
+                        t.small[bin] += 1;
+                        t.with_poles += usize::from(b.pole_joins > 0);
+                        t.with_seams += usize::from(b.seam_joins > 0);
+                    }
                     let shown = b
                         .joins_within
                         .map_or_else(|| "none".to_string(), |x| format!("{x:e}"));
                     println!(
-                        "break graph={id} face={fi} surface={class} loop={} edges={} chained={} gap={:.9} closing={closing} other_meets={} param_gap={:.3e} joins_within={shown} shortest_edge={:.9}",
+                        "break graph={id} face={fi} surface={class} loop={} edges={} chained={} gap={:.9} closing={closing} other_meets={} param_gap={:.3e} joins_within={shown} shortest_edge={:.9} small_gap={:.3e} pole_joins={} seam_joins={}",
                         b.loop_index,
                         b.edges,
                         b.chained,
                         b.gap,
                         b.other_meets,
                         b.param_gap,
-                        b.shortest_edge
+                        b.shortest_edge,
+                        b.small_gap,
+                        b.pole_joins,
+                        b.seam_joins
                     );
                 }
             }
@@ -274,6 +297,10 @@ fn main() -> Result<()> {
             println!(
                 "joins surface={class} within_1e-6={} within_1e-5={} within_1e-4={} within_1e-3={} none={} shortest_edge_under_bound={}",
                 t.joins[0], t.joins[1], t.joins[2], t.joins[3], t.joins[4], t.short
+            );
+            println!(
+                "params surface={class} small_under_1e-6={} 1e-6_to_1e-4={} 1e-4_to_1e-2={} loops_with_pole_joins={} loops_with_seam_joins={}",
+                t.small[0], t.small[1], t.small[2], t.with_poles, t.with_seams
             );
         }
     }
