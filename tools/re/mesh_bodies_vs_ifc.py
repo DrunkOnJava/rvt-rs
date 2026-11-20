@@ -9,14 +9,16 @@ meshes both in each file's own site frame, in Revit's internal feet, and
 measures the volume and how far each body's vertices lie from the other's
 surface. Per class, and under it per Revit type: how many have Revit's
 volume within 1% and 0.01%, every vertex of each body within 0.01 ft
-and 0.001 ft of the other's surface, and "ref on ours": every tested vertex
-of Revit's body within 0.001 ft of rvt-rs's surface, which tells a mesh of
+and 0.001 ft of the other's surface, and "ref on ours": every vertex of
+Revit's body within 0.001 ft of rvt-rs's surface, which tells a mesh of
 the same surface from a mesh of another one where Revit's export is the
 coarser (RE-311). Then the elements furthest off.
 
 A class with more than 300 such bodies is scored on an even stride of 300 of
-them by Tag, and at most 400 vertices of each body are tested, so a file
-with thousands of mullions fits the time Measure allows. The bodies are
+them by Tag, so a file with thousands of mullions fits the time Measure
+allows. Every distinct vertex of a scored body is tested (#2114): a stride of
+at most 400 of them passed a body whose untested vertex failed a column, and
+moved the columns when a mesh only gained vertices. The bodies are
 scored one process each over the CPUs (RVT_MESH_WORKERS sets the count), by
 the same arithmetic wherever a body runs, so the output does not depend on
 it. Bodies exist in the default export of a Revit 2023 to 2027 file (since
@@ -99,11 +101,9 @@ EXHAUSTIVE = 200_000
 BLOCK = 8
 SEEDS = 4
 SLIVER = 1e-2
-# Most elements scored per class (an even stride through them by Tag), and
-# most vertices of a body tested against the other's surface, so a file
-# with thousands of mullions is scored in the time Measure allows.
+# Most elements scored per class (an even stride through them by Tag), so a
+# file with thousands of mullions is scored in the time Measure allows.
 CLASS_CAP = 300
-VERTEX_CAP = 400
 # Fewer bodies than this are scored in this process: a forked worker has a
 # cost of its own that a handful do not repay.
 POOL_FROM = 16
@@ -347,17 +347,14 @@ def surface_distance(points, triangles):
     return float(nearest.max())
 
 
-def sample(triangles):
-    """The body's distinct vertices in lexicographic order, every `step`th of them so that
-    at most VERTEX_CAP are kept: the rows of `np.unique(axis=0)`, found by a sort that
-    does not compare structured values. Vertices equal but for the sign of a zero are
-    one vertex here as there; the one kept may differ from `np.unique`'s, and a zero's
-    sign changes no distance."""
-    vertices = triangles.reshape(-1, 3)
-    vertices = vertices[np.lexsort((vertices[:, 2], vertices[:, 1], vertices[:, 0]))]
-    points = vertices[np.r_[True, (vertices[1:] != vertices[:-1]).any(axis=1)]]
-    step = max(1, -(-len(points) // VERTEX_CAP))
-    return points[::step]
+def vertices(triangles):
+    """The body's distinct vertices in lexicographic order: the rows of `np.unique(axis=0)`,
+    found by a sort that does not compare structured values. Vertices equal but for the
+    sign of a zero are one vertex here as there; the one kept may differ from
+    `np.unique`'s, and a zero's sign changes no distance."""
+    points = triangles.reshape(-1, 3)
+    points = points[np.lexsort((points[:, 2], points[:, 1], points[:, 0]))]
+    return points[np.r_[True, (points[1:] != points[:-1]).any(axis=1)]]
 
 
 SCORING = {}
@@ -376,8 +373,8 @@ def score_pair(tag):
     our_triangles, ref_triangles = SCORING["ours"][tag][2], SCORING["ref"][tag][2]
     ref_volume, our_volume = volume(ref_triangles), volume(our_triangles)
     ratio = our_volume / ref_volume if ref_volume > 0 else float("inf")
-    to_ours = surface_distance(sample(ref_triangles), our_triangles)
-    to_ref = surface_distance(sample(our_triangles), ref_triangles)
+    to_ours = surface_distance(vertices(ref_triangles), our_triangles)
+    to_ref = surface_distance(vertices(our_triangles), ref_triangles)
     return ratio, to_ours, to_ref
 
 
