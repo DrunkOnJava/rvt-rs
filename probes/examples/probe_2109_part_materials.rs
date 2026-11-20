@@ -21,7 +21,18 @@
 //! reach class=<IFC class> shape=<cube|mesh> elements=<n>
 //! parts class=<IFC class> elements=<n> no_graphics=<n> split=<n> split_partly=<n> one_named=<n> one_transparent=<n> none_named=<n> other=<n>
 //! ids named=<n> joined=<n> unjoined=<n>
+//! tags class=<IFC class> elements=<n> no_symbol=<n> no_map=<n> parts=<n> tagged=<n> mapped=<n> split=<n> one=<n> none=<n>
+//! keys read=<n> unread=<n>
+//! sample id=<ElementId> symbol=<ElementId> face_tags=[..] map_tags=[..]
 //! ```
+//!
+//! The second route: a family type's `m_geomTag2MaterialId` maps geometry tags to material
+//! ElementIds (RE-82, RE-203), and each saved part keeps a tag (`face_tag`, `m_GInfo.m_tag`).
+//! `tags` reads each element's type from its `InstanceInfo.m_symbolId`, then each part's tag in
+//! that type's map: `tagged` parts carry a tag other than -1, `mapped` ones find it in the map;
+//! `split` elements map parts to a transparent and an opaque material, `one` to a single
+//! material, `none` to no material. `keys` counts the map entries whose tag was read as an
+//! integer. `sample` prints three elements' tags beside their type's map tags.
 //!
 //! `split`: every part names a material the file names, two or more of them, a transparent
 //! one and an opaque one among them. `split_partly`: the same among the parts that name a
@@ -41,8 +52,20 @@ use rvt::RevitFile;
 use rvt::ifc::entities::IfcEntity;
 use rvt::ifc::gltf::build_gltf;
 use rvt::ifc::{ExportOptions, SavedMeshChoice, run_export_with_limits_and_control};
-use rvt::research::native_document::Options;
+use rvt::research::graph_value::Fv;
+use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_saved_scene::extract_at_detail;
+
+/// An ElementId or tag as the graph saves it: an integer, or one under `m_id` / `m_id64`.
+fn ident(value: &Fv) -> Option<i64> {
+    if let Some(n) = value.as_i64() {
+        return Some(n);
+    }
+    ["m_id", "m_id64"]
+        .iter()
+        .find_map(|key| value.get(*key))
+        .and_then(ident)
+}
 
 fn main() -> Result<()> {
     let path = std::env::args()
@@ -151,6 +174,7 @@ fn main() -> Result<()> {
     // none named, other.
     let mut tally: BTreeMap<String, [usize; 8]> = BTreeMap::new();
     let mut found: BTreeSet<u64> = BTreeSet::new();
+    let mut face_tags: BTreeMap<u64, Vec<i64>> = BTreeMap::new();
     let (mut named_ids, mut joined_ids) = (BTreeSet::new(), BTreeSet::new());
     if let Some(scene) = &scene {
         for element in &scene.elements {
@@ -165,6 +189,7 @@ fn main() -> Result<()> {
                 .iter()
                 .filter(|p| !p.hidden && !p.filtered)
                 .collect();
+            face_tags.insert(id, parts.iter().map(|p| p.face_tag).collect());
             let ids: BTreeSet<i64> = parts.iter().filter_map(|p| p.material_id).collect();
             let unnamed = parts.iter().filter(|p| p.material_id.is_none()).count();
             let mut transparent = 0usize;
@@ -222,5 +247,134 @@ fn main() -> Result<()> {
         joined_ids.len(),
         named_ids.len() - joined_ids.len()
     );
+    // The second route: each element's type, then the type's tag-to-material map.
+    let mut symbol_of: BTreeMap<u64, u64> = BTreeMap::new();
+    if !meshed.is_empty() {
+        let options = Options {
+            selected_ids: meshed.keys().copied().collect(),
+            max_graph_values: 1_000_000,
+            max_graph_objects: 1_000_000,
+            ..Options::default()
+        };
+        let read = extract_graphs(&mut rf, &options, |record| {
+            if let Some(symbol) = record.graph.as_ref().and_then(|graph| {
+                graph
+                    .objects
+                    .iter()
+                    .find(|object| object.class_name == "InstanceInfo")
+                    .and_then(|object| object.fields.get("m_symbolId"))
+                    .and_then(ident)
+                    .and_then(|id| u64::try_from(id).ok())
+            }) {
+                symbol_of.insert(record.identity.element_id, symbol);
+            }
+            Ok(())
+        });
+        if let Err(error) = read {
+            println!("instances: {error}");
+        }
+    }
+    let symbols: BTreeSet<u64> = symbol_of.values().copied().collect();
+    let mut maps: BTreeMap<u64, BTreeMap<i64, i64>> = BTreeMap::new();
+    let (mut keys_read, mut keys_unread) = (0usize, 0usize);
+    if !symbols.is_empty() {
+        let options = Options {
+            selected_ids: symbols.clone(),
+            max_graph_values: 1_000_000,
+            max_graph_objects: 1_000_000,
+            ..Options::default()
+        };
+        let read = extract_graphs(&mut rf, &options, |record| {
+            let Some(map) = record
+                .graph
+                .as_ref()
+                .and_then(|graph| graph.objects.first())
+                .and_then(|root| root.fields.get("m_geomTag2MaterialId"))
+                .and_then(Fv::as_array)
+            else {
+                return Ok(());
+            };
+            let mut tags = BTreeMap::new();
+            for entry in map {
+                let tag = entry.get("first").and_then(ident);
+                let material = entry.pointer("/second/m_id/m_id64").and_then(Fv::as_i64);
+                match (tag, material) {
+                    (Some(tag), Some(material)) => {
+                        keys_read += 1;
+                        tags.insert(tag, material);
+                    }
+                    _ => keys_unread += 1,
+                }
+            }
+            maps.insert(record.identity.element_id, tags);
+            Ok(())
+        });
+        if let Err(error) = read {
+            println!("symbols: {error}");
+        }
+    }
+    // Per class: elements, no symbol, no map, parts, tagged, mapped, split, one, none.
+    let mut by_tag: BTreeMap<String, [usize; 9]> = BTreeMap::new();
+    let mut samples = 0usize;
+    for (id, class) in &meshed {
+        let t = by_tag.entry(class.clone()).or_default();
+        t[0] += 1;
+        let Some(symbol) = symbol_of.get(id) else {
+            t[1] += 1;
+            continue;
+        };
+        let Some(map) = maps.get(symbol) else {
+            t[2] += 1;
+            continue;
+        };
+        let tags = face_tags.get(id).cloned().unwrap_or_default();
+        if samples < 3 {
+            samples += 1;
+            let mut shown: Vec<i64> = tags.clone();
+            shown.sort_unstable();
+            shown.dedup();
+            println!(
+                "sample id={id} symbol={symbol} face_tags={:?} map_tags={:?}",
+                shown.iter().take(12).collect::<Vec<_>>(),
+                map.keys().take(12).collect::<Vec<_>>()
+            );
+        }
+        let mut transparent = 0usize;
+        let mut opaque = 0usize;
+        let mut materials: BTreeSet<i64> = BTreeSet::new();
+        for tag in &tags {
+            t[3] += 1;
+            if *tag == -1 {
+                continue;
+            }
+            t[4] += 1;
+            if let Some(material) = map.get(tag) {
+                t[5] += 1;
+                materials.insert(*material);
+            }
+        }
+        for material in &materials {
+            let name = u32::try_from(*material).ok().and_then(|m| names.get(&m));
+            match name {
+                Some(name) if transparent_names.contains(name.as_str()) => transparent += 1,
+                Some(_) => opaque += 1,
+                None => {}
+            }
+        }
+        if transparent > 0 && opaque > 0 {
+            t[6] += 1;
+        } else if materials.len() == 1 {
+            t[7] += 1;
+        } else if materials.is_empty() {
+            t[8] += 1;
+        }
+    }
+    for (class, t) in &by_tag {
+        println!(
+            "tags class={class} elements={} no_symbol={} no_map={} parts={} tagged={} mapped={} split={} one={} none={}",
+            t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8]
+        );
+    }
+    println!("keys read={keys_read} unread={keys_unread}");
     Ok(())
 }
