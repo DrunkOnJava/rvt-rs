@@ -12,8 +12,8 @@
 //! element id=<ElementId> graphs=<n> faces=<n> meshed=<n>
 //! refused id=<ElementId> faces=<n> why=<reason>
 //! match id=<ElementId> graph=<ElementId> face=<n> surface=<class> loops=<n> triangles=<n> edges=<ft,ft,ft> standoff=<ft|->
-//!   - `standoff`: for a cylinder face, the farthest of the triangle's edge midpoints, centroid
-//!     and 25 interior points from the face's own cylinder
+//!   - `standoff`: for a cylinder face, the farthest from the face's own cylinder of 28 points
+//!     on a six-step grid over the triangle (3 corners, 15 on its edges, 10 inside)
 //! ```
 //!
 //! With no `ID:L1,L2,L3` given, as in Measure, it reads the slivers #2111 found on Snowdon Towers
