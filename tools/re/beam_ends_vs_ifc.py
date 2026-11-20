@@ -108,7 +108,8 @@ crosses no face of Revit's beam (a hollow or channel section), Revit's end is re
 middle line's vertical plane instead, and counted. The row (S6 middle line row) counts the ends by where rvt-rs's line
 ends (inside the column, already at its near face, short of it, past it), since a beam Revit shortens also has the
 end it does not cut, and says how many of Revit's ends lie at the column's near face within 2 per cent of the chord
-and within 1 mm; for the outlines from a column's saved mesh it splits them by how many of the beam's named columns
+and within 1 mm, and how far from it in millimetres, short of the face and inside the column apart (a fixed setback
+would gather in one bin); for the outlines from a column's saved mesh it splits them by how many of the beam's named columns
 hold the end (the probe's `held_*`, from their record boxes), which is what an exporter can test from the file.
 """
 
@@ -776,6 +777,7 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                         middle_rows[key]["near face within 2 per cent of the chord"] += fraction_bin(t_middle) == "near"
                         middle_rows[key]["near face within 1 mm"] += abs(offset) * factor <= TOLERANCE_FEET
                         middle_rows[key]["Revit's end read in the middle line's vertical plane"] += by_plane
+                        middle_rows[key][distance_bin(offset * factor)] += 1
             crossing = chord(meshes[column][2], caps[0], axis)
             if crossing is None:
                 seen["of those, ends whose line crosses no face of Revit's column"] += 1
@@ -864,6 +866,21 @@ ROW_COUNTS = (
 )
 
 
+# Revit's end from the column's near face along the middle line, in mm: a fixed setback short of
+# the face would gather in one bin, where the fraction bins move with the column's size.
+DISTANCE_BINS = ((1.0, "within 1 mm"), (5.0, "1 to 5 mm"), (15.0, "5 to 15 mm"), (50.0, "15 to 50 mm"), (math.inf, "over 50 mm"))
+DISTANCE_NAMES = ["within 1 mm"] + [f"{side} {name}" for side in ("short of the face", "inside the column") for _, name in DISTANCE_BINS[1:]]
+
+
+def distance_bin(feet):
+    """The bin of a signed distance from the near face in feet: negative short of the face, positive inside."""
+    mm = abs(feet) * 304.8
+    name = next(name for top, name in DISTANCE_BINS if mm <= top)
+    if name == "within 1 mm":
+        return name
+    return f"{'short of the face' if feet < 0 else 'inside the column'} {name}"
+
+
 def plane_span(triangles, origin, direction, across):
     """The extent along `direction` of where a mesh crosses the vertical plane through `origin` that holds
     `direction` (its normal `across`): the first and last parameter of the points where the plane cuts the
@@ -935,6 +952,11 @@ def print_middle_rows(middle_rows):
             print(
                 f"beam ends:   S6 middle line row, outline from the {where}, the line ending {line_at}, "
                 f"{counts['ends']} ends: Revit's end at the {parts}"
+            )
+            distances = "; ".join(f"{name} {counts[name]}" for name in DISTANCE_NAMES if counts[name])
+            print(
+                f"beam ends:   S6 middle line row, outline from the {where}, the line ending {line_at}, "
+                f"Revit's end from the near face: {distances}"
             )
             if where != LINE_SOURCES["m"]:
                 continue
