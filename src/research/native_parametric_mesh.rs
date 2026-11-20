@@ -76,6 +76,8 @@ fn keeps_saved_chords(surface: &ParametricSurface) -> bool {
             profile1, profile2, ..
         } => matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. }),
         ParametricSurface::SurfRev { .. } | ParametricSurface::ConeSurf { .. } => true,
+        // Not measured at a plane on this branch (#1941 predates #2099).
+        ParametricSurface::HermiteSurf { .. } => false,
     }
 }
 
