@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import time
+import zlib
 
 import ifcopenshell.geom
 import ifcopenshell.util.placement
@@ -31,6 +32,19 @@ def siblings(path):
         for other in os.listdir(directory)
         if other != name and other.endswith(".ifc") and other.split("_")[:4] == head
     )
+
+
+def tag_sample(tags, cap):
+    """The Tags a scorer reads when it reads at most `cap`, in the order by length and text
+    the scorers print them: every one up to `cap`, else the `cap` with the smallest CRC-32
+    (#2114). A Tag added or taken away moves at most one other in or out, where an even
+    stride over the sorted Tags could move every chosen Tag that sorted after it; and the
+    choice is the same in every process, as Python's salted `hash` of a string is not."""
+    tags = sorted(set(tags), key=lambda t: (len(t), t))
+    if len(tags) > cap:
+        keep = set(sorted(tags, key=lambda t: (zlib.crc32(t.encode()), len(t), t))[:cap])
+        tags = [t for t in tags if t in keep]
+    return tags
 
 
 def site_frame(f):
