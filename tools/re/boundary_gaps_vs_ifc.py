@@ -54,6 +54,13 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
 7. **Between.** Where Revit has a point between the ends, how far along the gap it lies, from P
    (0) to Q (1), by cohort: 0.5 is the gap's middle.
 
+8. **Shared edges whose faces' samples differ** (#2106, the probe's `edgesides` lines). For a
+   plane refused as `shared edge surface samples disagree`, each edge it shares with a curved
+   face, both faces' samples placed in the probe's frame. At each interior sample the two put
+   2 `tol` or more apart, whether Revit's own points sit on the plane's sample, the curved face's,
+   both or neither; an edge whose samples all say one thing is counted by it, and one that
+   splits is `split`.
+
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
 Needs IfcOpenShell and numpy.
@@ -127,6 +134,11 @@ def read_probe(path):
                 joints.append(fields(line))
             elif line.startswith("boundaryunread "):
                 UNREAD_OWNERS.append(fields(line).get("owner"))
+            elif line.startswith("edgesides "):
+                f = fields(line)
+                f["plane"] = [point(x) for x in f["plane"].split(";")]
+                f["curved"] = [point(x) for x in f["curved"].split(";")]
+                EDGES.append(f)
     for key, (split, state) in wider.items():
         if key in pieces:
             gap, _, surface, _, plane_state = pieces[key]
@@ -136,6 +148,8 @@ def read_probe(path):
 
 
 UNREAD_OWNERS = []
+# Each `edgesides` line (#2106): a plane's shared edge with both faces' samples placed.
+EDGES = []
 GROUP_SOURCE = {}
 
 
@@ -418,10 +432,10 @@ def main():
     hit = collections.Counter(pieces[k][1] for k in reached if k in pieces)
     print(f"coverage: census gaps {len(pieces)} ({counts(census)}); reached by an element at level 3 {len(reached)} ({counts(hit)}); "
           f"groups from `piecex` on {GROUP_SOURCE.get('piecex', 0)} gaps and from `piece` on {GROUP_SOURCE.get('piece', 0)}")
-    tags = {g["owner"] for g in gaps}
+    tags = {g["owner"] for g in gaps} | {e["owner"] for e in EDGES}
     print(f"elements reaching a gap {len(tags)}; ring ends {len(joints)}; elements whose graphics the probe could not walk (`boundaryunread`) {len(UNREAD_OWNERS)}")
-    if not gaps:
-        print("not exercised: no gap reached by an element's graphics")
+    if not gaps and not EDGES:
+        print("not exercised: no gap or shared edge reached by an element's graphics")
         return 0
     # 3. Bodies: Revit's own coordinates decide; IfcOpenShell's mesh is the cross-check.
     model = ifcopenshell.open(args[1])
@@ -535,6 +549,32 @@ def main():
         tl = [t for _, t in tols[k]]
         print(f"gap size {c} {surf} {size:.6f} ft ({size * 304.8:.3f} mm): corners {corners_by_size[k]}, occurrences {counts(by_size[k])}; "
               f"classes {counts(classes[k])}; floor {min(fl):.9f} to {max(fl):.9f} ft, tol {min(tl):.9f} to {max(tl):.9f} ft")
+    # 8. Shared edges whose two faces' samples differ (#2106): at each interior sample the two
+    # faces put far enough apart to tell, which of them Revit's own points sit on.
+    if EDGES:
+        verdicts = collections.Counter()
+        largest = 0.0
+        for e in EDGES:
+            tag = e["owner"]
+            largest = max(largest, float(e["apart"]))
+            if tag not in raw or tag not in floors:
+                verdicts[(e["other"], "no Revit body or floor")] += 1
+                continue
+            tol = max(2 * floors[tag]["floor"], TOUCHING)
+            verts = raw[tag] if offset is None else raw[tag] - offset
+            calls = collections.Counter()
+            for a, c in list(zip(e["plane"], e["curved"]))[1:-1]:
+                if np.linalg.norm(a - c) < 2 * tol:
+                    calls["unresolved"] += 1
+                    continue
+                on_a = bool((np.linalg.norm(verts - a, axis=1) < tol).any())
+                on_c = bool((np.linalg.norm(verts - c, axis=1) < tol).any())
+                calls["both" if on_a and on_c else "plane's" if on_a else "curved face's" if on_c else "neither"] += 1
+            told = {k: v for k, v in calls.items() if k != "unresolved"}
+            verdict = "unresolved" if not told else next(iter(told)) if len(told) == 1 else "split"
+            verdicts[(e["other"], verdict)] += 1
+        print(f"shared edges whose faces' samples differ: {len(EDGES)}, largest separation {largest:.9f} ft; "
+              "Revit's points on, by edge: " + ", ".join(f"{o} {v} {n}" for (o, v), n in sorted(verdicts.items())))
     # 7. Where a point between the ends lies, from P (0) to Q (1): 0.5 is the gap's middle.
     along = collections.defaultdict(list)
     for g, o in scored:

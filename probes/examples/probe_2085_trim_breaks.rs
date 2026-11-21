@@ -123,6 +123,14 @@
 //!     face=<n> loop=<n> at_gap=<bool> x=<x,y,z>: every edge end of the same ring, the control a
 //!     scorer reads its floor from (ends at a gap marked); boundaryunread owner=<ElementId>.
 //!     The coordinates are a file's own: keep them private for a save that is not shared.
+//!   edgereach owner=<ElementId> graphs=[...]; edgesides owner=<ElementId> occ=<n>
+//!     graph=<ElementId> face=<n> loop=<n> edge=<n> other=<class> n=<n> apart=<ft>
+//!     plane=<x,y,z;...> curved=<x,y,z;...> (#2106): for an element whose graphics reach a plane
+//!     refused as `shared edge surface samples disagree`, each edge of that plane's rings that it
+//!     shares with a cylinder, surface of revolution, ruled surface or cone, both faces' samples
+//!     of it placed by the element's transform, where they are more than 1e-7 ft apart; the
+//!     plane's ring ends follow as `jointxyz` controls. `edgesidesunread` names an edge whose
+//!     two sides could not both be placed.
 //!   piecemore graph=<ElementId> face=<n> loop=<n> at=<k> loops_held=<n> loops_walked=<n>
 //!     through_faces=<faces> through_body=<same|other|none> through_orphan=<bool|none>
 //!     a_other_ends=<ft to P>/<ft to Q> a_ginfo=<..> a_flags=<..> b_...: for each gap, the
@@ -1280,9 +1288,10 @@ fn read_gaps(
 
 /// The faces of one graph: prints its breaks and adds to the tally; whether it holds one,
 /// and whether it holds a plane or cylinder face refused as `disconnected UV boundary`.
-fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (bool, bool) {
+fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (bool, bool, bool) {
     let mut any = false;
     let mut ringed = false;
+    let mut disagreed = false;
     let mut cache: Option<EdgeCache> = None;
     for (fi, object) in graph.objects.iter().enumerate() {
         if object.class_name != "Face" {
@@ -1317,6 +1326,9 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (b
                     t.gap_disconnected += 1;
                     ringed = true;
                     read_gaps(id, fi, &class, graph, &mut cache, t);
+                }
+                if full.contains(SAMPLES_DISAGREE) {
+                    disagreed = true;
                 }
             }
             continue;
@@ -1435,11 +1447,99 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (b
             }
         }
     }
-    (any, ringed)
+    (any, ringed, disagreed)
 }
+
+/// `native_saved_mesh`'s refusal of a plane whose shared edge's two faces' samples differ.
+const SAMPLES_DISAGREE: &str = "shared edge surface samples disagree";
+
+/// The curved surfaces `refined_plane_edge` meets a plane along.
+const PLANE_NEIGHBOURS: [&str; 4] = ["CylSurf", "SurfRev", "RuledSurf", "ConeSurf"];
 
 fn xyz(p: [f64; 3]) -> String {
     format!("{:.9},{:.9},{:.9}", p[0], p[1], p[2])
+}
+
+/// #2106: for a plane refused as [`SAMPLES_DISAGREE`], each edge of its rings that it shares
+/// with a curved face `refined_plane_edge` meets it along, both faces' samples of the edge,
+/// placed by the element's own transform in document feet, where they are more than 1e-7 ft
+/// apart (`edgesides`); and every edge end of the same rings as controls (`jointxyz`, never at a
+/// gap), as `boundary_pass` prints them, so the scorer reads the element's floor.
+fn edge_sides(
+    sg: &ObjectGraph,
+    fi: usize,
+    surface: Surf,
+    to_world: &dyn Fn([f64; 3]) -> [f64; 3],
+    owner: u64,
+    occ: usize,
+    gid: u64,
+) {
+    let mut surfs: BTreeMap<usize, Option<Surf>> = BTreeMap::new();
+    let mut params: BTreeMap<usize, Option<ParametricSurface>> = BTreeMap::new();
+    let mut ends: Vec<[f64; 3]> = Vec::new();
+    for (loop_index, li) in face_loops(sg, fi).iter().enumerate() {
+        let Some(chain) = loop_chain(sg, fi, *li) else {
+            continue;
+        };
+        for (e, side) in &chain {
+            if let Some(pts) = edge_uv(sg, *e, *side) {
+                for uv in [pts[0], pts[pts.len() - 1]] {
+                    let p = surface.at(uv);
+                    if !ends.iter().any(|q| dist(*q, p) < 1e-9) {
+                        ends.push(p);
+                    }
+                }
+            }
+            let faces = edge_faces(sg, *e);
+            let Some(other) = faces[1 - *side] else {
+                continue;
+            };
+            let class = surface_class(sg, other);
+            if !PLANE_NEIGHBOURS.contains(&class.as_str()) {
+                continue;
+            }
+            let own = place(sg, *e, *side, fi, &mut surfs, &mut params);
+            let theirs = place(sg, *e, 1 - *side, other, &mut surfs, &mut params);
+            let (Some(own), Some(theirs)) = (own, theirs) else {
+                println!(
+                    "edgesidesunread owner={owner} graph={gid} face={fi} edge={e} other={class}"
+                );
+                continue;
+            };
+            if own.len() != theirs.len() {
+                println!(
+                    "edgesidesunread owner={owner} graph={gid} face={fi} edge={e} other={class} why=counts"
+                );
+                continue;
+            }
+            let apart = own
+                .iter()
+                .zip(&theirs)
+                .map(|(a, b)| dist(*a, *b))
+                .fold(0.0, f64::max);
+            if apart <= 1e-7 {
+                continue;
+            }
+            let join = |pts: &[[f64; 3]]| {
+                pts.iter()
+                    .map(|p| xyz(to_world(*p)))
+                    .collect::<Vec<_>>()
+                    .join(";")
+            };
+            println!(
+                "edgesides owner={owner} occ={occ} graph={gid} face={fi} loop={loop_index} edge={e} other={class} n={} apart={apart:.9} plane={} curved={}",
+                own.len(),
+                join(&own),
+                join(&theirs)
+            );
+        }
+    }
+    for p in ends {
+        println!(
+            "jointxyz owner={owner} occ={occ} graph={gid} face={fi} loop=0 at_gap=false x={}",
+            xyz(to_world(p))
+        );
+    }
 }
 
 /// #2085: for every element whose graphics reach a graph with a refused ring, its graphics at
@@ -1508,9 +1608,16 @@ fn boundary_pass(
                 let Some(surface) = surf(sg, fi) else {
                     continue;
                 };
-                match rvt::research::native_saved_mesh::face(sg, fi) {
-                    Err(e) if format!("{e:#}").contains("disconnected UV boundary") => {}
-                    _ => continue,
+                let why = match rvt::research::native_saved_mesh::face(sg, fi) {
+                    Err(e) => format!("{e:#}"),
+                    Ok(_) => continue,
+                };
+                if why.contains(SAMPLES_DISAGREE) && matches!(surface, Surf::Plane { .. }) {
+                    edge_sides(sg, fi, surface, &place, *owner, occ, gid);
+                    continue;
+                }
+                if !why.contains("disconnected UV boundary") {
+                    continue;
                 }
                 for (loop_index, li) in face_loops(sg, fi).iter().enumerate() {
                     let Some(chain) = loop_chain(sg, fi, *li) else {
@@ -1596,6 +1703,7 @@ fn main() -> Result<()> {
     let mut tally: BTreeMap<String, Tally> = BTreeMap::new();
     let mut broken: BTreeSet<u64> = BTreeSet::new();
     let mut ringed: BTreeSet<u64> = BTreeSet::new();
+    let mut disagreed: BTreeSet<u64> = BTreeSet::new();
     let mut scanned: BTreeSet<u64> = BTreeSet::new();
     let mut symbols_of: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut owners: BTreeSet<u64> = BTreeSet::new();
@@ -1619,12 +1727,15 @@ fn main() -> Result<()> {
         if let Some(graph) = &r.graph {
             read_graphs += 1;
             symbols_of.insert(id, instance_symbols(graph));
-            let (any, ring) = scan(id, graph, tally);
+            let (any, ring, disagree) = scan(id, graph, tally);
             if any {
                 broken.insert(id);
             }
             if ring {
                 ringed.insert(id);
+            }
+            if disagree {
+                disagreed.insert(id);
             }
         }
     };
@@ -1671,6 +1782,11 @@ fn main() -> Result<()> {
         let graphs: Vec<u64> = seen.intersection(&ringed).copied().collect();
         if !graphs.is_empty() {
             println!("ringreach owner={owner} graphs={graphs:?}");
+            reaching.insert(*owner);
+        }
+        let graphs: Vec<u64> = seen.intersection(&disagreed).copied().collect();
+        if !graphs.is_empty() {
+            println!("edgereach owner={owner} graphs={graphs:?}");
             reaching.insert(*owner);
         }
     }
