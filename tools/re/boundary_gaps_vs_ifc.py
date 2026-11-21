@@ -69,7 +69,9 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    `piecemore` `a_flags` and `b_flags`: by whether bit 0x8 is set on one edge, both or neither,
    and by the two values. Where only one edge has it, whether Revit's point is at the other
    edge's end only, at the flagged edge's end only, or neither alone. Beside it, the outcome
-   against the class of each edge's other face (the probe's `piecenbr` `a=` and `b=`).
+   against the class of each edge's other face (the probe's `piecenbr` `a=` and `b=`), and
+   against where that face's own loop meets the gap: whether an edge beside the edge in that
+   loop passes within 0.00001 ft of P, of Q, of both or of neither, as `piecenbr` places it.
 
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
@@ -146,8 +148,10 @@ def read_probe(path):
                 FLAGS[(f["graph"], f["face"], f["loop"], f["at"])] = (f.get("a_flags"), f.get("b_flags"))
             elif line.startswith("piecenbr "):
                 f = fields(line)
-                NEIGHBOURS[(f["graph"], f["face"], f["loop"], f["at"])] = tuple(
+                key = (f["graph"], f["face"], f["loop"], f["at"])
+                NEIGHBOURS[key] = tuple(
                     (f.get(s) or "-").split(":")[1] if ":" in (f.get(s) or "") else "-" for s in ("a", "b"))
+                REACH[key] = tuple(reach(f.get(s)) for s in ("a", "b"))
             elif line.startswith("gapxyz "):
                 gaps.append(fields(line))
             elif line.startswith("jointxyz "):
@@ -181,6 +185,30 @@ GROUP_SOURCE = {}
 FLAGS = {}
 # (graph, face, loop, at) -> the class of the other face of the edges before and after the gap.
 NEIGHBOURS = {}
+# (graph, face, loop, at) -> for the edges before and after the gap, which of P and Q an edge
+# beside it in its other face's own loop passes within TOUCHING of.
+REACH = {}
+
+
+def reach(value):
+    """`P`, `Q`, `P+Q` or `-` from a `piecenbr` side, `<face>:<class>:<edge>[<faces>]:<to P>/<to Q>;...`;
+    `unread` where no neighbour is placed, `none` where the edge has no other face."""
+    if not value or value == "none" or value.count(":") < 2:
+        return "none"
+    near_p = near_q = read = False
+    for neighbour in value.split(":", 2)[2].split(";"):
+        distances = neighbour.rsplit("]:", 1)[-1]
+        if "/" not in distances:
+            continue
+        to_p, to_q = (side(x) for x in distances.split("/", 1))
+        if to_p is None or to_q is None:
+            continue
+        read = True
+        near_p |= to_p < TOUCHING
+        near_q |= to_q < TOUCHING
+    if not read:
+        return "unread"
+    return "P+Q" if near_p and near_q else "P" if near_p else "Q" if near_q else "-"
 
 
 def flags_of(key):
@@ -595,9 +623,10 @@ def main():
                 print(f"{label}, {c}: {line}")
     # 9. Which end Revit keeps against the stored `m_flags` of the edges beside the gap.
     by_bit, by_pair, other_end = collections.Counter(), collections.Counter(), collections.Counter()
-    by_faces = collections.Counter()
+    by_faces, by_reach = collections.Counter(), collections.Counter()
     for g, o in scored:
         by_faces[(cohort(g), NEIGHBOURS.get(key_of(g), ("unread", "unread")), o)] += 1
+        by_reach[(cohort(g), REACH.get(key_of(g), ("unread", "unread")), o)] += 1
         fl = flags_of(key_of(g))
         if fl is None:
             by_bit[(cohort(g), "unread", o)] += 1
@@ -623,6 +652,9 @@ def main():
         faces = [f"{a}/{b} {o} {n}" for (cc, (a, b), o), n in sorted(by_faces.items()) if cc == c]
         if faces:
             print(f"edges' other faces (P's edge/Q's edge), {c}: " + ", ".join(faces))
+        reached = [f"{a}/{b} {o} {n}" for (cc, (a, b), o), n in sorted(by_reach.items()) if cc == c]
+        if reached:
+            print(f"where each edge's other face's loop meets P and Q (P's edge/Q's edge), {c}: " + ", ".join(reached))
         told = {k: n for (cc, k), n in other_end.items() if cc == c}
         if told:
             print(f"bit 0x{FLAG_BIT:x} on one edge only, {c}: {sum(told.values())} drawings; Revit's point "
@@ -679,7 +711,7 @@ def main():
         for key, c in sorted(per_gap.items()):
             fl = flags_of(key)
             print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-', None, None))[1]} "
-                  f"flags={'unread' if fl is None else f'{fl[0]}/{fl[1]}'} faces={'/'.join(NEIGHBOURS.get(key, ('unread', 'unread')))} "
+                  f"flags={'unread' if fl is None else f'{fl[0]}/{fl[1]}'} faces={'/'.join(NEIGHBOURS.get(key, ('unread', 'unread')))} reach={'/'.join(REACH.get(key, ('unread', 'unread')))} "
                   + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
 
