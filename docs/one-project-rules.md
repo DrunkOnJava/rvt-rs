@@ -50,7 +50,7 @@ only identifiers that exist in `src/`.
 | puzzbobb's Revit 2025 models | 5 |
 | 255ribeiro modelo_bim | 4 |
 | Autodesk rac_basic sample | 4 |
-| BIMcollab Revit 2015 example (counts only) | 3 |
+| BIMcollab Revit 2015 example (local only) | 3 |
 | BIM4LCA housing | 4 |
 | Einhoven | 2 |
 | flowbim.ee house (held out) | 2 |
@@ -64,9 +64,10 @@ only identifiers that exist in `src/`.
 
 Snowdon Towers and the MIT models are local only: their Revit exports cannot
 be fetched by Measure, so a rule resting on them is measured on this machine and
-not in CI. BIMcollab's example has no redistribution licence either, but Measure
-fetches it and its Revit export from their source with `-f bimcollab=true` and
-keeps only summary counts. The held-out models leave the runner as counts
+not in CI. BIMcollab's example is local only too, in that it is never stored or
+committed, but Measure fetches it and its Revit export from their source with
+`-f bimcollab=true` and keeps only summary counts, so a rule resting on it is
+measured in a run. The held-out models leave the runner as counts
 only. A second, redistributable project with Revit's own IFC4 export, saved by
 Revit 2024 or 2025 and holding curtain walls, curved walls, stairs and MEP
 runs, would test the largest share of the rules below.
@@ -149,9 +150,9 @@ runs, would test the largest share of the rules below.
 | [RE-461](../reports/element-framing/RE-461-release-gates.md) | `CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume`, `NetVolume`, `HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS` | BIM4LCA office | 2024 | yes | "Measured on the BIM4LCA office, Revit 2024; no other file holds one a Revit export checks." |
 | [RE-461](../reports/element-framing/RE-461-release-gates.md) | `SWEEP_RAMP_NATIVE_TYPE_REVIT_VERSIONS` | BIM4LCA office | 2024 | no, it names this model only | "Measured on the BIM4LCA office, Revit 2024 (9 sweeps, 5 ramps)." |
 | [RE-470](../reports/element-framing/RE-470-tube-beam-sections.md) | `tube_beam_section`, `type_tube_section`, `TUBE_BEAM_REVIT_VERSIONS` | BIM4LCA office | 2024 | yes | "Measured on one project and one release" |
-| [RE-220](../reports/element-framing/RE-220-stored-global-ids.md) | `revit_global_ids`, `stored_global_ids` | BIMcollab Revit 2015 example (counts only) | 2015 | yes | "The storeys' stored-value rule is measured on one Revit 2015 file." |
-| [RE-283](../reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md) | `IsExternal`, `attach_native_named_parameters`, `NATIVE_NAMED_PARAMETER_REVIT_VERSIONS`, `LoadBearing`, `Pset_WallCommon` | BIMcollab Revit 2015 example (counts only) | 2015 | yes | "The only one measured is BIMcollab's two on the walls; the samples' named parameters rest on the copies (RE-281)." |
-| [RE-372](../reports/element-framing/RE-372-revit-2015-export-phase.md) | `PHASE_FILTER_RELEASES`, `set_export_phase` | BIMcollab Revit 2015 example (counts only) | 2015 | yes | "positive, on one Revit 2015 project with an export (held out of the corpus, counts only)" |
+| [RE-220](../reports/element-framing/RE-220-stored-global-ids.md) | `revit_global_ids`, `stored_global_ids` | BIMcollab Revit 2015 example (local only) | 2015 | yes | "The storeys' stored-value rule is measured on one Revit 2015 file." |
+| [RE-283](../reports/element-framing/RE-283-wall-function-and-named-parameters-pre2024.md) | `IsExternal`, `attach_native_named_parameters`, `NATIVE_NAMED_PARAMETER_REVIT_VERSIONS`, `LoadBearing`, `Pset_WallCommon` | BIMcollab Revit 2015 example (local only) | 2015 | yes | "The only one measured is BIMcollab's two on the walls; the samples' named parameters rest on the copies (RE-281)." |
+| [RE-372](../reports/element-framing/RE-372-revit-2015-export-phase.md) | `PHASE_FILTER_RELEASES`, `set_export_phase` | BIMcollab Revit 2015 example (local only) | 2015 | yes | "positive, on one Revit 2015 project with an export (held out of the corpus, counts only)" |
 | [RE-21](../reports/element-framing/RE-21-partition-element-record-instance-rule.md) | `STOREY_ELEVATION_SOURCE_TYPES` | Core Interior | 2024 | no, it names this model only | "Artifact: `2024_Core_Interior.rvt`" |
 | [RE-22](../reports/element-framing/RE-22-slab-instance-rule.md) | `OST_Floors`, `OST_BuildingPad`, `category_map`, `EXPORT_OVERRIDE_TARGETS` | Core Interior | 2024 | no, it names this model only | "Artifact: `2024_Core_Interior.rvt`" |
 | [RE-22](../reports/element-framing/RE-22-slab-instance-rule.md) | - | Core Interior | 2024 | no, it names this model only | "Artifact: `2024_Core_Interior.rvt`" |

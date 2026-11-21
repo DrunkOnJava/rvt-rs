@@ -51,9 +51,7 @@ findings or decoders:
    tree. Constants and short strings the exporter feeds an identifier
    (a sub-element index, a hash key's wording) may be reproduced where
    the same identifier needs them. Every such finding is checked
-   against Revit's own export of a real model before it lands. One finding
-   has landed without that check: the `IsExternal` of exterior curtain
-   members rests on revit-ifc's source alone (RE-288).
+   against Revit's own export of a real model before it lands.
 
 ## Forbidden sources
 
