@@ -18,11 +18,12 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    their host's Tag) and their aggregated parts. Revit's vertices are compared only where every
    Body item is polygonal: an `IfcPolygonalFaceSet`, `IfcTriangulatedFaceSet`, `IfcFacetedBrep`
    or `IfcShellBasedSurfaceModel` of polygon loops, alone or mapped. Revit's own coordinates
-   decide: each item's coordinate list placed into the probe's frame through the element's
+   decide: the points each item's faces use, placed into the probe's frame through the element's
    placement, each mapped item's target and its map's origin as IfcOpenShell applies them, the
    file's unit and the site frame, with no meshing between. IfcOpenShell's mesh, with
-   `weld-vertices` off, is the cross-check: on the BIM4LCA housing it put a basin family 0.213 ft
-   off where Revit's coordinates sit within 0.0000001 ft.
+   `weld-vertices` off, is the cross-check: on the BIM4LCA housing IfcOpenShell 0.9.0.post1
+   cannot process a basin's largest face set (`Failed to process shape`), and the element's mesh
+   leaves it out without a reported failure.
 4. **The floors.** For each element, every ring end that closes (`at_gap=false`) to Revit's
    nearest vertex: the median distance is its floor, from Revit's coordinates, with the mesh's
    beside it. Elements whose two floors disagree (one over twice the other and 0.00001 ft) are
@@ -33,8 +34,10 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
 5. **Outcomes, per occurrence and by cohort, from Revit's coordinates.** With `tol` the larger of
    twice the element's floor and 0.00001 ft, a gap under twice `tol` (so at least 0.00002 ft) is
    `unresolved`. Otherwise Revit has a vertex within `tol` at P only (`p_only`), at Q only
-   (`q_only`), at both (`both`), one strictly between them (within `tol` of the segment and
-   farther than `tol` from both ends, `between`), or none of these (`none`). Per gap, the
+   (`q_only`), at both (`both`), or none of these (`none`); or it has one strictly between them
+   (within `tol` of the segment and farther than `tol` from both ends): alone (`between`, Revit
+   merging the two ends into one vertex), or with P (`between_p`), Q (`between_q`) or both
+   (`between_both`) there too. Per gap, the
    outcomes over its occurrences and whether they agree. The registered verdict per cohort: one
    end kept on every scored gap is the office's result; anything else is counted by outcome. The
    mesh's outcomes beside them, by cohort. Where Revit keeps one end, which end, by cohort,
@@ -71,7 +74,8 @@ TOUCHING = 1e-5
 SAME_OFFSET = 1e-6
 PLACEMENT = 0.01
 ONE_END = ("p_only", "q_only")
-SCORED = ("p_only", "q_only", "both", "between", "none")
+BETWEEN = ("between", "between_p", "between_q", "between_both")
+SCORED = ("p_only", "q_only", "both", "none") + BETWEEN
 COHORTS = ("agree", "apart", "unread")
 
 
@@ -92,7 +96,8 @@ def side(value):
 
 def read_probe(path):
     pieces, gaps, joints = {}, [], []
-    with open(path, errors="replace") as handle:
+    # utf-8-sig: Windows PowerShell's `Out-File -Encoding utf8` writes a byte-order mark.
+    with open(path, encoding="utf-8-sig", errors="replace") as handle:
         for line in handle:
             if line.startswith("piece "):
                 f = fields(line)
@@ -105,7 +110,12 @@ def read_probe(path):
                 gaps.append(fields(line))
             elif line.startswith("jointxyz "):
                 joints.append(fields(line))
+            elif line.startswith("boundaryunread "):
+                UNREAD_OWNERS.append(fields(line).get("owner"))
     return pieces, gaps, joints
+
+
+UNREAD_OWNERS = []
 
 
 def key_of(g):
@@ -177,7 +187,20 @@ def local_points(item):
     not made of polygons (a face of a polygon solid bounded by anything but an IfcPolyLoop)."""
     kind = item.is_a()
     if kind in FACESETS:
-        return np.array(item.Coordinates.CoordList, dtype=float)
+        # Only the points a face uses: a coordinate list may hold more (on the BIM4LCA housing a
+        # basin's largest face set lists 17,276 that no triangle indexes).
+        coords = item.Coordinates.CoordList
+        if kind == "IfcTriangulatedFaceSet":
+            used = {i for tri in item.CoordIndex for i in tri}
+        else:
+            used = set()
+            for face in item.Faces:
+                used.update(face.CoordIndex)
+                for inner in getattr(face, "InnerCoordIndices", None) or []:
+                    used.update(inner)
+        pn = getattr(item, "PnIndex", None)
+        positions = sorted({pn[i - 1] for i in used} if pn else used)
+        return np.array([coords[i - 1] for i in positions], dtype=float)
     shells = []
     if kind in ("IfcFacetedBrep", "IfcFacetedBrepWithVoids"):
         shells = [item.Outer] + list(getattr(item, "Voids", None) or [])
@@ -209,7 +232,9 @@ def outcome(verts, gap, p, q, tol):
     dq = np.linalg.norm(verts - q, axis=1)
     at_p, at_q = bool((dp < tol).any()), bool((dq < tol).any())
     if bool(((segment_distance(verts, p, q) < tol) & (dp > tol) & (dq > tol)).any()):
-        return "between"
+        # A point between the ends, and which ends are there too: alone, it is Revit merging the
+        # two ends into one vertex; with both, the gap is drawn with a vertex inside it.
+        return "between_both" if at_p and at_q else "between_p" if at_p else "between_q" if at_q else "between"
     return "both" if at_p and at_q else "p_only" if at_p else "q_only" if at_q else "none"
 
 
@@ -372,7 +397,7 @@ def main():
     hit = collections.Counter(pieces[k][1] for k in reached if k in pieces)
     print(f"coverage: census gaps {len(pieces)} ({counts(census)}); reached by an element at level 3 {len(reached)} ({counts(hit)})")
     tags = {g["owner"] for g in gaps}
-    print(f"elements reaching a gap {len(tags)}; ring ends {len(joints)}")
+    print(f"elements reaching a gap {len(tags)}; ring ends {len(joints)}; elements whose graphics the probe could not walk (`boundaryunread`) {len(UNREAD_OWNERS)}")
     if not gaps:
         print("not exercised: no gap reached by an element's graphics")
         return 0
@@ -397,7 +422,11 @@ def main():
         weld_note = "weld-vertices off"
     except Exception as e:  # the setting's name differs between IfcOpenShell releases
         weld_note = f"weld-vertices could not be set ({type(e).__name__})"
-    got = meshes(args[1], tags=tags, model=model, settings=settings)
+    try:
+        got = meshes(args[1], tags=tags, model=model, settings=settings)
+    except Exception as e:  # the mesh is a cross-check only; its failure leaves Revit's reading
+        print(f"mesh cross-check failed ({type(e).__name__}); outcomes stand on Revit's coordinates alone")
+        got = {}
     mesh = {t: np.unique(v[2].reshape(-1, 3), axis=0) for t, v in got.items()}
     print(f"bodies: elements with a Revit body by Tag {len(set(elements) & tags)} of {len(tags)}, made of polygons {len(faceted)}, "
           f"Revit's coordinates read on {len(raw)}; IfcOpenShell meshed {len(set(mesh) & faceted)} of them ({weld_note})")
@@ -418,6 +447,9 @@ def main():
     raw_higher = sum(1 for t in both if floors[t]["floor"] > max(2 * mesh_floors[t]["floor"], TOUCHING))
     print(f"floors disagree (one over twice the other and 0.00001 ft): mesh higher on {mesh_higher}, raw higher on {raw_higher} of {len(both)} elements"
           + ("; raw higher means Revit's coordinates are placed wrong, and nothing after this counts" if raw_higher else ""))
+    if floors and not usable:
+        print("not exercised: every element is 0.01 ft or more off in Revit's coordinates, so the frames differ")
+        return 0
     offset = None
     if usable:
         vecs = np.array([f["vector"] for f in usable.values()])
@@ -455,7 +487,8 @@ def main():
         corners_by_size[size] += 1
         for g, o in members:
             by_size[size][o] += 1
-            classes[size]["+".join(sorted({e.is_a() for e in elements[g["owner"]]}))] += 1
+            names = {e.is_a() + (f" {e.ObjectType}" if per_gap_lines and e.ObjectType else "") for e in elements[g["owner"]]}
+            classes[size]["+".join(sorted(names))] += 1
             tols[size].append((floors[g["owner"]]["floor"], max(2 * floors[g["owner"]]["floor"], TOUCHING)))
         if per_gap_lines:
             print(f"corner {size[0]} {size[1]} gap {size[2]:.6f} ft: occurrences {len(members)}, " + counts(collections.Counter(o for _, o in members)))
@@ -480,7 +513,7 @@ def main():
     # 7. Where a point between the ends lies, from P (0) to Q (1): 0.5 is the gap's middle.
     along = collections.defaultdict(list)
     for g, o in scored:
-        if o == "between":
+        if o in BETWEEN:
             tag = g["owner"]
             verts = raw[tag] if offset is None else raw[tag] - offset
             along[cohort(g)].append(between_at(verts, point(g["p"]), point(g["q"]), max(2 * floors[tag]["floor"], TOUCHING)))
