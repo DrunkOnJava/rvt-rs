@@ -140,7 +140,12 @@
 //!     unplaced ones by their faces' classes, the matches as `piecemore` counts them, the
 //!     largest distance at which a matching edge's two faces put it (a "no match" binds only
 //!     where they agree), the same for the edges before and after the gap, and where their
-//!     other face's side ends.
+//!     other face's side ends. `matches_one_face_only` counts the matches that reach both
+//!     ends as one face places them and not as the other does; `unplaced_classes` keys each
+//!     count by cause (`not_read`, `not_evaluated`) and the two faces' classes;
+//!   edgeagree graph=<ElementId> both_faces=<n> over_bound=<n> largest=<ft>: once per graph
+//!     with a gap, the edges both faces place, how many they put 0.00001 ft or more apart,
+//!     and the largest.
 //! ```
 //! ElementIds, counts and distances in feet only.
 //!
@@ -401,10 +406,19 @@ struct EdgeCache {
     /// Each edge placed through either of its faces by any evaluator that reads it (plane,
     /// cylinder, or the parametric surfaces the mesher reads), and how far apart its two
     /// faces put its points where both place it.
-    xany: Vec<(usize, Option<Polyline>, Option<f64>)>,
+    xany: Vec<(usize, [Option<Polyline>; 2], Option<f64>)>,
     params: BTreeMap<usize, Option<ParametricSurface>>,
-    /// The edges no evaluator places, by their two faces' surface classes.
+    /// The edges no evaluator places, by cause (`not_read`: neither face's surface is read;
+    /// `not_evaluated`: a face's surface is read but a point of the edge does not evaluate)
+    /// and their two faces' surface classes.
     unplaced: BTreeMap<String, usize>,
+}
+
+/// Why an edge's side could not be placed.
+enum Placed {
+    At(Polyline),
+    NotRead,
+    NotEvaluated,
 }
 
 fn param_surface(graph: &ObjectGraph, face: usize) -> Option<ParametricSurface> {
@@ -412,7 +426,47 @@ fn param_surface(graph: &ObjectGraph, face: usize) -> Option<ParametricSurface> 
     ParametricSurface::read(graph, si).ok()
 }
 
-/// An edge's points through its face on `side`, by whichever evaluator reads that face.
+/// An edge's points through its face on `side`, by whichever evaluator reads that face. A
+/// parametric surface's points are clamped to its envelope first, as the mesher clamps a
+/// loop's samples.
+fn place_why(
+    graph: &ObjectGraph,
+    e: usize,
+    side: usize,
+    face: usize,
+    surfs: &mut BTreeMap<usize, Option<Surf>>,
+    params: &mut BTreeMap<usize, Option<ParametricSurface>>,
+) -> Placed {
+    let Some(uv) = edge_uv(graph, e, side) else {
+        return Placed::NotRead;
+    };
+    let s = *surfs.entry(face).or_insert_with(|| surf(graph, face));
+    if let Some(s) = s {
+        return Placed::At(uv.iter().map(|q| s.at(*q)).collect());
+    }
+    let Some(ps) = params
+        .entry(face)
+        .or_insert_with(|| param_surface(graph, face))
+        .as_ref()
+    else {
+        return Placed::NotRead;
+    };
+    let env = ps.bounds();
+    // `clamp` panics on a bound that is not finite.
+    if !env.iter().flatten().all(|x| x.is_finite()) {
+        return Placed::NotEvaluated;
+    }
+    let points: Option<Polyline> = uv
+        .iter()
+        .map(|q| {
+            let u = q[0].clamp(env[0][0].min(env[1][0]), env[0][0].max(env[1][0]));
+            let v = q[1].clamp(env[0][1].min(env[1][1]), env[0][1].max(env[1][1]));
+            ps.evaluate(u, v).ok()
+        })
+        .collect();
+    points.map_or(Placed::NotEvaluated, Placed::At)
+}
+
 fn place(
     graph: &ObjectGraph,
     e: usize,
@@ -421,16 +475,10 @@ fn place(
     surfs: &mut BTreeMap<usize, Option<Surf>>,
     params: &mut BTreeMap<usize, Option<ParametricSurface>>,
 ) -> Option<Polyline> {
-    let uv = edge_uv(graph, e, side)?;
-    let s = *surfs.entry(face).or_insert_with(|| surf(graph, face));
-    if let Some(s) = s {
-        return Some(uv.iter().map(|q| s.at(*q)).collect());
+    match place_why(graph, e, side, face, surfs, params) {
+        Placed::At(points) => Some(points),
+        _ => None,
     }
-    let ps = params
-        .entry(face)
-        .or_insert_with(|| param_surface(graph, face))
-        .as_ref()?;
-    uv.iter().map(|q| ps.evaluate(q[0], q[1]).ok()).collect()
 }
 
 /// The root of `x` in a union-find over faces.
@@ -481,9 +529,14 @@ impl EdgeCache {
             }
             xyz.push((e, line));
             let mut placed: [Option<Polyline>; 2] = [None, None];
+            let mut evaluated_somewhere = false;
             for (side, face) in faces.iter().enumerate() {
                 if let Some(face) = face {
-                    placed[side] = place(graph, e, side, *face, &mut surfs, &mut params);
+                    match place_why(graph, e, side, *face, &mut surfs, &mut params) {
+                        Placed::At(points) => placed[side] = Some(points),
+                        Placed::NotEvaluated => evaluated_somewhere = true,
+                        Placed::NotRead => {}
+                    }
                 }
             }
             let agree = match (&placed[0], &placed[1]) {
@@ -495,16 +548,20 @@ impl EdgeCache {
                 ),
                 _ => None,
             };
-            let any = placed[0].clone().or_else(|| placed[1].clone());
-            if any.is_none() {
-                let key = faces
+            if placed[0].is_none() && placed[1].is_none() {
+                let classes = faces
                     .iter()
                     .map(|f| f.map_or_else(|| "-".to_string(), |f| surface_class(graph, f)))
                     .collect::<Vec<_>>()
                     .join("+");
-                *unplaced.entry(key).or_default() += 1;
+                let cause = if evaluated_somewhere {
+                    "not_evaluated"
+                } else {
+                    "not_read"
+                };
+                *unplaced.entry(format!("{cause}/{classes}")).or_default() += 1;
             }
-            xany.push((e, any, agree));
+            xany.push((e, placed, agree));
         }
         let faces: Vec<usize> = parent.keys().copied().collect();
         let body = faces
@@ -767,7 +824,17 @@ fn read_pieces(
             keys(Some(&graph.objects[fi].fields)),
         );
     }
+    let fresh = cache.is_none();
     let cache = cache.get_or_insert_with(|| EdgeCache::new(graph));
+    if fresh {
+        let both: Vec<f64> = cache.xany.iter().filter_map(|(_, _, a)| *a).collect();
+        println!(
+            "edgeagree graph={id} both_faces={} over_bound={} largest={:.9}",
+            both.len(),
+            both.iter().filter(|a| **a >= TOUCHING).count(),
+            both.iter().copied().fold(0.0, f64::max)
+        );
+    }
     let reached: BTreeSet<usize> = loops
         .iter()
         .filter_map(|l| loop_chain(graph, fi, *l))
@@ -1011,23 +1078,35 @@ fn read_pieces(
         // cylinder placement left unread.
         let mut x_ends = None;
         let mut x_matches = 0usize;
+        let mut x_one_face = 0usize;
         let mut x_same = 0usize;
         let mut x_naming = 0usize;
+        let mut x_unreached = 0usize;
         let mut x_agree: f64 = 0.0;
         let mut x_agree_known = 0usize;
-        for (e, line, agree) in &cache.xany {
+        for (e, lines, agree) in &cache.xany {
             if *e == g.a || *e == g.b {
                 continue;
             }
-            let Some(line) = line else { continue };
-            let (e0, e1) = (line[0], line[line.len() - 1]);
-            if (dist(e0, g.p) < TOUCHING && dist(e1, g.q) < TOUCHING)
-                || (dist(e0, g.q) < TOUCHING && dist(e1, g.p) < TOUCHING)
-            {
-                x_ends.get_or_insert(*e);
+            // Each placement is tested: an edge may reach both ends as one face puts it and
+            // not as the other does.
+            let mut passes = 0usize;
+            for line in lines.iter().flatten() {
+                let (e0, e1) = (line[0], line[line.len() - 1]);
+                if (dist(e0, g.p) < TOUCHING && dist(e1, g.q) < TOUCHING)
+                    || (dist(e0, g.q) < TOUCHING && dist(e1, g.p) < TOUCHING)
+                {
+                    x_ends.get_or_insert(*e);
+                }
+                if polyline_dist(g.p, line) < TOUCHING && polyline_dist(g.q, line) < TOUCHING {
+                    passes += 1;
+                }
             }
-            if polyline_dist(g.p, line) < TOUCHING && polyline_dist(g.q, line) < TOUCHING {
+            if passes > 0 {
                 x_matches += 1;
+                let placements = lines.iter().flatten().count();
+                x_one_face += usize::from(placements == 2 && passes == 1);
+                x_unreached += usize::from(orphans.contains(e));
                 let faces = edge_faces(graph, *e);
                 if faces
                     .iter()
@@ -1045,7 +1124,11 @@ fn read_pieces(
                 }
             }
         }
-        let placed = cache.xany.iter().filter(|(_, l, _)| l.is_some()).count();
+        let placed = cache
+            .xany
+            .iter()
+            .filter(|(_, l, _)| l.iter().any(|x| x.is_some()))
+            .count();
         let unplaced: usize = cache.unplaced.values().sum();
         let classes = cache
             .unplaced
@@ -1071,7 +1154,7 @@ fn read_pieces(
         let xa = cache.other_side_ends_any(graph, g.a, fi, g.p, g.q);
         let xb = cache.other_side_ends_any(graph, g.b, fi, g.p, g.q);
         println!(
-            "piecex graph={id} face={fi} loop={loop_index} at={} placed={placed} unplaced={unplaced} unplaced_classes={} ends={} matches={x_matches} matches_same_body={x_same} matches_naming_face={x_naming} match_agree_max={} a_agree={a_agree} b_agree={b_agree} a_other_ends={} b_other_ends={}",
+            "piecex graph={id} face={fi} loop={loop_index} at={} placed={placed} unplaced={unplaced} unplaced_classes={} ends={} matches={x_matches} matches_one_face_only={x_one_face} matches_same_body={x_same} matches_naming_face={x_naming} matches_unreached={x_unreached} match_agree_max={} a_agree={a_agree} b_agree={b_agree} a_other_ends={} b_other_ends={}",
             g.at,
             if classes.is_empty() {
                 "-".to_string()
