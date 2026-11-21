@@ -207,7 +207,7 @@ fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally
         match &r.refined {
             Ok(j) if j.open > 0 => {
                 println!(
-                    "gap surface={class} graph={id} face={fi} loop={} edges={} stored={:e}/{:e}ft/{} refined={:e}/{:e}ft/{} du={:e} dv={:e} back={} step={:e} shortest={:e}",
+                    "gap surface={class} graph={id} face={fi} loop={} edges={} stored={:e}/{:e}ft/{} refined={:e}/{:e}ft/{} du={:e} dv={:e} back={} step={:e} shortest={:e} bridged={}",
                     r.loop_index,
                     r.edges,
                     r.stored.parameters,
@@ -220,7 +220,8 @@ fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally
                     j.components[1],
                     j.backward,
                     j.step,
-                    r.shortest_edge
+                    r.shortest_edge,
+                    j.bridged
                 );
                 if j.backward > 0 {
                     t.gap_backward += 1;

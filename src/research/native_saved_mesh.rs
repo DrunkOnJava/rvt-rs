@@ -1210,6 +1210,9 @@ pub struct JointGaps {
     /// Of those, the ones that run back along the edge before them in feet, so that the
     /// next edge starts behind where the last one ended (an overshoot, not a gap).
     pub backward: usize,
+    /// Of the gaps not within 1e-7 in the parameters, those whose step along the surface
+    /// is 1e-7 ft or more, which a join keeping both ends bridges rather than merges.
+    pub bridged: usize,
 }
 
 /// One ring of a plane or cylinder face as its reader builds it, read for #2085.
@@ -1360,6 +1363,9 @@ fn joint_gaps(
             let feet = (0..3).map(|k| (p[k] - q[k]).powi(2)).sum::<f64>().sqrt();
             gaps.feet = gaps.feet.max(feet);
             gaps.step = gaps.step.max(step(a, b));
+            if !close(a, b) && step(a, b) >= 1e-7 {
+                gaps.bridged += 1;
+            }
         };
         for s in &segments[1..] {
             let (head, tail) = (s[0], s[s.len() - 1]);
