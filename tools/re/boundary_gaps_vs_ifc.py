@@ -39,7 +39,8 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    either way round, so one corner seen from two faces counts once; then one line per cohort
    and gap size (one per corner with `--per-gap`).
 7. **Raw outcomes.** The outcome of every scored occurrence read again from the placed raw
-   points, against the mesh's.
+   points, against the mesh's; where Revit has a point between the ends, how far along the gap
+   it lies, from P (0) to Q (1), by cohort: 0.5 is the gap's middle.
 
 Needs IfcOpenShell and numpy.
 
@@ -201,6 +202,19 @@ def outcome(verts, gap, p, q, tol):
     if bool(((segment_distance(verts, p, q) < tol) & (dp > tol) & (dq > tol)).any()):
         return "between"
     return "both" if at_p and at_q else "p_only" if at_p else "q_only" if at_q else "none"
+
+
+def between_at(verts, p, q, tol):
+    """Where along the gap, from P (0) to Q (1), the vertex nearest the segment lies among those
+    within `tol` of it and farther than `tol` from both ends; None where there is none."""
+    ab = q - p
+    t = ((verts - p) @ ab) / max(float(ab @ ab), 1e-24)
+    near = (segment_distance(verts, p, q) < tol) & (np.linalg.norm(verts - p, axis=1) > tol) & (np.linalg.norm(verts - q, axis=1) > tol)
+    if not near.any():
+        return None
+    idx = np.flatnonzero(near)
+    best = idx[int(np.argmin(segment_distance(verts[idx], p, q)))]
+    return float(np.clip(t[best], 0.0, 1.0))
 
 
 def floors_of(bodies, joints, tags, offset=None):
@@ -430,6 +444,7 @@ def main():
         print(f"gap size {c} {size:.6f} ft ({size * 304.8:.3f} mm): corners {corners_by_size[(c, size)]}, occurrences {counts(by_size[(c, size)])}")
     # 7. The same outcomes read from the placed raw points.
     pairs = collections.Counter()
+    along = collections.defaultdict(list)
     for g, o in scored:
         tag = g["owner"]
         if tag not in raw:
@@ -437,8 +452,17 @@ def main():
             continue
         tol = max(2 * floors[tag]["floor"], TOUCHING)
         verts = raw[tag] if offset is None else raw[tag] - offset
-        pairs[(o, outcome(verts, float(g["gap"]), point(g["p"]), point(g["q"]), tol))] += 1
+        p, q = point(g["p"]), point(g["q"])
+        r = outcome(verts, float(g["gap"]), p, q, tol)
+        pairs[(o, r)] += 1
+        if r == "between":
+            along[cohort(g)].append(between_at(verts, p, q, tol))
     print("raw points: mesh outcome -> raw outcome: " + (", ".join(f"{a}->{b} {n}" for (a, b), n in sorted(pairs.items())) or "none"))
+    # Where the point between the ends lies, from P (0) to Q (1): 0.5 is the gap's middle.
+    for c in COHORTS:
+        if along.get(c):
+            ts = sorted(along[c])
+            print(f"raw points between, {c}: {len(ts)} drawings, along the gap from P (0) to Q (1): min {ts[0]:.3f} median {ts[len(ts) // 2]:.3f} max {ts[-1]:.3f}")
     if per_gap_lines:
         for key, c in sorted(per_gap.items()):
             print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-'))[1]} "
