@@ -3,30 +3,50 @@
 
 `probe_2085_trim_breaks` prints, for every element whose graphics reach a graph with a refused
 plane or cylinder ring, each gap's two ends (`gapxyz ... p=x,y,z q=x,y,z`) and every edge end of
-the same ring (`jointxyz ... at_gap=<bool> x=x,y,z`), in document feet. This reads Revit's body
-for the same Tag (`mesh_bodies_vs_ifc.meshes`, Revit's internal feet) and prints, by counts and
-distances only and never a coordinate:
+the same ring (`jointxyz ... at_gap=<bool> x=x,y,z`), in document feet, beside its census of the
+same gaps (`piece`). This sets them against Revit's body for the same Tag and prints counts and
+distances only, never a coordinate; `--per-gap` adds one line per gap with its ElementIds.
 
-- per Tag, the IFC items its body is made of: Revit's own vertices are compared only where the
-  body is faceted (an `IfcFacetedBrep`, `IfcTriangulatedFaceSet` or `IfcPolygonalFaceSet`);
-  elsewhere the vertices are IfcOpenShell's tessellation and the Tag is counted apart;
-- the floor: for the ring ends that close (`at_gap=False`), the distance to Revit's nearest
-  vertex, which says how closely Revit's vertices sit on the saved ring at all;
-- per gap occurrence, with `tol` the larger of twice the Tag's floor (its median) and 0.00001
-  ft: `unresolved` where the gap is under twice that floor; else Revit has a vertex within `tol`
-  at P only, at Q only, at both, one strictly between them along the gap (within `tol` of the
-  segment and farther than `tol` from both ends), or none of these;
-- per gap (by graph, face, loop and position), the outcomes over its occurrences and whether
-  they agree.
+1. **Row 0.** Each `gapxyz` gap equals the `piece` gap of the same graph, face, loop and
+   position, so both lines read one gap finder. Any difference or unmatched gap is printed
+   and nothing after it is trusted.
+2. **Coverage.** The gaps an element's graphics reach at detail level 3, of the census, split
+   as the census splits them: both edges beside the gap placed alike by their two faces
+   (`sides_a` and `sides_b` both under 0.00001 ft), or one of them placed apart.
+3. **Bodies.** Revit's vertices are compared only where the Tag's body is faceted (an
+   `IfcPolygonalFaceSet` or `IfcTriangulatedFaceSet`, alone or mapped). They are taken twice
+   from IfcOpenShell: as it meshes by default, and with `weld-vertices` off where the setting
+   exists. The outcomes are read from the unwelded vertices, so a point IfcOpenShell merged
+   cannot pass for one Revit merged; both are printed.
+4. **The floor and the offset.** For each element, every ring end that closes (`at_gap=false`)
+   to Revit's nearest vertex: the median distance (its floor), the median vector, and the share
+   of ends within 0.00001 ft. Where every element's median vector is one vector (within
+   0.000001 ft) and is not zero, it is a frame offset, and the outcomes are read a second time
+   with it taken off Revit's vertices. An element whose floor is 0.01 ft or more is a placement
+   mismatch, counted apart.
+5. **Outcomes, per occurrence.** With `tol` the larger of twice the element's floor and
+   0.00001 ft, a gap under twice `tol` is `unresolved`. Otherwise Revit has a vertex within
+   `tol` at P only (`p_only`), at Q only (`q_only`), at both (`both`), one strictly between them
+   (within `tol` of the segment and farther than `tol` from both ends, `between`), or none of
+   these (`none`). Per gap (graph, face, loop and position), the outcomes over its occurrences
+   and whether they agree.
+6. **Corners.** The scored gaps grouped by their two ends in world coordinates, either way
+   round, so one corner seen from the two faces that meet there counts once; with the elements
+   and graphs they are on.
+7. **Raw points.** For each element with a scored gap, the pairs of distinct points in the raw
+   coordinate lists of its face sets (Revit's own numbers, before any meshing) closer than 1.5
+   times the element's largest scored gap, and how many of those lie within half to 1.5 times
+   a scored gap's size. No such pair says IfcOpenShell did not merge two points of Revit's
+   into one at that size.
 
 Needs IfcOpenShell and numpy.
 
-    python3 tools/re/boundary_gaps_vs_ifc.py <probe output> <revit.ifc>
+    python3 tools/re/boundary_gaps_vs_ifc.py <probe output> <revit.ifc> [--per-gap]
 """
 
 import collections
+import math
 import os
-import re
 import sys
 
 import numpy as np
@@ -34,8 +54,11 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mesh_bodies_vs_ifc import meshes  # noqa: E402
 
-FACETED = {"IfcFacetedBrep", "IfcTriangulatedFaceSet", "IfcPolygonalFaceSet", "IfcShellBasedSurfaceModel"}
+FACESETS = {"IfcPolygonalFaceSet", "IfcTriangulatedFaceSet"}
 TOUCHING = 1e-5
+SAME_OFFSET = 1e-6
+PLACEMENT = 0.01
+SCORED = ("p_only", "q_only", "both", "between", "none")
 
 
 def point(text):
@@ -46,31 +69,61 @@ def fields(line):
     return dict(token.split("=", 1) for token in line.split()[1:] if "=" in token)
 
 
+def side(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def read_probe(path):
-    gaps, joints = [], []
+    pieces, gaps, joints = {}, [], []
     with open(path, errors="replace") as handle:
         for line in handle:
-            if line.startswith("gapxyz "):
+            if line.startswith("piece "):
                 f = fields(line)
-                gaps.append(f)
+                key = (f["graph"], f["face"], f["loop"], f["at"].split("/")[0])
+                a, b = side(f.get("sides_a")), side(f.get("sides_b"))
+                split = "unread" if a is None or b is None else "agree" if max(a, b) < TOUCHING else "apart"
+                pieces[key] = (float(f["gap"]), split)
+            elif line.startswith("gapxyz "):
+                gaps.append(fields(line))
             elif line.startswith("jointxyz "):
                 joints.append(fields(line))
-    return gaps, joints
+    return pieces, gaps, joints
 
 
-def item_types(model, tags):
-    out = collections.defaultdict(collections.Counter)
-    for element in model.by_type("IfcElement"):
-        if element.Tag not in tags or element.Representation is None:
-            continue
-        for rep in element.Representation.Representations:
-            for item in rep.Items:
-                kind = item.is_a()
-                if kind == "IfcMappedItem":
-                    for inner in item.MappingSource.MappedRepresentation.Items:
-                        out[element.Tag][inner.is_a()] += 1
-                else:
-                    out[element.Tag][kind] += 1
+def items_of(element):
+    out = []
+    if element.Representation is None:
+        return out
+    for rep in element.Representation.Representations:
+        stack = list(rep.Items)
+        while stack:
+            item = stack.pop()
+            if item.is_a("IfcMappedItem"):
+                stack.extend(item.MappingSource.MappedRepresentation.Items)
+            else:
+                out.append(item)
+    return out
+
+
+def close_pairs(points, reach):
+    """Distances of the pairs of distinct points closer than `reach`, by a grid of that size."""
+    cells = collections.defaultdict(list)
+    keys = np.floor(points / reach).astype(np.int64)
+    for i, k in enumerate(map(tuple, keys)):
+        cells[k].append(i)
+    out = []
+    for k, members in cells.items():
+        near = [j for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)
+                for j in cells.get((k[0] + dx, k[1] + dy, k[2] + dz), ())]
+        for i in members:
+            for j in near:
+                if j > i:
+                    d = float(np.linalg.norm(points[i] - points[j]))
+                    if 0 < d < reach:
+                        out.append(d)
     return out
 
 
@@ -80,71 +133,208 @@ def segment_distance(points, a, b):
     return np.linalg.norm(points - (a + t[:, None] * ab), axis=1)
 
 
-def main():
-    if len(sys.argv) < 3:
-        print(__doc__)
-        return 2
-    import ifcopenshell
+def outcome(verts, gap, p, q, tol):
+    if gap < 2 * tol:
+        return "unresolved"
+    dp = np.linalg.norm(verts - p, axis=1)
+    dq = np.linalg.norm(verts - q, axis=1)
+    at_p, at_q = bool((dp < tol).any()), bool((dq < tol).any())
+    if bool(((segment_distance(verts, p, q) < tol) & (dp > tol) & (dq > tol)).any()):
+        return "between"
+    return "both" if at_p and at_q else "p_only" if at_p else "q_only" if at_q else "none"
 
-    gaps, joints = read_probe(sys.argv[1])
-    tags = {g["owner"] for g in gaps}
-    print(f"gap occurrences {len(gaps)} on {len(tags)} elements; ring ends {len(joints)}")
-    if not gaps:
-        print("not exercised: no gap reached by an element's graphics")
-        return 0
-    model = ifcopenshell.open(sys.argv[2])
-    bodies = meshes(sys.argv[2], tags=tags, model=model)
-    kinds = item_types(model, tags)
-    faceted = {t for t, c in kinds.items() if c and set(c) <= FACETED}
-    print(f"elements with a Revit body by Tag {len(set(bodies) & tags)} of {len(tags)}; faceted {len(faceted & set(bodies))}")
-    item_census = collections.Counter(k for t in tags for k in kinds.get(t, {}))
-    print("item types: " + ", ".join(f"{k} {v}" for k, v in sorted(item_census.items())))
-    floors = {}
-    for tag in sorted(set(bodies) & faceted):
-        verts = np.unique(bodies[tag][2].reshape(-1, 3), axis=0)
+
+def floors_of(bodies, joints, tags, offset=None):
+    out = {}
+    for tag in tags:
+        verts = bodies[tag]
+        if offset is not None:
+            verts = verts - offset
         closed = [point(j["x"]) for j in joints if j["owner"] == tag and j["at_gap"] == "false"]
         if not closed:
             continue
-        d = np.array([np.linalg.norm(verts - p, axis=1).min() for p in closed])
-        floors[tag] = (float(np.median(d)), float(d.max()), len(d))
-    if floors:
-        med = sorted(v[0] for v in floors.values())
-        print(f"floor (closed ring ends to Revit's nearest vertex), per-element median: min {med[0]:.9f} median {med[len(med)//2]:.9f} max {med[-1]:.9f} ft over {len(floors)} elements")
-    outcomes = collections.Counter()
-    per_gap = collections.defaultdict(collections.Counter)
+        vectors = []
+        for c in closed:
+            d = np.linalg.norm(verts - c, axis=1)
+            vectors.append(verts[int(d.argmin())] - c)
+        vectors = np.array(vectors)
+        dist = np.linalg.norm(vectors, axis=1)
+        out[tag] = {
+            "floor": float(np.median(dist)),
+            "vector": np.median(vectors, axis=0),
+            "within": float((dist < TOUCHING).mean()),
+            "n": len(dist),
+        }
+    return out
+
+
+def score(gaps, bodies, faceted, floors, offset=None):
+    rows = []
     for g in gaps:
         tag = g["owner"]
-        key = (g["graph"], g["face"], g["loop"], g["at"])
         if tag not in bodies:
-            outcome = "no_revit_body"
+            o = "no_revit_body"
         elif tag not in faceted:
-            outcome = "not_faceted"
+            o = "not_faceted"
         elif tag not in floors:
-            outcome = "no_floor"
+            o = "no_floor"
+        elif floors[tag]["floor"] >= PLACEMENT:
+            o = "placement"
         else:
-            floor = floors[tag][0]
-            tol = max(2 * floor, TOUCHING)
-            gap = float(g["gap"])
-            p, q = point(g["p"]), point(g["q"])
-            verts = np.unique(bodies[tag][2].reshape(-1, 3), axis=0)
-            if gap < 2 * tol:
-                outcome = "unresolved"
-            else:
-                at_p = bool((np.linalg.norm(verts - p, axis=1) < tol).any())
-                at_q = bool((np.linalg.norm(verts - q, axis=1) < tol).any())
-                near_seg = segment_distance(verts, p, q) < tol
-                away = (np.linalg.norm(verts - p, axis=1) > tol) & (np.linalg.norm(verts - q, axis=1) > tol)
-                between = bool((near_seg & away).any())
-                outcome = "between" if between else "both" if at_p and at_q else "p_only" if at_p else "q_only" if at_q else "none"
-        outcomes[outcome] += 1
-        per_gap[key][outcome] += 1
-    print("occurrences by outcome: " + ", ".join(f"{k} {v}" for k, v in sorted(outcomes.items())))
+            verts = bodies[tag] if offset is None else bodies[tag] - offset
+            tol = max(2 * floors[tag]["floor"], TOUCHING)
+            o = outcome(verts, float(g["gap"]), point(g["p"]), point(g["q"]), tol)
+        rows.append((g, o))
+    return rows
+
+
+def summary(label, rows):
+    counts = collections.Counter(o for _, o in rows)
+    per_gap = collections.defaultdict(collections.Counter)
+    for g, o in rows:
+        per_gap[(g["graph"], g["face"], g["loop"], g["at"])][o] += 1
     agree = sum(1 for c in per_gap.values() if len(c) == 1)
-    print(f"gaps {len(per_gap)}; whose occurrences all agree {agree}")
-    by_class = collections.Counter(max(c, key=c.get) for c in per_gap.values())
-    print("gaps by their most common outcome: " + ", ".join(f"{k} {v}" for k, v in sorted(by_class.items())))
-    for key, c in sorted(per_gap.items()):
-        print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} " + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
+    by_gap = collections.Counter(c.most_common(1)[0][0] for c in per_gap.values())
+    print(f"{label}: occurrences " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+    print(f"{label}: gaps {len(per_gap)} (occurrences all agree on {agree}); by outcome " + ", ".join(f"{k} {v}" for k, v in sorted(by_gap.items())))
+    return per_gap
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    per_gap_lines = "--per-gap" in sys.argv
+    if len(args) < 2:
+        print(__doc__)
+        return 2
+    import ifcopenshell
+    import ifcopenshell.geom
+    import ifcopenshell.util.unit
+
+    pieces, gaps, joints = read_probe(args[0])
+    # 1. Row 0.
+    equal = differ = unmatched = 0
+    for g in gaps:
+        key = (g["graph"], g["face"], g["loop"], g["at"])
+        if key not in pieces:
+            unmatched += 1
+        elif abs(pieces[key][0] - float(g["gap"])) <= 1e-9:
+            equal += 1
+        else:
+            differ += 1
+    verdict = "holds" if differ == 0 and unmatched == 0 else "FAILS"
+    print(f"row 0 {verdict}: gap occurrences {len(gaps)}, equal to their census gap {equal}, different {differ}, not in the census {unmatched}")
+    # 2. Coverage.
+    reached = {(g["graph"], g["face"], g["loop"], g["at"]) for g in gaps}
+    census = collections.Counter(s for _, s in pieces.values())
+    hit = collections.Counter(pieces[k][1] for k in reached if k in pieces)
+    print(f"coverage: census gaps {len(pieces)} (" + ", ".join(f"{k} {v}" for k, v in sorted(census.items()))
+          + f"); reached by an element at level 3 {len(reached)} (" + ", ".join(f"{k} {v}" for k, v in sorted(hit.items())) + ")")
+    tags = {g["owner"] for g in gaps}
+    print(f"elements reaching a gap {len(tags)}; ring ends {len(joints)}")
+    if not gaps:
+        print("not exercised: no gap reached by an element's graphics")
+        return 0
+    # 3. Bodies.
+    model = ifcopenshell.open(args[1])
+    kinds = collections.defaultdict(collections.Counter)
+    elements = {}
+    for element in model.by_type("IfcElement"):
+        if element.Tag in tags:
+            elements[element.Tag] = element
+            for item in items_of(element):
+                kinds[element.Tag][item.is_a()] += 1
+    faceted = {t for t, c in kinds.items() if c and set(c) <= FACESETS}
+    census_items = collections.Counter(k for t in tags for k in kinds.get(t, {}))
+    print("item types: " + ", ".join(f"{k} {v}" for k, v in sorted(census_items.items())))
+
+    def vertices(settings):
+        got = meshes(args[1], tags=tags, model=model, settings=settings)
+        return {t: np.unique(v[2].reshape(-1, 3), axis=0) for t, v in got.items()}
+
+    welded_settings = ifcopenshell.geom.settings()
+    welded_settings.set("use-world-coords", True)
+    try:
+        weld_default = welded_settings.get("weld-vertices")
+    except Exception as e:  # the setting's name differs between IfcOpenShell releases
+        weld_default = f"unread ({type(e).__name__})"
+    welded = vertices(welded_settings)
+    unwelded_settings = ifcopenshell.geom.settings()
+    unwelded_settings.set("use-world-coords", True)
+    try:
+        unwelded_settings.set("weld-vertices", False)
+        unwelded = vertices(unwelded_settings)
+        weld_note = f"weld-vertices off (default {weld_default})"
+    except Exception as e:
+        unwelded = welded
+        weld_note = f"weld-vertices could not be set ({type(e).__name__}); outcomes read from the default meshes"
+    print(f"bodies: {weld_note}; elements with a Revit body by Tag {len(set(unwelded) & tags)} of {len(tags)}, faceted {len(faceted & set(unwelded))}")
+    # 4. The floor and the offset.
+    scored_tags = sorted(set(unwelded) & faceted)
+    floors = floors_of(unwelded, joints, scored_tags)
+    placement = [t for t, f in floors.items() if f["floor"] >= PLACEMENT]
+    usable = {t: f for t, f in floors.items() if f["floor"] < PLACEMENT}
+    if usable:
+        fl = sorted(f["floor"] for f in usable.values())
+        within = sum(f["within"] * f["n"] for f in usable.values()) / sum(f["n"] for f in usable.values())
+        print(f"floor over {len(usable)} elements (placement mismatches apart: {len(placement)}): min {fl[0]:.9f} median {fl[len(fl) // 2]:.9f} max {fl[-1]:.9f} ft; closed ends within 0.00001 ft of a Revit vertex {within:.1%}")
+        vecs = np.array([f["vector"] for f in usable.values()])
+        common = np.median(vecs, axis=0)
+        spread = float(np.abs(vecs - common).max())
+        print(f"median offset vectors: common {common[0]:+.9f},{common[1]:+.9f},{common[2]:+.9f} ft, largest departure from it {spread:.9f} ft")
+        offset = common if spread <= SAME_OFFSET and float(np.linalg.norm(common)) > SAME_OFFSET else None
+        print("offset: one vector, taken off for a second reading" if offset is not None else "offset: no single nonzero vector; no second reading")
+    else:
+        offset = None
+    # 5. Outcomes.
+    rows = score(gaps, unwelded, faceted, floors)
+    per_gap = summary("unwelded", rows)
+    if unwelded is not welded:
+        summary("default meshes", score(gaps, welded, faceted, floors_of(welded, joints, sorted(set(welded) & faceted))))
+    if offset is not None:
+        shifted = floors_of(unwelded, joints, scored_tags, offset)
+        rows_shifted = score(gaps, unwelded, faceted, shifted, offset)
+        summary("offset taken off", rows_shifted)
+        print(f"floor with the offset taken off: median {np.median([f['floor'] for f in shifted.values()]):.9f} ft")
+        # With a frame offset the reading without it is the floor's artefact, so the corners
+        # and raw points below follow the reading with it taken off.
+        rows = rows_shifted
+    # 6. Corners.
+    scored = [(g, o) for g, o in rows if o in SCORED]
+    corners = collections.defaultdict(list)
+    for g, o in scored:
+        ends = sorted([tuple(np.round(point(g["p"]), 6)), tuple(np.round(point(g["q"]), 6))])
+        corners[tuple(ends)].append((g, o))
+    print(f"scored occurrences {len(scored)}, distinct gaps {len({(g['graph'], g['face'], g['loop'], g['at']) for g, _ in scored})}, "
+          f"corners {len(corners)}, elements {len({g['owner'] for g, _ in scored})}, graphs {len({g['graph'] for g, _ in scored})}")
+    for ends, members in sorted(corners.items(), key=lambda kv: float(kv[1][0][0]["gap"])):
+        size = float(members[0][0]["gap"])
+        outs = collections.Counter(o for _, o in members)
+        print(f"corner gap {size:.6f} ft ({size * 304.8:.3f} mm): occurrences {len(members)}, " + ", ".join(f"{k} {v}" for k, v in sorted(outs.items())))
+    # 7. Raw points.
+    scale_ft = ifcopenshell.util.unit.calculate_unit_scale(model) / 0.3048
+    largest = collections.defaultdict(float)
+    sizes = collections.defaultdict(list)
+    for g, _ in scored:
+        largest[g["owner"]] = max(largest[g["owner"]], float(g["gap"]))
+        sizes[g["owner"]].append(float(g["gap"]))
+    with_pair = 0
+    for tag in sorted(largest):
+        pts = []
+        for item in items_of(elements[tag]):
+            if item.is_a() in FACESETS:
+                pts.extend(item.Coordinates.CoordList)
+        if not pts:
+            continue
+        raw = np.unique(np.array(pts, dtype=float) * scale_ft, axis=0)
+        near = close_pairs(raw, 1.5 * largest[tag])
+        at_size = [d for d in near if any(0.5 * s <= d <= 1.5 * s for s in sizes[tag])]
+        with_pair += bool(at_size)
+        if per_gap_lines:
+            print(f"raw owner={tag} points={len(raw)} pairs_under_1.5x_largest={len(near)} pairs_at_a_gap_size={len(at_size)}")
+    print(f"raw points: elements with a scored gap {len(largest)}; with two raw points at a scored gap's size (0.5x to 1.5x) {with_pair}")
+    if per_gap_lines:
+        for key, c in sorted(per_gap.items()):
+            print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} " + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
 
 
