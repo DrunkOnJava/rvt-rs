@@ -1151,8 +1151,9 @@ fn ring_segments(
 ///
 /// #2085: a ring whose edges do not all meet so joins where every gap's step along the
 /// surface (`length`) is under [`RING_TOUCHING`], each such pair of ends being one point,
-/// the ring's own, as [`close`] makes them. No edge is drawn that the file does not hold:
-/// Griffin chose to join no wider gap (2026-11-21). A ring with an edge whose ends lie
+/// the ring's own, as [`close`] makes them: the next edge's stored end is dropped, so its
+/// first span starts up to that distance off it, and no edge is added. Griffin chose to join
+/// no wider gap (2026-11-21). A ring with an edge whose ends lie
 /// within that distance of each other, or of the ring's last point, which could join at
 /// either end, stays refused.
 fn joined_ring(
@@ -1190,8 +1191,9 @@ fn joined_ring(
 
 /// Two ends of a ring's edges this close along the surface, in feet, are one point (#2085):
 /// 0.003 mm, which takes in the gaps of the BIM4LCA office mullions (3e-6 ft) and walls
-/// (2e-7 ft) whose bodies and quantities then match Revit's export, and none of the
-/// 1e-4 to 1.5e-3 ft gaps where a piece of edge is missing.
+/// (2e-7 ft) whose bodies and quantities then match Revit's export. Wider gaps stay
+/// refused: from 1e-4 ft up a piece of edge looks missing, and those between 1e-5 and
+/// 1e-4 ft are not read.
 const RING_TOUCHING: f64 = 1e-5;
 /// How a gap's step along the surface is measured, where the ring joins touching ends.
 type Loose<'a> = Option<&'a dyn Fn([f64; 2], [f64; 2]) -> f64>;
