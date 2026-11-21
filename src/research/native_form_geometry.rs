@@ -32,7 +32,9 @@
 //! separates the marked axis, reads the sweep angles, and projects the saved
 //! family-coordinate curves into a radial/axial profile (RE-391/RE-392).
 
+mod blend;
 mod revolution;
+pub use blend::{Blend, BlendSection, FIRST_OFFSET_PARAMETER, SECOND_OFFSET_PARAMETER};
 pub use revolution::{Revolution, RevolutionMesh};
 
 use crate::graph_value::Fv;
@@ -1403,7 +1405,7 @@ impl FormDocument {
                     self.sketch_curves.entry(sketch).or_default().push(id);
                 }
             }
-            "ExtrusionElem" | "RevolutionElem" | "SketchPlane" | "VarSketch" => {}
+            "ExtrusionElem" | "RevolutionElem" | "BlendElem" | "SketchPlane" | "VarSketch" => {}
             _ => return,
         }
         if self.graphs.contains_key(&id) {
