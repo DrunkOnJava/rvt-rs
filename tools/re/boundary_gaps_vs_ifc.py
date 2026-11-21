@@ -8,8 +8,10 @@ same gaps (`piece`). This sets them against Revit's body for the same Tag and pr
 distances only, never a coordinate; `--per-gap` adds one line per gap with its ElementIds.
 
 1. **Row 0.** Each `gapxyz` gap equals the `piece` gap of the same graph, face, loop and
-   position, so both lines read one gap finder. Any difference or unmatched gap is printed
-   and nothing after it is trusted.
+   position, so both lines read one gap finder. A gap on a plane refused because of a
+   neighbouring face (the probe's `gapfrom`), which the census does not count, is counted apart
+   and left out. Any other difference or unmatched gap is printed and nothing after it is
+   trusted.
 2. **Coverage.** The gaps an element's graphics reach at detail level 3, of the census, split
    into the census's groups: both edges beside the gap placed alike by their two faces (`agree`:
    both distances under 0.00001 ft), one of them placed apart (`apart`), or either unread
@@ -134,6 +136,9 @@ def read_probe(path):
                 joints.append(fields(line))
             elif line.startswith("boundaryunread "):
                 UNREAD_OWNERS.append(fields(line).get("owner"))
+            elif line.startswith("gapfrom "):
+                f = fields(line)
+                NEIGHBOUR_REFUSED.add((f["graph"], f["face"]))
             elif line.startswith("edgesides "):
                 f = fields(line)
                 f["plane"] = [point(x) for x in f["plane"].split(";")]
@@ -148,6 +153,9 @@ def read_probe(path):
 
 
 UNREAD_OWNERS = []
+# (graph, face) of each `gapfrom` line: a plane refused because a neighbouring face's ring is,
+# whose own ring the census does not count.
+NEIGHBOUR_REFUSED = set()
 # Each `edgesides` line (#2106): a plane's shared edge with both faces' samples placed.
 EDGES = []
 GROUP_SOURCE = {}
@@ -412,7 +420,12 @@ def main():
     def surface(g):
         return pieces.get(key_of(g), (None, "-", "-", None, None))[2]
 
-    # 1. Row 0.
+    # 1. Row 0. A gap on a plane refused because of its neighbour (`gapfrom`) has no census line;
+    # it is counted apart and left out, and any other gap not in the census fails the row.
+    outside = [g for g in gaps if key_of(g) not in pieces and (g["graph"], g["face"]) in NEIGHBOUR_REFUSED]
+    if outside:
+        print(f"gaps on planes refused because of a neighbouring face (`gapfrom`), outside the census, left out: {len(outside)}")
+        gaps = [g for g in gaps if not (key_of(g) not in pieces and (g["graph"], g["face"]) in NEIGHBOUR_REFUSED)]
     equal = differ = unmatched = 0
     for g in gaps:
         key = key_of(g)
