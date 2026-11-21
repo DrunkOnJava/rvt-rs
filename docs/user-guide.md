@@ -89,8 +89,8 @@ export gives them (#219, RE-27, RE-59). An element whose record names no
 Level is contained in the building rather than filed under an arbitrary
 storey. Every wall also joins to its
 `IfcWallType` exactly, 360 of 360 (#88, RE-28), and the export writes
-that join: every element whose Revit type it reads is typed by one IFC type
-object per Revit type (RE-110). Still blocked (RE-19 negative on magnetar
+that join: every element it names `Family:Type` and whose Revit type it
+reads is typed by one IFC type object per Revit type (RE-110). Still blocked (RE-19 negative on magnetar
 corpora): schema-field Walls. Typed door and window host binding and room
 outlines (RE-101) have since been read, the 20 rotated shading plates match
 Revit's outline within 0.01 ft (RE-95), and from Revit 2023 doors and
