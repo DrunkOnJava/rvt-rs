@@ -427,8 +427,8 @@ fn param_surface(graph: &ObjectGraph, face: usize) -> Option<ParametricSurface> 
 }
 
 /// An edge's points through its face on `side`, by whichever evaluator reads that face. A
-/// parametric surface's points are clamped to its envelope first, as the mesher clamps a
-/// loop's samples.
+/// parametric surface's point within 1e-7 of its envelope is clamped onto it and one
+/// farther out is not placed, as `loop_segments` takes a loop's samples.
 fn place_why(
     graph: &ObjectGraph,
     e: usize,
@@ -459,9 +459,17 @@ fn place_why(
     let points: Option<Polyline> = uv
         .iter()
         .map(|q| {
-            let u = q[0].clamp(env[0][0].min(env[1][0]), env[0][0].max(env[1][0]));
-            let v = q[1].clamp(env[0][1].min(env[1][1]), env[0][1].max(env[1][1]));
-            ps.evaluate(u, v).ok()
+            // As `loop_segments` takes a trim sample: within 1e-7 of the envelope, clamped
+            // onto it; farther out, not placed ("trim outside surface envelope").
+            let mut uv = *q;
+            for k in 0..2 {
+                let (lo, hi) = (env[0][k].min(env[1][k]), env[0][k].max(env[1][k]));
+                if uv[k] < lo - 1e-7 || uv[k] > hi + 1e-7 {
+                    return None;
+                }
+                uv[k] = uv[k].clamp(lo, hi);
+            }
+            ps.evaluate(uv[0], uv[1]).ok()
         })
         .collect();
     points.map_or(Placed::NotEvaluated, Placed::At)
