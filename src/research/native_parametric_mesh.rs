@@ -453,10 +453,11 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
 }
 
 /// The largest parameter gap, over the loop's extent on its axis, across which
-/// [`loop_polygon`] takes two ends that meet in model coordinates as one point. Read on
-/// spline faces only: on the BIM4LCA files and a contributor's save every failing join
-/// there was under 6e-5 of the range or a jump of 1 per cent or more (#2085); on ruled,
-/// revolved and cone faces it is not read.
+/// [`loop_polygon`] takes two ends that meet in model coordinates as one point. The
+/// figure was read on the research branch against the surface's range, on spline faces:
+/// there every failing join on the BIM4LCA files and a contributor's save was under 6e-5
+/// of the range or a jump of 1 per cent or more (#2085). Against the loop's extent, which
+/// is smaller, it is stricter, and in this form it has not been read on any class.
 const STRICT_PARAMETER_GAP: f64 = 1e-4;
 
 /// How far a revolved profile's points lie from the axis (the surface frame's `z`) for
