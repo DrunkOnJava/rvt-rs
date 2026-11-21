@@ -10,8 +10,9 @@ below names the model it was measured on, and says "local only" or "not shared"
 when nobody else can fetch that model, so nobody else can re-run it. The
 [model index](reference-models.md#model-index) lists the models, and
 [re-run the numbers](reference-models.md#re-run-the-numbers) is the command for
-the numbers on the models anyone can fetch; nobody has yet re-run this page's
-numbers from it and compared them. CI checks the rule on this page and the
+the numbers on the models anyone can fetch; this page's numbers were last
+compared with its output on 2026-11-09, in the [W10 re-run](w10-rerun.md),
+which records the differences it found and what the command does not produce. CI checks the rule on this page and the
 README.
 
 ## Four levels of "it works"
