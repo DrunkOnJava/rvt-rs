@@ -922,12 +922,18 @@ pub fn polygon_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<Polygon
     Ok((class, breaks))
 }
 
-/// #2085 candidate: the smallest of `JOIN_BOUNDS` within which the loop's edges join
+/// The bounds a trim loop's near ends may join within, in model coordinates: under
+/// 0.00001 ft, where two ends count as one point, the bound Griffin chose for a plane's or
+/// cylinder's ring (2026-11-21, #2085, RE-497). `JOIN_BOUNDS` keeps the wider ones for the
+/// probe's census of where loops would join.
+const LOOP_JOIN_BOUNDS: [f64; 2] = [1e-6, 1e-5];
+
+/// #2085 candidate: the smallest of `LOOP_JOIN_BOUNDS` within which the loop's edges join
 /// whole, each at its nearer end; `None` where none does, or where an edge is shorter
 /// than that bound, so that either of its ends would join.
 fn loop_join_bound(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<Option<f64>> {
     let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
-    for bound in JOIN_BOUNDS {
+    for bound in LOOP_JOIN_BOUNDS {
         if joins_within(&at, segments, bound)? {
             for seg in segments {
                 if distance(at(seg[0])?, at(*seg.last().unwrap())?) < bound {
@@ -1106,7 +1112,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         let least = if loops.is_empty() { 2 } else { 1 };
         let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
         // #2085 (candidate, `research/2085-chairs` only): a loop that does not join within
-        // 1e-7 joins at the smallest of `JOIN_BOUNDS` that closes it whole; a loop that
+        // 1e-7 joins at the smallest of `LOOP_JOIN_BOUNDS` that closes it whole; a loop that
         // already closes keeps the strict path unchanged.
         let bound = if loop_closes(&surface, &segments)? {
             STRICT_JOIN
