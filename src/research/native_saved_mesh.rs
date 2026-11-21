@@ -1022,6 +1022,53 @@ fn ring_impl(
     refine: EdgeSide,
     limit: usize,
 ) -> Result<Vec<[f64; 2]>> {
+    let segments = ring_segments(g, index, face, li, refine, limit)?;
+    joined_ring(segments, || step_length(g, index, face))
+}
+/// The length on a plane or cylinder face's surface of a straight step between two points
+/// of its parameters: a chord on a plane, a helix on a cylinder. A step across a cylinder's
+/// seam is so a whole turn long, not the distance between its ends (#2085).
+type StepLength = Box<dyn Fn([f64; 2], [f64; 2]) -> f64>;
+fn step_length(g: &ObjectGraph, index: &PointerIndex<'_>, face: usize) -> Result<StepLength> {
+    let si = index
+        .resolve(face, &g.objects[face].fields["m_pSurf"])?
+        .context("face surface")?;
+    let s = &g.objects[si];
+    match s.class_name.as_str() {
+        "Plane" => {
+            let x = point::<3>(&s.fields["m_xVec"])?;
+            let y = point::<3>(&s.fields["m_yVec"])?;
+            Ok(Box::new(move |a: [f64; 2], b: [f64; 2]| -> f64 {
+                let (du, dv) = (b[0] - a[0], b[1] - a[1]);
+                (0..3)
+                    .map(|k| (du * x[k] + dv * y[k]).powi(2))
+                    .sum::<f64>()
+                    .sqrt()
+            }))
+        }
+        "CylSurf" => {
+            // `cylinder_face` holds the basis orthonormal, so a straight step in the
+            // parameters is a helix of radius `r`.
+            let r = s.fields["m_radius"].as_f64().context("cylinder radius")?;
+            let z = point::<3>(&s.fields["m_zVec"])?;
+            let height = (0..3).map(|k| z[k] * z[k]).sum::<f64>().sqrt();
+            Ok(Box::new(move |a: [f64; 2], b: [f64; 2]| -> f64 {
+                (r * (b[0] - a[0])).hypot(height * (b[1] - a[1]))
+            }))
+        }
+        other => bail!("unsupported surface {other}"),
+    }
+}
+/// The edges of the loop `li` of `face` in the loop's order, each as its points in the
+/// surface's parameters, refined as `refine` says and bounded as [`ring_impl`] says.
+fn ring_segments(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    li: usize,
+    refine: EdgeSide,
+    limit: usize,
+) -> Result<Vec<Vec<[f64; 2]>>> {
     let l = &g.objects[li];
     ensure!(
         ["EdgeLoop", "EdgeLoopWithChainEnvelopes"].contains(&l.class_name.as_str()),
@@ -1093,6 +1140,23 @@ fn ring_impl(
             .resolve(cur, &e.fields["m_next"][side])?
             .context("null next edge")?;
     }
+    Ok(segments)
+}
+/// One ring from a loop's edges, each joined to the ring at whichever of its ends lies
+/// within 1e-7 of the ring's last point in the surface's parameters ([`close`]), and the
+/// last edge's far end back at the first point.
+///
+/// #2085: a ring whose edges do not all meet so joins where every gap's step along the
+/// surface (`length`) is under [`RING_TOUCHING`], each such pair of ends being one point,
+/// the ring's own, as [`close`] makes them: the next edge's stored end is dropped, so its
+/// first span starts up to that distance off it, and no edge is added. Griffin chose to join
+/// no wider gap (2026-11-21). A ring with an edge whose ends lie
+/// within that distance of each other, or of the ring's last point, which could join at
+/// either end, stays refused.
+fn joined_ring(
+    segments: Vec<Vec<[f64; 2]>>,
+    length: impl FnOnce() -> Result<StepLength>,
+) -> Result<Vec<[f64; 2]>> {
     // Saved circular loops can be represented by two connected arc edges
     // (typically two semicircles). A third edge is not a topology invariant;
     // closure, nonzero area, and connected ordering below remain mandatory.
@@ -1101,28 +1165,16 @@ fn ring_impl(
         segments.iter().all(|s: &Vec<_>| !s.is_empty()),
         "empty boundary edge"
     );
-    let mut output = None;
-    for reverse in [false, true] {
-        let mut out = segments[0].clone();
-        if reverse {
-            out.reverse()
-        };
-        let mut valid = true;
-        for s in &segments[1..] {
-            let last = *out.last().unwrap();
-            if close(last, s[0]) {
-                out.extend_from_slice(&s[1..])
-            } else if close(last, *s.last().unwrap()) {
-                out.extend(s.iter().rev().skip(1).copied())
-            } else {
-                valid = false;
-                break;
+    let mut output = joined_within(&segments, None);
+    if output.is_none() {
+        // A surface whose steps cannot be measured keeps the strict join's refusal.
+        if let Ok(length) = length() {
+            if segments
+                .iter()
+                .all(|s| length(s[0], s[s.len() - 1]) >= RING_TOUCHING)
+            {
+                output = joined_within(&segments, Some(&*length));
             }
-        }
-        if valid && close(out[0], *out.last().unwrap()) {
-            out.pop();
-            output = Some(out);
-            break;
         }
     }
     let mut out = output.context("disconnected UV boundary")?;
@@ -1132,6 +1184,67 @@ fn ring_impl(
         "degenerate boundary"
     );
     Ok(out)
+}
+
+/// Two ends of a ring's edges this close along the surface, in feet, are one point (#2085):
+/// 0.003 mm, which takes in the gaps of the BIM4LCA office mullions (3e-6 ft) and walls
+/// (2e-7 ft) whose bodies and quantities then match Revit's export. Wider gaps stay
+/// refused: from 1e-4 ft up a piece of edge looks missing, and those between 1e-5 and
+/// 1e-4 ft are not read.
+const RING_TOUCHING: f64 = 1e-5;
+/// How a gap's step along the surface is measured, where the ring joins touching ends.
+type Loose<'a> = Option<&'a dyn Fn([f64; 2], [f64; 2]) -> f64>;
+/// The ring `segments` make, each edge joined at its end within 1e-7 of the ring's last
+/// point in the parameters ([`close`]). With `loose`, an edge whose nearer end's step
+/// along the surface is under [`RING_TOUCHING`] joins too, that end taken as the ring's
+/// last point, and so may the last edge's far end and the first point. `None` where
+/// neither way round the first edge closes.
+fn joined_within(segments: &[Vec<[f64; 2]>], loose: Loose<'_>) -> Option<Vec<[f64; 2]>> {
+    for reverse in [false, true] {
+        let mut out = segments[0].clone();
+        if reverse {
+            out.reverse()
+        };
+        let mut valid = true;
+        for s in &segments[1..] {
+            let last = *out.last().unwrap();
+            let tail = *s.last().unwrap();
+            if close(last, s[0]) {
+                out.extend_from_slice(&s[1..])
+            } else if close(last, tail) {
+                out.extend(s.iter().rev().skip(1).copied())
+            } else if let Some(length) = loose {
+                let (head_step, tail_step) = (length(last, s[0]), length(last, tail));
+                if head_step.min(tail_step) >= RING_TOUCHING
+                    || head_step.max(tail_step) < RING_TOUCHING
+                {
+                    valid = false;
+                    break;
+                }
+                if head_step < tail_step {
+                    out.extend_from_slice(&s[1..])
+                } else {
+                    out.extend(s.iter().rev().skip(1).copied())
+                }
+            } else {
+                valid = false;
+                break;
+            }
+        }
+        if !valid {
+            continue;
+        }
+        let (first, last) = (out[0], *out.last().unwrap());
+        if close(first, last) {
+            out.pop();
+            return Some(out);
+        }
+        if loose.is_some_and(|length| length(last, first) < RING_TOUCHING) {
+            out.pop();
+            return Some(out);
+        }
+    }
+    None
 }
 
 fn tessellation_axis(
@@ -2674,9 +2787,10 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, band_mesh,
-        cross, distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
-        refine_crossing_edge, refine_crossing_edge_within, regions_tile, regions_tile_within,
+        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, RING_TOUCHING,
+        StepLength, area, band_mesh, cross, distance_to_chord, isoparametric_axis, joined_ring,
+        normals_follow_winding, planar_points_with, refine_crossing_edge,
+        refine_crossing_edge_within, regions_tile, regions_tile_within,
         retain_boundary_points_within, ring_points_with, split_pinched_rings, within_envelope,
     };
     use anyhow::Result;
@@ -3523,5 +3637,83 @@ mod tests {
         let square = vec![[0.5, 0.5], [1.5, 0.5], [1.5, 1.5], [0.5, 1.5]];
         let covered = band_area(&[square], 0.5, 2.).unwrap();
         assert!((covered - 1.).abs() < 1e-12, "covered area {covered}");
+    }
+    // #2085's touching join (`joined_ring`, `joined_within`), failure modes first:
+    // a gap at or over `RING_TOUCHING` must stay refused; a step across a seam, whose
+    // ends coincide in space, must stay refused; an edge both of whose ends lie within
+    // the bound of the ring's last point, or shorter than it, must stay refused; and a
+    // touching pair must become one point, not two.
+
+    /// A unit square in a plane's parameters, its four sides as edges, the third edge's
+    /// start moved by `gap` along the side before it.
+    fn square_with_gap(gap: f64) -> Vec<Vec<[f64; 2]>> {
+        vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1. - gap, 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ]
+    }
+
+    fn plane_steps() -> Result<StepLength> {
+        Ok(Box::new(|a: [f64; 2], b: [f64; 2]| -> f64 {
+            (b[0] - a[0]).hypot(b[1] - a[1])
+        }))
+    }
+
+    #[test]
+    fn touching_ends_join_as_one_point() {
+        let ring = joined_ring(square_with_gap(RING_TOUCHING / 2.), plane_steps).unwrap();
+        assert_eq!(ring.len(), 4, "the touching pair is one point: {ring:?}");
+    }
+
+    #[test]
+    fn a_gap_just_over_the_bound_stays_refused() {
+        let error = joined_ring(square_with_gap(RING_TOUCHING * 1.001), plane_steps).unwrap_err();
+        assert_eq!(error.to_string(), "disconnected UV boundary");
+    }
+
+    #[test]
+    fn a_step_across_a_seam_stays_refused() {
+        // On a cylinder of radius 1 the third edge starts at u + 2π: the same point in
+        // space, a whole turn along the surface.
+        let mut segments = square_with_gap(0.);
+        segments[2][0][0] += std::f64::consts::TAU;
+        let helix = || -> Result<StepLength> {
+            Ok(Box::new(|a: [f64; 2], b: [f64; 2]| -> f64 {
+                (b[0] - a[0]).hypot(b[1] - a[1])
+            }))
+        };
+        assert!(joined_ring(segments, helix).is_err());
+    }
+
+    #[test]
+    fn an_edge_within_the_bound_of_the_ring_stays_refused() {
+        // The third edge is shorter than the bound, so either of its ends could join.
+        let short = RING_TOUCHING / 4.;
+        let segments = vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1. - short / 2., 1.], [1. - short, 1.]],
+            vec![[1. - short, 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ];
+        assert!(joined_ring(segments, plane_steps).is_err());
+    }
+
+    #[test]
+    fn an_edge_whose_ends_both_touch_the_ring_stays_refused() {
+        // The third edge (1.125 bounds long) has both ends within the bound of the ring's
+        // last point, (1, 1), its far end the nearer. Taken there, as the nearer end would
+        // be without the guard, its start meets the fourth edge and the ring closes.
+        let d = RING_TOUCHING * 0.75;
+        let segments = vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1. + d, 1.], [1. - d / 2., 1.]],
+            vec![[1. + d, 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ];
+        assert!(joined_ring(segments, plane_steps).is_err());
     }
 }
