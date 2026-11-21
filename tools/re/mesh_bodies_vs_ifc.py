@@ -72,7 +72,6 @@ import multiprocessing
 import os
 import statistics
 import sys
-import zlib
 
 import ifcopenshell
 import ifcopenshell.geom
@@ -82,7 +81,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fine_mesh  # noqa: E402
 import true_curves  # noqa: E402
 import volume_readings  # noqa: E402
-from ifc_common import mesh_parts, site_frame  # noqa: E402
+from ifc_common import mesh_parts, site_frame, tag_sample  # noqa: E402
 from roof_bodies_vs_ifc import shapes_of  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
@@ -351,15 +350,8 @@ def surface_distance(points, triangles):
 
 
 def class_sample(tags, cap=CLASS_CAP):
-    """The Tags of one class's bodies that are scored, in the order by length and text the
-    scorer prints them: every one up to `cap`, else the `cap` whose Tag has the smallest CRC-32
-    (#2114). A body added to the class or taken from it moves at most one other in or out, and
-    the choice is the same in every process, as Python's salted `hash` of a string is not."""
-    tags = sorted(set(tags), key=lambda t: (len(t), t))
-    if len(tags) > cap:
-        keep = set(sorted(tags, key=lambda t: (zlib.crc32(t.encode()), len(t), t))[:cap])
-        tags = [t for t in tags if t in keep]
-    return tags
+    """The Tags of one class's bodies that are scored (`ifc_common.tag_sample`)."""
+    return tag_sample(tags, cap)
 
 
 def vertices(triangles):
