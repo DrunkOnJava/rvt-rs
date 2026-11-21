@@ -11,9 +11,11 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    position, so both lines read one gap finder. Any difference or unmatched gap is printed
    and nothing after it is trusted.
 2. **Coverage.** The gaps an element's graphics reach at detail level 3, of the census, split
-   into the census's cohorts: both edges beside the gap placed alike by their two faces
-   (`agree`: `sides_a` and `sides_b` both under 0.00001 ft), one of them placed apart
-   (`apart`), or either unread (`unread`).
+   into the census's groups: both edges beside the gap placed alike by their two faces (`agree`:
+   both distances under 0.00001 ft), one of them placed apart (`apart`), or either unread
+   (`unread`). The distances are `piecex`'s `a_agree` and `b_agree` where it is printed, which
+   place an edge through any face an evaluator reads, and `piece`'s `sides_a` and `sides_b`
+   (planes and cylinders only) elsewhere.
 3. **Bodies.** Only the Body representations of the Tag's elements but openings (which carry
    their host's Tag) and their aggregated parts. Revit's vertices are compared only where every
    Body item is polygonal: an `IfcPolygonalFaceSet`, `IfcTriangulatedFaceSet`, `IfcFacetedBrep`
@@ -42,7 +44,9 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    end kept on every scored gap is the office's result; anything else is counted by outcome. The
    mesh's outcomes beside them, by cohort. Where Revit keeps one end, which end, by cohort,
    against the state of the two edges beside the gap: the edge before it, ending at P, and the
-   edge after it, starting at Q, each placed alike or apart by its two faces, or unread.
+   edge after it, starting at Q, each placed alike or apart by its two faces, or unread; once by
+   `piecex`'s reading and once by `piece`'s, which places an edge through planes and cylinders
+   only.
 6. **Corners and sizes.** The scored gaps grouped by their two ends in world coordinates,
    either way round, so one corner seen from two faces counts once; then one line per cohort,
    surface class and gap size, with the elements' IFC classes and the floor and `tol` they were
@@ -94,28 +98,45 @@ def side(value):
         return None
 
 
+def states(a, b):
+    """The census group of a gap and the state of each edge beside it, from two distances."""
+    split = "unread" if a is None or b is None else "agree" if max(a, b) < TOUCHING else "apart"
+    state = tuple("unread" if x is None else "placed alike" if x < TOUCHING else "placed apart" for x in (a, b))
+    return split, state
+
+
 def read_probe(path):
-    pieces, gaps, joints = {}, [], []
+    """`piecex` places each edge through either face by any evaluator that reads it, parametric
+    surfaces included, so its `a_agree` and `b_agree` give a gap's group where it is printed;
+    `piece`'s `sides_a` and `sides_b` (planes and cylinders only) give it elsewhere."""
+    pieces, gaps, joints, wider = {}, [], [], {}
     # utf-8-sig: Windows PowerShell's `Out-File -Encoding utf8` writes a byte-order mark.
     with open(path, encoding="utf-8-sig", errors="replace") as handle:
         for line in handle:
             if line.startswith("piece "):
                 f = fields(line)
                 key = (f["graph"], f["face"], f["loop"], f["at"].split("/")[0])
-                a, b = side(f.get("sides_a")), side(f.get("sides_b"))
-                split = "unread" if a is None or b is None else "agree" if max(a, b) < TOUCHING else "apart"
-                state = tuple("unread" if x is None else "placed alike" if x < TOUCHING else "placed apart" for x in (a, b))
-                pieces[key] = (float(f["gap"]), split, f.get("surface", "-"), state)
+                split, state = states(side(f.get("sides_a")), side(f.get("sides_b")))
+                pieces[key] = (float(f["gap"]), split, f.get("surface", "-"), state, state)
+            elif line.startswith("piecex "):
+                f = fields(line)
+                wider[(f["graph"], f["face"], f["loop"], f["at"])] = states(side(f.get("a_agree")), side(f.get("b_agree")))
             elif line.startswith("gapxyz "):
                 gaps.append(fields(line))
             elif line.startswith("jointxyz "):
                 joints.append(fields(line))
             elif line.startswith("boundaryunread "):
                 UNREAD_OWNERS.append(fields(line).get("owner"))
+    for key, (split, state) in wider.items():
+        if key in pieces:
+            gap, _, surface, _, plane_state = pieces[key]
+            pieces[key] = (gap, split, surface, state, plane_state)
+    GROUP_SOURCE.update(piecex=sum(1 for k in pieces if k in wider), piece=sum(1 for k in pieces if k not in wider))
     return pieces, gaps, joints
 
 
 UNREAD_OWNERS = []
+GROUP_SOURCE = {}
 
 
 def key_of(g):
@@ -372,10 +393,10 @@ def main():
         return 1
 
     def cohort(g):
-        return pieces.get(key_of(g), (None, "not in the census", "-", None))[1]
+        return pieces.get(key_of(g), (None, "not in the census", "-", None, None))[1]
 
     def surface(g):
-        return pieces.get(key_of(g), (None, "-", "-", None))[2]
+        return pieces.get(key_of(g), (None, "-", "-", None, None))[2]
 
     # 1. Row 0.
     equal = differ = unmatched = 0
@@ -395,7 +416,8 @@ def main():
     reached = {key_of(g) for g in gaps}
     census = collections.Counter(v[1] for v in pieces.values())
     hit = collections.Counter(pieces[k][1] for k in reached if k in pieces)
-    print(f"coverage: census gaps {len(pieces)} ({counts(census)}); reached by an element at level 3 {len(reached)} ({counts(hit)})")
+    print(f"coverage: census gaps {len(pieces)} ({counts(census)}); reached by an element at level 3 {len(reached)} ({counts(hit)}); "
+          f"groups from `piecex` on {GROUP_SOURCE.get('piecex', 0)} gaps and from `piece` on {GROUP_SOURCE.get('piece', 0)}")
     tags = {g["owner"] for g in gaps}
     print(f"elements reaching a gap {len(tags)}; ring ends {len(joints)}; elements whose graphics the probe could not walk (`boundaryunread`) {len(UNREAD_OWNERS)}")
     if not gaps:
@@ -494,16 +516,19 @@ def main():
             print(f"corner {size[0]} {size[1]} gap {size[2]:.6f} ft: occurrences {len(members)}, " + counts(collections.Counter(o for _, o in members)))
     # Which end Revit keeps, against the state of the edge before the gap (ending at P) and the
     # edge after it (starting at Q): on the office it keeps the end of the edge both faces place.
-    kept = collections.Counter()
-    for g, o in scored:
-        if o in ONE_END:
-            state = pieces.get(key_of(g), (None, None, None, None))[3]
-            if state:
-                kept[(cohort(g), o, state[0], state[1])] += 1
-    for c in COHORTS:
-        line = ", ".join(f"{o} with P's edge {a} and Q's edge {b} {n}" for (cc, o, a, b), n in sorted(kept.items()) if cc == c)
-        if line:
-            print(f"kept end by its edges, {c}: {line}")
+    # Twice: by `piecex`'s reading (any evaluator), and by `piece`'s, which places an edge through
+    # planes and cylinders only; on the office the end Revit keeps is on the edge `piece` reads.
+    for which, label in ((3, "kept end by its edges"), (4, "kept end by its edges as planes and cylinders place them")):
+        kept = collections.Counter()
+        for g, o in scored:
+            if o in ONE_END:
+                state = pieces.get(key_of(g), (None, None, None, None, None))[which]
+                if state:
+                    kept[(cohort(g), o, state[0], state[1])] += 1
+        for c in COHORTS:
+            line = ", ".join(f"{o} with P's edge {a} and Q's edge {b} {n}" for (cc, o, a, b), n in sorted(kept.items()) if cc == c)
+            if line:
+                print(f"{label}, {c}: {line}")
     for c, surf, size in sorted(by_size):
         k = (c, surf, size)
         fl = [f for f, _ in tols[k]]
@@ -523,7 +548,7 @@ def main():
             print(f"between, {c}: {len(ts)} drawings, along the gap from P (0) to Q (1): min {ts[0]:.3f} median {ts[len(ts) // 2]:.3f} max {ts[-1]:.3f}")
     if per_gap_lines:
         for key, c in sorted(per_gap.items()):
-            print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-', None))[1]} "
+            print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-', None, None))[1]} "
                   + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
 
