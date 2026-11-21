@@ -68,7 +68,8 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    the edge before the gap (ending at P) and the edge after it (starting at Q), the probe's
    `piecemore` `a_flags` and `b_flags`: by whether bit 0x8 is set on one edge, both or neither,
    and by the two values. Where only one edge has it, whether Revit's point is at the other
-   edge's end only, at the flagged edge's end only, or neither alone.
+   edge's end only, at the flagged edge's end only, or neither alone. Beside it, the outcome
+   against the class of each edge's other face (the probe's `piecenbr` `a=` and `b=`).
 
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
@@ -143,6 +144,10 @@ def read_probe(path):
             elif line.startswith("piecemore "):
                 f = fields(line)
                 FLAGS[(f["graph"], f["face"], f["loop"], f["at"])] = (f.get("a_flags"), f.get("b_flags"))
+            elif line.startswith("piecenbr "):
+                f = fields(line)
+                NEIGHBOURS[(f["graph"], f["face"], f["loop"], f["at"])] = tuple(
+                    (f.get(s) or "-").split(":")[1] if ":" in (f.get(s) or "") else "-" for s in ("a", "b"))
             elif line.startswith("gapxyz "):
                 gaps.append(fields(line))
             elif line.startswith("jointxyz "):
@@ -174,6 +179,8 @@ EDGES = []
 GROUP_SOURCE = {}
 # (graph, face, loop, at) -> the `m_flags` of the edges before and after the gap, as printed.
 FLAGS = {}
+# (graph, face, loop, at) -> the class of the other face of the edges before and after the gap.
+NEIGHBOURS = {}
 
 
 def flags_of(key):
@@ -588,7 +595,9 @@ def main():
                 print(f"{label}, {c}: {line}")
     # 9. Which end Revit keeps against the stored `m_flags` of the edges beside the gap.
     by_bit, by_pair, other_end = collections.Counter(), collections.Counter(), collections.Counter()
+    by_faces = collections.Counter()
     for g, o in scored:
+        by_faces[(cohort(g), NEIGHBOURS.get(key_of(g), ("unread", "unread")), o)] += 1
         fl = flags_of(key_of(g))
         if fl is None:
             by_bit[(cohort(g), "unread", o)] += 1
@@ -611,6 +620,9 @@ def main():
         pairs = [f"{a}/{b} {o} {n}" for (cc, (a, b), o), n in sorted(by_pair.items()) if cc == c]
         if pairs:
             print(f"edge m_flags (P's edge/Q's edge), {c}: " + ", ".join(pairs))
+        faces = [f"{a}/{b} {o} {n}" for (cc, (a, b), o), n in sorted(by_faces.items()) if cc == c]
+        if faces:
+            print(f"edges' other faces (P's edge/Q's edge), {c}: " + ", ".join(faces))
         told = {k: n for (cc, k), n in other_end.items() if cc == c}
         if told:
             print(f"bit 0x{FLAG_BIT:x} on one edge only, {c}: {sum(told.values())} drawings; Revit's point "
@@ -667,7 +679,7 @@ def main():
         for key, c in sorted(per_gap.items()):
             fl = flags_of(key)
             print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-', None, None))[1]} "
-                  f"flags={'unread' if fl is None else f'{fl[0]}/{fl[1]}'} "
+                  f"flags={'unread' if fl is None else f'{fl[0]}/{fl[1]}'} faces={'/'.join(NEIGHBOURS.get(key, ('unread', 'unread')))} "
                   + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
 
