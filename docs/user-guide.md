@@ -79,20 +79,23 @@ takes all 360 walls to an exact match against Revit's own
 export in world coordinates, and every column is the record prism minus
 the walls that cut it, exact on 256 of 256 (#215 / #238 / #239, RE-26 and
 RE-29). Rooms come out as 116 `IFCSPACE` carrying their real Revit name,
-number and storey, with a body that is the record's bounding box — exactly
-the reference export's plan envelope and floor-to-ceiling extent on all
-116 (#90, RE-29). Those elements land on the Revit Level their own element
+number and storey, with a body that is the outline of the solid Revit
+stores for the room wherever that solid closes, within 0.1% of Revit's own
+area and 0.01 ft of its outline on all 116 (RE-101; before it, the record's
+bounding box, #90, RE-29). Those elements land on the Revit Level their own element
 record names, or their base constraint where it names two, so all 970
 exported elements on Core Interior are contained in the storey Revit's own
 export gives them (#219, RE-27, RE-59). An element whose record names no
 Level is contained in the building rather than filed under an arbitrary
 storey. Every wall also joins to its
-`IfcWallType` exactly, 360 of 360, though that join is library-side today
-and is not yet written onto the exported wall (#88, RE-28). Still blocked
-(RE-19 / RE-20 negative on magnetar corpora): schema-field Walls, typed
-Door/Window host binding, room boundary polygons — RE-29 measured that
-negative, a room record carries no sketch — door and window bodies, the
-profile of the 20 rotated shading plates. Compound layers are read from
+`IfcWallType` exactly, 360 of 360 (#88, RE-28), and the export writes
+that join: every element it names `Family:Type` and whose Revit type it
+reads is typed by one IFC type object per Revit type (RE-110). Still blocked (RE-19 negative on magnetar
+corpora): schema-field Walls. Typed door and window host binding and room
+outlines (RE-101) have since been read, the 20 rotated shading plates match
+Revit's outline within 0.01 ft (RE-95), and from Revit 2023 doors and
+windows are drawn from Revit's saved meshes by default, where the mesh
+decodes whole. Compound layers are read from
 each type's own data (RE-53) and written as layer sets with their
 material names (RE-58); the reference export is a `ReferenceView_V1.2`
 file with no `IfcMaterialLayerSet` in it, so they are scored against the
@@ -284,9 +287,11 @@ calling it a breaking change.
 | `space_kind` | What the space is: `room`, `area` (a Revit Area), `mep_space` (a Revit Space) or `family_instance` (any other element that its "Export to IFC As" writes as a space, a family instance or a mass in the files measured); the same as `RvtElementRecordGeometry.SpaceKind` in the IFC. Filter on this, not on how the area was read. `mep_space` is the kind of a Revit Space (MEP), which rvt-rs does not read from a file's partition records, so none is written today; that says what rvt-rs writes, not what the files hold |
 
 What the schedules contain is what rvt-rs decodes and the IFC export writes,
-so check `rvt-inspect model.rvt` first: Revit 2024 project files with element
-records give walls, doors, windows, columns, slabs and rooms; other files
-give few or no rows. The browser viewer has the same two schedules as
+so check `rvt-inspect model.rvt` first: project files whose element records
+decode (Revit 2023 to 2025, and experimentally 2011 to 2022, 2026 and 2027)
+give the elements those records type, such as walls, doors, windows,
+columns, slabs and, where they are read, rooms; other files give few or no
+rows. The browser viewer has the same two schedules as
 **Download element schedule (CSV)** and **Download room schedule (CSV)**
 under Schedule, built in the tab like every other export.
 
