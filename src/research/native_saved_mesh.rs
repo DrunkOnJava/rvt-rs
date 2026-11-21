@@ -1149,12 +1149,12 @@ fn ring_segments(
 /// within 1e-7 of the ring's last point in the surface's parameters ([`close`]), and the
 /// last edge's far end back at the first point.
 ///
-/// #2085 (candidate): a ring whose edges do not all meet so joins at the smallest of
-/// `JOIN_BOUNDS` within which every gap's step along the surface (`length`) lies, keeping
-/// both of the edges' own ends: the face across each edge holds those ends, so a point
-/// moved between them would part the two faces; two ends within [`RING_SAME_POINT`] are one
-/// vertex, as [`close`] makes them. A ring with an edge whose ends lie within that bound of
-/// each other, or of the ring's last point, which could join at either end, stays refused.
+/// #2085: a ring whose edges do not all meet so joins where every gap's step along the
+/// surface (`length`) is under [`RING_TOUCHING`], each such pair of ends being one point,
+/// the ring's own, as [`close`] makes them. No edge is drawn that the file does not hold:
+/// Griffin chose to join no wider gap (2026-11-21). A ring with an edge whose ends lie
+/// within that distance of each other, or of the ring's last point, which could join at
+/// either end, stays refused.
 fn joined_ring(
     segments: Vec<Vec<[f64; 2]>>,
     length: impl FnOnce() -> Result<StepLength>,
@@ -1171,16 +1171,11 @@ fn joined_ring(
     if output.is_none() {
         // A surface whose steps cannot be measured keeps the strict join's refusal.
         if let Ok(length) = length() {
-            for bound in crate::native_parametric_mesh::JOIN_BOUNDS {
-                if let Some(out) = joined_within(&segments, Some((bound, &*length))) {
-                    if segments
-                        .iter()
-                        .all(|s| length(s[0], s[s.len() - 1]) >= bound)
-                    {
-                        output = Some(out);
-                    }
-                    break;
-                }
+            if segments
+                .iter()
+                .all(|s| length(s[0], s[s.len() - 1]) >= RING_TOUCHING)
+            {
+                output = joined_within(&segments, Some(&*length));
             }
         }
     }
@@ -1193,15 +1188,18 @@ fn joined_ring(
     Ok(out)
 }
 
-/// Two ends of a ring's edges this close along the surface, in feet, are one vertex.
-const RING_SAME_POINT: f64 = 1e-7;
-/// A bound on a ring's gaps, with how a gap's step along the surface is measured.
-type Loose<'a> = Option<(f64, &'a dyn Fn([f64; 2], [f64; 2]) -> f64)>;
+/// Two ends of a ring's edges this close along the surface, in feet, are one point (#2085):
+/// 0.003 mm, which takes in the gaps of the BIM4LCA office mullions (3e-6 ft) and walls
+/// (2e-7 ft) whose bodies and quantities then match Revit's export, and none of the
+/// 1e-4 to 1.5e-3 ft gaps where a piece of edge is missing.
+const RING_TOUCHING: f64 = 1e-5;
+/// How a gap's step along the surface is measured, where the ring joins touching ends.
+type Loose<'a> = Option<&'a dyn Fn([f64; 2], [f64; 2]) -> f64>;
 /// The ring `segments` make, each edge joined at its end within 1e-7 of the ring's last
 /// point in the parameters ([`close`]). With `loose`, an edge whose nearer end's step
-/// along the surface is under its bound joins too, with both its ends kept, and so may
-/// the last edge's far end and the first point. `None` where neither way round the
-/// first edge closes.
+/// along the surface is under [`RING_TOUCHING`] joins too, that end taken as the ring's
+/// last point, and so may the last edge's far end and the first point. `None` where
+/// neither way round the first edge closes.
 fn joined_within(segments: &[Vec<[f64; 2]>], loose: Loose<'_>) -> Option<Vec<[f64; 2]>> {
     for reverse in [false, true] {
         let mut out = segments[0].clone();
@@ -1216,17 +1214,18 @@ fn joined_within(segments: &[Vec<[f64; 2]>], loose: Loose<'_>) -> Option<Vec<[f6
                 out.extend_from_slice(&s[1..])
             } else if close(last, tail) {
                 out.extend(s.iter().rev().skip(1).copied())
-            } else if let Some((bound, length)) = loose {
+            } else if let Some(length) = loose {
                 let (head_step, tail_step) = (length(last, s[0]), length(last, tail));
-                if head_step.min(tail_step) >= bound || head_step.max(tail_step) < bound {
+                if head_step.min(tail_step) >= RING_TOUCHING
+                    || head_step.max(tail_step) < RING_TOUCHING
+                {
                     valid = false;
                     break;
                 }
-                let skip = usize::from(head_step.min(tail_step) < RING_SAME_POINT);
                 if head_step < tail_step {
-                    out.extend_from_slice(&s[skip..])
+                    out.extend_from_slice(&s[1..])
                 } else {
-                    out.extend(s.iter().rev().skip(skip).copied())
+                    out.extend(s.iter().rev().skip(1).copied())
                 }
             } else {
                 valid = false;
@@ -1241,14 +1240,9 @@ fn joined_within(segments: &[Vec<[f64; 2]>], loose: Loose<'_>) -> Option<Vec<[f6
             out.pop();
             return Some(out);
         }
-        if let Some((bound, length)) = loose {
-            let step = length(last, first);
-            if step < bound {
-                if step < RING_SAME_POINT {
-                    out.pop();
-                }
-                return Some(out);
-            }
+        if loose.is_some_and(|length| length(last, first) < RING_TOUCHING) {
+            out.pop();
+            return Some(out);
         }
     }
     None
