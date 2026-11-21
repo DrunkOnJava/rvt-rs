@@ -1,5 +1,6 @@
 """Helpers the tools/re scorers share, one copy of each so they cannot drift."""
 
+import collections
 import concurrent.futures
 import concurrent.futures.process
 import hashlib
@@ -85,6 +86,69 @@ _MESHING = {}
 # `mesh_parts` could not mesh (a part kept in the cache keeps its reason too).
 # Nothing prints them: a scorer's output does not change when a part fails.
 MESH_FAILURES = {}
+# Part id -> [(item id, item class, the first line of IfcOpenShell's reason)] for each
+# part `mesh_parts` meshed without a Body item it cannot process (`lost_items`, #2133),
+# kept in the cache with the mesh. `meshes()` and the replays say so.
+ITEM_FAILURES = {}
+LOST_ITEM_LINES = set()
+
+
+def body_leaves(product):
+    """The representation items of the product's Body representations, each mapped item
+    replaced by the items of the representation it maps, as IfcOpenShell's `item_ids` names
+    them; each once."""
+    out, seen = [], set()
+
+    def walk(item):
+        if item.is_a("IfcMappedItem"):
+            for inner in item.MappingSource.MappedRepresentation.Items:
+                walk(inner)
+        elif item.id() not in seen:
+            seen.add(item.id())
+            out.append(item)
+
+    for rep in (product.Representation.Representations if product.Representation else ()):
+        if rep.RepresentationIdentifier == "Body":
+            for item in rep.Items:
+                walk(item)
+    return out
+
+
+def lost_items(settings, product, item_ids):
+    """The Body items of `product` that its mesh leaves out because IfcOpenShell cannot
+    process them (#2133), as [(item id, class, reason)]. `item_ids` is the mesh's
+    `geometry.item_ids`, the item each triangle comes from. A Body item with no triangle is
+    meshed alone, and counted only where that raises: on the BIM4LCA housing,
+    IfcOpenShell 0.9.0.post1 meshes a sanitary terminal whole without the face set it
+    cannot process, and reports nothing, while a door's panel that the door's own opening
+    cuts away is missing too, and meshes alone."""
+    seen = set(np.asarray(item_ids, dtype=np.int64).tolist())
+    out = []
+    for item in body_leaves(product):
+        if item.id() in seen:
+            continue
+        try:
+            ifcopenshell.geom.create_shape(settings, item)
+        except RuntimeError as error:
+            # IfcOpenShell's message goes on with the item's whole STEP text after "Instance:".
+            reason = ((str(error).strip().splitlines() or [""])[0].split(" Instance:")[0].strip().rstrip(".")[:200]
+                      or type(error).__name__)
+            out.append((item.id(), item.is_a(), reason))
+    return out
+
+
+def report_lost_items(label, parts):
+    """Print, once per distinct line, how many of the `parts` (part ids) lost a Body item
+    and which classes and reasons, prefixed by `label`; nothing where none did."""
+    lost = [(part, item) for part in parts for item in ITEM_FAILURES.get(part, ())]
+    if not lost:
+        return
+    by_kind = collections.Counter(f"{cls}: {reason}" for _, (_, cls, reason) in lost)
+    line = (f"{label}: IfcOpenShell cannot process {len(lost)} Body items of {len({p for p, _ in lost})} parts, "
+            "which their meshes leave out (#2133): " + ", ".join(f"{k} {n}" for k, n in sorted(by_kind.items())))
+    if line not in LOST_ITEM_LINES:
+        LOST_ITEM_LINES.add(line)
+        print(line)
 # Fewer parts than this are meshed in this process: a forked worker parses
 # again the parts of the file it meshes, which a handful do not repay.
 POOL_FROM = 16
@@ -95,17 +159,21 @@ def _in_worker():
 
 
 def _mesh_one(part_id):
-    """(vertices, faces) of the part, or the first line of why IfcOpenShell would not mesh it."""
+    """(vertices, faces, lost items) of the part, or the first line of why IfcOpenShell would
+    not mesh it. The lost items travel back with the mesh, since a forked worker's globals never
+    reach the parent."""
     # An OOM-killed parent leaves its workers with the queued parts: stop at the next one.
     if "parent" in _MESHING and os.getppid() != _MESHING["parent"]:
         os._exit(1)
+    product = _MESHING["model"].by_id(part_id)
     try:
-        shape = ifcopenshell.geom.create_shape(_MESHING["settings"], _MESHING["model"].by_id(part_id))
+        shape = ifcopenshell.geom.create_shape(_MESHING["settings"], product)
     except RuntimeError as error:
         return (str(error).strip().splitlines() or [""])[0] or type(error).__name__
     return (
         np.array(shape.geometry.verts, dtype=float).reshape(-1, 3),
         np.array(shape.geometry.faces, dtype=int).reshape(-1, 3),
+        lost_items(_MESHING["settings"], product, shape.geometry.item_ids),
     )
 
 
@@ -129,21 +197,28 @@ def _mesh_cache(path, settings):
 
 
 def _read_meshes(path):
-    """What `_write_meshes` kept: instance id -> (vertices, faces), or the reason IfcOpenShell gave for a part it could not mesh."""
+    """What `_write_meshes` kept: instance id -> (vertices, faces, lost items), or the reason IfcOpenShell gave for a part it could not mesh."""
     out = {}
+    lost = collections.defaultdict(list)
     with np.load(path, allow_pickle=False) as kept:
         ids, reasons, nverts, nfaces = kept["ids"], kept["reasons"], kept["nverts"], kept["nfaces"]
         verts, faces = kept["verts"], kept["faces"]
+        # A shard written before #2133 has no lost items.
+        if "lost_parts" in kept.files:
+            for part, item, cls, reason in zip(kept["lost_parts"], kept["lost_items"], kept["lost_classes"], kept["lost_reasons"]):
+                lost[int(part)].append((int(item), str(cls), str(reason)))
     vstart = np.concatenate([[0], np.cumsum(nverts)])
     fstart = np.concatenate([[0], np.cumsum(nfaces)])
     for k, part_id in enumerate(ids):
-        out[int(part_id)] = str(reasons[k]) or (verts[vstart[k] : vstart[k + 1]], faces[fstart[k] : fstart[k + 1]])
+        out[int(part_id)] = str(reasons[k]) or (
+            verts[vstart[k] : vstart[k + 1]], faces[fstart[k] : fstart[k + 1]], lost.get(int(part_id), []))
     return out
 
 
 def _write_meshes(path, meshes):
     ids = list(meshes)
-    parts = [(np.empty((0, 3)), np.empty((0, 3), dtype=int)) if isinstance(meshes[i], str) else meshes[i] for i in ids]
+    parts = [(np.empty((0, 3)), np.empty((0, 3), dtype=int)) if isinstance(meshes[i], str) else meshes[i][:2] for i in ids]
+    lost = [(i, *item) for i in ids if not isinstance(meshes[i], str) for item in meshes[i][2]]
     scratch = f"{path}.tmp"
     with open(scratch, "wb") as f:
         np.savez(
@@ -154,6 +229,10 @@ def _write_meshes(path, meshes):
             nfaces=np.array([len(t) for _, t in parts], dtype=np.int64),
             verts=np.concatenate([v for v, _ in parts]),
             faces=np.concatenate([t for _, t in parts]),
+            lost_parts=np.array([p for p, _, _, _ in lost], dtype=np.int64),
+            lost_items=np.array([i for _, i, _, _ in lost], dtype=np.int64),
+            lost_classes=np.array([c for _, _, c, _ in lost], dtype=str),
+            lost_reasons=np.array([r for _, _, _, r in lost], dtype=str),
         )
     os.replace(scratch, path)
 
@@ -165,7 +244,8 @@ def mesh_parts(model, settings, parts, path=None):
     iterator's are the same, but it took twice the CPU time per element in
     a measurement on the BIM4LCA office, and no less wall time with 12 threads
     than with 4); a part it cannot mesh is left out, with its reason in
-    `MESH_FAILURES`.
+    `MESH_FAILURES`, and a part it meshes without a Body item it cannot process
+    is returned without it, the items named in `ITEM_FAILURES` (#2133).
 
     With `RVT_MESH_CACHE` set to a directory and the model's `path`, what is
     meshed is kept there for the next scorer to read, which Measure sets for
@@ -208,4 +288,5 @@ def mesh_parts(model, settings, parts, path=None):
         _write_meshes(os.path.join(cache, f"{os.getpid()}-{time.time_ns()}.npz"), fresh)
     known.update(fresh)
     MESH_FAILURES.update({i: known[i] for i in ids if isinstance(known[i], str)})
-    return {i: known[i] for i in ids if not isinstance(known[i], str)}
+    ITEM_FAILURES.update({i: known[i][2] for i in ids if not isinstance(known[i], str) and known[i][2]})
+    return {i: known[i][:2] for i in ids if not isinstance(known[i], str)}

@@ -26,7 +26,7 @@ import ifcopenshell.util.unit
 import numpy as np
 
 import fine_mesh
-from ifc_common import MESH_FAILURES, site_frame
+from ifc_common import ITEM_FAILURES, MESH_FAILURES, site_frame
 import mesh_bodies_vs_ifc as score
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -178,10 +178,11 @@ def measure(candidate, native_path, native_model, fine, workers):
     label = 'fine' if fine else 'default'
     print(f'Measuring {len(candidate)} bodies against {label} native tessellation...', flush=True)
     MESH_FAILURES.clear()
+    ITEM_FAILURES.clear()
     reference = score.meshes(str(native_path), tags=set(candidate), model=native_model,
                              settings=fine_mesh.settings() if fine else None)
-    if set(reference) != set(candidate) or MESH_FAILURES:
-        raise ValueError(f'Incomplete native meshing: {MESH_FAILURES}')
+    if set(reference) != set(candidate) or MESH_FAILURES or ITEM_FAILURES:
+        raise ValueError(f'Incomplete native meshing: {MESH_FAILURES} {ITEM_FAILURES}')
     payloads = ((tag, candidate[tag], reference[tag][2], reference[tag][0], fine)
                 for tag in sorted(candidate, key=int))
     rows = []
