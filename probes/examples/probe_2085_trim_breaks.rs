@@ -115,6 +115,16 @@
 //!   pieces surface=<class> gaps=<n> one=<n> diagonal=<n> tenth_mm=<n> ends=<n> through=<n>
 //!     mid_covered=<n> orphan_near=<n> sides_disagree=<n> rings_under=<n> unread=<n>: by class;
 //!   graphs read=<n> refused=<n>: the graphs decoded, and those refused whole for the budget.
+//!   piecemore graph=<ElementId> face=<n> loop=<n> at=<k> loops_held=<n> loops_walked=<n>
+//!     through_faces=<faces> through_body=<same|other|none> through_orphan=<bool|none>
+//!     a_other_ends=<ft to P>/<ft to Q> a_ginfo=<..> a_flags=<..> b_...: for each gap, the
+//!     faces of the `through` edge and whether one of them is joined to this face through
+//!     edges that name two faces (its body), whether the edge is one of those that name this
+//!     face but that no loop walked reaches, the face's loops against those the probe could
+//!     walk, and for the edges before (`a`) and after (`b`) the gap: where the side on their
+//!     other face puts its ends (the nearer to P, the nearer to Q), their `m_GInfo` (the
+//!     class and fields of what it points to, or its value) and `m_flags`;
+//!   pieces2 surface=<class> through=<n> through_same_body=<n> through_orphan=<n>: by class.
 //! ```
 //! ElementIds, counts and distances in feet only.
 //!
@@ -215,6 +225,8 @@ struct Tally {
     piece_sides: usize,
     piece_unread: usize,
     piece_rings_under: usize,
+    piece_through_same: usize,
+    piece_through_orphan: usize,
 }
 
 /// The decade a gap falls in: under 1e-7, then up to 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, beyond.
@@ -367,12 +379,28 @@ struct EdgeCache {
     xyz: Vec<(usize, Option<Polyline>)>,
     surfs: BTreeMap<usize, Option<Surf>>,
     naming: BTreeMap<usize, Vec<usize>>,
+    /// Each face's body: the faces joined to it through edges that name two faces.
+    body: BTreeMap<usize, usize>,
+}
+
+/// The root of `x` in a union-find over faces.
+fn root(parent: &mut BTreeMap<usize, usize>, x: usize) -> usize {
+    let mut r = x;
+    while let Some(&p) = parent.get(&r) {
+        if p == r {
+            break;
+        }
+        r = p;
+    }
+    parent.insert(x, r);
+    r
 }
 
 impl EdgeCache {
     fn new(graph: &ObjectGraph) -> EdgeCache {
         let mut surfs: BTreeMap<usize, Option<Surf>> = BTreeMap::new();
         let mut naming: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        let mut parent: BTreeMap<usize, usize> = BTreeMap::new();
         let mut xyz = Vec::new();
         for (e, object) in graph.objects.iter().enumerate() {
             if object.class_name != "Edge" {
@@ -381,6 +409,13 @@ impl EdgeCache {
             let faces = edge_faces(graph, e);
             for face in faces.iter().flatten() {
                 naming.entry(*face).or_default().push(e);
+                parent.entry(*face).or_insert(*face);
+            }
+            if let [Some(f0), Some(f1)] = faces {
+                let (r0, r1) = (root(&mut parent, f0), root(&mut parent, f1));
+                if r0 != r1 {
+                    parent.insert(r0.max(r1), r0.min(r1));
+                }
             }
             let mut line = None;
             for (side, face) in faces.iter().enumerate() {
@@ -393,7 +428,37 @@ impl EdgeCache {
             }
             xyz.push((e, line));
         }
-        EdgeCache { xyz, surfs, naming }
+        let faces: Vec<usize> = parent.keys().copied().collect();
+        let body = faces
+            .into_iter()
+            .map(|f| (f, root(&mut parent, f)))
+            .collect();
+        EdgeCache {
+            xyz,
+            surfs,
+            naming,
+            body,
+        }
+    }
+    /// Where the side of `e` on the face that is not `face` puts its ends: the nearer of them
+    /// to `p`, and the nearer to `q`.
+    fn other_side_ends(
+        &mut self,
+        graph: &ObjectGraph,
+        e: usize,
+        face: usize,
+        p: [f64; 3],
+        q: [f64; 3],
+    ) -> Option<(f64, f64)> {
+        let faces = edge_faces(graph, e);
+        let side = (0..2).find(|k| faces[*k].is_some_and(|f| f != face))?;
+        let s = self.surf(graph, faces[side]?)?;
+        let pts = edge_uv(graph, e, side)?;
+        let ends = [s.at(pts[0]), s.at(pts[pts.len() - 1])];
+        Some((
+            dist(ends[0], p).min(dist(ends[1], p)),
+            dist(ends[0], q).min(dist(ends[1], q)),
+        ))
     }
     fn surf(&mut self, graph: &ObjectGraph, face: usize) -> Option<Surf> {
         *self.surfs.entry(face).or_insert_with(|| surf(graph, face))
@@ -746,6 +811,64 @@ fn read_pieces(
             "piecenbr graph={id} face={fi} loop={loop_index} at={} {}",
             g.at,
             beside.join(" ")
+        );
+        // Whose edge a `through` match is: this face's body or another, and whether it is one
+        // of the edges that name this face but that no loop walked reaches.
+        let own_body = cache.body.get(&fi).copied();
+        let (through_body, through_orphan, through_faces) = match through {
+            Some(e) => {
+                let same = edge_faces(graph, e)
+                    .iter()
+                    .flatten()
+                    .any(|f| own_body.is_some() && cache.body.get(f).copied() == own_body);
+                t.piece_through_same += usize::from(same);
+                t.piece_through_orphan += usize::from(orphans.contains(&e));
+                (
+                    if same { "same" } else { "other" },
+                    orphans.contains(&e).to_string(),
+                    faces_of(e),
+                )
+            }
+            None => ("none", "none".to_string(), "-".to_string()),
+        };
+        let mut sides = Vec::new();
+        for (label, e) in [("a", g.a), ("b", g.b)] {
+            let text = cache.other_side_ends(graph, e, fi, g.p, g.q).map_or_else(
+                || "unread".to_string(),
+                |(dp, dq)| format!("{dp:.9}/{dq:.9}"),
+            );
+            let fields = &graph.objects[e].fields;
+            let ginfo = fields.get("m_GInfo").map_or_else(
+                || "absent".to_string(),
+                |v| match pointer(graph, e, v).ok().flatten() {
+                    Some(o) => format!(
+                        "{}{:?}",
+                        graph.objects[o].class_name,
+                        keys(Some(&graph.objects[o].fields))
+                    ),
+                    None => v.to_json().to_string().chars().take(80).collect(),
+                },
+            );
+            let flags: String = fields
+                .get("m_flags")
+                .map_or_else(|| "absent".to_string(), |v| v.to_json().to_string())
+                .chars()
+                .take(40)
+                .collect();
+            sides.push(format!(
+                "{label}_other_ends={text} {label}_ginfo={} {label}_flags={flags}",
+                ginfo.replace(' ', "")
+            ));
+        }
+        println!(
+            "piecemore graph={id} face={fi} loop={loop_index} at={} loops_held={} loops_walked={} through_faces={through_faces} through_body={through_body} through_orphan={through_orphan} {}",
+            g.at,
+            loops.len(),
+            loops
+                .iter()
+                .filter(|l| loop_chain(graph, fi, **l).is_some())
+                .count(),
+            sides.join(" ")
         );
     }
 }
@@ -1152,6 +1275,10 @@ fn main() -> Result<()> {
                 t.piece_sides,
                 t.piece_rings_under,
                 t.piece_unread
+            );
+            println!(
+                "pieces2 surface={class} through={} through_same_body={} through_orphan={}",
+                t.piece_through, t.piece_through_same, t.piece_through_orphan
             );
             continue;
         }
