@@ -31,10 +31,14 @@ def main():
     model = ifcopenshell.open(sys.argv[2])
     failed = collections.Counter()
     losing = collections.Counter()
-    elements = items = 0
+    elements = items = all_elements = represented = 0
     for element in model.by_type("IfcElement"):
-        if element.is_a("IfcOpeningElement") or not element.Representation:
+        if element.is_a("IfcOpeningElement"):
             continue
+        all_elements += 1
+        if not element.Representation:
+            continue
+        represented += 1
         found = body_items(element)
         if not found:
             continue
@@ -50,8 +54,11 @@ def main():
         if lost:
             losing[element.is_a()] += 1
     print(f"ifcopenshell {ifcopenshell.version}")
-    print(f"item mesh census: elements with a Body {elements}, Body items {items}; "
+    print(f"item mesh census: IfcElement but openings {all_elements}, with a representation {represented}, "
+          f"with a Body {elements}, Body items {items}; "
           f"items IfcOpenShell cannot process {sum(failed.values())} on {sum(losing.values())} elements")
+    if represented and not items:
+        print("not exercised: no Body item on any element with a representation")
     if failed:
         print("items that fail: " + ", ".join(f"{k} {e} {n}" for (k, e), n in sorted(failed.items())))
         print("elements that lose one: " + ", ".join(f"{k} {n}" for k, n in sorted(losing.items())))
