@@ -34,7 +34,9 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    them (within `tol` of the segment and farther than `tol` from both ends, `between`), or none
    of these (`none`). Per gap, the outcomes over its occurrences and whether they agree. The
    registered verdict per cohort: one end kept on every scored gap is the office's result;
-   anything else is counted by outcome.
+   anything else is counted by outcome. Where Revit keeps one end, which end, against the state
+   of the two edges beside the gap: the edge before it, ending at P, and the edge after it,
+   starting at Q, each placed alike or apart by its two faces, or unread.
 6. **Corners and sizes.** The scored gaps grouped by their two ends in world coordinates,
    either way round, so one corner seen from two faces counts once; then one line per cohort,
    surface class and gap size, with the elements' IFC classes and the floor and `tol` they were
@@ -93,7 +95,8 @@ def read_probe(path):
                 key = (f["graph"], f["face"], f["loop"], f["at"].split("/")[0])
                 a, b = side(f.get("sides_a")), side(f.get("sides_b"))
                 split = "unread" if a is None or b is None else "agree" if max(a, b) < TOUCHING else "apart"
-                pieces[key] = (float(f["gap"]), split, f.get("surface", "-"))
+                state = tuple("unread" if x is None else "placed alike" if x < TOUCHING else "placed apart" for x in (a, b))
+                pieces[key] = (float(f["gap"]), split, f.get("surface", "-"), state)
             elif line.startswith("gapxyz "):
                 gaps.append(fields(line))
             elif line.startswith("jointxyz "):
@@ -334,10 +337,10 @@ def main():
     pieces, gaps, joints = read_probe(args[0])
 
     def cohort(g):
-        return pieces.get(key_of(g), (None, "not in the census", "-"))[1]
+        return pieces.get(key_of(g), (None, "not in the census", "-", None))[1]
 
     def surface(g):
-        return pieces.get(key_of(g), (None, "-", "-"))[2]
+        return pieces.get(key_of(g), (None, "-", "-", None))[2]
 
     # 1. Row 0.
     equal = differ = unmatched = 0
@@ -452,6 +455,16 @@ def main():
             tols[size].append((floors[g["owner"]]["floor"], max(2 * floors[g["owner"]]["floor"], TOUCHING)))
         if per_gap_lines:
             print(f"corner {size[0]} {size[1]} gap {size[2]:.6f} ft: occurrences {len(members)}, " + counts(collections.Counter(o for _, o in members)))
+    # Which end Revit keeps, against the state of the edge before the gap (ending at P) and the
+    # edge after it (starting at Q): on the office it keeps the end of the edge both faces place.
+    kept = collections.Counter()
+    for g, o in scored:
+        if o in ONE_END:
+            state = pieces.get(key_of(g), (None, None, None, None))[3]
+            if state:
+                kept[(o, state[0], state[1])] += 1
+    if kept:
+        print("kept end by its edges (P's edge, Q's edge): " + ", ".join(f"{o} with P's edge {a} and Q's edge {b} {n}" for (o, a, b), n in sorted(kept.items())))
     for c, surf, size in sorted(by_size):
         k = (c, surf, size)
         fl = [f for f, _ in tols[k]]
@@ -481,7 +494,7 @@ def main():
             print(f"raw points between, {c}: {len(ts)} drawings, along the gap from P (0) to Q (1): min {ts[0]:.3f} median {ts[len(ts) // 2]:.3f} max {ts[-1]:.3f}")
     if per_gap_lines:
         for key, c in sorted(per_gap.items()):
-            print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-'))[1]} "
+            print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-', None))[1]} "
                   + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
 
