@@ -14,36 +14,40 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    into the census's cohorts: both edges beside the gap placed alike by their two faces
    (`agree`: `sides_a` and `sides_b` both under 0.00001 ft), one of them placed apart
    (`apart`), or either unread (`unread`).
-3. **Bodies.** Only the Body representations of the Tag's element and its aggregated parts.
-   Revit's vertices are compared only where every Body item is polygonal: an
-   `IfcPolygonalFaceSet`, `IfcTriangulatedFaceSet`, `IfcFacetedBrep` or
-   `IfcShellBasedSurfaceModel` of polygon loops, alone or mapped. The mesh is taken twice from
-   IfcOpenShell, as it meshes by default and with `weld-vertices` off where the setting exists;
-   outcomes are read from the unwelded one.
-4. **Two floors, for every faceted element.** The ring ends that close (`at_gap=false`) to
-   Revit's nearest vertex, in the mesh and in Revit's raw coordinates placed into the probe's
-   frame (through the element's placement, each mapped item's target and its map's origin as
-   IfcOpenShell applies them, the file's unit and the site frame, with no meshing between). The median distance is the floor; an
-   element whose raw floor exceeds twice its mesh floor and 0.00001 ft is counted, since then the
-   placement is read wrong. Where every element's median vector is one nonzero vector it is a
-   frame offset, and the outcomes are read again with it taken off. An element whose mesh floor
-   is 0.01 ft or more is a placement mismatch, counted apart.
-5. **Outcomes, per occurrence and by cohort.** With `tol` the larger of twice the element's
-   floor and 0.00001 ft, a gap under twice `tol` is `unresolved`. Otherwise Revit has a vertex
-   within `tol` at P only (`p_only`), at Q only (`q_only`), at both (`both`), one strictly between
-   them (within `tol` of the segment and farther than `tol` from both ends, `between`), or none
-   of these (`none`). Per gap, the outcomes over its occurrences and whether they agree. The
-   registered verdict per cohort: one end kept on every scored gap is the office's result;
-   anything else is counted by outcome. Where Revit keeps one end, which end, against the state
-   of the two edges beside the gap: the edge before it, ending at P, and the edge after it,
-   starting at Q, each placed alike or apart by its two faces, or unread.
+3. **Bodies.** Only the Body representations of the Tag's elements but openings (which carry
+   their host's Tag) and their aggregated parts. Revit's vertices are compared only where every
+   Body item is polygonal: an `IfcPolygonalFaceSet`, `IfcTriangulatedFaceSet`, `IfcFacetedBrep`
+   or `IfcShellBasedSurfaceModel` of polygon loops, alone or mapped. Revit's own coordinates
+   decide: each item's coordinate list placed into the probe's frame through the element's
+   placement, each mapped item's target and its map's origin as IfcOpenShell applies them, the
+   file's unit and the site frame, with no meshing between. IfcOpenShell's mesh, with
+   `weld-vertices` off, is the cross-check: on the BIM4LCA housing it put a basin family 0.213 ft
+   off where Revit's coordinates sit within 0.0000001 ft.
+4. **The floors.** For each element, every ring end that closes (`at_gap=false`) to Revit's
+   nearest vertex: the median distance is its floor, from Revit's coordinates, with the mesh's
+   beside it. Elements whose two floors disagree (one over twice the other and 0.00001 ft) are
+   counted each way; a raw floor higher than the mesh's means Revit's coordinates are placed
+   wrong, and nothing after it counts. Where every element's median vector is one nonzero vector
+   it is a frame offset and is taken off. An element whose floor is 0.01 ft or more is a
+   placement mismatch (`placement`), counted apart.
+5. **Outcomes, per occurrence and by cohort, from Revit's coordinates.** With `tol` the larger of
+   twice the element's floor and 0.00001 ft, a gap under twice `tol` (so at least 0.00002 ft) is
+   `unresolved`. Otherwise Revit has a vertex within `tol` at P only (`p_only`), at Q only
+   (`q_only`), at both (`both`), one strictly between them (within `tol` of the segment and
+   farther than `tol` from both ends, `between`), or none of these (`none`). Per gap, the
+   outcomes over its occurrences and whether they agree. The registered verdict per cohort: one
+   end kept on every scored gap is the office's result; anything else is counted by outcome. The
+   mesh's outcomes beside them, by cohort. Where Revit keeps one end, which end, by cohort,
+   against the state of the two edges beside the gap: the edge before it, ending at P, and the
+   edge after it, starting at Q, each placed alike or apart by its two faces, or unread.
 6. **Corners and sizes.** The scored gaps grouped by their two ends in world coordinates,
    either way round, so one corner seen from two faces counts once; then one line per cohort,
    surface class and gap size, with the elements' IFC classes and the floor and `tol` they were
    read with (one line per corner with `--per-gap`).
-7. **Raw outcomes.** The outcome of every scored occurrence read again from the placed raw
-   points, against the mesh's; where Revit has a point between the ends, how far along the gap
-   it lies, from P (0) to Q (1), by cohort: 0.5 is the gap's middle.
+7. **Between.** Where Revit has a point between the ends, how far along the gap it lies, from P
+   (0) to Q (1), by cohort: 0.5 is the gap's middle.
+
+An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
 Needs IfcOpenShell and numpy.
 
@@ -246,13 +250,13 @@ def floors_of(bodies, joints, tags, offset=None):
     return out
 
 
-def score(gaps, bodies, faceted, floors, offset=None):
+def score(gaps, bodies, faceted, floors, offset=None, present=None):
     rows = []
     for g in gaps:
         tag = g["owner"]
-        if tag not in bodies:
+        if tag not in (bodies if present is None else present):
             o = "no_revit_body"
-        elif tag not in faceted:
+        elif tag not in faceted or tag not in bodies:
             o = "not_faceted"
         elif tag not in floors:
             o = "no_floor"
@@ -335,6 +339,12 @@ def main():
 
     print(f"ifcopenshell {ifcopenshell.version}, numpy {np.__version__}")
     pieces, gaps, joints = read_probe(args[0])
+    if not pieces:
+        # An empty or unreadable probe output (in Windows PowerShell 5, `>` writes UTF-16) would
+        # otherwise read as a holding row 0 over nothing.
+        print("row 0 FAILS: no `piece` line read; the probe output is empty, incomplete or not UTF-8 "
+              "(in Windows PowerShell write it with `| Out-File -Encoding utf8`)")
+        return 1
 
     def cohort(g):
         return pieces.get(key_of(g), (None, "not in the census", "-", None))[1]
@@ -352,8 +362,10 @@ def main():
             equal += 1
         else:
             differ += 1
-    verdict = "holds" if differ == 0 and unmatched == 0 else "FAILS"
-    print(f"row 0 {verdict}: gap occurrences {len(gaps)}, equal to their census gap {equal}, different {differ}, not in the census {unmatched}")
+    holds = differ == 0 and unmatched == 0
+    print(f"row 0 {'holds' if holds else 'FAILS'}: gap occurrences {len(gaps)}, equal to their census gap {equal}, different {differ}, not in the census {unmatched}")
+    if not holds:
+        return 1
     # 2. Coverage.
     reached = {key_of(g) for g in gaps}
     census = collections.Counter(v[1] for v in pieces.values())
@@ -364,7 +376,7 @@ def main():
     if not gaps:
         print("not exercised: no gap reached by an element's graphics")
         return 0
-    # 3. Bodies.
+    # 3. Bodies: Revit's own coordinates decide; IfcOpenShell's mesh is the cross-check.
     model = ifcopenshell.open(args[1])
     kinds = collections.defaultdict(collections.Counter)
     elements = {}
@@ -377,44 +389,35 @@ def main():
                 kinds[element.Tag][item.is_a()] += 1
     faceted = {t for t, c in kinds.items() if c and set(c) <= FACETED}
     print("Body item types: " + counts(collections.Counter(k for t in tags for k in kinds.get(t, {}))))
-
-    def vertices(settings):
-        got = meshes(args[1], tags=tags, model=model, settings=settings)
-        return {t: np.unique(v[2].reshape(-1, 3), axis=0) for t, v in got.items()}
-
-    welded_settings = ifcopenshell.geom.settings()
-    welded_settings.set("use-world-coords", True)
+    raw = raw_points(model, elements, sorted(faceted))
+    settings = ifcopenshell.geom.settings()
+    settings.set("use-world-coords", True)
     try:
-        weld_default = welded_settings.get("weld-vertices")
+        settings.set("weld-vertices", False)
+        weld_note = "weld-vertices off"
     except Exception as e:  # the setting's name differs between IfcOpenShell releases
-        weld_default = f"unread ({type(e).__name__})"
-    welded = vertices(welded_settings)
-    unwelded_settings = ifcopenshell.geom.settings()
-    unwelded_settings.set("use-world-coords", True)
-    try:
-        unwelded_settings.set("weld-vertices", False)
-        unwelded = vertices(unwelded_settings)
-        weld_note = f"weld-vertices off (default {weld_default})"
-    except Exception as e:
-        unwelded = welded
-        weld_note = f"weld-vertices could not be set ({type(e).__name__}); outcomes read from the default meshes"
-    print(f"bodies: {weld_note}; elements with a Revit body by Tag {len(set(unwelded) & tags)} of {len(tags)}, faceted {len(faceted & set(unwelded))}")
-    # 4. The floor, in the mesh and in the placed raw points, for every faceted element.
-    scored_tags = sorted(set(unwelded) & faceted)
-    floors = floors_of(unwelded, joints, scored_tags)
-    raw = raw_points(model, elements, scored_tags)
-    raw_floors = floors_of(raw, joints, sorted(set(raw) & set(floors)))
+        weld_note = f"weld-vertices could not be set ({type(e).__name__})"
+    got = meshes(args[1], tags=tags, model=model, settings=settings)
+    mesh = {t: np.unique(v[2].reshape(-1, 3), axis=0) for t, v in got.items()}
+    print(f"bodies: elements with a Revit body by Tag {len(set(elements) & tags)} of {len(tags)}, made of polygons {len(faceted)}, "
+          f"Revit's coordinates read on {len(raw)}; IfcOpenShell meshed {len(set(mesh) & faceted)} of them ({weld_note})")
+    # 4. The floors: Revit's coordinates (raw) decide; the mesh's is printed beside it.
+    floors = floors_of(raw, joints, sorted(raw))
+    mesh_floors = floors_of(mesh, joints, sorted(set(mesh) & faceted))
     placement = [t for t, f in floors.items() if f["floor"] >= PLACEMENT]
     usable = {t: f for t, f in floors.items() if f["floor"] < PLACEMENT}
-    if floors:
-        fl = sorted(f["floor"] for f in floors.values())
-        within = sum(f["within"] * f["n"] for f in floors.values()) / sum(f["n"] for f in floors.values())
-        print(f"mesh floor over {len(floors)} elements (0.01 ft or more on {len(placement)}): min {fl[0]:.9f} median {fl[len(fl) // 2]:.9f} max {fl[-1]:.9f} ft; closed ends within 0.00001 ft of a Revit vertex {within:.1%}")
-    if raw_floors:
-        rl = sorted(f["floor"] for f in raw_floors.values())
-        apart = [t for t in raw_floors if raw_floors[t]["floor"] > max(2 * floors[t]["floor"], TOUCHING)]
-        print(f"raw floor over {len(raw_floors)} elements: min {rl[0]:.9f} median {rl[len(rl) // 2]:.9f} max {rl[-1]:.9f} ft; elements whose raw floor exceeds twice the mesh floor and 0.00001 ft: {len(apart)}")
-    print(f"raw points read on {len(raw)} of {len(scored_tags)} faceted elements")
+    for label, fs in (("raw floor (decides)", floors), ("mesh floor (cross-check)", mesh_floors)):
+        if fs:
+            fl = sorted(f["floor"] for f in fs.values())
+            within = sum(f["within"] * f["n"] for f in fs.values()) / sum(f["n"] for f in fs.values())
+            off = sum(1 for f in fs.values() if f["floor"] >= PLACEMENT)
+            print(f"{label} over {len(fs)} elements (0.01 ft or more on {off}): min {fl[0]:.9f} median {fl[len(fl) // 2]:.9f} max {fl[-1]:.9f} ft; "
+                  f"closed ends within 0.00001 ft of a Revit vertex {within:.1%}")
+    both = sorted(set(floors) & set(mesh_floors))
+    mesh_higher = sum(1 for t in both if mesh_floors[t]["floor"] > max(2 * floors[t]["floor"], TOUCHING))
+    raw_higher = sum(1 for t in both if floors[t]["floor"] > max(2 * mesh_floors[t]["floor"], TOUCHING))
+    print(f"floors disagree (one over twice the other and 0.00001 ft): mesh higher on {mesh_higher}, raw higher on {raw_higher} of {len(both)} elements"
+          + ("; raw higher means Revit's coordinates are placed wrong, and nothing after this counts" if raw_higher else ""))
     offset = None
     if usable:
         vecs = np.array([f["vector"] for f in usable.values()])
@@ -422,17 +425,18 @@ def main():
         spread = float(np.abs(vecs - common).max())
         print(f"median offset vectors: common {common[0]:+.9f},{common[1]:+.9f},{common[2]:+.9f} ft, largest departure from it {spread:.9f} ft")
         offset = common if spread <= SAME_OFFSET and float(np.linalg.norm(common)) > SAME_OFFSET else None
-        print("offset: one vector, taken off for a second reading" if offset is not None else "offset: no single nonzero vector; no second reading")
-    # 5. Outcomes, by cohort.
-    rows = score(gaps, unwelded, faceted, floors)
-    per_gap = summary("unwelded", rows, cohort)
-    if unwelded is not welded:
-        summary("default meshes", score(gaps, welded, faceted, floors_of(welded, joints, sorted(set(welded) & faceted))), cohort)
-    if offset is not None:
-        shifted = floors_of(unwelded, joints, scored_tags, offset)
-        rows = score(gaps, unwelded, faceted, shifted, offset)
-        summary("offset taken off", rows, cohort)
-        print(f"floor with the offset taken off: median {np.median([f['floor'] for f in shifted.values()]):.9f} ft")
+        print("offset: one vector, taken off" if offset is not None else "offset: no single nonzero vector")
+        if offset is not None:
+            floors = floors_of(raw, joints, sorted(raw), offset)
+    # 5. Outcomes, by cohort, from Revit's coordinates.
+    rows = score(gaps, raw, faceted, floors, offset, present=elements)
+    per_gap = summary("outcomes", rows, cohort)
+    mesh_rows = score(gaps, mesh, faceted, mesh_floors, present=elements)
+    cross = collections.Counter((cohort(g), o, m) for (g, o), (_, m) in zip(rows, mesh_rows) if o in SCORED or m in SCORED)
+    for c in COHORTS:
+        line = ", ".join(f"{o}->{m} {n}" for (cc, o, m), n in sorted(cross.items()) if cc == c)
+        if line:
+            print(f"mesh cross-check {c} (raw outcome -> mesh outcome): {line}")
     # 6. Corners and gap sizes, by cohort.
     scored = [(g, o) for g, o in rows if o in SCORED]
     corners = collections.defaultdict(list)
@@ -462,36 +466,28 @@ def main():
         if o in ONE_END:
             state = pieces.get(key_of(g), (None, None, None, None))[3]
             if state:
-                kept[(o, state[0], state[1])] += 1
-    if kept:
-        print("kept end by its edges (P's edge, Q's edge): " + ", ".join(f"{o} with P's edge {a} and Q's edge {b} {n}" for (o, a, b), n in sorted(kept.items())))
+                kept[(cohort(g), o, state[0], state[1])] += 1
+    for c in COHORTS:
+        line = ", ".join(f"{o} with P's edge {a} and Q's edge {b} {n}" for (cc, o, a, b), n in sorted(kept.items()) if cc == c)
+        if line:
+            print(f"kept end by its edges, {c}: {line}")
     for c, surf, size in sorted(by_size):
         k = (c, surf, size)
         fl = [f for f, _ in tols[k]]
         tl = [t for _, t in tols[k]]
         print(f"gap size {c} {surf} {size:.6f} ft ({size * 304.8:.3f} mm): corners {corners_by_size[k]}, occurrences {counts(by_size[k])}; "
               f"classes {counts(classes[k])}; floor {min(fl):.9f} to {max(fl):.9f} ft, tol {min(tl):.9f} to {max(tl):.9f} ft")
-    # 7. The same outcomes read from the placed raw points.
-    pairs = collections.Counter()
+    # 7. Where a point between the ends lies, from P (0) to Q (1): 0.5 is the gap's middle.
     along = collections.defaultdict(list)
     for g, o in scored:
-        tag = g["owner"]
-        if tag not in raw:
-            pairs[(o, "no_raw_points")] += 1
-            continue
-        tol = max(2 * floors[tag]["floor"], TOUCHING)
-        verts = raw[tag] if offset is None else raw[tag] - offset
-        p, q = point(g["p"]), point(g["q"])
-        r = outcome(verts, float(g["gap"]), p, q, tol)
-        pairs[(o, r)] += 1
-        if r == "between":
-            along[cohort(g)].append(between_at(verts, p, q, tol))
-    print("raw points: mesh outcome -> raw outcome: " + (", ".join(f"{a}->{b} {n}" for (a, b), n in sorted(pairs.items())) or "none"))
-    # Where the point between the ends lies, from P (0) to Q (1): 0.5 is the gap's middle.
+        if o == "between":
+            tag = g["owner"]
+            verts = raw[tag] if offset is None else raw[tag] - offset
+            along[cohort(g)].append(between_at(verts, point(g["p"]), point(g["q"]), max(2 * floors[tag]["floor"], TOUCHING)))
     for c in COHORTS:
         if along.get(c):
             ts = sorted(along[c])
-            print(f"raw points between, {c}: {len(ts)} drawings, along the gap from P (0) to Q (1): min {ts[0]:.3f} median {ts[len(ts) // 2]:.3f} max {ts[-1]:.3f}")
+            print(f"between, {c}: {len(ts)} drawings, along the gap from P (0) to Q (1): min {ts[0]:.3f} median {ts[len(ts) // 2]:.3f} max {ts[-1]:.3f}")
     if per_gap_lines:
         for key, c in sorted(per_gap.items()):
             print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-', None))[1]} "
