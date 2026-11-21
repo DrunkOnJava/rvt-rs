@@ -15,7 +15,7 @@ On the BIM4LCA housing and office (concrete, as built) the census found every su
 The gaps, each failing ring by its largest step along the surface, were:
 - **Under 0.00001 ft:** 134 of the housing's 302 plane rings and 39 of its 65 cylinder rings; 80 of the office's 123 and 4 of its 12. Many cylinder rings part only in their angle, by 1e-7 to 4e-6, with the points under 1e-7 ft apart.
 - **From 0.00001 to 0.0001 ft:** 16 plane and 24 cylinder rings on the two files. Not read.
-- **From 0.0001 to 0.0015 ft:** where a piece of edge looks missing. 158 of the housing's 165 are in three graphs with the same counts and face numbers. 68 of the 165 part by exactly 0.1 mm: 60 along one parameter, 8 along both.
+- **From 0.0001 to 0.0015 ft:** where a piece of edge looks missing. 158 of the housing's 165 are in three graphs, 1743745, 2091369 and 2138355 (53, 53 and 52 rings). 68 of the 165 part by exactly 0.1 mm: 60 along one parameter, 8 along both.
 
 On the contributor's save, 36 of the 84 cylinder rings on the chairs part by under 0.00001 ft, and the other 48 by 0.0001 to 0.001 ft ([#2085](https://github.com/DrunkOnJava/rvt-rs/issues/2085#issuecomment-7054296537)).
 
@@ -33,7 +33,7 @@ The rows were registered on [#2085](https://github.com/DrunkOnJava/rvt-rs/issues
 - **Housing (concrete, as built):** faces refused as `disconnected UV boundary` fall from 351 to 199; the other 152 mesh, and none takes a new reason.
 - **Office (concrete, as built):** 142 → 58, with 84 meshing.
 - Paired by graph and face, no face that meshes on `6be738a5` is refused, and no other refused face changes its reason.
-- Every ring still refused (194 and 51) has a step of 0.00001 ft or more. None is held back by a short edge or by both of an edge's ends touching the ring.
+- Every ring still refused (194 and 51) has a step of 0.00001 ft or more. None is held back by a short edge or by both of an edge's ends touching the ring. 13 more planes (5 housing, 8 office) stay refused through a cylinder beside them that is still refused.
 - **On the contributor's save** ([#2085](https://github.com/DrunkOnJava/rvt-rs/issues/2085#issuecomment-7056173710)), the same probe on `5be3e1eb`: 36 of the 84 cylinder faces refused as disconnected mesh and 48 stay refused, with no meshed face lost. The chairs' coverage of Revit's surface within 0.01 ft rises from 65.6–65.8% to 67.55–67.63%, against 70.3–70.5% for the bridging candidate. All 448 chairs stay partial.
 
 **On `main`,** the join alone (`42fad511` against `0d0fc927`):
@@ -69,4 +69,4 @@ gh workflow run measure.yml --ref main -f ref=818ccf1dcda5646d85726d3fe518a42bcd
 
 - **Gaps from 0.00001 to 0.0001 ft:** not read; they stay refused.
 - **Gaps from 0.0001 ft up:** whether the file stores the missing piece of edge is not read; they stay refused.
-- **The contributor's chairs:** none draws whole; four other faults remain (#2085).
+- **The contributor's chairs:** none draws whole; four other faults remain (#2085). Their runs were on the research branch, which also carries a polygon fix for other curved faces and a larger graph budget; `main` has not been run on their save.
