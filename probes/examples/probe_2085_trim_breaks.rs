@@ -131,6 +131,16 @@
 //!     it names this face, and by whether no loop walked reaches it; and how many regions the
 //!     face lists (`m_faceRegions`), which the probe does not walk;
 //!   pieces2 surface=<class> through=<n> through_same_body=<n> through_orphan=<n>: by class.
+//!   piecex graph=<ElementId> face=<n> loop=<n> at=<k> placed=<n> unplaced=<n>
+//!     unplaced_classes=<class+class:n,...> ends=<edge|none> matches=<n> matches_same_body=<n>
+//!     matches_naming_face=<n> match_agree_max=<ft|none> a_agree=<ft|unread>
+//!     b_agree=<ft|unread> a_other_ends=<ft>/<ft> b_other_ends=<ft>/<ft>: the same gap with
+//!     every edge placed through either face by any evaluator that reads it (plane, cylinder,
+//!     or a parametric surface the mesher reads): the graph's edges placed and not, the
+//!     unplaced ones by their faces' classes, the matches as `piecemore` counts them, the
+//!     largest distance at which a matching edge's two faces put it (a "no match" binds only
+//!     where they agree), the same for the edges before and after the gap, and where their
+//!     other face's side ends.
 //! ```
 //! ElementIds, counts and distances in feet only.
 //!
@@ -150,6 +160,7 @@ use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_parametric_mesh::{
     JOIN_BOUNDS, face_grid, merged_chord_ends, polygon_breaks, trim_breaks,
 };
+use rvt::research::native_parametric_surface::ParametricSurface;
 use rvt::research::native_saved_mesh::{pointer, ring_gaps};
 
 const DISCONNECTED: &str = "disconnected parametric trim in model coordinates";
@@ -387,6 +398,39 @@ struct EdgeCache {
     naming: BTreeMap<usize, Vec<usize>>,
     /// Each face's body: the faces joined to it through edges that name two faces.
     body: BTreeMap<usize, usize>,
+    /// Each edge placed through either of its faces by any evaluator that reads it (plane,
+    /// cylinder, or the parametric surfaces the mesher reads), and how far apart its two
+    /// faces put its points where both place it.
+    xany: Vec<(usize, Option<Polyline>, Option<f64>)>,
+    params: BTreeMap<usize, Option<ParametricSurface>>,
+    /// The edges no evaluator places, by their two faces' surface classes.
+    unplaced: BTreeMap<String, usize>,
+}
+
+fn param_surface(graph: &ObjectGraph, face: usize) -> Option<ParametricSurface> {
+    let si = pointer(graph, face, graph.objects.get(face)?.fields.get("m_pSurf")?).ok()??;
+    ParametricSurface::read(graph, si).ok()
+}
+
+/// An edge's points through its face on `side`, by whichever evaluator reads that face.
+fn place(
+    graph: &ObjectGraph,
+    e: usize,
+    side: usize,
+    face: usize,
+    surfs: &mut BTreeMap<usize, Option<Surf>>,
+    params: &mut BTreeMap<usize, Option<ParametricSurface>>,
+) -> Option<Polyline> {
+    let uv = edge_uv(graph, e, side)?;
+    let s = *surfs.entry(face).or_insert_with(|| surf(graph, face));
+    if let Some(s) = s {
+        return Some(uv.iter().map(|q| s.at(*q)).collect());
+    }
+    let ps = params
+        .entry(face)
+        .or_insert_with(|| param_surface(graph, face))
+        .as_ref()?;
+    uv.iter().map(|q| ps.evaluate(q[0], q[1]).ok()).collect()
 }
 
 /// The root of `x` in a union-find over faces.
@@ -408,6 +452,9 @@ impl EdgeCache {
         let mut naming: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         let mut parent: BTreeMap<usize, usize> = BTreeMap::new();
         let mut xyz = Vec::new();
+        let mut xany = Vec::new();
+        let mut params: BTreeMap<usize, Option<ParametricSurface>> = BTreeMap::new();
+        let mut unplaced: BTreeMap<String, usize> = BTreeMap::new();
         for (e, object) in graph.objects.iter().enumerate() {
             if object.class_name != "Edge" {
                 continue;
@@ -433,6 +480,31 @@ impl EdgeCache {
                 }
             }
             xyz.push((e, line));
+            let mut placed: [Option<Polyline>; 2] = [None, None];
+            for (side, face) in faces.iter().enumerate() {
+                if let Some(face) = face {
+                    placed[side] = place(graph, e, side, *face, &mut surfs, &mut params);
+                }
+            }
+            let agree = match (&placed[0], &placed[1]) {
+                (Some(a), Some(b)) if a.len() == b.len() => Some(
+                    a.iter()
+                        .zip(b)
+                        .map(|(p, q)| dist(*p, *q))
+                        .fold(0.0, f64::max),
+                ),
+                _ => None,
+            };
+            let any = placed[0].clone().or_else(|| placed[1].clone());
+            if any.is_none() {
+                let key = faces
+                    .iter()
+                    .map(|f| f.map_or_else(|| "-".to_string(), |f| surface_class(graph, f)))
+                    .collect::<Vec<_>>()
+                    .join("+");
+                *unplaced.entry(key).or_default() += 1;
+            }
+            xany.push((e, any, agree));
         }
         let faces: Vec<usize> = parent.keys().copied().collect();
         let body = faces
@@ -444,7 +516,35 @@ impl EdgeCache {
             surfs,
             naming,
             body,
+            xany,
+            params,
+            unplaced,
         }
+    }
+    /// As [`EdgeCache::other_side_ends`], placing the side by any evaluator that reads it.
+    fn other_side_ends_any(
+        &mut self,
+        graph: &ObjectGraph,
+        e: usize,
+        face: usize,
+        p: [f64; 3],
+        q: [f64; 3],
+    ) -> Option<(f64, f64)> {
+        let faces = edge_faces(graph, e);
+        let side = (0..2).find(|k| faces[*k].is_some_and(|f| f != face))?;
+        let pts = place(
+            graph,
+            e,
+            side,
+            faces[side]?,
+            &mut self.surfs,
+            &mut self.params,
+        )?;
+        let ends = [pts[0], pts[pts.len() - 1]];
+        Some((
+            dist(ends[0], p).min(dist(ends[1], p)),
+            dist(ends[0], q).min(dist(ends[1], q)),
+        ))
     }
     /// Where the side of `e` on the face that is not `face` puts its ends: the nearer of them
     /// to `p`, and the nearer to `q`.
@@ -906,6 +1006,86 @@ fn read_pieces(
                 .count(),
             sides.join(" "),
             matches.len()
+        );
+        // The same gap with every edge any evaluator places (#2085): what the plane and
+        // cylinder placement left unread.
+        let mut x_ends = None;
+        let mut x_matches = 0usize;
+        let mut x_same = 0usize;
+        let mut x_naming = 0usize;
+        let mut x_agree: f64 = 0.0;
+        let mut x_agree_known = 0usize;
+        for (e, line, agree) in &cache.xany {
+            if *e == g.a || *e == g.b {
+                continue;
+            }
+            let Some(line) = line else { continue };
+            let (e0, e1) = (line[0], line[line.len() - 1]);
+            if (dist(e0, g.p) < TOUCHING && dist(e1, g.q) < TOUCHING)
+                || (dist(e0, g.q) < TOUCHING && dist(e1, g.p) < TOUCHING)
+            {
+                x_ends.get_or_insert(*e);
+            }
+            if polyline_dist(g.p, line) < TOUCHING && polyline_dist(g.q, line) < TOUCHING {
+                x_matches += 1;
+                let faces = edge_faces(graph, *e);
+                if faces
+                    .iter()
+                    .flatten()
+                    .any(|f| own_body.is_some() && cache.body.get(f).copied() == own_body)
+                {
+                    x_same += 1;
+                }
+                if faces.contains(&Some(fi)) {
+                    x_naming += 1;
+                }
+                if let Some(a) = agree {
+                    x_agree = x_agree.max(*a);
+                    x_agree_known += 1;
+                }
+            }
+        }
+        let placed = cache.xany.iter().filter(|(_, l, _)| l.is_some()).count();
+        let unplaced: usize = cache.unplaced.values().sum();
+        let classes = cache
+            .unplaced
+            .iter()
+            .map(|(k, v)| format!("{k}:{v}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let agree_of = |e: usize| {
+            cache
+                .xany
+                .iter()
+                .find(|(x, _, _)| *x == e)
+                .and_then(|(_, _, a)| *a)
+                .map_or_else(|| "unread".to_string(), |a| format!("{a:.9}"))
+        };
+        let (a_agree, b_agree) = (agree_of(g.a), agree_of(g.b));
+        let ends_shown = |x: Option<(f64, f64)>| {
+            x.map_or_else(
+                || "unread".to_string(),
+                |(dp, dq)| format!("{dp:.9}/{dq:.9}"),
+            )
+        };
+        let xa = cache.other_side_ends_any(graph, g.a, fi, g.p, g.q);
+        let xb = cache.other_side_ends_any(graph, g.b, fi, g.p, g.q);
+        println!(
+            "piecex graph={id} face={fi} loop={loop_index} at={} placed={placed} unplaced={unplaced} unplaced_classes={} ends={} matches={x_matches} matches_same_body={x_same} matches_naming_face={x_naming} match_agree_max={} a_agree={a_agree} b_agree={b_agree} a_other_ends={} b_other_ends={}",
+            g.at,
+            if classes.is_empty() {
+                "-".to_string()
+            } else {
+                classes
+            },
+            named(x_ends),
+            if x_agree_known > 0 {
+                format!("{x_agree:.9}")
+            } else {
+                "none".to_string()
+            },
+            ends_shown(xa),
+            ends_shown(xb),
         );
     }
 }
