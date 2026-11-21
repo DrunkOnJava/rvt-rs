@@ -34,8 +34,9 @@
 //! the reason as `ProfileStubRefusal`: the opening does not reach the end with
 //! one such edge, both neighbours of a level cut-out are interior or both on the
 //! wall's top or base, the stretch is longer than the wall is thick (a
-//! heuristic: every stretch measured is half the wall's thickness, and nothing
-//! in the file says a wall goes on past its profile by at most that), or the
+//! heuristic: the stretch is half the wall's thickness on 11 of the 12 walls
+//! RE-383 measured, and nothing in the file says a wall goes on past its profile
+//! by at most its thickness), or the
 //! slope would carry the line to the wall's base or across the rectangle's edge. A wall's property keeps the first reason only,
 //! and a wall carried at one end and refused at the other is counted in both
 //! `exported.wall_profile_sources` and `exported.wall_profile_refusals`. A wall

@@ -415,7 +415,7 @@ fn catalogued_divergence_notes(deltas: &BTreeMap<String, CountDelta>) -> Vec<Str
         ),
         (
             "IFCSPACE",
-            "Revit 2024 room set, names, numbers and storeys are exact (RE-29); the outline is the room's stored solid's (RE-101), and a room whose solid does not close keeps its bounding box (#90).",
+            "Revit 2024 room set, names, numbers and storeys are exact (RE-29); the outline is the room's stored solid's (RE-101); a room whose solid does not close is read again from the solid's faces or edges, from Revit 2023 drawn from its saved mesh where that decodes whole (#1191), and otherwise keeps its bounding box (#90).",
         ),
         (
             "IFCWINDOW",
