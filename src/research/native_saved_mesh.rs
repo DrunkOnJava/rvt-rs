@@ -2787,9 +2787,10 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, band_mesh,
-        cross, distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
-        refine_crossing_edge, refine_crossing_edge_within, regions_tile, regions_tile_within,
+        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, RING_TOUCHING,
+        StepLength, area, band_mesh, cross, distance_to_chord, isoparametric_axis, joined_ring,
+        normals_follow_winding, planar_points_with, refine_crossing_edge,
+        refine_crossing_edge_within, regions_tile, regions_tile_within,
         retain_boundary_points_within, ring_points_with, split_pinched_rings, within_envelope,
     };
     use anyhow::Result;
