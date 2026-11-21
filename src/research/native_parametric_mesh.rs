@@ -382,17 +382,27 @@ fn trim_is_rectangle(
     Ok(true)
 }
 
+/// Each point a loop's join dropped, with the point kept in its place (#2085).
+type Dropped = Vec<([f64; 2], [f64; 2])>;
+
 /// A loop as a closed polygon in the surface's parameters: each edge's samples in the
 /// direction that continues the one before, and the last point (the first again)
 /// dropped. Where two ends meet within 1e-7 ft in model coordinates and their parameters
 /// differ by at most [`STRICT_PARAMETER_GAP`] of the loop's own extent on each axis, they
 /// are one point: the ring keeps its own and the next edge's stored end is dropped, as a
-/// plane or cylinder ring joins touching ends (#2085). A join that meets in model
-/// coordinates across a wider parameter gap (the seam of a revolution, a pole) is refused.
-fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<Vec<[f64; 2]>> {
+/// plane or cylinder ring joins touching ends (#2085). An edge whose two ends both meet the
+/// ring's last point, neither exactly, could join at either end and is refused, as a plane
+/// or cylinder ring refuses one. A join that meets in model coordinates across a wider
+/// parameter gap (the seam of a revolution, a pole) is refused. Returns the ring and each
+/// point a join dropped, with the point kept in its place.
+fn loop_polygon(
+    surface: &ParametricSurface,
+    segments: &[Vec<[f64; 2]>],
+) -> Result<(Vec<[f64; 2]>, Dropped)> {
     let same =
         |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
-    // The loop's own extent, not the surface's envelope, which may be unbounded.
+    // The loop's own extent: never wider than the surface's envelope, which `loop_segments`
+    // clamps every sample into, so a seam, whose jump spans it, is refused.
     let extent = |k: usize| {
         let values = segments.iter().flatten().map(|p| p[k]);
         let (lo, hi) = values.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
@@ -413,20 +423,35 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
             segments[0].clone()
         };
         let mut joined = true;
+        let mut dropped: Dropped = Vec::new();
         for seg in &segments[1..] {
             let last = *ring.last().unwrap();
             let p = surface.evaluate(last[0], last[1])?;
             let (a, b) = (seg[0], *seg.last().unwrap());
-            if distance(p, surface.evaluate(a[0], a[1])?) < 1e-7 {
+            let (to_a, to_b) = (
+                distance(p, surface.evaluate(a[0], a[1])?),
+                distance(p, surface.evaluate(b[0], b[1])?),
+            );
+            if to_a < 1e-7 && to_b < 1e-7 && !same(last, a) && !same(last, b) {
+                joined = false;
+                break;
+            }
+            if to_a < 1e-7 {
                 if !near(last, a) {
                     joined = false;
                     break;
                 }
+                if !same(last, a) {
+                    dropped.push((a, last));
+                }
                 ring.extend(seg.iter().skip(1).copied());
-            } else if distance(p, surface.evaluate(b[0], b[1])?) < 1e-7 {
+            } else if to_b < 1e-7 {
                 if !near(last, b) {
                     joined = false;
                     break;
+                }
+                if !same(last, b) {
+                    dropped.push((b, last));
                 }
                 ring.extend(seg.iter().rev().skip(1).copied());
             } else {
@@ -444,20 +469,25 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
                 surface.evaluate(last[0], last[1])?,
             ) < 1e-7
         {
+            if !same(first, last) {
+                dropped.push((last, first));
+            }
             ring.pop();
             ensure!(ring.len() >= 3, "a trim loop needs three points");
-            return Ok(ring);
+            return Ok((ring, dropped));
         }
     }
     anyhow::bail!("a trim loop does not close in the surface's parameters")
 }
 
 /// The largest parameter gap, over the loop's extent on its axis, across which
-/// [`loop_polygon`] takes two ends that meet in model coordinates as one point. The
-/// figure was read on the research branch against the surface's range, on spline faces:
-/// there every failing join on the BIM4LCA files and a contributor's save was under 6e-5
-/// of the range or a jump of 1 per cent or more (#2085). Against the loop's extent, which
-/// is smaller, it is stricter, and in this form it has not been read on any class.
+/// [`loop_polygon`] takes two ends that meet in model coordinates as one point. The loop's
+/// extent is never wider than the surface's range, so this is never looser than the same
+/// figure against the range, and equal to it where the loop spans the range. The figure was
+/// read on the research branch against the surface's range, on spline faces: there every
+/// failing join on the BIM4LCA files and a contributor's save was under 6e-5 of the range or
+/// a jump of 1 per cent or more (#2085). On ruled, revolved and cone faces it is not read.
+/// Two ends whose parameters agree within 1e-9 join whatever the extent, as before.
 const STRICT_PARAMETER_GAP: f64 = 1e-4;
 
 /// How far a revolved profile's points lie from the axis (the surface frame's `z`) for
@@ -551,8 +581,9 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             loop_closes(&surface, &segments)?,
             "disconnected parametric trim in model coordinates"
         );
-        // The spans come from the clamped samples the loop's polygon is made of, so
-        // that a vertex the cells put on one lies on it exactly.
+        // The spans come from the clamped samples the loop's polygon is made of (a chord
+        // end a join dropped is moved onto the point kept, below), so that a vertex the
+        // cells put on one lies on it exactly.
         for (points, edge) in segments.iter().zip(&edges) {
             if let Some(edge) = edge {
                 chord_edges.insert(*edge);
@@ -591,14 +622,29 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         !collapsed || rectangular,
         "unqualified collapsed ruled trim"
     );
-    let polygons = if rectangular {
-        Vec::new()
+    let (polygons, dropped): (Vec<Vec<[f64; 2]>>, Vec<Dropped>) = if rectangular {
+        (Vec::new(), Vec::new())
     } else {
         loops
             .iter()
             .map(|segments| loop_polygon(&surface, segments))
             .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .unzip()
     };
+    // A join that takes two ends as one point drops one of them (#2085). A chord that starts
+    // or ends at the dropped point moves onto the kept one, so the span beside the join still
+    // finds its chord and the plane beside it keeps meeting the face.
+    let dropped: Dropped = dropped.into_iter().flatten().collect();
+    if !dropped.is_empty() {
+        for chord in &mut chords {
+            for end in chord.iter_mut() {
+                if let Some((_, kept)) = dropped.iter().find(|(gone, _)| *gone == *end) {
+                    *end = *kept;
+                }
+            }
+        }
+    }
     const CHORD: f64 = 0.001;
     let length = |p: [f64; 3]| p.iter().map(|x| x * x).sum::<f64>().sqrt();
     let angular = |r: f64| {
@@ -1518,7 +1564,8 @@ fn tessellate_trimmed(
     max_vertices: usize,
 ) -> Result<ParametricMesh> {
     // Each chord is the span of the loop edge between the same two points, either way
-    // round: the loops' points are the samples the chords were taken from.
+    // round: the loops' points are the samples the chords were taken from, with a chord end
+    // a join dropped already moved onto the point kept (`face_grid`).
     let mut by_ends: BTreeMap<EndKeys, Chord> = BTreeMap::new();
     let key = |p: [f64; 2]| [knot_key(p[0]), knot_key(p[1])];
     for &[a, b] in chords {
