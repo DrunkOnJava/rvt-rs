@@ -3,7 +3,7 @@
 **Date:** 2026-11-21
 **Issues:** #2085 (this change, #2120); #2108, #2111.
 **Artefacts:** the BIM4LCA office and housing files (VTT, CC BY-SA 4.0; Revit 2024), each with Revit's own IFC4 export; RE1 Architecture, Plumbing, Mechanical and Electrical (Revit 2025, MIT); Autodesk's sample projects of Revit 2015 to 2027, which have no Revit export in Measure; the held-out models. Outside Measure, kept local: Revit's IFC4 export of Snowdon Towers Architectural (bldrs-ai/test-models, no licence).
-**Probes:** `probe_2085_trim_breaks` with `native_saved_mesh::ring_gaps`, on `research/2085-ring-join` (`6be738a5`, and the candidate `5be3e1eb`), kept as `refs/archive/2026-11-21/research-2085-ring-join`; `probe_2098_face_cracks` on `measure/2085-touch-slice-cracks` and `measure/2085-touch-main-cracks`.
+**Probes:** `probe_2085_trim_breaks` with `native_saved_mesh::ring_gaps`, on `research/2085-ring-join` (`6be738a5`, and the candidate `5be3e1eb`), kept as `refs/archive/2026-11-21/research-2085-ring-join`; `probe_2098_face_cracks` on `refs/archive/2026-11-21/measure-2085-touch-slice-cracks` and `-touch-main-cracks`.
 **Status:** positive. On `main` the join draws two office mullions, six bodies across four files, that were refused; each is within 0.000003 ft of Revit's body and at its volume. Four walls gain their five base quantities, every one equal to Revit's. No drawn body changes, nothing is newly refused, and no "different" count rises. On the research branch it meshes 152 of the housing's 351 and 84 of the office's 142 faces refused as disconnected. Gaps of 0.00001 ft or more stay refused, as Griffin chose (2026-11-21).
 
 ## 1. What refuses these faces
