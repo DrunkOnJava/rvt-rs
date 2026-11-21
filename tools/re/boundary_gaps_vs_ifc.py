@@ -33,11 +33,11 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
 6. **Corners.** The scored gaps grouped by their two ends in world coordinates, either way
    round, so one corner seen from the two faces that meet there counts once; with the elements
    and graphs they are on.
-7. **Raw points.** For each element with a scored gap, the pairs of distinct points in the raw
-   coordinate lists of its face sets (Revit's own numbers, before any meshing) closer than 1.5
-   times the element's largest scored gap, and how many of those lie within half to 1.5 times
-   a scored gap's size. No such pair says IfcOpenShell did not merge two points of Revit's
-   into one at that size.
+7. **Raw points, placed.** Revit's own coordinate lists of each face set, before any meshing,
+   placed through the element's placement, each mapped item's origin and target, the file's
+   unit and the site frame into the frame P and Q are in, and read by the same outcome rules:
+   the mesh's outcome against the raw points' for every scored occurrence. The ring ends that
+   close give the placed points' floor, which says whether the placement was read right.
 
 Needs IfcOpenShell and numpy.
 
@@ -52,6 +52,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ifc_common import site_frame  # noqa: E402
 from mesh_bodies_vs_ifc import meshes  # noqa: E402
 
 FACESETS = {"IfcPolygonalFaceSet", "IfcTriangulatedFaceSet"}
@@ -108,22 +109,50 @@ def items_of(element):
     return out
 
 
-def close_pairs(points, reach):
-    """Distances of the pairs of distinct points closer than `reach`, by a grid of that size."""
-    cells = collections.defaultdict(list)
-    keys = np.floor(points / reach).astype(np.int64)
-    for i, k in enumerate(map(tuple, keys)):
-        cells[k].append(i)
+def axis2(placement):
+    """An IfcAxis2Placement3D as a 4x4 matrix in the file's unit."""
+    m = np.eye(4)
+    if placement is None:
+        return m
+    o = np.array(placement.Location.Coordinates, dtype=float)
+    z = np.array(placement.Axis.DirectionRatios, dtype=float) if getattr(placement, "Axis", None) else np.array([0.0, 0.0, 1.0])
+    x = np.array(placement.RefDirection.DirectionRatios, dtype=float) if getattr(placement, "RefDirection", None) else np.array([1.0, 0.0, 0.0])
+    z = z / np.linalg.norm(z)
+    x = x - (x @ z) * z
+    x = x / np.linalg.norm(x)
+    m[:3, 0], m[:3, 1], m[:3, 2], m[:3, 3] = x, np.cross(z, x), z, o
+    return m
+
+
+def operator(target):
+    """An IfcCartesianTransformationOperator3D as a 4x4 matrix (its axes as given, then scaled)."""
+    m = np.eye(4)
+    if target is None:
+        return m
+    axes = [getattr(target, a, None) for a in ("Axis1", "Axis2", "Axis3")]
+    base = np.eye(3)
+    cols = [np.array(a.DirectionRatios, dtype=float) / np.linalg.norm(a.DirectionRatios) if a else base[:, k] for k, a in enumerate(axes)]
+    scale = float(getattr(target, "Scale", None) or 1.0)
+    for k in range(3):
+        m[:3, k] = cols[k] * scale
+    m[:3, 3] = np.array(target.LocalOrigin.Coordinates, dtype=float)
+    return m
+
+
+def placed_items(element, top):
+    """Each geometric item of an element's representations with the matrix that places it."""
     out = []
-    for k, members in cells.items():
-        near = [j for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)
-                for j in cells.get((k[0] + dx, k[1] + dy, k[2] + dz), ())]
-        for i in members:
-            for j in near:
-                if j > i:
-                    d = float(np.linalg.norm(points[i] - points[j]))
-                    if 0 < d < reach:
-                        out.append(d)
+    if element.Representation is None:
+        return out
+    stack = [(item, top) for rep in element.Representation.Representations for item in rep.Items]
+    while stack:
+        item, m = stack.pop()
+        if item.is_a("IfcMappedItem"):
+            source = item.MappingSource
+            inner = m @ operator(item.MappingTarget) @ np.linalg.inv(axis2(source.MappingOrigin))
+            stack.extend((x, inner) for x in source.MappedRepresentation.Items)
+        else:
+            out.append((item, m))
     return out
 
 
@@ -310,28 +339,39 @@ def main():
         size = float(members[0][0]["gap"])
         outs = collections.Counter(o for _, o in members)
         print(f"corner gap {size:.6f} ft ({size * 304.8:.3f} mm): occurrences {len(members)}, " + ", ".join(f"{k} {v}" for k, v in sorted(outs.items())))
-    # 7. Raw points.
-    scale_ft = ifcopenshell.util.unit.calculate_unit_scale(model) / 0.3048
-    largest = collections.defaultdict(float)
-    sizes = collections.defaultdict(list)
-    for g, _ in scored:
-        largest[g["owner"]] = max(largest[g["owner"]], float(g["gap"]))
-        sizes[g["owner"]].append(float(g["gap"]))
-    with_pair = 0
-    for tag in sorted(largest):
+    # 7. Raw points, placed: Revit's own coordinate lists, through the element's placement,
+    # each mapped item's origin and target, the file's unit and the site frame, into the frame
+    # P and Q are in, with no meshing between. The ring ends that close give their floor; a
+    # transform this reads wrong shows there, and then nothing below is trusted.
+    import ifcopenshell.util.placement
+
+    unit = ifcopenshell.util.unit.calculate_unit_scale(model)
+    frame = site_frame(model)
+    raw_rows = []
+    raw_floors = []
+    for tag in sorted({g["owner"] for g, _ in scored}):
+        element = elements[tag]
+        top = np.array(ifcopenshell.util.placement.get_local_placement(element.ObjectPlacement), dtype=float)
         pts = []
-        for item in items_of(elements[tag]):
+        for item, m in placed_items(element, top):
             if item.is_a() in FACESETS:
-                pts.extend(item.Coordinates.CoordList)
+                local = np.array(item.Coordinates.CoordList, dtype=float)
+                world = (m[:3, :3] @ local.T).T + m[:3, 3]
+                pts.append(world * unit)
         if not pts:
             continue
-        raw = np.unique(np.array(pts, dtype=float) * scale_ft, axis=0)
-        near = close_pairs(raw, 1.5 * largest[tag])
-        at_size = [d for d in near if any(0.5 * s <= d <= 1.5 * s for s in sizes[tag])]
-        with_pair += bool(at_size)
-        if per_gap_lines:
-            print(f"raw owner={tag} points={len(raw)} pairs_under_1.5x_largest={len(near)} pairs_at_a_gap_size={len(at_size)}")
-    print(f"raw points: elements with a scored gap {len(largest)}; with two raw points at a scored gap's size (0.5x to 1.5x) {with_pair}")
+        raw = frame(np.unique(np.concatenate(pts), axis=0))
+        closed = [point(j["x"]) for j in joints if j["owner"] == tag and j["at_gap"] == "false"]
+        raw_floors.extend(float(np.linalg.norm(raw - c, axis=1).min()) for c in closed)
+        tol = max(2 * floors[tag]["floor"], TOUCHING) if tag in floors else TOUCHING
+        for g, o in scored:
+            if g["owner"] == tag:
+                raw_rows.append((o, outcome(raw, float(g["gap"]), point(g["p"]), point(g["q"]), tol)))
+    if raw_floors:
+        rf = sorted(raw_floors)
+        print(f"raw points placed: closed ring ends to the nearest raw point, median {rf[len(rf) // 2]:.9f} max {rf[-1]:.9f} ft over {len(rf)} ends")
+    pairs = collections.Counter(raw_rows)
+    print("raw points: mesh outcome -> raw outcome: " + ", ".join(f"{a}->{b} {n}" for (a, b), n in sorted(pairs.items())))
     if per_gap_lines:
         for key, c in sorted(per_gap.items()):
             print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} " + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
