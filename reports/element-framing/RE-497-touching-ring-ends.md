@@ -15,7 +15,7 @@ On the BIM4LCA housing and office (concrete, as built) the census found every su
 The gaps, each failing ring by its largest step along the surface, were:
 - **Under 0.00001 ft:** 134 of the housing's 302 plane rings and 39 of its 65 cylinder rings; 80 of the office's 123 and 4 of its 12. Many cylinder rings part only in their angle, by 1e-7 to 4e-6, with the points under 1e-7 ft apart.
 - **From 0.00001 to 0.0001 ft:** 16 plane and 24 cylinder rings on the two files. Not read.
-- **From 0.0001 to 0.0015 ft:** where a piece of edge looks missing. 158 of the housing's are in three graphs with the same counts and face numbers, most part by exactly 0.1 mm along one parameter.
+- **From 0.0001 to 0.0015 ft:** where a piece of edge looks missing. 158 of the housing's 165 are in three graphs with the same counts and face numbers. 68 of the 165 part by exactly 0.1 mm: 60 along one parameter, 8 along both.
 
 On the contributor's save, 36 of the 84 cylinder rings on the chairs part by under 0.00001 ft, and the other 48 by 0.0001 to 0.001 ft ([#2085](https://github.com/DrunkOnJava/rvt-rs/issues/2085#issuecomment-7054296537)).
 
@@ -37,11 +37,14 @@ The rows were registered on [#2085](https://github.com/DrunkOnJava/rvt-rs/issues
 - **On the contributor's save** ([#2085](https://github.com/DrunkOnJava/rvt-rs/issues/2085#issuecomment-7056173710)), the same probe on `5be3e1eb`: 36 of the 84 cylinder faces refused as disconnected mesh and 48 stay refused, with no meshed face lost. The chairs' coverage of Revit's surface within 0.01 ft rises from 65.6–65.8% to 67.55–67.63%, against 70.3–70.5% for the bridging candidate. All 448 chairs stay partial.
 
 **On `main`,** the join alone (`42fad511` against `0d0fc927`):
-- **Cracks** ([44857637927](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44857637927), the crack probe on `818ccf1d` against `1eea412b`, on BIM4LCA and Autodesk's samples). Of 5,927 bodies, 2 change, and none gains a boundary vertex over 0.001 ft. Both stay refused, on the next face's reason: RE1 Architecture's 356990, now `a trim loop does not close in the surface's parameters`, and Snowdon Towers' 1135940, now `shared curved edge leaves adjacent plane`. 12 of the 77 exports differ.
+- **Cracks** ([44857637927](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44857637927), the crack probe on `818ccf1d` against `1eea412b`, on BIM4LCA and Autodesk's samples). Of the 5,927 bodies the probe tracks, 2 change, and none gains a boundary vertex over 0.001 ft. The newly drawn mullions are not among them; their evidence is their fit to Revit's export, below. Both stay refused, on the next face's reason: RE1 Architecture's 356990, now `a trim loop does not close in the surface's parameters`, and Snowdon Towers' 1135940, now `shared curved edge leaves adjacent plane`. 12 of the 77 exports differ.
 
 - **Full Measure** ([44857635338](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44857635338)): 13 of 120 exports differ, the held-out AA house's among them (not kept), and 11 of 102 `diagnostics.json`.
-- **Bodies** (`ifc_body_diff.py` on the kept exports): no drawn body's geometry changes, and none stops being drawn. 67 objects change their refusal text, each naming `disconnected UV boundary` on `main`; they stay refused on the next face's reason.
-- **Newly drawn:** six bodies, the BIM4LCA office's curtain mullions 3029185 and 3029301 (both on each concrete file, 3029301 on each timber file). Each also named the reason on `main`. Read on every vertex against Revit's export, each is within 0.000003 ft both ways, with volume ratio 1.0000.
+- **Bodies** (`ifc_body_diff.py` on the kept exports): no drawn body's geometry changes, and none stops being drawn. 67 objects change their refusal text, each naming `disconnected UV boundary` in full on `main`. They stay refused, and three reasons rise:
+  - `disconnected parametric trim in model coordinates` on 60: 15 terminals on each office file, which keep `disconnected UV boundary` from another face;
+  - `a trim loop does not close in the surface's parameters` on 1: RE1 Architecture's furniture 356990, which keeps it too;
+  - `shared curved edge leaves adjacent plane` on 6: Snowdon Towers' terminal 1135940, and one proxy in each `rac_basic` save.
+- **Newly drawn:** six bodies, the BIM4LCA office's curtain mullions 3029185 and 3029301 (both on each concrete file, 3029301 on each timber file). Each also named the reason on `main`. Read on every vertex against Revit's export, each is within 0.000003 ft both ways, with volume ratio 1.0000. The bodies, walls and refusal texts are read from the kept exports by `research-tools/2085/` on `refs/archive/2026-11-21/measure-2085-reads` (`fddeb94e`).
 - **Walls:** four walls gain their five base quantities, read from their saved meshes once those close (RE-388). They are 1347016 on the housing at permit, and 3011915, 3454517 and 3455071 on the office as built. `qtos_vs_ifc`'s "equal" rises by 5 and 15 there; "different" (0 and 1) and "values Revit does not write" (0) do not move.
 - **Lines that follow the mullions:**
   - `saved_meshes_vs_ifc` counts them, each within its box;
