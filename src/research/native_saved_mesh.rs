@@ -3702,13 +3702,14 @@ mod tests {
 
     #[test]
     fn an_edge_whose_ends_both_touch_the_ring_stays_refused() {
-        // The third edge is longer than the bound, but both its ends lie within it of the
-        // ring's last point, (1, 1). Taken at either end, the ring would close.
+        // The third edge (1.125 bounds long) has both ends within the bound of the ring's
+        // last point, (1, 1), its far end the nearer. Taken there, as the nearer end would
+        // be without the guard, its start meets the fourth edge and the ring closes.
         let d = RING_TOUCHING * 0.75;
         let segments = vec![
             vec![[0., 0.], [1., 0.]],
             vec![[1., 0.], [1., 1.]],
-            vec![[1. + d, 1.], [1. - d, 1.]],
+            vec![[1. + d, 1.], [1. - d / 2., 1.]],
             vec![[1. + d, 1.], [0., 1.]],
             vec![[0., 1.], [0., 0.]],
         ];
