@@ -4,7 +4,7 @@
 **Issues:** #2111 (this change, #2116); #2107 (RE-495), #2104, #2114.
 **Artefacts:** the BIM4LCA office and housing files (VTT, CC BY-SA 4.0; Revit 2024), each with Revit's own IFC4 export; RE1 Architecture and Plumbing (Revit 2025, MIT); the held-out house; Autodesk's sample projects of Revit 2015 to 2027 and Snowdon Towers' 2024 models, which have no Revit export in Measure. Outside Measure, kept local: Revit's IFC4 export of Snowdon Towers Architectural (bldrs-ai/test-models, no licence).
 **Probes:** `probe_2098_face_cracks` with the cylinder standoff of #2111 (`cylsag`), on each bound and on `main` at `26a6b0e1` (`e1f9649d`); `probe_2111_sliver_faces`. Not landed; kept as `refs/archive/2026-11-20/measure-2111-chord-cand`, `-chord-cand2`, `-head`, `-base`, `-sliver` and `-sliver-base`. The local reads are `research-tools/2111/` on `refs/archive/2026-11-20/measure-2111-reads`.
-**Status:** positive. At half the faces' chord every boundary vertex between two cylinders stays within 0.001 ft on the 77 files the crack probe reads, and 182,090 of the 297,784 cylinder triangles #2107 added go (each graph counted once); on the 13 files where #2107 added the most, 48 to 100 per cent of its rise goes. On 147 graphs the farthest cylinder standoff rises, by at most 0.000318 ft, within 0.001 ft. Griffin chose this over #2107's finer edge (2026-11-20). The rows were registered on #2111 before each run was read.
+**Status:** positive. At half the faces' chord every boundary vertex between two cylinders stays within 0.001 ft on the 77 files the crack probe reads, and 182,090 of the 297,784 cylinder triangles #2107 added go (each graph counted once, 61 per cent); on the 13 files whose triangle totals #2107 raised by more than 10 per cent, 48 to 100 per cent of its rise goes. On 147 graphs the farthest cylinder standoff rises, by at most 0.000318 ft, within 0.001 ft. Griffin chose this over #2107's finer edge (2026-11-20). The rows were registered on #2111 before each run was read.
 
 ## 1. The rule
 
@@ -23,7 +23,7 @@ Read before this change ([#2111](https://github.com/DrunkOnJava/rvt-rs/issues/21
 - No boundary vertex between two cylinders over 0.001 ft on any file; the downpipes' farthest gap over every pair is 0.000920 ft, as with #2107. 1,265 bodies with a cylinder pair have a farthest gap above #2107's, the highest 0.000466 ft.
 - No other pair of surfaces gains a vertex over 0.001 ft, and no body does.
 - The farthest cylinder standoff stays within 0.001 ft on all 1,492 graphs (0.000997), rises on 147 by at most 0.000318 ft (median 0.000281), and ends above its figure before #2107 on none. The cylinder triangles standing off more than 0.0005 ft are the same as #2107's on every graph (193,887); that count is coarse.
-- The cylinder triangles, each graph counted once: 1,385,188 before #2107, 1,682,972 with it, 1,500,882 now. By file, in the crack probe's totals:
+- The cylinder triangles, each graph counted once: 1,385,188 before #2107, 1,682,972 with it, 1,500,882 now. On the 13 files whose totals #2107 raised by more than 10 per cent, in the crack probe's totals:
 
   | file | before #2107 | #2107 | half chord | of #2107's rise taken back |
   | --- | ---: | ---: | ---: | ---: |

@@ -2,8 +2,9 @@
   triangles (#2111, RE-496).** #2107 closed the cracks between two cylinder
   faces by giving their shared edge points four times finer than the faces'
   own 0.001 ft chord; the edge now takes them at half that chord. The cracks
-  stay closed on the 77 files read, and on the 13 files where #2107 added the
-  most triangles, 48 to 100 per cent of them go: on Autodesk's `rme_basic` the 2024 export goes from
+  stay closed on the 77 files read, and 61 per cent of the triangles #2107
+  added go, counting each graph once (48 to 100 per cent on the 13 files whose
+  totals it raised by more than 10 per cent): on Autodesk's `rme_basic` the 2024 export goes from
   112.7 to 108.0 MiB (106.0 before #2107). On 147 groups of faces the farthest
-  a round face stands off its true cylinder rises by at most 0.0003 ft, still
+  a round face stands off its true cylinder rises by at most 0.00032 ft, still
   within 0.001 ft.
