@@ -15,6 +15,7 @@
 //!     1,000,000 budget refuses, with every budget that refuses it, so its size lies between the
 //!     largest of those and the next; `objects_or_other` where 16,000,000 refuses it too (its
 //!     objects, or another fault);
+//!   selected elements=<n> symbols_added=<n>: the ids read, and those the following added;
 //!   largest values=<n>: the largest graph decoded at 16,000,000, in values.
 //! ```
 //! ElementIds and counts only. The selection is the probe's own: the elements of the export's
@@ -95,6 +96,7 @@ fn main() -> Result<()> {
         .collect();
     // At the largest budget, follow instances to their symbols, so every budget below reads
     // the same ids.
+    let elements = ids.len();
     let mut all = ids.clone();
     let mut wanted = ids;
     let mut classes: BTreeMap<u64, String> = BTreeMap::new();
@@ -120,6 +122,11 @@ fn main() -> Result<()> {
         largest = largest.max(summary.max_graph_values_observed);
         wanted = found.into_iter().filter(|id| all.insert(*id)).collect();
     }
+    // With no symbol added, the census reads only the elements' own graphs, and a zero is void.
+    println!(
+        "selected elements={elements} symbols_added={}",
+        all.len() - elements
+    );
     let mut refused: BTreeMap<usize, BTreeSet<u64>> = BTreeMap::new();
     for values in BUDGETS {
         let summary =
