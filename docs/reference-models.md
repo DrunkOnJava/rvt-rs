@@ -118,10 +118,11 @@ What it does not cover:
   [`docs/maintaining.md`](maintaining.md#numbers-on-the-readme-and-the-supported-profile)
   requires of it.
 
-Nobody has yet re-run the pages' numbers from this command and compared the
-result with them: it is the command their runs were dispatched with, not a
-verified reproduction of every figure (W10 in the
-[1.0 criteria](release-1.0-criteria.md)).
+The pages' numbers were last compared with this command's output on
+2026-11-09, in [the W10 re-run](w10-rerun.md). It is the command their runs
+were dispatched with, not a verified reproduction of every figure: the re-run
+records the differences it found and the figures it does not produce (W10 in
+the [1.0 criteria](release-1.0-criteria.md)).
 
 ## The files
 
