@@ -89,6 +89,32 @@
 //!   chords surface=<class> ends=<n> moved=<n> largest=<ft>: the ends of chord edges (drawn
 //!     straight to a plane) the polygons hold, those a merged join moved off the edge's own end,
 //!     which the plane beside it keeps, and the largest move
+//!   piece graph=<ElementId> face=<n> surface=<Plane|CylSurf> loop=<n> at=<k>/<edges>
+//!     gap=<ft> du_ft=<ft> dv_ft=<ft> sig=<one|diagonal> tenth_mm=<bool> ends=<edge|none>
+//!     through=<edge|none> mid=<ft>@<edge>:<faces> orphans=<n> orphan_near=<ft|none>
+//!     sides_a=<ft|unread> sides_b=<ft|unread> unread_edges=<n>: does the graph store the edge
+//!     a failing ring is missing? For each gap of 0.00001 ft (Griffin's touching bound) or more
+//!     between the ring's stored edges, each joined at its nearer end in model coordinates,
+//!     from the ring's point P before the gap to the next edge's end Q: its size and each
+//!     parameter's share in feet (`one` where one is under 1% of the other; `tenth_mm` where
+//!     one is 0.1 mm); `ends`, an edge of the graph (not the two beside the gap) with one end
+//!     at P and the other at Q within the bound; `through`, one whose points and spans pass
+//!     within it of both; `mid`, the nearest edge to the gap's midpoint and its faces (`F` for
+//!     this face); `orphans`, the edges that name this face but that none of its loops reaches,
+//!     and the nearest of them to P or Q; `sides_*`, how far apart the two faces' surfaces put
+//!     the ends of the edge before (`a`) and after (`b`) the gap. An edge is placed through the
+//!     first of its faces that is a plane or a cylinder; `unread_edges` have neither. Pointers
+//!     and the graph's own points only: nothing is joined.
+//!   piecenbr graph=<ElementId> face=<n> loop=<n> at=<k> a=<face>:<class>:<edges> b=...: the
+//!     edges either side of the edge before (`a`) and after (`b`) the gap on the other face's
+//!     own loop, each as `<edge>[<faces>]:<ft to P>/<ft to Q>`;
+//!   piecenone, pieceunread graph=<ElementId> face=<n> loop=<n>: a failing ring with no gap of
+//!     the bound or more in model coordinates, or one whose chain or points cannot be read;
+//!   keys loop=[..] edge=[..] endpoint=[..] interior=[..] face=[..]: once, the field names of
+//!     the first gap's loop, edge, edge points and face;
+//!   pieces surface=<class> gaps=<n> one=<n> diagonal=<n> tenth_mm=<n> ends=<n> through=<n>
+//!     mid_covered=<n> orphan_near=<n> sides_disagree=<n> rings_under=<n> unread=<n>: by class;
+//!   graphs read=<n> refused=<n>: the graphs decoded, and those refused whole for the budget.
 //! ```
 //! ElementIds, counts and distances in feet only.
 //!
@@ -98,6 +124,7 @@
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
 use rvt::RevitFile;
@@ -178,6 +205,16 @@ struct Tally {
     gap_backward: usize,
     gap_parameters: [usize; 7],
     gap_feet: [usize; 7],
+    piece_gaps: usize,
+    piece_one: usize,
+    piece_tenth: usize,
+    piece_ends: usize,
+    piece_through: usize,
+    piece_mid: usize,
+    piece_orphan: usize,
+    piece_sides: usize,
+    piece_unread: usize,
+    piece_rings_under: usize,
 }
 
 /// The decade a gap falls in: under 1e-7, then up to 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, beyond.
@@ -188,8 +225,540 @@ fn decade(x: f64) -> usize {
         .count()
 }
 
+/// Two points this close in feet are one point: Griffin's bound for a ring's ends (#2085).
+const TOUCHING: f64 = 1e-5;
+/// 0.1 mm in feet: the gap three housing graphs' rings leave in one parameter.
+const TENTH_MM: f64 = 0.1 / 304.8;
+static KEYS_SHOWN: AtomicBool = AtomicBool::new(false);
+
+type Polyline = Vec<[f64; 3]>;
+
+/// A plane or cylinder surface, as `native_saved_mesh::ring_gaps` evaluates it.
+#[derive(Clone, Copy)]
+enum Surf {
+    Plane {
+        o: [f64; 3],
+        x: [f64; 3],
+        y: [f64; 3],
+    },
+    Cyl {
+        c: [f64; 3],
+        x: [f64; 3],
+        y: [f64; 3],
+        z: [f64; 3],
+        r: f64,
+    },
+}
+
+impl Surf {
+    fn at(&self, uv: [f64; 2]) -> [f64; 3] {
+        match *self {
+            Surf::Plane { o, x, y } => std::array::from_fn(|k| o[k] + uv[0] * x[k] + uv[1] * y[k]),
+            Surf::Cyl { c, x, y, z, r } => {
+                let (s, co) = uv[0].sin_cos();
+                std::array::from_fn(|k| c[k] + r * (co * x[k] + s * y[k]) + uv[1] * z[k])
+            }
+        }
+    }
+    /// Feet per unit of each parameter.
+    fn scales(&self) -> [f64; 2] {
+        let norm = |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+        match *self {
+            Surf::Plane { x, y, .. } => [norm(x), norm(y)],
+            Surf::Cyl { z, r, .. } => [r, norm(z)],
+        }
+    }
+}
+
+fn coords<const N: usize>(v: &Fv) -> Option<[f64; N]> {
+    let a = v.as_array()?;
+    if a.len() != N {
+        return None;
+    }
+    let mut p = [0.0; N];
+    for (i, x) in a.iter().enumerate() {
+        p[i] = x.as_f64().filter(|x| x.is_finite())?;
+    }
+    Some(p)
+}
+
+fn surf(graph: &ObjectGraph, face: usize) -> Option<Surf> {
+    let si = pointer(graph, face, graph.objects.get(face)?.fields.get("m_pSurf")?).ok()??;
+    let object = graph.objects.get(si)?;
+    let s = &object.fields;
+    match object.class_name.as_str() {
+        "Plane" => Some(Surf::Plane {
+            o: coords(s.get("m_origin")?)?,
+            x: coords(s.get("m_xVec")?)?,
+            y: coords(s.get("m_yVec")?)?,
+        }),
+        "CylSurf" => Some(Surf::Cyl {
+            c: coords(s.get("m_center")?)?,
+            x: coords(s.get("m_xVec")?)?,
+            y: coords(s.get("m_yVec")?)?,
+            z: coords(s.get("m_zVec")?)?,
+            r: s.get("m_radius")?.as_f64()?,
+        }),
+        _ => None,
+    }
+}
+
+fn surface_class(graph: &ObjectGraph, face: usize) -> String {
+    graph
+        .objects
+        .get(face)
+        .and_then(|f| f.fields.get("m_pSurf"))
+        .and_then(|p| pointer(graph, face, p).ok().flatten())
+        .and_then(|si| graph.objects.get(si))
+        .map_or_else(|| "unknown".to_string(), |s| s.class_name.clone())
+}
+
+fn edge_faces(graph: &ObjectGraph, e: usize) -> [Option<usize>; 2] {
+    let faces = graph.objects[e]
+        .fields
+        .get("m_pFace")
+        .and_then(|f| f.as_array());
+    std::array::from_fn(|k| {
+        faces
+            .and_then(|f| f.get(k))
+            .and_then(|p| pointer(graph, e, p).ok().flatten())
+    })
+}
+
+/// An edge's stored points in the parameters of its face on `side`, ends included.
+fn edge_uv(graph: &ObjectGraph, e: usize, side: usize) -> Option<Vec<[f64; 2]>> {
+    let f = &graph.objects[e].fields;
+    let ends = f.get("m_firstAndLastEdgePnts")?.as_array()?;
+    if ends.len() != 2 {
+        return None;
+    }
+    let mut pts = vec![coords::<2>(ends[0].get("uv")?.get(side)?)?];
+    for p in f.get("m_interiorEdgePnts")?.as_array()? {
+        pts.push(coords(p.get("uv")?.get(side)?)?);
+    }
+    pts.push(coords(ends[1].get("uv")?.get(side)?)?);
+    Some(pts)
+}
+
+fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+}
+
+/// From `p` to the polyline `pts`, its spans included.
+fn polyline_dist(p: [f64; 3], pts: &[[f64; 3]]) -> f64 {
+    let mut best = pts
+        .iter()
+        .map(|q| dist(p, *q))
+        .fold(f64::INFINITY, f64::min);
+    for w in pts.windows(2) {
+        let ab: [f64; 3] = std::array::from_fn(|k| w[1][k] - w[0][k]);
+        let len2 = ab.iter().map(|x| x * x).sum::<f64>();
+        if len2 > 0.0 {
+            let t = ((0..3).map(|k| (p[k] - w[0][k]) * ab[k]).sum::<f64>() / len2).clamp(0.0, 1.0);
+            best = best.min(dist(p, std::array::from_fn(|k| w[0][k] + t * ab[k])));
+        }
+    }
+    best
+}
+
+/// One graph's edges in model coordinates, each through the first of its faces that is a
+/// plane or a cylinder (`None` where neither is), built once per graph.
+struct EdgeCache {
+    xyz: Vec<(usize, Option<Polyline>)>,
+    surfs: BTreeMap<usize, Option<Surf>>,
+    naming: BTreeMap<usize, Vec<usize>>,
+}
+
+impl EdgeCache {
+    fn new(graph: &ObjectGraph) -> EdgeCache {
+        let mut surfs: BTreeMap<usize, Option<Surf>> = BTreeMap::new();
+        let mut naming: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        let mut xyz = Vec::new();
+        for (e, object) in graph.objects.iter().enumerate() {
+            if object.class_name != "Edge" {
+                continue;
+            }
+            let faces = edge_faces(graph, e);
+            for face in faces.iter().flatten() {
+                naming.entry(*face).or_default().push(e);
+            }
+            let mut line = None;
+            for (side, face) in faces.iter().enumerate() {
+                let Some(face) = face else { continue };
+                let s = *surfs.entry(*face).or_insert_with(|| surf(graph, *face));
+                if let Some(s) = s {
+                    line = edge_uv(graph, e, side).map(|p| p.iter().map(|q| s.at(*q)).collect());
+                    break;
+                }
+            }
+            xyz.push((e, line));
+        }
+        EdgeCache { xyz, surfs, naming }
+    }
+    fn surf(&mut self, graph: &ObjectGraph, face: usize) -> Option<Surf> {
+        *self.surfs.entry(face).or_insert_with(|| surf(graph, face))
+    }
+    /// How far an edge's ends lie apart as its two faces' surfaces place them, where both
+    /// are planes or cylinders.
+    fn sides(&mut self, graph: &ObjectGraph, e: usize) -> Option<f64> {
+        let faces = edge_faces(graph, e);
+        let mut ends = Vec::new();
+        for (side, face) in faces.iter().enumerate() {
+            let s = self.surf(graph, (*face)?)?;
+            let pts = edge_uv(graph, e, side)?;
+            ends.push([s.at(pts[0]), s.at(pts[pts.len() - 1])]);
+        }
+        Some(dist(ends[0][0], ends[1][0]).max(dist(ends[0][1], ends[1][1])))
+    }
+}
+
+fn face_loops(graph: &ObjectGraph, fi: usize) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut next = graph.objects[fi]
+        .fields
+        .get("m_pFirstLoop")
+        .and_then(|p| pointer(graph, fi, p).ok().flatten());
+    while let Some(li) = next {
+        if out.contains(&li) {
+            break;
+        }
+        out.push(li);
+        next = graph.objects[li]
+            .fields
+            .get("m_nextLoop")
+            .and_then(|p| pointer(graph, li, p).ok().flatten());
+    }
+    out
+}
+
+/// A loop's edges in chain order, each with the side of it that names the face.
+fn loop_chain(graph: &ObjectGraph, fi: usize, li: usize) -> Option<Vec<(usize, usize)>> {
+    let mut cur = pointer(graph, li, graph.objects[li].fields.get("m_next")?).ok()??;
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    while cur != li {
+        if !seen.insert(cur) || graph.objects.get(cur)?.class_name != "Edge" {
+            return None;
+        }
+        let faces = edge_faces(graph, cur);
+        let side = (0..2).find(|k| faces[*k] == Some(fi))?;
+        out.push((cur, side));
+        cur = pointer(
+            graph,
+            cur,
+            graph.objects[cur].fields.get("m_next")?.get(side)?,
+        )
+        .ok()??;
+    }
+    Some(out)
+}
+
+/// One gap of a loop's stored edges of `TOUCHING` or more, in model coordinates.
+struct Gap {
+    at: usize,
+    a: usize,
+    a_side: usize,
+    b: usize,
+    b_side: usize,
+    p: [f64; 3],
+    q: [f64; 3],
+    duv: [f64; 2],
+    d: f64,
+}
+
+/// The gaps of `TOUCHING` or more the loop's stored edges leave, each edge joined at its
+/// nearer end in model coordinates, of the two ways round the first edge the one whose
+/// largest gap is smaller.
+fn open_gaps(graph: &ObjectGraph, chain: &[(usize, usize)], s: Surf) -> Option<Vec<Gap>> {
+    let segs = chain
+        .iter()
+        .map(|(e, side)| edge_uv(graph, *e, *side))
+        .collect::<Option<Vec<_>>>()?;
+    if segs.is_empty() {
+        return None;
+    }
+    let mut best: Option<(f64, Vec<Gap>)> = None;
+    for reverse in [false, true] {
+        let p0 = &segs[0];
+        let (first, mut last) = if reverse {
+            (p0[p0.len() - 1], p0[0])
+        } else {
+            (p0[0], p0[p0.len() - 1])
+        };
+        let mut prev = 0usize;
+        let mut gaps = Vec::new();
+        let mut worst: f64 = 0.0;
+        let gap = |at: usize, prev: usize, from: [f64; 2], to: [f64; 2], gaps: &mut Vec<Gap>| {
+            let d = dist(s.at(from), s.at(to));
+            if d >= TOUCHING {
+                gaps.push(Gap {
+                    at,
+                    a: chain[prev].0,
+                    a_side: chain[prev].1,
+                    b: chain[at].0,
+                    b_side: chain[at].1,
+                    p: s.at(from),
+                    q: s.at(to),
+                    duv: [to[0] - from[0], to[1] - from[1]],
+                    d,
+                });
+            }
+            d
+        };
+        for (k, pts) in segs.iter().enumerate().skip(1) {
+            let (h, t) = (pts[0], pts[pts.len() - 1]);
+            let (near, far) = if dist(s.at(last), s.at(h)) <= dist(s.at(last), s.at(t)) {
+                (h, t)
+            } else {
+                (t, h)
+            };
+            worst = worst.max(gap(k, prev, last, near, &mut gaps));
+            last = far;
+            prev = k;
+        }
+        worst = worst.max(gap(0, prev, last, first, &mut gaps));
+        if best.as_ref().is_none_or(|(w, _)| worst < *w) {
+            best = Some((worst, gaps));
+        }
+    }
+    best.map(|(_, gaps)| gaps)
+}
+
+fn keys(v: Option<&Fv>) -> Vec<String> {
+    v.and_then(|v| v.as_object())
+        .map(|o| o.keys().map(str::to_string).collect())
+        .unwrap_or_default()
+}
+
+/// An edge beside `e` on the loop of `face` that holds it: its two neighbours in chain order.
+fn chain_neighbours(graph: &ObjectGraph, face: usize, e: usize) -> Option<[usize; 2]> {
+    for li in face_loops(graph, face) {
+        let Some(chain) = loop_chain(graph, face, li) else {
+            continue;
+        };
+        if let Some(i) = chain.iter().position(|(x, _)| *x == e) {
+            let n = chain.len();
+            return Some([chain[(i + n - 1) % n].0, chain[(i + 1) % n].0]);
+        }
+    }
+    None
+}
+
+/// For each gap of `TOUCHING` or more in a failing ring's stored edges: whether the graph
+/// stores an edge that fills it, by pointers first and then by distance (#2085).
+#[allow(clippy::too_many_arguments)]
+fn read_pieces(
+    id: u64,
+    fi: usize,
+    class: &str,
+    loop_index: usize,
+    graph: &ObjectGraph,
+    cache: &mut Option<EdgeCache>,
+    t: &mut Tally,
+) {
+    let loops = face_loops(graph, fi);
+    let (Some(&li), Some(s)) = (loops.get(loop_index), surf(graph, fi)) else {
+        t.piece_unread += 1;
+        println!("pieceunread graph={id} face={fi} loop={loop_index} why=loop_or_surface");
+        return;
+    };
+    let Some(chain) = loop_chain(graph, fi, li) else {
+        t.piece_unread += 1;
+        println!("pieceunread graph={id} face={fi} loop={loop_index} why=chain");
+        return;
+    };
+    let Some(gaps) = open_gaps(graph, &chain, s) else {
+        t.piece_unread += 1;
+        println!("pieceunread graph={id} face={fi} loop={loop_index} why=points");
+        return;
+    };
+    if gaps.is_empty() {
+        t.piece_rings_under += 1;
+        println!("piecenone graph={id} face={fi} loop={loop_index}");
+        return;
+    }
+    if !KEYS_SHOWN.swap(true, Ordering::Relaxed) {
+        let a = &graph.objects[gaps[0].a].fields;
+        let end = a
+            .get("m_firstAndLastEdgePnts")
+            .and_then(|v| v.as_array())
+            .and_then(|v| v.first());
+        let interior = a
+            .get("m_interiorEdgePnts")
+            .and_then(|v| v.as_array())
+            .and_then(|v| v.first());
+        println!(
+            "keys loop={:?} edge={:?} endpoint={:?} interior={:?} face={:?}",
+            keys(Some(&graph.objects[li].fields)),
+            keys(Some(a)),
+            keys(end),
+            keys(interior),
+            keys(Some(&graph.objects[fi].fields)),
+        );
+    }
+    let cache = cache.get_or_insert_with(|| EdgeCache::new(graph));
+    let reached: BTreeSet<usize> = loops
+        .iter()
+        .filter_map(|l| loop_chain(graph, fi, *l))
+        .flatten()
+        .map(|(e, _)| e)
+        .collect();
+    let orphans: Vec<usize> = cache
+        .naming
+        .get(&fi)
+        .into_iter()
+        .flatten()
+        .filter(|e| !reached.contains(*e))
+        .copied()
+        .collect();
+    let unread = cache.xyz.iter().filter(|(_, l)| l.is_none()).count();
+    let scales = s.scales();
+    for g in &gaps {
+        t.piece_gaps += 1;
+        let comp = [g.duv[0] * scales[0], g.duv[1] * scales[1]];
+        let (lo, hi) = if comp[0].abs() <= comp[1].abs() {
+            (comp[0].abs(), comp[1].abs())
+        } else {
+            (comp[1].abs(), comp[0].abs())
+        };
+        let sig = if hi > 0.0 && lo / hi < 0.01 {
+            "one"
+        } else {
+            "diagonal"
+        };
+        let tenth = comp.iter().any(|c| (c.abs() - TENTH_MM).abs() < 1e-7);
+        t.piece_one += usize::from(sig == "one");
+        t.piece_tenth += usize::from(tenth);
+        let mid: [f64; 3] = std::array::from_fn(|k| (g.p[k] + g.q[k]) / 2.0);
+        let mut ends = None;
+        let mut through = None;
+        let mut nearest_mid = (f64::INFINITY, 0usize);
+        for (e, line) in &cache.xyz {
+            if *e == g.a || *e == g.b {
+                continue;
+            }
+            let Some(line) = line else { continue };
+            let (e0, e1) = (line[0], line[line.len() - 1]);
+            if (dist(e0, g.p) < TOUCHING && dist(e1, g.q) < TOUCHING)
+                || (dist(e0, g.q) < TOUCHING && dist(e1, g.p) < TOUCHING)
+            {
+                ends.get_or_insert(*e);
+            }
+            if polyline_dist(g.p, line) < TOUCHING && polyline_dist(g.q, line) < TOUCHING {
+                through.get_or_insert(*e);
+            }
+            let dm = polyline_dist(mid, line);
+            if dm < nearest_mid.0 {
+                nearest_mid = (dm, *e);
+            }
+        }
+        t.piece_ends += usize::from(ends.is_some());
+        t.piece_through += usize::from(through.is_some());
+        t.piece_mid += usize::from(nearest_mid.0 < TOUCHING);
+        let orphan_near = orphans
+            .iter()
+            .filter_map(|e| {
+                cache
+                    .xyz
+                    .iter()
+                    .find(|(x, _)| x == e)
+                    .and_then(|(_, l)| l.as_ref())
+                    .map(|l| polyline_dist(g.p, l).min(polyline_dist(g.q, l)))
+            })
+            .fold(f64::INFINITY, f64::min);
+        t.piece_orphan += usize::from(orphan_near < TOUCHING);
+        let (sa, sb) = (cache.sides(graph, g.a), cache.sides(graph, g.b));
+        t.piece_sides +=
+            usize::from(sa.is_some_and(|x| x >= TOUCHING) || sb.is_some_and(|x| x >= TOUCHING));
+        let shown = |x: Option<f64>| x.map_or_else(|| "unread".to_string(), |x| format!("{x:.9}"));
+        let named = |x: Option<usize>| x.map_or_else(|| "none".to_string(), |x| x.to_string());
+        let faces_of = |e: usize| {
+            edge_faces(graph, e)
+                .iter()
+                .map(|f| match f {
+                    Some(f) if *f == fi => "F".to_string(),
+                    Some(f) => format!("{f}:{}", surface_class(graph, *f)),
+                    None => "-".to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        println!(
+            "piece graph={id} face={fi} surface={class} loop={loop_index} at={}/{} gap={:.9} du_ft={:.9} dv_ft={:.9} sig={sig} tenth_mm={tenth} ends={} through={} mid={:.9}@{}:{} orphans={} orphan_near={} sides_a={} sides_b={} unread_edges={unread}",
+            g.at,
+            chain.len(),
+            g.d,
+            comp[0],
+            comp[1],
+            named(ends),
+            named(through),
+            nearest_mid.0,
+            nearest_mid.1,
+            faces_of(nearest_mid.1),
+            orphans.len(),
+            if orphan_near.is_finite() {
+                format!("{orphan_near:.9}")
+            } else {
+                "none".to_string()
+            },
+            shown(sa),
+            shown(sb),
+        );
+        // The neighbour faces' chains at the two edges either side of the gap: an edge there
+        // with an end at both P and Q would be the missing piece, stored on the other face.
+        let mut beside = Vec::new();
+        for (label, e, side) in [("a", g.a, g.a_side), ("b", g.b, g.b_side)] {
+            let Some(other) = edge_faces(graph, e)[1 - side] else {
+                beside.push(format!("{label}=none"));
+                continue;
+            };
+            let neighbours = chain_neighbours(graph, other, e);
+            let text = neighbours.map_or_else(
+                || "unread".to_string(),
+                |pair| {
+                    pair.iter()
+                        .map(|n| {
+                            let line = cache
+                                .xyz
+                                .iter()
+                                .find(|(x, _)| x == n)
+                                .and_then(|(_, l)| l.as_ref());
+                            match line {
+                                Some(l) => format!(
+                                    "{n}[{}]:{:.9}/{:.9}",
+                                    faces_of(*n),
+                                    polyline_dist(g.p, l),
+                                    polyline_dist(g.q, l)
+                                ),
+                                None => format!("{n}[{}]:unread", faces_of(*n)),
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(";")
+                },
+            );
+            beside.push(format!(
+                "{label}={other}:{}:{text}",
+                surface_class(graph, other)
+            ));
+        }
+        println!(
+            "piecenbr graph={id} face={fi} loop={loop_index} at={} {}",
+            g.at,
+            beside.join(" ")
+        );
+    }
+}
+
 /// The rings of a face refused as `disconnected UV boundary`: prints where each fails.
-fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally) {
+fn read_gaps(
+    id: u64,
+    fi: usize,
+    class: &str,
+    graph: &ObjectGraph,
+    cache: &mut Option<EdgeCache>,
+    t: &mut Tally,
+) {
     let short = |text: &str| text.chars().take(160).collect::<String>();
     let rings = match ring_gaps(graph, fi) {
         Ok(rings) => rings,
@@ -235,6 +804,9 @@ fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally
                     t.gap_seam_like += 1;
                 }
                 first.get_or_insert("own");
+                if r.stored.open > 0 {
+                    read_pieces(id, fi, class, r.loop_index, graph, cache, t);
+                }
             }
             Ok(_) => {}
             Err(why) => {
@@ -271,6 +843,7 @@ fn read_gaps(id: u64, fi: usize, class: &str, graph: &ObjectGraph, t: &mut Tally
 fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (bool, bool) {
     let mut any = false;
     let mut ringed = false;
+    let mut cache: Option<EdgeCache> = None;
     for (fi, object) in graph.objects.iter().enumerate() {
         if object.class_name != "Face" {
             continue;
@@ -303,7 +876,7 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (b
                 if full.contains("disconnected UV boundary") {
                     t.gap_disconnected += 1;
                     ringed = true;
-                    read_gaps(id, fi, &class, graph, t);
+                    read_gaps(id, fi, &class, graph, &mut cache, t);
                 }
             }
             continue;
@@ -462,6 +1035,8 @@ fn main() -> Result<()> {
     let mut scanned: BTreeSet<u64> = BTreeSet::new();
     let mut symbols_of: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut owners: BTreeSet<u64> = BTreeSet::new();
+    let mut read_graphs = 0usize;
+    let mut refused_graphs = 0usize;
     let mut note = |r: &Record,
                     owner: bool,
                     tally: &mut BTreeMap<String, Tally>,
@@ -473,7 +1048,12 @@ fn main() -> Result<()> {
         if !scanned.insert(id) {
             return;
         }
+        // A graph past the budget is refused whole, never read in part.
+        if r.status == "unsupported_graph" {
+            refused_graphs += 1;
+        }
         if let Some(graph) = &r.graph {
+            read_graphs += 1;
             symbols_of.insert(id, instance_symbols(graph));
             let (any, ring) = scan(id, graph, tally);
             if any {
@@ -508,6 +1088,7 @@ fn main() -> Result<()> {
             symbols_of.entry(id).or_default();
         }
     }
+    println!("graphs read={read_graphs} refused={refused_graphs}");
     for owner in &owners {
         let mut seen = BTreeSet::from([*owner]);
         let mut stack = vec![*owner];
@@ -558,6 +1139,20 @@ fn main() -> Result<()> {
                     bins[0], bins[1], bins[2], bins[3], bins[4], bins[5], bins[6]
                 );
             }
+            println!(
+                "pieces surface={class} gaps={} one={} diagonal={} tenth_mm={} ends={} through={} mid_covered={} orphan_near={} sides_disagree={} rings_under={} unread={}",
+                t.piece_gaps,
+                t.piece_one,
+                t.piece_gaps - t.piece_one,
+                t.piece_tenth,
+                t.piece_ends,
+                t.piece_through,
+                t.piece_mid,
+                t.piece_orphan,
+                t.piece_sides,
+                t.piece_rings_under,
+                t.piece_unread
+            );
             continue;
         }
         println!(
