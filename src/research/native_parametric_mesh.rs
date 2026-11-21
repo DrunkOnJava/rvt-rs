@@ -384,11 +384,37 @@ fn trim_is_rectangle(
 
 /// A loop as a closed polygon in the surface's parameters: each edge's samples in the
 /// direction that continues the one before, and the last point (the first again)
-/// dropped. A join that meets in model coordinates but not in the parameters (the
+/// dropped. Two ends that meet within 1e-7 ft in model coordinates join as one point
+/// where their parameters are within [`STRICT_PARAMETER_GAP`] of the surface's range: the
+/// point halfway between them in the parameters, which must lie within 1e-7 ft of both
+/// ends (#2085). A join that meets in model coordinates across a wider parameter gap (the
 /// seam of a revolution, a pole) is refused.
 fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<Vec<[f64; 2]>> {
     let same =
         |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
+    let env = surface.bounds();
+    let range = [
+        (env[1][0] - env[0][0]).abs().max(1e-12),
+        (env[1][1] - env[0][1]).abs().max(1e-12),
+    ];
+    let near = |p: [f64; 2], q: [f64; 2]| {
+        same(p, q)
+            || ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1])
+                <= STRICT_PARAMETER_GAP
+    };
+    let meet = |p: [f64; 2], q: [f64; 2]| -> Result<[f64; 2]> {
+        if same(p, q) {
+            return Ok(p);
+        }
+        let middle = [p[0].midpoint(q[0]), p[1].midpoint(q[1])];
+        let point = surface.evaluate(middle[0], middle[1])?;
+        ensure!(
+            distance(point, surface.evaluate(p[0], p[1])?) < 1e-7
+                && distance(point, surface.evaluate(q[0], q[1])?) < 1e-7,
+            "merged trim join exceeds model-space bound"
+        );
+        Ok(middle)
+    };
     for reverse in [false, true] {
         let mut ring: Vec<[f64; 2]> = if reverse {
             segments[0].iter().rev().copied().collect()
@@ -401,16 +427,18 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
             let p = surface.evaluate(last[0], last[1])?;
             let (a, b) = (seg[0], *seg.last().unwrap());
             if distance(p, surface.evaluate(a[0], a[1])?) < 1e-7 {
-                if !same(last, a) {
+                if !near(last, a) {
                     joined = false;
                     break;
                 }
+                *ring.last_mut().unwrap() = meet(last, a)?;
                 ring.extend(seg.iter().skip(1).copied());
             } else if distance(p, surface.evaluate(b[0], b[1])?) < 1e-7 {
-                if !same(last, b) {
+                if !near(last, b) {
                     joined = false;
                     break;
                 }
+                *ring.last_mut().unwrap() = meet(last, b)?;
                 ring.extend(seg.iter().rev().skip(1).copied());
             } else {
                 joined = false;
@@ -421,12 +449,13 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
             continue;
         }
         let (first, last) = (ring[0], *ring.last().unwrap());
-        if same(first, last)
+        if near(first, last)
             && distance(
                 surface.evaluate(first[0], first[1])?,
                 surface.evaluate(last[0], last[1])?,
             ) < 1e-7
         {
+            ring[0] = meet(first, last)?;
             ring.pop();
             ensure!(ring.len() >= 3, "a trim loop needs three points");
             return Ok(ring);
@@ -434,6 +463,12 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
     }
     anyhow::bail!("a trim loop does not close in the surface's parameters")
 }
+
+/// The largest parameter gap, over the surface's range on its axis, across which
+/// [`loop_polygon`] joins two ends that meet in model coordinates. On the BIM4LCA files and
+/// a contributor's save every failing join on a spline face was under 6e-5 of the range or
+/// a jump of 1 per cent or more (#2085).
+const STRICT_PARAMETER_GAP: f64 = 1e-4;
 
 /// How far a revolved profile's points lie from the axis (the surface frame's `z`) for
 /// the parameters from `lo` to `hi`, never less: the farthest of 64 equal steps' ends,
@@ -785,7 +820,13 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         a.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         Ok(a)
     };
-    let trim_u: Vec<f64> = trim.iter().map(|p| p[0]).collect();
+    // A join of two ends that meet is a point of the polygon no edge holds (#2085), so the
+    // polygons' points are grid lines too.
+    let trim_u: Vec<f64> = trim
+        .iter()
+        .map(|p| p[0])
+        .chain(polygons.iter().flatten().map(|p| p[0]))
+        .collect();
     let trim_v: Vec<f64> = if rectangular {
         trim.iter().map(|p| p[1]).collect()
     } else {
