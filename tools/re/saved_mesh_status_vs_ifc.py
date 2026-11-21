@@ -33,8 +33,8 @@ from mesh_bodies_vs_ifc import (  # noqa: E402
     CLASS_CAP,
     SOURCE,
     meshes,
-    sample,
     surface_distance,
+    vertices,
     volume,
 )
 
@@ -99,8 +99,8 @@ def main():
         ref_volume = volume(ref_triangles)
         ratio = volume(our_triangles) / ref_volume if ref_volume > 0 else float("inf")
         far = max(
-            surface_distance(sample(ref_triangles), our_triangles),
-            surface_distance(sample(our_triangles), ref_triangles),
+            surface_distance(vertices(ref_triangles), our_triangles),
+            surface_distance(vertices(our_triangles), ref_triangles),
         )
         scored[tag] = (far <= 0.001, far, ratio, cls, object_type)
     exact = sum(1 for v in scored.values() if v[0])
