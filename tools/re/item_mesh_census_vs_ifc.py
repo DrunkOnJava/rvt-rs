@@ -52,7 +52,7 @@ def main():
                 failed[(item.is_a(), type(e).__name__)] += 1
                 lost = True
         if lost:
-            losing[element.is_a()] += 1
+            losing[(element.is_a(), element.ObjectType or "")] += 1
     print(f"ifcopenshell {ifcopenshell.version}")
     print(f"item mesh census: IfcElement but openings {all_elements}, with a representation {represented}, "
           f"with a Body {elements}, Body items {items}; "
@@ -61,7 +61,7 @@ def main():
         print("not exercised: no Body item on any element with a representation")
     if failed:
         print("items that fail: " + ", ".join(f"{k} {e} {n}" for (k, e), n in sorted(failed.items())))
-        print("elements that lose one: " + ", ".join(f"{k} {n}" for k, n in sorted(losing.items())))
+        print("elements that lose one: " + ", ".join(f"{k} {t!r} {n}" for (k, t), n in sorted(losing.items())))
     return 0
 
 
