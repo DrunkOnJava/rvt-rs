@@ -64,6 +64,12 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    both or neither; an edge whose samples all say one thing is counted by it, and one that
    splits is `split`.
 
+9. **Edge flags.** Where Revit's points are scored, the outcome against the stored `m_flags` of
+   the edge before the gap (ending at P) and the edge after it (starting at Q), the probe's
+   `piecemore` `a_flags` and `b_flags`: by whether bit 0x8 is set on one edge, both or neither,
+   and by the two values. Where only one edge has it, whether Revit's point is at the other
+   edge's end only, at the flagged edge's end only, or neither alone.
+
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
 Needs IfcOpenShell and numpy.
@@ -91,6 +97,9 @@ ONE_END = ("p_only", "q_only")
 BETWEEN = ("between", "between_p", "between_q", "between_both")
 SCORED = ("p_only", "q_only", "both", "none") + BETWEEN
 COHORTS = ("agree", "apart", "unread")
+# The `m_flags` bit that, on the office's washbasin and a Snowdon Towers hand sink, marks the
+# edge whose end Revit does not keep where only one edge beside a gap has it.
+FLAG_BIT = 0x8
 
 
 def point(text):
@@ -131,6 +140,9 @@ def read_probe(path):
             elif line.startswith("piecex "):
                 f = fields(line)
                 wider[(f["graph"], f["face"], f["loop"], f["at"])] = states(side(f.get("a_agree")), side(f.get("b_agree")))
+            elif line.startswith("piecemore "):
+                f = fields(line)
+                FLAGS[(f["graph"], f["face"], f["loop"], f["at"])] = (f.get("a_flags"), f.get("b_flags"))
             elif line.startswith("gapxyz "):
                 gaps.append(fields(line))
             elif line.startswith("jointxyz "):
@@ -160,6 +172,13 @@ NEIGHBOUR_REFUSED = set()
 # Each `edgesides` line (#2106): a plane's shared edge with both faces' samples placed.
 EDGES = []
 GROUP_SOURCE = {}
+# (graph, face, loop, at) -> the `m_flags` of the edges before and after the gap, as printed.
+FLAGS = {}
+
+
+def flags_of(key):
+    a, b = FLAGS.get(key, (None, None))
+    return (int(a), int(b)) if a and b and a.isdigit() and b.isdigit() else None
 
 
 def key_of(g):
@@ -567,6 +586,35 @@ def main():
             line = ", ".join(f"{o} with P's edge {a} and Q's edge {b} {n}" for (cc, o, a, b), n in sorted(kept.items()) if cc == c)
             if line:
                 print(f"{label}, {c}: {line}")
+    # 9. Which end Revit keeps against the stored `m_flags` of the edges beside the gap.
+    by_bit, by_pair, other_end = collections.Counter(), collections.Counter(), collections.Counter()
+    for g, o in scored:
+        fl = flags_of(key_of(g))
+        if fl is None:
+            by_bit[(cohort(g), "unread", o)] += 1
+            continue
+        a, b = (bool(x & FLAG_BIT) for x in fl)
+        where = "neither edge" if not (a or b) else "both edges" if a and b else "P's edge only" if a else "Q's edge only"
+        by_bit[(cohort(g), where, o)] += 1
+        by_pair[(cohort(g), fl, o)] += 1
+        if a != b:
+            other = "q_only" if a else "p_only"
+            flagged = "p_only" if a else "q_only"
+            other_end[(cohort(g), "at the other edge's end only" if o == other else "at the flagged edge's end only" if o == flagged else "otherwise")] += 1
+    for c in COHORTS:
+        groups = {}
+        for (cc, w, o), n in sorted(by_bit.items()):
+            if cc == c:
+                groups.setdefault(w, []).append(f"{o} {n}")
+        if groups:
+            print(f"kept end by its edges' m_flags bit 0x{FLAG_BIT:x}, {c}: " + "; ".join(f"on {w}: {', '.join(v)}" for w, v in groups.items()))
+        pairs = [f"{a}/{b} {o} {n}" for (cc, (a, b), o), n in sorted(by_pair.items()) if cc == c]
+        if pairs:
+            print(f"edge m_flags (P's edge/Q's edge), {c}: " + ", ".join(pairs))
+        told = {k: n for (cc, k), n in other_end.items() if cc == c}
+        if told:
+            print(f"bit 0x{FLAG_BIT:x} on one edge only, {c}: {sum(told.values())} drawings; Revit's point "
+                  + ", ".join(f"{k} {n}" for k, n in sorted(told.items())))
     for c, surf, size in sorted(by_size):
         k = (c, surf, size)
         fl = [f for f, _ in tols[k]]
@@ -617,7 +665,9 @@ def main():
             print(f"between, {c}: {len(ts)} drawings, along the gap from P (0) to Q (1): min {ts[0]:.3f} median {ts[len(ts) // 2]:.3f} max {ts[-1]:.3f}")
     if per_gap_lines:
         for key, c in sorted(per_gap.items()):
+            fl = flags_of(key)
             print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-', None, None))[1]} "
+                  f"flags={'unread' if fl is None else f'{fl[0]}/{fl[1]}'} "
                   + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
 
