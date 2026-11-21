@@ -58,8 +58,9 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
 
 8. **Shared edges whose faces' samples differ** (#2106, the probe's `edgesides` lines). For a
    plane refused as `shared edge surface samples disagree`, each edge it shares with a curved
-   face, both faces' samples placed in the probe's frame. At each interior sample the two put
-   2 `tol` or more apart, whether Revit's own points sit on the plane's sample, the curved face's,
+   face, both faces' samples placed in the probe's frame, ends included. The plane's ring ends that
+   lie on those samples are left out of the floors, since they are what is measured. At each
+   sample the two put 2 `tol` or more apart, whether Revit's own points sit on the plane's sample, the curved face's,
    both or neither; an edge whose samples all say one thing is counted by it, and one that
    splits is `split`.
 
@@ -479,6 +480,16 @@ def main():
     mesh = {t: np.unique(v[2].reshape(-1, 3), axis=0) for t, v in got.items()}
     print(f"bodies: elements with a Revit body by Tag {len(set(elements) & tags)} of {len(tags)}, made of polygons {len(faceted)}, "
           f"Revit's coordinates read on {len(raw)}; IfcOpenShell meshed {len(set(mesh) & faceted)} of them ({weld_note})")
+    # A refused plane's ring ends include the ends of its disputed edges (`edgesides`), which are
+    # what is being measured, so they are not controls: left in, a floor would rise to their
+    # separation wherever Revit follows the curved face's samples.
+    if EDGES:
+        disputed = collections.defaultdict(list)
+        for e in EDGES:
+            disputed[e["owner"]].extend(e["plane"] + e["curved"])
+        before = len(joints)
+        joints = [j for j in joints if not any(np.linalg.norm(point(j["x"]) - d) < 1e-7 for d in disputed.get(j["owner"], ()))]
+        print(f"ring-end controls on a disputed shared edge's samples, left out of the floors: {before - len(joints)}")
     # 4. The floors: Revit's coordinates (raw) decide; the mesh's is printed beside it.
     floors = floors_of(raw, joints, sorted(raw))
     mesh_floors = floors_of(mesh, joints, sorted(set(mesh) & faceted))
@@ -576,7 +587,7 @@ def main():
             tol = max(2 * floors[tag]["floor"], TOUCHING)
             verts = raw[tag] if offset is None else raw[tag] - offset
             calls = collections.Counter()
-            for a, c in list(zip(e["plane"], e["curved"]))[1:-1]:
+            for a, c in zip(e["plane"], e["curved"]):
                 if np.linalg.norm(a - c) < 2 * tol:
                     calls["unresolved"] += 1
                     continue
@@ -586,6 +597,11 @@ def main():
             told = {k: v for k, v in calls.items() if k != "unresolved"}
             verdict = "unresolved" if not told else next(iter(told)) if len(told) == 1 else "split"
             verdicts[(e["other"], verdict)] += 1
+            if per_gap_lines:
+                print(f"edge owner={tag} graph={e['graph']} face={e['face']} edge={e['edge']} other={e['other']} n={e['n']} apart={e['apart']} "
+                      + " ".join(f"{k}={v}" for k, v in sorted(calls.items())) + f" verdict={verdict}")
+        samples = collections.Counter(int(e["n"]) for e in EDGES)
+        print("shared edges by their sample count: " + ", ".join(f"{k} samples {v}" for k, v in sorted(samples.items())))
         print(f"shared edges whose faces' samples differ: {len(EDGES)}, largest separation {largest:.9f} ft; "
               "Revit's points on, by edge: " + ", ".join(f"{o} {v} {n}" for (o, v), n in sorted(verdicts.items())))
     # 7. Where a point between the ends lies, from P (0) to Q (1): 0.5 is the gap's middle.
