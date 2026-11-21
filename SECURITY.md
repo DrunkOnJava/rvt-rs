@@ -12,7 +12,10 @@ can actually be delivered:
 | Older release lines | no, unless a note here says that line is maintained |
 
 No older line is maintained today. A fix lands on `main` first and reaches
-users in the next release.
+users in the next release. The one patch to an older line so far, 0.14.1
+(2026-11-19), was made for users who compare rvt-rs's output exactly and so
+cannot move past 0.14 (#1808); it also carried the rmcp 3.9.0 update
+(RUSTSEC-2026-0462). It did not make the 0.14 line maintained.
 
 ## Reporting a vulnerability
 

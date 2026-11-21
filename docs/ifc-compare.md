@@ -52,13 +52,6 @@ The table lists exactly the types `catalogued_divergence_notes` in
 it has no remaining gap — since RE-29 its body is the record prism minus
 the walls it names, exact on 256 of 256 against Revit's own export.
 
-**The shipped note strings lag this table.** Those constants still quote
-the pre-#274 figures — "31 over-trimmed wall ends" for `IFCWALL`, where
-RE-29 leaves 9 — and still name #219 as the open tracker for `IFCSLAB`
-and `IFCWINDOW` storey containment, which #267 / RE-27 closed for both.
-The table above is the measured state; refreshing the constants is a code
-change, not a docs one.
-
 Scaffold-only `rvt-ifc` exports (no typed products) will report large
 object/entity gaps versus real Revit IFCs — that is expected until the
 linked recall work lands, not a bug in the compare tool.
