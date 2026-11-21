@@ -17,8 +17,8 @@ coarser (RE-311). Then the elements furthest off.
 A class with more than 300 such bodies is scored on the 300 whose Tag has the
 smallest CRC-32 (`class_sample`), so a file with thousands of mullions fits the
 time Measure allows. A body added to the class or taken from it moves at most
-one other in or out, where an even stride by Tag moved nearly every one
-(#2114). Every distinct vertex of a scored body is tested (#2114): a stride of
+one other in or out; with the even stride by Tag used before, every chosen body
+that sorted after it could move (#2114). Every distinct vertex of a scored body is tested (#2114): a stride of
 at most 400 of them passed a body whose untested vertex failed a column, and
 moved the columns when a mesh only gained vertices. The bodies are
 scored one process each over the CPUs (RVT_MESH_WORKERS sets the count), by
