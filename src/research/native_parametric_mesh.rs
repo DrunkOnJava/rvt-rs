@@ -384,11 +384,28 @@ fn trim_is_rectangle(
 
 /// A loop as a closed polygon in the surface's parameters: each edge's samples in the
 /// direction that continues the one before, and the last point (the first again)
-/// dropped. A join that meets in model coordinates but not in the parameters (the
-/// seam of a revolution, a pole) is refused.
+/// dropped. Where two ends meet within 1e-7 ft in model coordinates and their parameters
+/// differ by at most [`STRICT_PARAMETER_GAP`] of the loop's own extent on each axis, they
+/// are one point: the ring keeps its own and the next edge's stored end is dropped, as a
+/// plane or cylinder ring joins touching ends (#2085). A join that meets in model
+/// coordinates across a wider parameter gap (the seam of a revolution, a pole) is refused.
 fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<Vec<[f64; 2]>> {
     let same =
         |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
+    // The loop's own extent, not the surface's envelope, which may be unbounded.
+    let extent = |k: usize| {
+        let values = segments.iter().flatten().map(|p| p[k]);
+        let (lo, hi) = values.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
+            (lo.min(x), hi.max(x))
+        });
+        (hi - lo).max(1e-12)
+    };
+    let range = [extent(0), extent(1)];
+    let near = |p: [f64; 2], q: [f64; 2]| {
+        same(p, q)
+            || ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1])
+                <= STRICT_PARAMETER_GAP
+    };
     for reverse in [false, true] {
         let mut ring: Vec<[f64; 2]> = if reverse {
             segments[0].iter().rev().copied().collect()
@@ -401,13 +418,13 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
             let p = surface.evaluate(last[0], last[1])?;
             let (a, b) = (seg[0], *seg.last().unwrap());
             if distance(p, surface.evaluate(a[0], a[1])?) < 1e-7 {
-                if !same(last, a) {
+                if !near(last, a) {
                     joined = false;
                     break;
                 }
                 ring.extend(seg.iter().skip(1).copied());
             } else if distance(p, surface.evaluate(b[0], b[1])?) < 1e-7 {
-                if !same(last, b) {
+                if !near(last, b) {
                     joined = false;
                     break;
                 }
@@ -421,7 +438,7 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
             continue;
         }
         let (first, last) = (ring[0], *ring.last().unwrap());
-        if same(first, last)
+        if near(first, last)
             && distance(
                 surface.evaluate(first[0], first[1])?,
                 surface.evaluate(last[0], last[1])?,
@@ -434,6 +451,13 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
     }
     anyhow::bail!("a trim loop does not close in the surface's parameters")
 }
+
+/// The largest parameter gap, over the loop's extent on its axis, across which
+/// [`loop_polygon`] takes two ends that meet in model coordinates as one point. Read on
+/// spline faces only: on the BIM4LCA files and a contributor's save every failing join
+/// there was under 6e-5 of the range or a jump of 1 per cent or more (#2085); on ruled,
+/// revolved and cone faces it is not read.
+const STRICT_PARAMETER_GAP: f64 = 1e-4;
 
 /// How far a revolved profile's points lie from the axis (the surface frame's `z`) for
 /// the parameters from `lo` to `hi`, never less: the farthest of 64 equal steps' ends,
