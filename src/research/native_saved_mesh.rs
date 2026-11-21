@@ -3637,4 +3637,81 @@ mod tests {
         let covered = band_area(&[square], 0.5, 2.).unwrap();
         assert!((covered - 1.).abs() < 1e-12, "covered area {covered}");
     }
+    // #2085's touching join (`joined_ring`, `joined_within`), failure modes first:
+    // a gap at or over `RING_TOUCHING` must stay refused; a step across a seam, whose
+    // ends coincide in space, must stay refused; an edge both of whose ends lie within
+    // the bound of the ring's last point, or shorter than it, must stay refused; and a
+    // touching pair must become one point, not two.
+
+    /// A unit square in a plane's parameters, its four sides as edges, the third edge's
+    /// start moved by `gap` along the side before it.
+    fn square_with_gap(gap: f64) -> Vec<Vec<[f64; 2]>> {
+        vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1. - gap, 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ]
+    }
+
+    fn plane_steps() -> Result<StepLength> {
+        Ok(Box::new(|a: [f64; 2], b: [f64; 2]| -> f64 {
+            (b[0] - a[0]).hypot(b[1] - a[1])
+        }))
+    }
+
+    #[test]
+    fn touching_ends_join_as_one_point() {
+        let ring = joined_ring(square_with_gap(RING_TOUCHING / 2.), plane_steps).unwrap();
+        assert_eq!(ring.len(), 4, "the touching pair is one point: {ring:?}");
+    }
+
+    #[test]
+    fn a_gap_just_over_the_bound_stays_refused() {
+        let error = joined_ring(square_with_gap(RING_TOUCHING * 1.001), plane_steps).unwrap_err();
+        assert_eq!(error.to_string(), "disconnected UV boundary");
+    }
+
+    #[test]
+    fn a_step_across_a_seam_stays_refused() {
+        // On a cylinder of radius 1 the third edge starts at u + 2π: the same point in
+        // space, a whole turn along the surface.
+        let mut segments = square_with_gap(0.);
+        segments[2][0][0] += std::f64::consts::TAU;
+        let helix = || -> Result<StepLength> {
+            Ok(Box::new(|a: [f64; 2], b: [f64; 2]| -> f64 {
+                (b[0] - a[0]).hypot(b[1] - a[1])
+            }))
+        };
+        assert!(joined_ring(segments, helix).is_err());
+    }
+
+    #[test]
+    fn an_edge_within_the_bound_of_the_ring_stays_refused() {
+        // The third edge is shorter than the bound, so either of its ends could join.
+        let short = RING_TOUCHING / 4.;
+        let segments = vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1. - short / 2., 1.], [1. - short, 1.]],
+            vec![[1. - short, 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ];
+        assert!(joined_ring(segments, plane_steps).is_err());
+    }
+
+    #[test]
+    fn an_edge_whose_ends_both_touch_the_ring_stays_refused() {
+        // The third edge is longer than the bound, but both its ends lie within it of the
+        // ring's last point, (1, 1). Taken at either end, the ring would close.
+        let d = RING_TOUCHING * 0.75;
+        let segments = vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1. + d, 1.], [1. - d, 1.]],
+            vec![[1. + d, 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ];
+        assert!(joined_ring(segments, plane_steps).is_err());
+    }
 }
