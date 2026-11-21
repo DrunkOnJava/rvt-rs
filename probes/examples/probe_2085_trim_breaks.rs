@@ -115,6 +115,14 @@
 //!   pieces surface=<class> gaps=<n> one=<n> diagonal=<n> tenth_mm=<n> ends=<n> through=<n>
 //!     mid_covered=<n> orphan_near=<n> sides_disagree=<n> rings_under=<n> unread=<n>: by class;
 //!   graphs read=<n> refused=<n>: the graphs decoded, and those refused whole for the budget.
+//!   gapxyz owner=<ElementId> occ=<n> graph=<ElementId> oi=<n> level=3 face=<n> loop=<n> at=<k>
+//!     gap=<ft> p=<x,y,z> q=<x,y,z>: for each element whose graphics reach a graph with a
+//!     refused ring, walked at detail level 3, each gap of a selected face's rings, its ends
+//!     placed by the element's transform in document feet (`occ` counts repeats of one
+//!     `Geometry` in one element); jointxyz owner=<ElementId> occ=<n> graph=<ElementId>
+//!     face=<n> loop=<n> at_gap=<bool> x=<x,y,z>: every edge end of the same ring, the control a
+//!     scorer reads its floor from (ends at a gap marked); boundaryunread owner=<ElementId>.
+//!     The coordinates are a file's own: keep them private for a save that is not shared.
 //!   piecemore graph=<ElementId> face=<n> loop=<n> at=<k> loops_held=<n> loops_walked=<n>
 //!     through_faces=<faces> through_body=<same|other|none> through_orphan=<bool|none>
 //!     a_other_ends=<ft to P>/<ft to Q> a_ginfo=<..> a_flags=<..> b_...: for each gap, the
@@ -161,6 +169,7 @@ use anyhow::Result;
 use rvt::RevitFile;
 use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Record};
+use rvt::research::native_graphics_traversal::select_graphics_with_resolver_at_detail;
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_parametric_mesh::{
     JOIN_BOUNDS, face_grid, merged_chord_ends, polygon_breaks, trim_breaks,
@@ -1429,6 +1438,130 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (b
     (any, ringed)
 }
 
+fn xyz(p: [f64; 3]) -> String {
+    format!("{:.9},{:.9},{:.9}", p[0], p[1], p[2])
+}
+
+/// #2085: for every element whose graphics reach a graph with a refused ring, its graphics at
+/// detail level 3 (the fitting probe's convention; which level Revit's export used is not in
+/// the file), and for each selected `Geometry` face refused as `disconnected UV boundary`, each
+/// gap of its rings and each of its rings' edge ends, placed by the element's own transform in
+/// document feet, for a scorer to set against Revit's body by Tag.
+fn boundary_pass(
+    rf: &mut RevitFile,
+    options: &native_document::Options,
+    owners: &BTreeSet<u64>,
+    symbols_of: &BTreeMap<u64, Vec<u64>>,
+) -> Result<()> {
+    let mut wanted = owners.clone();
+    for owner in owners {
+        let mut stack = vec![*owner];
+        while let Some(next) = stack.pop() {
+            for symbol in symbols_of.get(&next).into_iter().flatten() {
+                if wanted.insert(*symbol) {
+                    stack.push(*symbol);
+                }
+            }
+        }
+    }
+    let mut graphs: BTreeMap<u64, ObjectGraph> = BTreeMap::new();
+    let mut again = options.clone();
+    again.selected_ids = wanted;
+    native_document::extract_graphs(rf, &again, |r: Record| {
+        if let Some(graph) = r.graph {
+            graphs.insert(r.identity.element_id, graph);
+        }
+        Ok(())
+    })?;
+    for owner in owners {
+        let Some(g) = graphs.get(owner) else {
+            println!("boundaryunread owner={owner} why=no_graph");
+            continue;
+        };
+        let resolver = |rid: u64| graphs.get(&rid);
+        let selection = select_graphics_with_resolver_at_detail(g, &resolver, 3);
+        let mut seen: BTreeMap<(u64, usize), usize> = BTreeMap::new();
+        for s in &selection.selected {
+            let gid = s.source_owner_id.unwrap_or(*owner);
+            let Some(sg) = graphs.get(&gid) else {
+                continue;
+            };
+            let oi = s.object_index;
+            if sg.objects.get(oi).map(|o| o.class_name.as_str()) != Some("Geometry") {
+                continue;
+            }
+            let occurrence = seen.entry((gid, oi)).or_default();
+            *occurrence += 1;
+            let occ = *occurrence;
+            let m = &s.world_transform;
+            let place = |p: [f64; 3]| -> [f64; 3] {
+                std::array::from_fn(|i| m[i][3] + (0..3).map(|j| m[i][j] * p[j]).sum::<f64>())
+            };
+            let faces = sg.objects[oi].fields["m_pFaces"]
+                .as_array()
+                .map(<[Fv]>::to_vec)
+                .unwrap_or_default();
+            for ptr in &faces {
+                let Ok(Some(fi)) = pointer(sg, oi, ptr) else {
+                    continue;
+                };
+                let Some(surface) = surf(sg, fi) else {
+                    continue;
+                };
+                match rvt::research::native_saved_mesh::face(sg, fi) {
+                    Err(e) if format!("{e:#}").contains("disconnected UV boundary") => {}
+                    _ => continue,
+                }
+                for (loop_index, li) in face_loops(sg, fi).iter().enumerate() {
+                    let Some(chain) = loop_chain(sg, fi, *li) else {
+                        continue;
+                    };
+                    let Some(gaps) = open_gaps(sg, &chain, surface) else {
+                        continue;
+                    };
+                    if gaps.is_empty() {
+                        continue;
+                    }
+                    for gp in &gaps {
+                        println!(
+                            "gapxyz owner={owner} occ={occ} graph={gid} oi={oi} level=3 face={fi} loop={loop_index} at={} gap={:.9} p={} q={}",
+                            gp.at,
+                            gp.d,
+                            xyz(place(gp.p)),
+                            xyz(place(gp.q))
+                        );
+                    }
+                    // The control: every edge end of the same ring, through the same transform.
+                    // An end within the touching bound of a gap's end is marked, so the scorer
+                    // reads the floor from the ends that close.
+                    let mut ends: Vec<[f64; 3]> = Vec::new();
+                    for (e, side) in &chain {
+                        let Some(pts) = edge_uv(sg, *e, *side) else {
+                            continue;
+                        };
+                        for uv in [pts[0], pts[pts.len() - 1]] {
+                            let p = surface.at(uv);
+                            if !ends.iter().any(|q| dist(*q, p) < 1e-9) {
+                                ends.push(p);
+                            }
+                        }
+                    }
+                    for p in ends {
+                        let at_gap = gaps
+                            .iter()
+                            .any(|gp| dist(gp.p, p) < TOUCHING || dist(gp.q, p) < TOUCHING);
+                        println!(
+                            "jointxyz owner={owner} occ={occ} graph={gid} face={fi} loop={loop_index} at_gap={at_gap} x={}",
+                            xyz(place(p))
+                        );
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let path = std::env::args()
         .skip(1)
@@ -1520,6 +1653,7 @@ fn main() -> Result<()> {
         }
     }
     println!("graphs read={read_graphs} refused={refused_graphs}");
+    let mut reaching: BTreeSet<u64> = BTreeSet::new();
     for owner in &owners {
         let mut seen = BTreeSet::from([*owner]);
         let mut stack = vec![*owner];
@@ -1537,8 +1671,10 @@ fn main() -> Result<()> {
         let graphs: Vec<u64> = seen.intersection(&ringed).copied().collect();
         if !graphs.is_empty() {
             println!("ringreach owner={owner} graphs={graphs:?}");
+            reaching.insert(*owner);
         }
     }
+    boundary_pass(&mut rf, &options, &reaching, &symbols_of)?;
     for (class, t) in &tally {
         if t.ring_faces > 0 {
             let refused: usize = t.ring_refused.values().sum();
