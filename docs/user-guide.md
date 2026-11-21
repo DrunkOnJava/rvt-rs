@@ -89,12 +89,13 @@ export gives them (#219, RE-27, RE-59). An element whose record names no
 Level is contained in the building rather than filed under an arbitrary
 storey. Every wall also joins to its
 `IfcWallType` exactly, 360 of 360 (#88, RE-28), and the export writes
-that join: every element typed this way is related to one type object per
-Revit type (RE-110). Still blocked (RE-19 / RE-20 negative on magnetar
+that join: every element whose Revit type it reads is typed by one IFC type
+object per Revit type (RE-110). Still blocked (RE-19 negative on magnetar
 corpora): schema-field Walls. Typed door and window host binding and room
-outlines (RE-101) have since been read, the 20 rotated shading plates take
-Revit's outline (RE-95), and doors and windows are drawn from Revit's saved
-meshes by default. Compound layers are read from
+outlines (RE-101) have since been read, the 20 rotated shading plates match
+Revit's outline within 0.01 ft (RE-95), and from Revit 2023 doors and
+windows are drawn from Revit's saved meshes by default, where the mesh
+decodes whole. Compound layers are read from
 each type's own data (RE-53) and written as layer sets with their
 material names (RE-58); the reference export is a `ReferenceView_V1.2`
 file with no `IfcMaterialLayerSet` in it, so they are scored against the
@@ -288,8 +289,9 @@ calling it a breaking change.
 What the schedules contain is what rvt-rs decodes and the IFC export writes,
 so check `rvt-inspect model.rvt` first: project files whose element records
 decode (Revit 2023 to 2025, and experimentally 2011 to 2022, 2026 and 2027)
-give walls, doors, windows, columns, slabs and rooms; family and template
-files give few or no rows. The browser viewer has the same two schedules as
+give the elements those records type, such as walls, doors, windows,
+columns, slabs and, where they are read, rooms; other files give few or no
+rows. The browser viewer has the same two schedules as
 **Download element schedule (CSV)** and **Download room schedule (CSV)**
 under Schedule, built in the tab like every other export.
 

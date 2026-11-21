@@ -184,8 +184,9 @@ per-area starting points are in
   table for one class or partition pattern (decoder issue form; the reports
   under `reports/element-framing/` show the shape). Typed extraction works on Revit 2023 to 2025 projects, and
   experimentally on 2011 to 2022, 2026 and 2027 projects (since 0.5.0 for 2026,
-  0.6.0 for 2015 to 2022, 0.11.0 for 2011 to 2014), and Revit 2008 to 2010
-  files open with their metadata only; [`ROADMAP.md`](ROADMAP.md) says what is partial and the
+  0.6.0 for 2015 to 2022 and 2027, 0.11.0 for 2011 to 2014), and Revit 2008 to
+  2010 files open and report their release, metadata and schema only, measured
+  on local files; [`ROADMAP.md`](ROADMAP.md) says what is partial and the
   reports under `reports/element-framing/` record the known negatives (RE-19,
   RE-20, RE-121 and others), so check before spending days on one.
 - **Tests that prevent false-positive decode claims**, viewer accessibility,
@@ -409,9 +410,9 @@ this). The three most used are, in decreasing specificity:
   `tools/check-local.sh` and CI use the same two locations, and both
   folders are git-ignored.
 
-Others each name one corpus (`RVT_NORDIC_LCA_DIR`,
+Others name further corpora (`RVT_NORDIC_LCA_DIR`,
 `RVT_REVIT2024_SAMPLES_DIR`, `RVT_R2025_DIR`, `RVT_SAMPLE_PROJECTS_DIR` and a
-few more); each test or probe says which it reads and skips without it.
+few more).
 
 Tests and benches that need these files skip gracefully if the
 path doesn't exist, so a fresh clone runs all non-corpus-dependent

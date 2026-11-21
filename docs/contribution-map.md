@@ -25,6 +25,7 @@ milestone is for.
 
 | Issue | Remainder |
 |---|---|
+| [#2069](https://github.com/DrunkOnJava/rvt-rs/issues/2069) | Ordinary walls' Length before Revit 2024: 8 walls of one held-out Revit 2021 project are written and nothing checks them; score them against Revit's Axis |
 | [#2046](https://github.com/DrunkOnJava/rvt-rs/issues/2046) | Revit 2027: stair landings are written with no IfcSlabType where Revit types them LANDING (CHL, 14 landings) |
 | [#2007](https://github.com/DrunkOnJava/rvt-rs/issues/2007) | IfcRampFlight: Revit's export writes one under a ramp it exports as a container, and rvt-rs writes none (RE-467) |
 | [#1987](https://github.com/DrunkOnJava/rvt-rs/issues/1987) | Opening Reference, sloped floor PitchAngle and door FireRating write values Revit leaves out on the BIM4LCA housing (RE-381, RE-384, RE-354) |
