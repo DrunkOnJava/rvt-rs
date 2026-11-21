@@ -14,9 +14,11 @@ Revit's body within 0.001 ft of rvt-rs's surface, which tells a mesh of
 the same surface from a mesh of another one where Revit's export is the
 coarser (RE-311). Then the elements furthest off.
 
-A class with more than 300 such bodies is scored on an even stride of 300 of
-them by Tag, so a file with thousands of mullions fits the time Measure
-allows. Every distinct vertex of a scored body is tested (#2114): a stride of
+A class with more than 300 such bodies is scored on the 300 whose Tag has the
+smallest CRC-32 (`class_sample`), so a file with thousands of mullions fits the
+time Measure allows. A body added to the class or taken from it moves at most
+one other in or out, where an even stride by Tag moved nearly every one
+(#2114). Every distinct vertex of a scored body is tested (#2114): a stride of
 at most 400 of them passed a body whose untested vertex failed a column, and
 moved the columns when a mesh only gained vertices. The bodies are
 scored one process each over the CPUs (RVT_MESH_WORKERS sets the count), by
@@ -70,6 +72,7 @@ import multiprocessing
 import os
 import statistics
 import sys
+import zlib
 
 import ifcopenshell
 import ifcopenshell.geom
@@ -101,8 +104,8 @@ EXHAUSTIVE = 200_000
 BLOCK = 8
 SEEDS = 4
 SLIVER = 1e-2
-# Most elements scored per class (an even stride through them by Tag), so a
-# file with thousands of mullions is scored in the time Measure allows.
+# Most elements scored per class (`class_sample`), so a file with thousands of
+# mullions is scored in the time Measure allows.
 CLASS_CAP = 300
 # Fewer bodies than this are scored in this process: a forked worker has a
 # cost of its own that a handful do not repay.
@@ -347,6 +350,18 @@ def surface_distance(points, triangles):
     return float(nearest.max())
 
 
+def class_sample(tags, cap=CLASS_CAP):
+    """The Tags of one class's bodies that are scored, in the order by length and text the
+    scorer prints them: every one up to `cap`, else the `cap` whose Tag has the smallest CRC-32
+    (#2114). A body added to the class or taken from it moves at most one other in or out, and
+    the choice is the same in every process, as Python's salted `hash` of a string is not."""
+    tags = sorted(set(tags), key=lambda t: (len(t), t))
+    if len(tags) > cap:
+        keep = set(sorted(tags, key=lambda t: (zlib.crc32(t.encode()), len(t), t))[:cap])
+        tags = [t for t in tags if t in keep]
+    return tags
+
+
 def vertices(triangles):
     """The body's distinct vertices in lexicographic order: the rows of `np.unique(axis=0)`,
     found by a sort that does not compare structured values. Vertices equal but for the
@@ -575,11 +590,10 @@ def main():
             by_class[element.is_a()].append(element.Tag)
     chosen = set()
     for cls, tags in by_class.items():
-        tags = sorted(set(tags), key=lambda t: (len(t), t))
-        step = max(1, -(-len(tags) // CLASS_CAP))
-        chosen.update(tags[::step])
-        if step > 1:
-            print(f"{cls}: {len(tags)} bodies, every {step}th scored")
+        picked = class_sample(tags)
+        chosen.update(picked)
+        if len(picked) < len(set(tags)):
+            print(f"{cls}: {len(set(tags))} bodies, {len(picked)} scored by the smallest CRC-32 of their Tag")
     study = fine_mesh.enabled()
     CURVES.clear()
     ours = meshes(sys.argv[1], tags=chosen, source=SOURCE, model=model, role="ours", detect=True)
