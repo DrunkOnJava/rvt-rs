@@ -3,7 +3,7 @@
 **Date:** 2026-11-21
 **Issues:** #2085 (this change, #2120); #2108, #2111.
 **Artefacts:** the BIM4LCA office and housing files (VTT, CC BY-SA 4.0; Revit 2024), each with Revit's own IFC4 export; RE1 Architecture, Plumbing, Mechanical and Electrical (Revit 2025, MIT); Autodesk's sample projects of Revit 2015 to 2027, which have no Revit export in Measure; the held-out models. Outside Measure, kept local: Revit's IFC4 export of Snowdon Towers Architectural (bldrs-ai/test-models, no licence).
-**Probes:** `probe_2085_trim_breaks` with `native_saved_mesh::ring_gaps`, on `research/2085-ring-join` (`6be738a5`, and the candidate `5be3e1eb`), kept as `refs/archive/2026-11-21/research-2085-ring-join`; `probe_2098_face_cracks` on `measure/2085-touch-slice-cracks` and `measure/2085-touch-main-cracks`.
+**Probes:** `probe_2085_trim_breaks` with `native_saved_mesh::ring_gaps`, on `research/2085-ring-join` (`6be738a5`, and the candidate `5be3e1eb`), kept as `refs/archive/2026-11-21/research-2085-ring-join`; `probe_2098_face_cracks` on `refs/archive/2026-11-21/measure-2085-touch-slice-cracks` and `-touch-main-cracks`.
 **Status:** positive. On `main` the join draws two office mullions, six bodies across four files, that were refused; each is within 0.000003 ft of Revit's body and at its volume. Four walls gain their five base quantities, every one equal to Revit's. No drawn body changes, nothing is newly refused, and no "different" count rises. On the research branch it meshes 152 of the housing's 351 and 84 of the office's 142 faces refused as disconnected. Gaps of 0.00001 ft or more stay refused, as Griffin chose (2026-11-21).
 
 ## 1. What refuses these faces
@@ -15,7 +15,7 @@ On the BIM4LCA housing and office (concrete, as built) the census found every su
 The gaps, each failing ring by its largest step along the surface, were:
 - **Under 0.00001 ft:** 134 of the housing's 302 plane rings and 39 of its 65 cylinder rings; 80 of the office's 123 and 4 of its 12. Many cylinder rings part only in their angle, by 1e-7 to 4e-6, with the points under 1e-7 ft apart.
 - **From 0.00001 to 0.0001 ft:** 16 plane and 24 cylinder rings on the two files. Not read.
-- **From 0.0001 to 0.0015 ft:** where a piece of edge looks missing. 158 of the housing's are in three graphs with the same counts and face numbers, most part by exactly 0.1 mm along one parameter.
+- **From 0.0001 to 0.0015 ft:** where a piece of edge looks missing. 158 of the housing's 165 are in three graphs, 1743745, 2091369 and 2138355 (53, 53 and 52 rings). 68 of the 165 part by exactly 0.1 mm: 60 along one parameter, 8 along both.
 
 On the contributor's save, 36 of the 84 cylinder rings on the chairs part by under 0.00001 ft, and the other 48 by 0.0001 to 0.001 ft ([#2085](https://github.com/DrunkOnJava/rvt-rs/issues/2085#issuecomment-7054296537)).
 
@@ -33,15 +33,18 @@ The rows were registered on [#2085](https://github.com/DrunkOnJava/rvt-rs/issues
 - **Housing (concrete, as built):** faces refused as `disconnected UV boundary` fall from 351 to 199; the other 152 mesh, and none takes a new reason.
 - **Office (concrete, as built):** 142 → 58, with 84 meshing.
 - Paired by graph and face, no face that meshes on `6be738a5` is refused, and no other refused face changes its reason.
-- Every ring still refused (194 and 51) has a step of 0.00001 ft or more. None is held back by a short edge or by both of an edge's ends touching the ring.
+- Every ring still refused (194 and 51) has a step of 0.00001 ft or more. None is held back by a short edge or by both of an edge's ends touching the ring. 13 more planes (5 housing, 8 office) stay refused through a cylinder beside them that is still refused.
 - **On the contributor's save** ([#2085](https://github.com/DrunkOnJava/rvt-rs/issues/2085#issuecomment-7056173710)), the same probe on `5be3e1eb`: 36 of the 84 cylinder faces refused as disconnected mesh and 48 stay refused, with no meshed face lost. The chairs' coverage of Revit's surface within 0.01 ft rises from 65.6–65.8% to 67.55–67.63%, against 70.3–70.5% for the bridging candidate. All 448 chairs stay partial.
 
 **On `main`,** the join alone (`42fad511` against `0d0fc927`):
-- **Cracks** ([44857637927](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44857637927), the crack probe on `818ccf1d` against `1eea412b`, on BIM4LCA and Autodesk's samples). Of 5,927 bodies, 2 change, and none gains a boundary vertex over 0.001 ft. Both stay refused, on the next face's reason: RE1 Architecture's 356990, now `a trim loop does not close in the surface's parameters`, and Snowdon Towers' 1135940, now `shared curved edge leaves adjacent plane`. 12 of the 77 exports differ.
+- **Cracks** ([44857637927](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44857637927), the crack probe on `818ccf1d` against `1eea412b`, on BIM4LCA and Autodesk's samples). Of the 5,927 bodies the probe tracks, 2 change, and none gains a boundary vertex over 0.001 ft. The newly drawn mullions are not among them; their evidence is their fit to Revit's export, below. Both stay refused, on the next face's reason: RE1 Architecture's 356990, now `a trim loop does not close in the surface's parameters`, and Snowdon Towers' 1135940, now `shared curved edge leaves adjacent plane`. 12 of the 77 exports differ.
 
 - **Full Measure** ([44857635338](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44857635338)): 13 of 120 exports differ, the held-out AA house's among them (not kept), and 11 of 102 `diagnostics.json`.
-- **Bodies** (`ifc_body_diff.py` on the kept exports): no drawn body's geometry changes, and none stops being drawn. 67 objects change their refusal text, each naming `disconnected UV boundary` on `main`; they stay refused on the next face's reason.
-- **Newly drawn:** six bodies, the BIM4LCA office's curtain mullions 3029185 and 3029301 (both on each concrete file, 3029301 on each timber file). Each also named the reason on `main`. Read on every vertex against Revit's export, each is within 0.000003 ft both ways, with volume ratio 1.0000.
+- **Bodies** (`ifc_body_diff.py` on the kept exports): no drawn body's geometry changes, and none stops being drawn. 67 objects change their refusal text, each naming `disconnected UV boundary` in full on `main`. They stay refused, and three reasons rise:
+  - `disconnected parametric trim in model coordinates` on 60: 15 terminals on each office file, which keep `disconnected UV boundary` from another face;
+  - `a trim loop does not close in the surface's parameters` on 1: RE1 Architecture's furniture 356990, which keeps it too;
+  - `shared curved edge leaves adjacent plane` on 6: Snowdon Towers' terminal 1135940, and one proxy in each `rac_basic` save.
+- **Newly drawn:** six bodies, the BIM4LCA office's curtain mullions 3029185 and 3029301 (both on each concrete file, 3029301 on each timber file). Each also named the reason on `main`. Read on every vertex against Revit's export, each is within 0.000003 ft both ways, with volume ratio 1.0000. The bodies, walls and refusal texts are read from the kept exports by `research-tools/2085/` on `refs/archive/2026-11-21/measure-2085-reads` (`dfb7cb34`).
 - **Walls:** four walls gain their five base quantities, read from their saved meshes once those close (RE-388). They are 1347016 on the housing at permit, and 3011915, 3454517 and 3455071 on the office as built. `qtos_vs_ifc`'s "equal" rises by 5 and 15 there; "different" (0 and 1) and "values Revit does not write" (0) do not move.
 - **Lines that follow the mullions:**
   - `saved_meshes_vs_ifc` counts them, each within its box;
@@ -66,4 +69,4 @@ gh workflow run measure.yml --ref main -f ref=818ccf1dcda5646d85726d3fe518a42bcd
 
 - **Gaps from 0.00001 to 0.0001 ft:** not read; they stay refused.
 - **Gaps from 0.0001 ft up:** whether the file stores the missing piece of edge is not read; they stay refused.
-- **The contributor's chairs:** none draws whole; four other faults remain (#2085).
+- **The contributor's chairs:** none draws whole; four other faults remain (#2085). Their runs were on the research branch, which also carries a polygon fix for other curved faces and a larger graph budget; `main` has not been run on their save.
