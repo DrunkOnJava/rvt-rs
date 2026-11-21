@@ -54,8 +54,8 @@ the walls it names, exact on 256 of 256 against Revit's own export.
 
 **One shipped note lags the measured state.** `IFCSPACE`'s note says a room
 whose solid does not close keeps its bounding box. Such a room is read again
-from its solid's faces or edges first, and from Revit 2023 one none of those
-reads is drawn from its saved mesh where that mesh decodes whole (#1191); only
+from its solid's faces or edges first, and from Revit 2023 a room that none of
+those reads is drawn from its saved mesh where that mesh decodes whole (#1191); only
 otherwise does it keep its box ([rooms](rooms.md)). The table says so, and
 refreshing the note is a code change (#2130).
 
