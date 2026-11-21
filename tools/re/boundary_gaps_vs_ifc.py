@@ -32,7 +32,8 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    and whether they agree.
 6. **Corners.** The scored gaps grouped by their two ends in world coordinates, either way
    round, so one corner seen from the two faces that meet there counts once; with the elements
-   and graphs they are on.
+   and graphs they are on, then one line per gap size with its corners and outcomes (one line
+   per corner with `--per-gap`).
 7. **Raw points, placed.** Revit's own coordinate lists of each face set, before any meshing,
    placed through the element's placement, each mapped item's origin and target, the file's
    unit and the site frame into the frame P and Q are in, and read by the same outcome rules:
@@ -335,10 +336,18 @@ def main():
         corners[tuple(ends)].append((g, o))
     print(f"scored occurrences {len(scored)}, distinct gaps {len({(g['graph'], g['face'], g['loop'], g['at']) for g, _ in scored})}, "
           f"corners {len(corners)}, elements {len({g['owner'] for g, _ in scored})}, graphs {len({g['graph'] for g, _ in scored})}")
-    for ends, members in sorted(corners.items(), key=lambda kv: float(kv[1][0][0]["gap"])):
-        size = float(members[0][0]["gap"])
-        outs = collections.Counter(o for _, o in members)
-        print(f"corner gap {size:.6f} ft ({size * 304.8:.3f} mm): occurrences {len(members)}, " + ", ".join(f"{k} {v}" for k, v in sorted(outs.items())))
+    by_size = collections.defaultdict(collections.Counter)
+    corners_by_size = collections.Counter()
+    for ends, members in corners.items():
+        size = round(float(members[0][0]["gap"]), 6)
+        corners_by_size[size] += 1
+        for _, o in members:
+            by_size[size][o] += 1
+        if per_gap_lines:
+            outs = collections.Counter(o for _, o in members)
+            print(f"corner gap {size:.6f} ft: occurrences {len(members)}, " + ", ".join(f"{k} {v}" for k, v in sorted(outs.items())))
+    for size in sorted(by_size):
+        print(f"gap size {size:.6f} ft ({size * 304.8:.3f} mm): corners {corners_by_size[size]}, occurrences " + ", ".join(f"{k} {v}" for k, v in sorted(by_size[size].items())))
     # 7. Raw points, placed: Revit's own coordinate lists, through the element's placement,
     # each mapped item's origin and target, the file's unit and the site frame, into the frame
     # P and Q are in, with no meshing between. The ring ends that close give their floor; a
