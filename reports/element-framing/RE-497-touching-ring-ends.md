@@ -34,6 +34,7 @@ The rows were registered on [#2085](https://github.com/DrunkOnJava/rvt-rs/issues
 - **Office (concrete, as built):** 142 → 58, with 84 meshing.
 - Paired by graph and face, no face that meshes on `6be738a5` is refused, and no other refused face changes its reason.
 - Every ring still refused (194 and 51) has a step of 0.00001 ft or more. None is held back by a short edge or by both of an edge's ends touching the ring.
+- **On the contributor's save** ([#2085](https://github.com/DrunkOnJava/rvt-rs/issues/2085#issuecomment-7056173710)), the same probe on `5be3e1eb`: 36 of the 84 cylinder faces refused as disconnected mesh and 48 stay refused, with no meshed face lost. The chairs' coverage of Revit's surface within 0.01 ft rises from 65.6–65.8% to 67.55–67.63%, against 70.3–70.5% for the bridging candidate. All 448 chairs stay partial.
 
 **On `main`,** the join alone (`42fad511` against `0d0fc927`):
 - **Cracks** ([44857637927](https://github.com/DrunkOnJava/rvt-rs/actions/runs/44857637927), the crack probe on `818ccf1d` against `1eea412b`, on BIM4LCA and Autodesk's samples). Of 5,927 bodies, 2 change, and none gains a boundary vertex over 0.001 ft. Both stay refused, on the next face's reason: RE1 Architecture's 356990, now `a trim loop does not close in the surface's parameters`, and Snowdon Towers' 1135940, now `shared curved edge leaves adjacent plane`. 12 of the 77 exports differ.
