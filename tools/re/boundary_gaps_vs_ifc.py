@@ -310,7 +310,7 @@ def raw_points(model, elements, tags):
     out = {}
     for tag in tags:
         pts = []
-        for item, m in body_items(elements[tag]):
+        for item, m in (x for e in elements[tag] for x in body_items(e)):
             local = local_points(item)
             if local is None:
                 pts = None
@@ -365,9 +365,11 @@ def main():
     model = ifcopenshell.open(args[1])
     kinds = collections.defaultdict(collections.Counter)
     elements = {}
+    # Every element with the Tag but openings, which carry their host's Tag in Revit's export:
+    # `meshes` reads the same set.
     for element in model.by_type("IfcElement"):
-        if element.Tag in tags:
-            elements[element.Tag] = element
+        if element.Tag in tags and not element.is_a("IfcOpeningElement"):
+            elements.setdefault(element.Tag, []).append(element)
             for item, _ in body_items(element):
                 kinds[element.Tag][item.is_a()] += 1
     faceted = {t for t, c in kinds.items() if c and set(c) <= FACETED}
@@ -446,7 +448,7 @@ def main():
         corners_by_size[size] += 1
         for g, o in members:
             by_size[size][o] += 1
-            classes[size][elements[g["owner"]].is_a()] += 1
+            classes[size]["+".join(sorted({e.is_a() for e in elements[g["owner"]]}))] += 1
             tols[size].append((floors[g["owner"]]["floor"], max(2 * floors[g["owner"]]["floor"], TOUCHING)))
         if per_gap_lines:
             print(f"corner {size[0]} {size[1]} gap {size[2]:.6f} ft: occurrences {len(members)}, " + counts(collections.Counter(o for _, o in members)))
