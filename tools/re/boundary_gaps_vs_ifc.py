@@ -71,7 +71,10 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    edge's end only, at the flagged edge's end only, or neither alone. Beside it, the outcome
    against the class of each edge's other face (the probe's `piecenbr` `a=` and `b=`), and
    against where that face's own loop meets the gap: whether an edge beside the edge in that
-   loop passes within 0.00001 ft of P, of Q, of both or of neither, as `piecenbr` places it.
+   loop passes within 0.00001 ft of P, of Q, of both or of neither, as `piecenbr` places it,
+   and again within 1e-7 ft, the bound the probe's own loops join within. Where the bit is on
+   one edge only, the same two readings for the flagged edge's side, each end named by whose
+   it is, against the end Revit keeps.
 
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
@@ -151,7 +154,8 @@ def read_probe(path):
                 key = (f["graph"], f["face"], f["loop"], f["at"])
                 NEIGHBOURS[key] = tuple(
                     (f.get(s) or "-").split(":")[1] if ":" in (f.get(s) or "") else "-" for s in ("a", "b"))
-                REACH[key] = tuple(reach(f.get(s)) for s in ("a", "b"))
+                REACH[key] = tuple(reach(f.get(s), TOUCHING) for s in ("a", "b"))
+                REACH_JOIN[key] = tuple(reach(f.get(s), JOIN) for s in ("a", "b"))
             elif line.startswith("gapxyz "):
                 gaps.append(fields(line))
             elif line.startswith("jointxyz "):
@@ -186,11 +190,14 @@ FLAGS = {}
 # (graph, face, loop, at) -> the class of the other face of the edges before and after the gap.
 NEIGHBOURS = {}
 # (graph, face, loop, at) -> for the edges before and after the gap, which of P and Q an edge
-# beside it in its other face's own loop passes within TOUCHING of.
+# beside it in its other face's own loop passes within TOUCHING of, and within JOIN of.
 REACH = {}
+REACH_JOIN = {}
+# The bound within which the probe's loops join (`native_saved_mesh`'s `close`).
+JOIN = 1e-7
 
 
-def reach(value):
+def reach(value, bound):
     """`P`, `Q`, `P+Q` or `-` from a `piecenbr` side, `<face>:<class>:<edge>[<faces>]:<to P>/<to Q>;...`;
     `unread` where no neighbour is placed, `none` where the edge has no other face."""
     if not value or value == "none" or value.count(":") < 2:
@@ -204,8 +211,8 @@ def reach(value):
         if to_p is None or to_q is None:
             continue
         read = True
-        near_p |= to_p < TOUCHING
-        near_q |= to_q < TOUCHING
+        near_p |= to_p < bound
+        near_q |= to_q < bound
     if not read:
         return "unread"
     return "P+Q" if near_p and near_q else "P" if near_p else "Q" if near_q else "-"
@@ -623,10 +630,21 @@ def main():
                 print(f"{label}, {c}: {line}")
     # 9. Which end Revit keeps against the stored `m_flags` of the edges beside the gap.
     by_bit, by_pair, other_end = collections.Counter(), collections.Counter(), collections.Counter()
-    by_faces, by_reach = collections.Counter(), collections.Counter()
+    by_faces, by_reach, by_join = collections.Counter(), collections.Counter(), collections.Counter()
+    flagged_side = collections.Counter()
     for g, o in scored:
         by_faces[(cohort(g), NEIGHBOURS.get(key_of(g), ("unread", "unread")), o)] += 1
         by_reach[(cohort(g), REACH.get(key_of(g), ("unread", "unread")), o)] += 1
+        by_join[(cohort(g), REACH_JOIN.get(key_of(g), ("unread", "unread")), o)] += 1
+        fl = flags_of(key_of(g))
+        if fl is not None and bool(fl[0] & FLAG_BIT) != bool(fl[1] & FLAG_BIT):
+            on_p = bool(fl[0] & FLAG_BIT)
+            ends = {"P": "the flagged edge's end" if on_p else "the other edge's end",
+                    "Q": "the other edge's end" if on_p else "the flagged edge's end", "P+Q": "both ends", "-": "neither end"}
+            kept = {("p_only" if on_p else "q_only"): "keeps the flagged edge's end", ("q_only" if on_p else "p_only"): "keeps the other edge's end"}
+            for bound, table in (("0.00001 ft", REACH), ("1e-7 ft", REACH_JOIN)):
+                side_reach = table.get(key_of(g), ("unread", "unread"))[0 if on_p else 1]
+                flagged_side[(cohort(g), bound, ends.get(side_reach, side_reach), kept.get(o, o))] += 1
         fl = flags_of(key_of(g))
         if fl is None:
             by_bit[(cohort(g), "unread", o)] += 1
@@ -655,6 +673,13 @@ def main():
         reached = [f"{a}/{b} {o} {n}" for (cc, (a, b), o), n in sorted(by_reach.items()) if cc == c]
         if reached:
             print(f"where each edge's other face's loop meets P and Q (P's edge/Q's edge), {c}: " + ", ".join(reached))
+        joined = [f"{a}/{b} {o} {n}" for (cc, (a, b), o), n in sorted(by_join.items()) if cc == c]
+        if joined:
+            print(f"where each edge's other face's loop meets P and Q within 1e-7 ft (P's edge/Q's edge), {c}: " + ", ".join(joined))
+        for bound in ("0.00001 ft", "1e-7 ft"):
+            sided = [f"meets {r}, {k} {n}" for (cc, bb, r, k), n in sorted(flagged_side.items()) if cc == c and bb == bound]
+            if sided:
+                print(f"bit 0x{FLAG_BIT:x} on one edge only, where the flagged edge's other face's loop meets the gap within {bound}, {c}: " + "; ".join(sided))
         told = {k: n for (cc, k), n in other_end.items() if cc == c}
         if told:
             print(f"bit 0x{FLAG_BIT:x} on one edge only, {c}: {sum(told.values())} drawings; Revit's point "
@@ -711,7 +736,7 @@ def main():
         for key, c in sorted(per_gap.items()):
             fl = flags_of(key)
             print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-', None, None))[1]} "
-                  f"flags={'unread' if fl is None else f'{fl[0]}/{fl[1]}'} faces={'/'.join(NEIGHBOURS.get(key, ('unread', 'unread')))} reach={'/'.join(REACH.get(key, ('unread', 'unread')))} "
+                  f"flags={'unread' if fl is None else f'{fl[0]}/{fl[1]}'} faces={'/'.join(NEIGHBOURS.get(key, ('unread', 'unread')))} reach={'/'.join(REACH.get(key, ('unread', 'unread')))} joins={'/'.join(REACH_JOIN.get(key, ('unread', 'unread')))} "
                   + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
 
