@@ -124,6 +124,12 @@
 //!     walk, and for the edges before (`a`) and after (`b`) the gap: where the side on their
 //!     other face puts its ends (the nearer to P, the nearer to Q), their `m_GInfo` (the
 //!     class and fields of what it points to, or its value) and `m_flags`;
+//!     then matches=<n> matches_same_body=<n> matches_naming_face=<n>
+//!     matches_same_body_naming_face=<n> matches_same_body_between_others=<n>
+//!     matches_unreached=<n> face_regions=<n|absent>: every edge passing within the bound of
+//!     both P and Q (`through` names only the first, in the graph's order), by body, by whether
+//!     it names this face, and by whether no loop walked reaches it; and how many regions the
+//!     face lists (`m_faceRegions`), which the probe does not walk;
 //!   pieces2 surface=<class> through=<n> through_same_body=<n> through_orphan=<n>: by class.
 //! ```
 //! ElementIds, counts and distances in feet only.
@@ -697,6 +703,8 @@ fn read_pieces(
         let mid: [f64; 3] = std::array::from_fn(|k| (g.p[k] + g.q[k]) / 2.0);
         let mut ends = None;
         let mut through = None;
+        // Every edge passing within the bound of both P and Q, not only the first.
+        let mut matches: Vec<usize> = Vec::new();
         let mut nearest_mid = (f64::INFINITY, 0usize);
         for (e, line) in &cache.xyz {
             if *e == g.a || *e == g.b {
@@ -711,6 +719,7 @@ fn read_pieces(
             }
             if polyline_dist(g.p, line) < TOUCHING && polyline_dist(g.q, line) < TOUCHING {
                 through.get_or_insert(*e);
+                matches.push(*e);
             }
             let dm = polyline_dist(mid, line);
             if dm < nearest_mid.0 {
@@ -860,15 +869,43 @@ fn read_pieces(
                 ginfo.replace(' ', "")
             ));
         }
+        // Every match, by body, by whether it names this face, and by whether no loop walked
+        // reaches it; and how many of each kind name the face and sit in this body.
+        let mut same_body = 0usize;
+        let mut names_face = 0usize;
+        let mut same_names = 0usize;
+        let mut same_between_others = 0usize;
+        let mut unreached = 0usize;
+        for e in &matches {
+            let faces = edge_faces(graph, *e);
+            let same = faces
+                .iter()
+                .flatten()
+                .any(|f| own_body.is_some() && cache.body.get(f).copied() == own_body);
+            let named = faces.contains(&Some(fi));
+            same_body += usize::from(same);
+            names_face += usize::from(named);
+            same_names += usize::from(same && named);
+            same_between_others += usize::from(same && !named);
+            unreached += usize::from(orphans.contains(e));
+        }
+        let regions = graph.objects[fi].fields.get("m_faceRegions").map_or_else(
+            || "absent".to_string(),
+            |v| {
+                v.as_array()
+                    .map_or_else(|| "not_a_list".to_string(), |a| a.len().to_string())
+            },
+        );
         println!(
-            "piecemore graph={id} face={fi} loop={loop_index} at={} loops_held={} loops_walked={} through_faces={through_faces} through_body={through_body} through_orphan={through_orphan} {}",
+            "piecemore graph={id} face={fi} loop={loop_index} at={} loops_held={} loops_walked={} through_faces={through_faces} through_body={through_body} through_orphan={through_orphan} {} matches={} matches_same_body={same_body} matches_naming_face={names_face} matches_same_body_naming_face={same_names} matches_same_body_between_others={same_between_others} matches_unreached={unreached} face_regions={regions}",
             g.at,
             loops.len(),
             loops
                 .iter()
                 .filter(|l| loop_chain(graph, fi, **l).is_some())
                 .count(),
-            sides.join(" ")
+            sides.join(" "),
+            matches.len()
         );
     }
 }
