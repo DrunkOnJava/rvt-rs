@@ -1,0 +1,9 @@
+IfcOpenShell cannot mesh: RuntimeError: No suitable IfcRepresentation found
+11 floors, roofs and ceilings drawn in layers in the GLB
+      4  IFCROOF in both
+      7  IFCSLAB in both
+      4  IfcOpenShell cannot mesh the IFC element
+      7  Revit styles the whole body with one material
+compared layers' colours against Revit's surface styles:
+      3  same
+exit 0

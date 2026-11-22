@@ -1,0 +1,51 @@
+Revit's ports on pipes rvt-rs draws as a cylinder: 62 on 31 pipes
+  index 0: first end 11
+  index 0: neither end 18
+  index 0: second end 2
+  index 1: first end 2
+  index 1: neither end 18
+  index 1: second end 11
+  port Z axis against the pipe at that end: outward 17, inward 9
+  In/Out by index: 0 - 3, 0 In 18, 0 Out 10, 1 - 6, 1 In 9, 1 Out 16
+  Z axis by In/Out: - outward 9, In inward 9, Out outward 8
+rvt-rs's ports on those pipes: placed within 0.01 ft of Revit's 62, Z axis as Revit's (In) 27, Z axis as Revit's (Out) 26, Z axis as Revit's (-) 9
+Revit's ports joined to a segment's port: at the segment port, same axis 53, at the segment port, opposite axis 6
+rvt-rs's ports joined to a segment's port: placed within 0.01 ft of Revit's 59, Z axis as Revit's 53, Z axis opposite to Revit's 6
+rvt-rs's ports no segment's port joins: placed within 0.01 ft of Revit's 29, Z axis as Revit's (In) 14, Z axis as Revit's (Out) 14, Z axis as Revit's (-) 1
+  428274_0: neither end, 0.9755 ft from the nearer end
+  428274_1: neither end, 0.9755 ft from the nearer end
+  435015_0: neither end, 0.4925 ft from the nearer end
+  435015_1: neither end, 0.4925 ft from the nearer end
+  438792_0: neither end, 0.5009 ft from the nearer end
+  438792_1: neither end, 0.5009 ft from the nearer end
+  438801_0: neither end, 0.8666 ft from the nearer end
+  438801_1: neither end, 0.8666 ft from the nearer end
+  438862_0: neither end, 1.2939 ft from the nearer end
+  438862_1: neither end, 1.2939 ft from the nearer end
+  438936_0: neither end, 1.3169 ft from the nearer end
+  438936_1: neither end, 1.3169 ft from the nearer end
+  438945_0: neither end, 0.6726 ft from the nearer end
+  438945_1: neither end, 0.6726 ft from the nearer end
+  439086_0: neither end, 0.4048 ft from the nearer end
+  439086_1: neither end, 0.4048 ft from the nearer end
+  439088_0: neither end, 3.4187 ft from the nearer end
+  439088_1: neither end, 3.4187 ft from the nearer end
+  439118_0: neither end, 0.4063 ft from the nearer end
+  439118_1: neither end, 0.4063 ft from the nearer end
+  439120_0: neither end, 1.2512 ft from the nearer end
+  439120_1: neither end, 1.2512 ft from the nearer end
+  439147_0: neither end, 0.5008 ft from the nearer end
+  439147_1: neither end, 0.5008 ft from the nearer end
+  439149_0: neither end, 1.6053 ft from the nearer end
+  439149_1: neither end, 1.6053 ft from the nearer end
+  439172_0: neither end, 2.4172 ft from the nearer end
+  439172_1: neither end, 2.4172 ft from the nearer end
+  439174_0: neither end, 1.7859 ft from the nearer end
+  439174_1: neither end, 1.7859 ft from the nearer end
+  439201_0: neither end, 1.0877 ft from the nearer end
+  439201_1: neither end, 1.0877 ft from the nearer end
+  439203_0: neither end, 4.9557 ft from the nearer end
+  439203_1: neither end, 4.9557 ft from the nearer end
+  439223_0: neither end, 0.4502 ft from the nearer end
+  439223_1: neither end, 0.4502 ft from the nearer end
+exit 0

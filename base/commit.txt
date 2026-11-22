@@ -1,0 +1,1 @@
+a06397777fbafadb0b97af7cb25838c56479835d feat(ifc): every IfcSpace says what it is: SpaceKind room, area, mep_space or family_instance (#1437) (#1439)

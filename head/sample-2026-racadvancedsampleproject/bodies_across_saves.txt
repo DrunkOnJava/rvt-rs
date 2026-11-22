@@ -1,0 +1,15 @@
+bodies across saves: sample-2026-racadvancedsampleproject, held to the 2024, 2025 saves
+named 139803, 2026 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+named 139803, 2024 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=440.512245 m3, 24 vertices
+named 147534, 2026 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+named 147534, 2024 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=True volume=4.15431293 m3, 8 vertices
+beams and landings: compared 42 against the 2024 save (IfcBeam 37, IfcSlab 5); left as boxes here, drawn in the 2024 save, not scored: 0
+stair runs: compared 10 against the 2025 save (IfcStairFlight 10); left as boxes here, drawn in the 2025 save, not scored: 0
+sketch outlines: compared 82 against the 2024 save (IfcCovering 64, IfcRoof 1, IfcSlab 17); left as boxes here, drawn in the 2024 save, not scored: 4 (IfcRoof 4)
+sketch outlines against the 2025 save, not scored: 81 equal, 1 differ, 0 drawn otherwise there
+  sketch outlines against the 2025 save: 139803 IfcSlab volume: 441.111228 m3 here, 440.512245 m3 there; IfcSlab vertices: the farthest is 9.6919 ft from the earlier save's here
+named elements: compared 1 against the 2024 save (IfcCovering 1); left as boxes here, drawn in the 2024 save, not scored: 0
+bodies across saves: PASS
+exit 0

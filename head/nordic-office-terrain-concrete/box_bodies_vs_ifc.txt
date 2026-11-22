@@ -1,0 +1,14 @@
+record-box bodies: 20; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcWasteTerminal                  11       0       0      11       0       0       0    0.784
+        11  Hulevesikaivo:HVK-1
+IfcRamp                            6       0       0       3       3       0       0    0.557
+         5  Ramp:AP-ajoramppi
+         1  Ramp:AP-ulkoluiska
+IfcBuildingElementProxy            2       0       0       0       2       0       0    0.228
+         1  Kohdistuskappale:3x2x1
+         1  RPC Tree - Deciduous:Red Maple - 30'
+IfcRailing                         1       0       0       0       1       0       0    0.023
+         1  Railing:KAI-3
+total                             20       0       0      14       6       0       0
+exit 0

@@ -1,0 +1,8 @@
+bodies across saves: sample-2026-racbasicsampleproject, held to the 2024, 2025 saves
+beams and landings: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 1 (IfcSlab 1)
+stair runs: compared 2 against the 2025 save (IfcStairFlight 2); left as boxes here, drawn in the 2025 save, not scored: 0
+sketch outlines: compared 12 against the 2024 save (IfcCovering 2, IfcSlab 10); left as boxes here, drawn in the 2024 save, not scored: 1 (IfcRoof 1)
+sketch outlines against the 2025 save, not scored: 12 equal, 0 differ, 0 drawn otherwise there
+named elements: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+bodies across saves: PASS
+exit 0

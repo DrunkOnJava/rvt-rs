@@ -1,0 +1,2 @@
+      2  IfcMember: same whole
+exit 0

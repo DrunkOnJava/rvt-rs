@@ -1,0 +1,325 @@
+Only in measure-head: areas_across_saves.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2016-rac_basic_sample_project/element_stage_counts.txt measure-head/sample-2016-rac_basic_sample_project/element_stage_counts.txt
+--- measure-base/sample-2016-rac_basic_sample_project/element_stage_counts.txt	2026-11-05 13:46:10.516216470 +0000
++++ measure-head/sample-2016-rac_basic_sample_project/element_stage_counts.txt	2026-11-05 13:46:08.661203362 +0000
+@@ -18 +18 @@
+-  not_in_export_phase: 14
++  not_in_export_phase: 0
+@@ -21 +21 @@
+-  handed_to_export: 451
++  handed_to_export: 465
+@@ -23 +23 @@
+-  written_to_model: 450
++  written_to_model: 464
+@@ -27 +27 @@
+-  exported.building_elements: 450
++  exported.building_elements: 464
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2016-rac_basic_sample_project/schema.txt measure-head/sample-2016-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2016-rac_basic_sample_project/schema.txt	2026-11-05 13:46:10.516216470 +0000
++++ measure-head/sample-2016-rac_basic_sample_project/schema.txt	2026-11-05 13:46:08.661203362 +0000
+@@ -4 +4 @@
+-  placement composition: 481 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 462 on 225 objects and types
++sets 476 on 239 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2016-rac_basic_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2016-rac_basic_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2016-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.516216470 +0000
++++ measure-head/sample-2016-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.661203362 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2017-rac_basic_sample_project/element_stage_counts.txt measure-head/sample-2017-rac_basic_sample_project/element_stage_counts.txt
+--- measure-base/sample-2017-rac_basic_sample_project/element_stage_counts.txt	2026-11-05 13:46:10.543216661 +0000
++++ measure-head/sample-2017-rac_basic_sample_project/element_stage_counts.txt	2026-11-05 13:46:08.681203503 +0000
+@@ -18 +18 @@
+-  not_in_export_phase: 14
++  not_in_export_phase: 0
+@@ -21 +21 @@
+-  handed_to_export: 451
++  handed_to_export: 465
+@@ -23 +23 @@
+-  written_to_model: 450
++  written_to_model: 464
+@@ -27 +27 @@
+-  exported.building_elements: 450
++  exported.building_elements: 464
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2017-rac_basic_sample_project/schema.txt measure-head/sample-2017-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2017-rac_basic_sample_project/schema.txt	2026-11-05 13:46:10.543216661 +0000
++++ measure-head/sample-2017-rac_basic_sample_project/schema.txt	2026-11-05 13:46:08.681203503 +0000
+@@ -4 +4 @@
+-  placement composition: 481 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 462 on 225 objects and types
++sets 476 on 239 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2017-rac_basic_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2017-rac_basic_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2017-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.543216661 +0000
++++ measure-head/sample-2017-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.681203503 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2018-rac_basic_sample_project/element_stage_counts.txt measure-head/sample-2018-rac_basic_sample_project/element_stage_counts.txt
+--- measure-base/sample-2018-rac_basic_sample_project/element_stage_counts.txt	2026-11-05 13:46:10.543216661 +0000
++++ measure-head/sample-2018-rac_basic_sample_project/element_stage_counts.txt	2026-11-05 13:46:08.681203503 +0000
+@@ -18 +18 @@
+-  not_in_export_phase: 14
++  not_in_export_phase: 0
+@@ -21 +21 @@
+-  handed_to_export: 451
++  handed_to_export: 465
+@@ -23 +23 @@
+-  written_to_model: 450
++  written_to_model: 464
+@@ -27 +27 @@
+-  exported.building_elements: 450
++  exported.building_elements: 464
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2018-rac_basic_sample_project/schema.txt measure-head/sample-2018-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2018-rac_basic_sample_project/schema.txt	2026-11-05 13:46:10.543216661 +0000
++++ measure-head/sample-2018-rac_basic_sample_project/schema.txt	2026-11-05 13:46:08.681203503 +0000
+@@ -4 +4 @@
+-  placement composition: 481 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 462 on 225 objects and types
++sets 476 on 239 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2018-rac_basic_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2018-rac_basic_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2018-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.543216661 +0000
++++ measure-head/sample-2018-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.682203510 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rac_basic_sample_project/element_stage_counts.txt measure-head/sample-2019-rac_basic_sample_project/element_stage_counts.txt
+--- measure-base/sample-2019-rac_basic_sample_project/element_stage_counts.txt	2026-11-05 13:46:10.544216668 +0000
++++ measure-head/sample-2019-rac_basic_sample_project/element_stage_counts.txt	2026-11-05 13:46:08.682203510 +0000
+@@ -18 +18 @@
+-  not_in_export_phase: 14
++  not_in_export_phase: 0
+@@ -21 +21 @@
+-  handed_to_export: 451
++  handed_to_export: 465
+@@ -23 +23 @@
+-  written_to_model: 450
++  written_to_model: 464
+@@ -27 +27 @@
+-  exported.building_elements: 450
++  exported.building_elements: 464
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rac_basic_sample_project/schema.txt measure-head/sample-2019-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2019-rac_basic_sample_project/schema.txt	2026-11-05 13:46:10.544216668 +0000
++++ measure-head/sample-2019-rac_basic_sample_project/schema.txt	2026-11-05 13:46:08.682203510 +0000
+@@ -4 +4 @@
+-  placement composition: 481 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 462 on 225 objects and types
++sets 476 on 239 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rac_basic_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2019-rac_basic_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2019-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.544216668 +0000
++++ measure-head/sample-2019-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.682203510 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2020-racbasicsampleproject/element_stage_counts.txt measure-head/sample-2020-racbasicsampleproject/element_stage_counts.txt
+--- measure-base/sample-2020-racbasicsampleproject/element_stage_counts.txt	2026-11-05 13:46:10.613217156 +0000
++++ measure-head/sample-2020-racbasicsampleproject/element_stage_counts.txt	2026-11-05 13:46:08.787204252 +0000
+@@ -18 +18 @@
+-  not_in_export_phase: 14
++  not_in_export_phase: 0
+@@ -21 +21 @@
+-  handed_to_export: 451
++  handed_to_export: 465
+@@ -23 +23 @@
+-  written_to_model: 450
++  written_to_model: 464
+@@ -27 +27 @@
+-  exported.building_elements: 450
++  exported.building_elements: 464
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2020-racbasicsampleproject/schema.txt measure-head/sample-2020-racbasicsampleproject/schema.txt
+--- measure-base/sample-2020-racbasicsampleproject/schema.txt	2026-11-05 13:46:10.613217156 +0000
++++ measure-head/sample-2020-racbasicsampleproject/schema.txt	2026-11-05 13:46:08.787204252 +0000
+@@ -4 +4 @@
+-  placement composition: 481 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 462 on 225 objects and types
++sets 476 on 239 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2020-racbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2020-racbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2020-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.613217156 +0000
++++ measure-head/sample-2020-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.787204252 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2021-racbasicsampleproject/element_stage_counts.txt measure-head/sample-2021-racbasicsampleproject/element_stage_counts.txt
+--- measure-base/sample-2021-racbasicsampleproject/element_stage_counts.txt	2026-11-05 13:46:10.609217127 +0000
++++ measure-head/sample-2021-racbasicsampleproject/element_stage_counts.txt	2026-11-05 13:46:08.848204683 +0000
+@@ -18 +18 @@
+-  not_in_export_phase: 14
++  not_in_export_phase: 0
+@@ -21 +21 @@
+-  handed_to_export: 451
++  handed_to_export: 465
+@@ -23 +23 @@
+-  written_to_model: 450
++  written_to_model: 464
+@@ -27 +27 @@
+-  exported.building_elements: 450
++  exported.building_elements: 464
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2021-racbasicsampleproject/schema.txt measure-head/sample-2021-racbasicsampleproject/schema.txt
+--- measure-base/sample-2021-racbasicsampleproject/schema.txt	2026-11-05 13:46:10.613217156 +0000
++++ measure-head/sample-2021-racbasicsampleproject/schema.txt	2026-11-05 13:46:08.848204683 +0000
+@@ -4 +4 @@
+-  placement composition: 481 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 462 on 225 objects and types
++sets 476 on 239 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2021-racbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2021-racbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2021-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.613217156 +0000
++++ measure-head/sample-2021-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.848204683 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2022-racbasicsampleproject/element_stage_counts.txt measure-head/sample-2022-racbasicsampleproject/element_stage_counts.txt
+--- measure-base/sample-2022-racbasicsampleproject/element_stage_counts.txt	2026-11-05 13:46:10.650217417 +0000
++++ measure-head/sample-2022-racbasicsampleproject/element_stage_counts.txt	2026-11-05 13:46:08.849204690 +0000
+@@ -18 +18 @@
+-  not_in_export_phase: 14
++  not_in_export_phase: 0
+@@ -21 +21 @@
+-  handed_to_export: 451
++  handed_to_export: 465
+@@ -23 +23 @@
+-  written_to_model: 450
++  written_to_model: 464
+@@ -27 +27 @@
+-  exported.building_elements: 450
++  exported.building_elements: 464
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2022-racbasicsampleproject/schema.txt measure-head/sample-2022-racbasicsampleproject/schema.txt
+--- measure-base/sample-2022-racbasicsampleproject/schema.txt	2026-11-05 13:46:10.650217417 +0000
++++ measure-head/sample-2022-racbasicsampleproject/schema.txt	2026-11-05 13:46:08.849204690 +0000
+@@ -4 +4 @@
+-  placement composition: 481 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 462 on 225 objects and types
++sets 476 on 239 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2022-racbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2022-racbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2022-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.650217417 +0000
++++ measure-head/sample-2022-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.849204690 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2023-racbasicsampleproject/element_stage_counts.txt measure-head/sample-2023-racbasicsampleproject/element_stage_counts.txt
+--- measure-base/sample-2023-racbasicsampleproject/element_stage_counts.txt	2026-11-05 13:46:10.660217488 +0000
++++ measure-head/sample-2023-racbasicsampleproject/element_stage_counts.txt	2026-11-05 13:46:08.850204697 +0000
+@@ -18 +18 @@
+-  not_in_export_phase: 14
++  not_in_export_phase: 0
+@@ -21 +21 @@
+-  handed_to_export: 451
++  handed_to_export: 465
+@@ -23 +23 @@
+-  written_to_model: 450
++  written_to_model: 464
+@@ -27 +27 @@
+-  exported.building_elements: 450
++  exported.building_elements: 464
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2023-racbasicsampleproject/schema.txt measure-head/sample-2023-racbasicsampleproject/schema.txt
+--- measure-base/sample-2023-racbasicsampleproject/schema.txt	2026-11-05 13:46:10.660217488 +0000
++++ measure-head/sample-2023-racbasicsampleproject/schema.txt	2026-11-05 13:46:08.850204697 +0000
+@@ -4 +4 @@
+-  placement composition: 448 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 462 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 458 on 227 objects and types
++sets 472 on 241 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2023-racbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2023-racbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2023-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.660217488 +0000
++++ measure-head/sample-2023-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.850204697 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-racbasicsampleproject/schema.txt measure-head/sample-2024-racbasicsampleproject/schema.txt
+--- measure-base/sample-2024-racbasicsampleproject/schema.txt	2026-11-05 13:46:10.430215863 +0000
++++ measure-head/sample-2024-racbasicsampleproject/schema.txt	2026-11-05 13:46:08.612203016 +0000
+@@ -4 +4 @@
+-  placement composition: 441 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 455 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 954 on 465 objects and types
++sets 968 on 479 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-racbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2024-racbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2024-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.430215863 +0000
++++ measure-head/sample-2024-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.612203016 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racbasicsampleproject/schema.txt measure-head/sample-2025-racbasicsampleproject/schema.txt
+--- measure-base/sample-2025-racbasicsampleproject/schema.txt	2026-11-05 13:46:10.555216746 +0000
++++ measure-head/sample-2025-racbasicsampleproject/schema.txt	2026-11-05 13:46:08.719203772 +0000
+@@ -4 +4 @@
+-  placement composition: 433 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 447 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 951 on 464 objects and types
++sets 965 on 478 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2025-racbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2025-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.555216746 +0000
++++ measure-head/sample-2025-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.719203772 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racbasicsampleproject/schema.txt measure-head/sample-2026-racbasicsampleproject/schema.txt
+--- measure-base/sample-2026-racbasicsampleproject/schema.txt	2026-11-05 13:46:10.604217092 +0000
++++ measure-head/sample-2026-racbasicsampleproject/schema.txt	2026-11-05 13:46:08.851204705 +0000
+@@ -4 +4 @@
+-  placement composition: 435 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 449 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 947 on 461 objects and types
++sets 961 on 475 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2026-racbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2026-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.604217092 +0000
++++ measure-head/sample-2026-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.851204705 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racbasicsampleproject/schema.txt measure-head/sample-2027-racbasicsampleproject/schema.txt
+--- measure-base/sample-2027-racbasicsampleproject/schema.txt	2026-11-05 13:46:10.617217184 +0000
++++ measure-head/sample-2027-racbasicsampleproject/schema.txt	2026-11-05 13:46:08.888204966 +0000
+@@ -4 +4 @@
+-  placement composition: 435 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 449 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 947 on 461 objects and types
++sets 961 on 475 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2027-racbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2027-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:10.617217184 +0000
++++ measure-head/sample-2027-racbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 13:46:08.888204966 +0000
+@@ -1,2 +1,2 @@
+-space kinds: IfcSpace 0
+-space kinds: room 0
++space kinds: IfcSpace 14
++space kinds: room 14
