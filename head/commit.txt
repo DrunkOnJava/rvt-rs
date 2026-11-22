@@ -1,0 +1,1 @@
+af500685905ed47c3629871ca126cbb70c1b95ca research(elements): bit 12 of the flag word is an exported room and a joined wall end, bit 7 a type record (#223) (RE-261) (#1082)

@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "mode": "default",
+  "input": {
+    "revit_version": 2019,
+    "build": "20180123_1515(x64)",
+    "original_path": "rme_basic_sample_project.rvt",
+    "project_name": "rme_basic_sample_project",
+    "stream_count": 13,
+    "has_basic_file_info": true,
+    "has_part_atom": false,
+    "has_formats_latest": true,
+    "has_global_latest": true,
+    "release_support": {
+      "status": "experimental",
+      "capability": "element-records-revit-2019-2022"
+    }
+  },
+  "decoded": {
+    "production_walker_elements": 6910,
+    "diagnostic_proxy_candidates": 0,
+    "arcwall_records": 0,
+    "class_counts": {},
+    "production_class_counts": {
+      "Ceiling": 43,
+      "Column": 4,
+      "CurtainWallMullion": 1450,
+      "CurtainWallPanel": 629,
+      "Door": 124,
+      "Duct": 724,
+      "DuctFitting": 935,
+      "DuctTerminal": 309,
+      "ElectricalEquipment": 29,
+      "ElectricalFixture": 424,
+      "Floor": 21,
+      "GenericModel": 82,
+      "LightingDevice": 63,
+      "LightingFixture": 410,
+      "Mass": 6,
+      "Material": 175,
+      "MechanicalEquipment": 47,
+      "Pipe": 491,
+      "PipeFitting": 535,
+      "PlumbingFixture": 11,
+      "Railing": 14,
+      "Room": 76,
+      "SpecialtyEquipment": 3,
+      "Stair": 8,
+      "StructuralColumn": 131,
+      "Wall": 166
+    },
+    "parameter_value_count": 6947,
+    "mean_element_confidence": 0.80250674,
+    "elements_below_min_confidence": 0,
+    "min_element_confidence": 0.55,
+    "recovered_unit_identifiers": [],
+    "unknown_unit_identifiers": []
+  },
+  "exported": {
+    "total_entities": 22887,
+    "building_elements": 6729,
+    "building_elements_with_geometry": 6729,
+    "building_elements_carried_by_parts": 0,
+    "by_ifc_type": {
+      "IFCAIRTERMINAL": 309,
+      "IFCBUILDINGELEMENTPROXY": 648,
+      "IFCCOLUMN": 135,
+      "IFCCOVERING": 43,
+      "IFCDOOR": 124,
+      "IFCDUCTFITTING": 935,
+      "IFCDUCTSEGMENT": 724,
+      "IFCLIGHTFIXTURE": 410,
+      "IFCMEMBER": 1450,
+      "IFCPIPEFITTING": 535,
+      "IFCPIPESEGMENT": 491,
+      "IFCPLATE": 629,
+      "IFCRAILING": 14,
+      "IFCSANITARYTERMINAL": 11,
+      "IFCSLAB": 21,
+      "IFCSPACE": 76,
+      "IFCSTAIR": 8,
+      "IFCWALL": 166
+    },
+    "classification_count": 0,
+    "unit_assignment_count": 0,
+    "material_count": 175,
+    "storey_count": 4,
+    "storey_names": [
+      "Level 1",
+      "Level 2",
+      "Level 3",
+      "Roof Level"
+    ],
+    "storey_elevations_feet": [
+      0.30896239133315895,
+      12.46719160104952,
+      23.95013123359545,
+      35.761154855642694
+    ],
+    "storey_bound_elements": 6629,
+    "material_names_sample": [
+      "Default",
+      "Default Wall",
+      "Default Roof",
+      "Glass",
+      "Phase - Demo",
+      "Phase - Exist",
+      "Phase - Temporary",
+      "Masonry - Brick",
+      "Masonry - Concrete Block",
+      "Metal - Stud Layer",
+      "Wood - Sheathing - plywood",
+      "Misc. Air Layers - Air Space"
+    ],
+    "layered_element_count": 197,
+    "body_sources": {
+      "partition_element_record_bbox": 6563,
+      "partition_element_record_join_trimmed": 166
+    },
+    "bounding_box_bodies": 6537
+  },
+  "skipped": [
+    {
+      "reason": "unsupported_geometry_missing_level",
+      "count": 100,
+      "classes": {
+        "IFCAIRTERMINAL": 7,
+        "IFCBUILDINGELEMENTPROXY": 85,
+        "IFCRAILING": 8
+      },
+      "sample_names": [
+        "M_Return Grille - Rectangular - Hosted:Standard:411597",
+        "M_Return Grille - Rectangular - Hosted:Standard:411600",
+        "M_Return Grille - Rectangular - Hosted:Standard:411656",
+        "M_Return Grille - Rectangular - Hosted:Standard:411657",
+        "M_Return Grille - Rectangular - Hosted:Standard:411674",
+        "M_Return Grille - Rectangular - Hosted:Standard:412887",
+        "M_Return Grille - Rectangular - Hosted:Standard:412889",
+        "Railing-576231",
+        "Railing-576235",
+        "Railing-576361",
+        "Railing-576365",
+        "Railing-576957"
+      ]
+    }
+  ],
+  "unsupported_features": [
+    "project_units_from_revit_bytes",
+    "revit_compound_assemblies_and_walltype_widths",
+    "typed_door_window_discrimination_and_host_binding",
+    "opening_index_to_ifc_openingelement_host_join",
+    "schema_field_wall_instances",
+    "partial_revit_element_parameters"
+  ],
+  "warnings": [
+    "Revit 2019: elements come from their records with their ElementId, category and bounding box, doors and windows with their host wall, rooms with their outline, and, where its Levels are read, each element on the storey of the Level its record names; family instances, walls, floors and roofs carry their family and type names, and family instances their type's materials. Layers become material layer sets where their materials are named, a layer that takes its category's material taking the object styles' one, and walls keep their record box. Wall joins and profiles, design options, parameters and \"Export to IFC As\" overrides are not read for 2019, and components nested in doors and windows are left out.",
+    "Revit 2019 is read experimentally (element-records-revit-2019-2022 in docs/support-matrix.json): too few files of this release are measured against Revit's own export to rely on its elements, which may be missing, extra or of another class.",
+    "Unsupported or incomplete geometry was reported: unsupported_geometry_missing_level=100.",
+    "No Revit display units were recovered; the IFC declares the SI units its values are written in.",
+    "4 building storey name(s) came from partition Level records; 6629 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
+  ],
+  "confidence": {
+    "level": "geometry",
+    "score": 0.9,
+    "has_project_metadata": true,
+    "has_typed_elements": true,
+    "has_geometry": true,
+    "has_diagnostic_proxies": false,
+    "warning_count": 5,
+    "unexported_element_records": 0
+  },
+  "source_coverage": {
+    "status": "measured",
+    "notes": "Measured from export diagnostics counts only (production walker, exported building elements, ElementIds declared by Global/ElemTable). Not a converter-grade completeness claim.",
+    "decoded_element_fraction": 0.25153798,
+    "exported_element_fraction": 0.9738061,
+    "geometry_element_fraction": 1.0
+  },
+  "formats_latest_integrity": {
+    "stream": "Formats/Latest",
+    "stored_bytes": 154295,
+    "inflated_bytes": 428839,
+    "page_boundary_detected": true,
+    "checksum_tail_stripping": "enabled",
+    "integrity_status": "ok",
+    "schema_scan_truncated": false,
+    "schema_scanned_bytes": 428839
+  }
+}

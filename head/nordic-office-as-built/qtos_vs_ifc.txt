@@ -1,0 +1,132 @@
+Revit quantities on objects rvt-rs writes: 39721; equal: 21065; different: 1; missing: 18655; rvt-rs quantities Revit does not write: 0
+Revit values known to be wrong, left out (RE-235 §5): Qto_MemberBaseQuantities.CrossSectionArea 10003
+Revit values known to be wrong, left out (RE-235 §5): Qto_OpeningElementBaseQuantities.Height 191
+Revit values known to be wrong, left out (RE-235 §5): Qto_OpeningElementBaseQuantities.Width 191
+Revit values known to be wrong, left out (RE-235 §5): Qto_SlabBaseQuantities.Perimeter 13
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 461
+walls whose Length is rvt-rs's curve's: 407; Revit's Axis's: 184; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+  Qto_AirTerminalBaseQuantities.Perimeter: 1, equal 0, different 0, missing 1
+  Qto_BeamBaseQuantities.CrossSectionArea: 8, equal 0, different 0, missing 8
+  Qto_BeamBaseQuantities.GrossSurfaceArea: 8, equal 0, different 0, missing 8
+  Qto_BeamBaseQuantities.GrossVolume: 8, equal 0, different 0, missing 8
+  Qto_BeamBaseQuantities.Length: 8, equal 8, different 0, missing 0
+  Qto_BeamBaseQuantities.NetSurfaceArea: 8, equal 0, different 0, missing 8
+  Qto_BeamBaseQuantities.NetVolume: 8, equal 0, different 0, missing 8
+  Qto_BeamBaseQuantities.OuterSurfaceArea: 8, equal 0, different 0, missing 8
+  Qto_BuildingElementProxyQuantities.NetSurfaceArea: 12, equal 0, different 0, missing 12
+  Qto_BuildingElementProxyQuantities.NetVolume: 12, equal 0, different 0, missing 12
+  Qto_ColumnBaseQuantities.CrossSectionArea: 279, equal 79, different 0, missing 200
+  Qto_ColumnBaseQuantities.GrossVolume: 279, equal 79, different 0, missing 200
+  Qto_ColumnBaseQuantities.Length: 279, equal 93, different 0, missing 186
+  Qto_ColumnBaseQuantities.NetVolume: 279, equal 0, different 0, missing 279
+  Qto_ColumnBaseQuantities.OuterSurfaceArea: 279, equal 79, different 0, missing 200
+  Qto_CoveringBaseQuantities.GrossArea: 90, equal 0, different 0, missing 90
+  Qto_CoveringBaseQuantities.Width: 111, equal 59, different 0, missing 52
+  Qto_CurtainWallQuantities.Length: 220, equal 213, different 0, missing 7
+  Qto_DoorBaseQuantities.Area: 269, equal 196, different 0, missing 73
+  Qto_DoorBaseQuantities.Height: 269, equal 196, different 0, missing 73
+  Qto_DoorBaseQuantities.Perimeter: 46, equal 0, different 0, missing 46
+  Qto_DoorBaseQuantities.Width: 269, equal 196, different 0, missing 73
+  Qto_MemberBaseQuantities.Length: 10003, equal 9984, different 1, missing 18
+  Qto_MemberBaseQuantities.NetSurfaceArea: 10003, equal 0, different 0, missing 10003
+  Qto_MemberBaseQuantities.NetVolume: 10003, equal 7795, different 0, missing 2208
+  Qto_OpeningElementBaseQuantities.Area: 5, equal 0, different 0, missing 5
+  Qto_OpeningElementBaseQuantities.Depth: 300, equal 187, different 0, missing 113
+  Qto_OpeningElementBaseQuantities.Height: 133, equal 0, different 0, missing 133
+  Qto_OpeningElementBaseQuantities.Volume: 2, equal 0, different 0, missing 2
+  Qto_OpeningElementBaseQuantities.Width: 134, equal 0, different 0, missing 134
+  Qto_PipeSegmentBaseQuantities.GrossCrossSectionArea: 12, equal 12, different 0, missing 0
+  Qto_PipeSegmentBaseQuantities.Length: 12, equal 12, different 0, missing 0
+  Qto_PipeSegmentBaseQuantities.NetCrossSectionArea: 12, equal 0, different 0, missing 12
+  Qto_PipeSegmentBaseQuantities.OuterSurfaceArea: 12, equal 12, different 0, missing 0
+  Qto_PlateBaseQuantities.NetVolume: 260, equal 0, different 0, missing 260
+  Qto_PlateBaseQuantities.Width: 257, equal 0, different 0, missing 257
+  Qto_RailingBaseQuantities.Length: 41, equal 4, different 0, missing 37
+  Qto_RampFlightBaseQuantities.NetVolume: 1, equal 0, different 0, missing 1
+  Qto_RampFlightBaseQuantities.Width: 1, equal 0, different 0, missing 1
+  Qto_SlabBaseQuantities.Depth: 42, equal 13, different 0, missing 29
+  Qto_SlabBaseQuantities.GrossArea: 42, equal 31, different 0, missing 11
+  Qto_SlabBaseQuantities.GrossVolume: 42, equal 13, different 0, missing 29
+  Qto_SlabBaseQuantities.Length: 27, equal 0, different 0, missing 27
+  Qto_SlabBaseQuantities.NetVolume: 63, equal 0, different 0, missing 63
+  Qto_SlabBaseQuantities.Perimeter: 29, equal 0, different 0, missing 29
+  Qto_SlabBaseQuantities.Width: 34, equal 0, different 0, missing 34
+  Qto_SpaceBaseQuantities.GrossVolume: 136, equal 0, different 0, missing 136
+  Qto_SpaceBaseQuantities.Height: 254, equal 234, different 0, missing 20
+  Qto_SpaceBaseQuantities.NetVolume: 278, equal 0, different 0, missing 278
+  Qto_StairFlightBaseQuantities.GrossVolume: 1, equal 0, different 0, missing 1
+  Qto_StairFlightBaseQuantities.Length: 35, equal 34, different 0, missing 1
+  Qto_StairFlightBaseQuantities.NetVolume: 35, equal 34, different 0, missing 1
+  Qto_WallBaseQuantities.GrossFootprintArea: 279, equal 0, different 0, missing 279
+  Qto_WallBaseQuantities.GrossSideArea: 579, equal 0, different 0, missing 579
+  Qto_WallBaseQuantities.GrossVolume: 579, equal 0, different 0, missing 579
+  Qto_WallBaseQuantities.Height: 579, equal 0, different 0, missing 579
+  Qto_WallBaseQuantities.Length: 146, equal 88, different 0, missing 58
+  Qto_WallBaseQuantities.NetSideArea: 579, equal 0, different 0, missing 579
+  Qto_WallBaseQuantities.NetVolume: 607, equal 0, different 0, missing 607
+  Qto_WallBaseQuantities.Width: 607, equal 607, different 0, missing 0
+  Qto_WindowBaseQuantities.Area: 269, equal 269, different 0, missing 0
+  Qto_WindowBaseQuantities.Height: 269, equal 269, different 0, missing 0
+  Qto_WindowBaseQuantities.Width: 269, equal 269, different 0, missing 0
+entities Revit writes each missing quantity on:
+  Qto_MemberBaseQuantities.NetSurfaceArea: 10003; on IfcMember x10003
+  Qto_MemberBaseQuantities.NetVolume: 2208; on IfcMember x2208
+  Qto_WallBaseQuantities.NetVolume: 607; on IfcWall x606, IfcOpeningElement x1
+  Qto_WallBaseQuantities.GrossSideArea: 579; on IfcWall x578, IfcOpeningElement x1
+  Qto_WallBaseQuantities.GrossVolume: 579; on IfcWall x578, IfcOpeningElement x1
+  Qto_WallBaseQuantities.Height: 579; on IfcWall x578, IfcOpeningElement x1
+  Qto_WallBaseQuantities.NetSideArea: 579; on IfcWall x578, IfcOpeningElement x1
+  Qto_ColumnBaseQuantities.NetVolume: 279; on IfcColumn x279
+  Qto_WallBaseQuantities.GrossFootprintArea: 279; on IfcWall x278, IfcOpeningElement x1
+  Qto_SpaceBaseQuantities.NetVolume: 278; on IfcSpace x278
+  Qto_PlateBaseQuantities.NetVolume: 260; on IfcPlate x260
+  Qto_PlateBaseQuantities.Width: 257; on IfcPlate x257
+  Qto_ColumnBaseQuantities.CrossSectionArea: 200; on IfcColumn x200
+  Qto_ColumnBaseQuantities.GrossVolume: 200; on IfcColumn x200
+  Qto_ColumnBaseQuantities.OuterSurfaceArea: 200; on IfcColumn x200
+  Qto_ColumnBaseQuantities.Length: 186; on IfcColumn x186
+  Qto_SpaceBaseQuantities.GrossVolume: 136; on IfcSpace x136
+  Qto_OpeningElementBaseQuantities.Width: 134; on IfcOpeningElement x134
+  Qto_OpeningElementBaseQuantities.Height: 133; on IfcOpeningElement x133
+  Qto_OpeningElementBaseQuantities.Depth: 113; on IfcOpeningElement x113
+  Qto_CoveringBaseQuantities.GrossArea: 90; on IfcCovering x90
+  Qto_DoorBaseQuantities.Area: 73; on IfcDoor x71, IfcOpeningElement x2
+  Qto_DoorBaseQuantities.Height: 73; on IfcDoor x71, IfcOpeningElement x2
+  Qto_DoorBaseQuantities.Width: 73; on IfcDoor x71, IfcOpeningElement x2
+  Qto_SlabBaseQuantities.NetVolume: 63; on IfcSlab x62, IfcOpeningElement x1
+  Qto_WallBaseQuantities.Length: 58; on IfcWall x58
+  Qto_CoveringBaseQuantities.Width: 52; on IfcCovering x52
+  Qto_DoorBaseQuantities.Perimeter: 46; on IfcOpeningElement x38, IfcDoor x8
+  Qto_RailingBaseQuantities.Length: 37; on IfcRailing x37
+  Qto_SlabBaseQuantities.Width: 34; on IfcSlab x34
+  Qto_SlabBaseQuantities.Depth: 29; on IfcSlab x28, IfcOpeningElement x1
+  Qto_SlabBaseQuantities.GrossVolume: 29; on IfcSlab x28, IfcOpeningElement x1
+  Qto_SlabBaseQuantities.Perimeter: 29; on IfcSlab x28, IfcOpeningElement x1
+  Qto_SlabBaseQuantities.Length: 27; on IfcSlab x27
+  Qto_SpaceBaseQuantities.Height: 20; on IfcSpace x20
+  Qto_MemberBaseQuantities.Length: 18; on IfcMember x18
+  Qto_BuildingElementProxyQuantities.NetSurfaceArea: 12; on IfcBuildingElementProxy x12
+  Qto_BuildingElementProxyQuantities.NetVolume: 12; on IfcBuildingElementProxy x12
+  Qto_PipeSegmentBaseQuantities.NetCrossSectionArea: 12; on IfcPipeSegment x12
+  Qto_SlabBaseQuantities.GrossArea: 11; on IfcSlab x10, IfcOpeningElement x1
+  Qto_BeamBaseQuantities.CrossSectionArea: 8; on IfcBeam x8
+  Qto_BeamBaseQuantities.GrossSurfaceArea: 8; on IfcBeam x8
+  Qto_BeamBaseQuantities.GrossVolume: 8; on IfcBeam x8
+  Qto_BeamBaseQuantities.NetSurfaceArea: 8; on IfcBeam x8
+  Qto_BeamBaseQuantities.NetVolume: 8; on IfcBeam x8
+  Qto_BeamBaseQuantities.OuterSurfaceArea: 8; on IfcBeam x8
+  Qto_CurtainWallQuantities.Length: 7; on IfcCurtainWall x7
+  Qto_OpeningElementBaseQuantities.Area: 5; on IfcOpeningElement x5
+  Qto_OpeningElementBaseQuantities.Volume: 2; on IfcOpeningElement x2
+  Qto_RampFlightBaseQuantities.NetVolume: 1; on IfcRampFlight x1
+  Qto_RampFlightBaseQuantities.Width: 1; on IfcRampFlight x1
+  Qto_StairFlightBaseQuantities.GrossVolume: 1; on IfcStairFlight x1
+  Qto_StairFlightBaseQuantities.Length: 1; on IfcStairFlight x1
+  Qto_StairFlightBaseQuantities.NetVolume: 1; on IfcStairFlight x1
+  Qto_AirTerminalBaseQuantities.Perimeter: 1; on IfcAirTerminal x1
+rvt-rs quantities Revit does not write:
+largest differences (rvt-rs, Revit; SI units):
+  tag:3027671 Qto_MemberBaseQuantities.Length: IfcQuantityLength 4.269995, IfcQuantityLength 4.270046644207709
+exit 0

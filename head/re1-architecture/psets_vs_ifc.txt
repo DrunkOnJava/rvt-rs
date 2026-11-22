@@ -1,0 +1,64 @@
+Revit values on objects rvt-rs writes: 262; equal: 197; different: 0; missing: 65; rvt-rs values Revit does not write: 59
+  Pset_AirSideSystemInformation.Name: 13, equal 0, different 0, missing 13
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 1, different 0, missing 0
+  Pset_BuildingElementProxyCommon.Reference: 9, equal 9, different 0, missing 0
+  Pset_BuildingStoreyCommon.AboveGround: 2, equal 2, different 0, missing 0
+  Pset_ConcreteElementGeneral.FireRating: 8, equal 0, different 0, missing 8
+  Pset_CoveringCommon.Finish: 6, equal 6, different 0, missing 0
+  Pset_CoveringCommon.Reference: 6, equal 6, different 0, missing 0
+  Pset_CoveringCommon.TotalThickness: 1, equal 0, different 0, missing 1
+  Pset_CurtainWallCommon.IsExternal: 1, equal 1, different 0, missing 0
+  Pset_CurtainWallCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_DoorCommon.IsExternal: 5, equal 5, different 0, missing 0
+  Pset_DoorCommon.Reference: 5, equal 5, different 0, missing 0
+  Pset_DoorCommon.ThermalTransmittance: 2, equal 0, different 0, missing 2
+  Pset_EnvironmentalImpactIndicators.Reference: 73, equal 73, different 0, missing 0
+  Pset_MemberCommon.IsExternal: 10, equal 0, different 0, missing 10
+  Pset_MemberCommon.Reference: 10, equal 10, different 0, missing 0
+  Pset_OpeningElementCommon.Reference: 2, equal 0, different 0, missing 2
+  Pset_PlateCommon.IsExternal: 2, equal 0, different 0, missing 2
+  Pset_PlateCommon.Reference: 2, equal 2, different 0, missing 0
+  Pset_ProductRequirements.Name: 13, equal 0, different 0, missing 13
+  Pset_RailingCommon.Height: 1, equal 1, different 0, missing 0
+  Pset_RailingCommon.IsExternal: 1, equal 1, different 0, missing 0
+  Pset_RailingCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_ReinforcementBarPitchOfSlab.Description: 2, equal 0, different 0, missing 2
+  Pset_ReinforcementBarPitchOfSlab.Reference: 2, equal 2, different 0, missing 0
+  Pset_ReinforcementBarPitchOfWall.Description: 1, equal 0, different 0, missing 1
+  Pset_ReinforcementBarPitchOfWall.Reference: 7, equal 7, different 0, missing 0
+  Pset_SanitaryTerminalTypeCommon.Reference: 7, equal 7, different 0, missing 0
+  Pset_SlabCommon.IsExternal: 2, equal 2, different 0, missing 0
+  Pset_SlabCommon.LoadBearing: 2, equal 0, different 0, missing 2
+  Pset_SlabCommon.PitchAngle: 2, equal 2, different 0, missing 0
+  Pset_SlabCommon.Reference: 2, equal 2, different 0, missing 0
+  Pset_SpaceCommon.Reference: 11, equal 11, different 0, missing 0
+  Pset_SpaceCoveringRequirements.FloorCovering: 11, equal 11, different 0, missing 0
+  Pset_WallCommon.ExtendToStructure: 7, equal 7, different 0, missing 0
+  Pset_WallCommon.FireRating: 8, equal 7, different 0, missing 1
+  Pset_WallCommon.IsExternal: 7, equal 7, different 0, missing 0
+  Pset_WallCommon.LoadBearing: 7, equal 0, different 0, missing 7
+  Pset_WallCommon.Reference: 7, equal 7, different 0, missing 0
+  Pset_WallCommon.ThermalTransmittance: 1, equal 0, different 0, missing 1
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+  Pset_BuildingElementProxyCommon.IsExternal: 9, 0
+  Pset_CoveringCommon.IsExternal: 6, 0
+  Pset_FurnitureTypeCommon.Reference: 23, 0
+  Pset_MemberCommon.Span: 10, 0
+  Pset_SpaceCommon.IsExternal: 11, 0
+Revit's most common values where rvt-rs writes none:
+  Pset_AirSideSystemInformation.Name: ('IfcLabel', 'Level 1') x1, ('IfcLabel', 'Level 2') x1, ('IfcLabel', '4 Tatami') x1, ('IfcLabel', 'Terrace') x1; on IfcSpace x11, IfcBuildingStorey x2
+  Pset_ProductRequirements.Name: ('IfcLabel', 'Level 1') x1, ('IfcLabel', 'Level 2') x1, ('IfcLabel', '4 Tatami') x1, ('IfcLabel', 'Terrace') x1; on IfcSpace x11, IfcBuildingStorey x2
+  Pset_MemberCommon.IsExternal: ('IfcBoolean', False) x10; on IfcMember x10
+  Pset_ConcreteElementGeneral.FireRating: ('IfcLabel', '2') x8; on IfcWallStandardCase x6, IfcOpeningElement x1, IfcWallType x1
+  Pset_WallCommon.LoadBearing: ('IfcBoolean', False) x7; on IfcWallStandardCase x6, IfcOpeningElement x1
+  Pset_OpeningElementCommon.Reference: ('IfcIdentifier', '-') x2; on IfcOpeningElement x2
+  Pset_SlabCommon.LoadBearing: ('IfcBoolean', False) x2; on IfcSlab x2
+  Pset_PlateCommon.IsExternal: ('IfcBoolean', False) x2; on IfcPlate x2
+  Pset_ReinforcementBarPitchOfSlab.Description: ('IfcText', '75mm FINISH T&G FLOORING OVER 25x50mm SLEEPERS  x1, ('IfcText', '300mm WIDE x 300mm LONG x 10mm THICK PORCELAIN  x1; on IfcSlabType x2
+  Pset_DoorCommon.ThermalTransmittance: ('IfcThermalTransmittanceMeasure', 3.1287229130000003) x2; on IfcDoorStyle x2
+  Pset_ReinforcementBarPitchOfWall.Description: ('IfcText', '2') x1; on IfcWallType x1
+  Pset_WallCommon.FireRating: ('IfcLabel', '2') x1; on IfcWallType x1
+  Pset_WallCommon.ThermalTransmittance: ('IfcThermalTransmittanceMeasure', 0.24714828897338403) x1; on IfcWallType x1
+  Pset_CoveringCommon.TotalThickness: ('IfcPositiveLengthMeasure', 0.115) x1; on IfcCoveringType x1
+exit 0

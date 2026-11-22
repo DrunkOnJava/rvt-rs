@@ -1,0 +1,29 @@
+Revit values on objects rvt-rs writes: 458; equal: 314; different: 0; missing: 144; rvt-rs values Revit does not write: 2
+  Pset_AirSideSystemInformation.Name: 2, equal 0, different 0, missing 2
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 1, different 0, missing 0
+  Pset_BuildingStoreyCommon.AboveGround: 2, equal 2, different 0, missing 0
+  Pset_DuctConnection.ConnectionType: 67, equal 0, different 0, missing 67
+  Pset_ElectricalDeviceCommon.NumberOfPoles: 1, equal 0, different 0, missing 1
+  Pset_EnvironmentalImpactIndicators.Reference: 123, equal 123, different 0, missing 0
+  Pset_ManufacturerOccurrence.SerialNumber: 1, equal 1, different 0, missing 0
+  Pset_ManufacturerTypeInformation.Manufacturer: 5, equal 0, different 0, missing 5
+  Pset_PipeConnection.ConnectionType: 67, equal 0, different 0, missing 67
+  Pset_PipeFittingTypeCommon.Reference: 54, equal 54, different 0, missing 0
+  Pset_PipeSegmentOccurrence.InvertElevation: 63, equal 63, different 0, missing 0
+  Pset_PipeSegmentTypeCommon.Reference: 63, equal 63, different 0, missing 0
+  Pset_ProductRequirements.Name: 2, equal 0, different 0, missing 2
+  Pset_SanitaryTerminalTypeCommon.Reference: 6, equal 6, different 0, missing 0
+IFC2X3 lengths IFC4 holds as quantities, not scored here: 126
+IFC2X3 values no IFC4 set Revit's export writes holds, in rvt-rs's own set, not scored here: 42
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+  Pset_EnvironmentalImpactIndicators.Reference: 0, 1
+  Pset_SanitaryTerminalTypeCommon.Reference: 0, 1
+Revit's most common values where rvt-rs writes none:
+  Pset_DuctConnection.ConnectionType: ('list', (('IfcText', 'Generic'),)) x67; on IfcFlowSegment x63, IfcPipeFittingType x4
+  Pset_PipeConnection.ConnectionType: ('list', (('IfcLabel', 'Generic'),)) x67; on IfcFlowSegment x63, IfcPipeFittingType x4
+  Pset_ManufacturerTypeInformation.Manufacturer: ('IfcLabel', 'Generic') x4, ('IfcLabel', 'A.O. SMITH') x1; on IfcDistributionElementType x5
+  Pset_AirSideSystemInformation.Name: ('IfcLabel', 'Level 1') x1, ('IfcLabel', 'Level 2') x1; on IfcBuildingStorey x2
+  Pset_ProductRequirements.Name: ('IfcLabel', 'Level 1') x1, ('IfcLabel', 'Level 2') x1; on IfcBuildingStorey x2
+  Pset_ElectricalDeviceCommon.NumberOfPoles: ('IfcInteger', 2) x1; on IfcDistributionElementType x1
+exit 0

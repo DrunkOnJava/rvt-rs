@@ -1,0 +1,10 @@
+record-box bodies: 138; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcDoor                          132       0       0       0     132       0       0    0.201
+        70  I_Single-Flush:3 x 8
+        50  I_Single-Flush:3 x 8 2 Hour
+        12  M_Single-Flush:0915 x 2134mm
+IfcWindow                          6       0       0       0       6       0       0    0.178
+         6  Single Window:Standard
+total                            138       0       0       0     138       0       0
+exit 0

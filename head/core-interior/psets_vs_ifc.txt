@@ -1,0 +1,26 @@
+Revit values on objects rvt-rs writes: 0; equal: 0; different: 0; missing: 0; rvt-rs values Revit does not write: 4130
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+  Pset_BuildingCommon.IsLandmarked: 1, 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, 0
+  Pset_BuildingStoreyCommon.AboveGround: 15, 0
+  Pset_ColumnCommon.IsExternal: 256, 0
+  Pset_ColumnCommon.Reference: 256, 0
+  Pset_DoorCommon.IsExternal: 132, 0
+  Pset_DoorCommon.Reference: 132, 0
+  Pset_EnvironmentalImpactIndicators.Reference: 854, 0
+  Pset_OpeningElementCommon.Reference: 62, 0
+  Pset_ReinforcementBarPitchOfColumn.Reference: 256, 0
+  Pset_ReinforcementBarPitchOfSlab.Reference: 80, 0
+  Pset_ReinforcementBarPitchOfWall.Reference: 360, 0
+  Pset_ShadingDeviceCommon.Reference: 20, 0
+  Pset_SlabCommon.PitchAngle: 80, 0
+  Pset_SlabCommon.Reference: 80, 0
+  Pset_SpaceCommon.IsExternal: 116, 0
+  Pset_SpaceCommon.Reference: 116, 0
+  Pset_WallCommon.ExtendToStructure: 360, 0
+  Pset_WallCommon.FireRating: 227, 0
+  Pset_WallCommon.IsExternal: 360, 0
+  Pset_WallCommon.Reference: 360, 0
+  Pset_WindowCommon.Reference: 6, 0
+Revit's most common values where rvt-rs writes none:
+exit 0

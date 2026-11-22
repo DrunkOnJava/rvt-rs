@@ -1,0 +1,15 @@
+record-box bodies: 16; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcBuildingElementProxy            9       0       0       0       9       0       0    0.144
+         3  Muntin Pattern_2x2:Muntin Pattern_2x2
+         3  Trim-Window-Exterior-Flat:with Sill
+         3  Trim-Window-Interior-Flat:Picture Frame
+IfcWindow                          3       0       0       0       3       0       0    0.170
+         3  Window-Fixed:24" x 36"
+IfcRailing                         2       0       0       0       2       0       0    0.079
+         2  Railing:Railing 1
+IfcDoor                            1       0       0       0       1       0       0    0.215
+         1  Door-Passage-Single-Full_Lite:36" x 84" Storefront
+IfcStair                           1       0       0       0       0       0       1      nan
+total                             16       0       0       0      15       0       1
+exit 0
