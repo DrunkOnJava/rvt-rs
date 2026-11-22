@@ -1,0 +1,43 @@
+export schema IFC2X3; elements with a numeric Tag: 74
+written instances 92; in the export 74, not in it 18, export elements not written 0
+category | name | any | rule (in export) | written (in export, not in export) | export classes of the written, categories of the instances
+-2000107 | unnamed | 3 | 0 (0) | 0 (0, 0) | 
+-2000500 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000977 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001140 | Mechanical_Equipment | 1 | 1 (1) | 1 (1, 0) | IfcBuildingElementProxy 1 | category '-' 1 | type object IfcBuildingElementProxyType/NOTDEFINED 1
+-2001271 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001272 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001352 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2003600 | unnamed | 9 | 9 (0) | 9 (0, 9) | 
+    not in the export: 425275,425277,425279,425281,425283,425285,425287,425289,425291
+-2008000 | Ducts | 25 | 25 (25) | 25 (25, 0) | IfcFlowSegment 25 | category '-' 25 | type object IfcDuctSegmentType/NOTDEFINED 25
+-2008010 | Duct_Fittings | 32 | 32 (32) | 32 (32, 0) | IfcFlowFitting 32 | category '-' 32 | type object IfcDuctFittingType/NOTDEFINED 32
+-2008013 | Air_Terminals | 7 | 7 (7) | 7 (7, 0) | IfcFlowTerminal 7 | category '-' 7 | type object IfcAirTerminalType/NOTDEFINED 7
+-2008044 | Pipes | 6 | 6 (6) | 6 (6, 0) | IfcFlowSegment 6 | category '-' 6 | type object IfcPipeSegmentType/NOTDEFINED 6
+-2008045 | unnamed | 6 | 6 (0) | 6 (0, 6) | 
+    not in the export: 441732,441850,441893,442027,442036,442190
+-2008049 | Pipe_Fittings | 3 | 3 (3) | 3 (3, 0) | IfcFlowFitting 3 | category '-' 3 | type object IfcPipeFittingType/NOTDEFINED 3
+-2008072 | unnamed | 3 | 3 (0) | 3 (0, 3) | 
+    not in the export: 442038,442041,442192
+export elements not written, by IFC class and where rvt-rs holds their id:
+category census export: schema IFC2X3; elements 74; numeric Tag 74
+category census export: IfcBuildingElementProxy 1 (numeric Tag 1)
+category census export: IfcFlowFitting 35 (numeric Tag 35)
+category census export: IfcFlowSegment 31 (numeric Tag 31)
+category census export: IfcFlowTerminal 7 (numeric Tag 7)
+category census: -2000107 unnamed any 3; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 3 (0 in export)
+category census: -2000500 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 1 (0 in export)
+category census: -2000977 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001140 Mechanical_Equipment any 1; placed 1 (1 in export, IfcBuildingElementProxy=1); written 1 (1 in export, 0 not)
+category census: -2001271 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001272 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001352 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 1 (0 in export)
+category census: -2003600 unnamed any 9; placed 9 (0 in export); written 9 (0 in export, 9 not)
+category census: -2008000 Ducts any 25; placed 25 (25 in export, IfcFlowSegment=25); written 25 (25 in export, 0 not)
+category census: -2008010 Duct_Fittings any 32; placed 32 (32 in export, IfcFlowFitting=32); written 32 (32 in export, 0 not)
+category census: -2008013 Air_Terminals any 7; placed 7 (7 in export, IfcFlowTerminal=7); written 7 (7 in export, 0 not)
+category census: -2008044 Pipes any 6; placed 6 (6 in export, IfcFlowSegment=6); written 6 (6 in export, 0 not)
+category census: -2008045 unnamed any 6; placed 6 (0 in export); written 6 (0 in export, 6 not)
+category census: -2008049 Pipe_Fittings any 3; placed 3 (3 in export, IfcFlowFitting=3); written 3 (3 in export, 0 not)
+category census: -2008072 unnamed any 3; placed 3 (0 in export); written 3 (0 in export, 3 not)
+exit 0

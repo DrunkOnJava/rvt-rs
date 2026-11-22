@@ -1,0 +1,23 @@
+export schema IFC4; elements with a numeric Tag: 8
+written instances 8; in the export 8, not in it 0, export elements not written 0
+category | name | any | rule (in export) | written (in export, not in export) | export classes of the written, categories of the instances
+-2000011 | Walls | 7 | 7 (7) | 7 (7, 0) | IfcWall 7 | category '-' 7 | type object IfcWallType/STANDARD 7
+-2000035 | Roofs | 1 | 1 (1) | 1 (1, 0) | IfcSlab 1 | category '-' 1 | type object IfcRoofType/NOTDEFINED 1
+-2000045 | Lines:_<Sketch> | 12 | 12 (0) | 0 (0, 0) | 
+-2000500 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000977 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001271 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001272 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+export elements not written, by IFC class and where rvt-rs holds their id:
+category census export: schema IFC4; elements 14; numeric Tag 8
+category census export: IfcRoof 1 (numeric Tag 1)
+category census export: IfcSlab 6 (numeric Tag 6)
+category census export: IfcWall 7 (numeric Tag 7)
+category census: -2000011 Walls any 7; placed 7 (7 in export, IfcWall=7); written 7 (7 in export, 0 not)
+category census: -2000035 Roofs any 1; placed 1 (1 in export, IfcSlab=1); written 1 (1 in export, 0 not)
+category census: -2000045 Lines:_<Sketch> any 12; placed 12 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 10 (0 in export); refused no_body_line 2 (0 in export)
+category census: -2000500 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 1 (0 in export)
+category census: -2000977 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001271 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001272 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+exit 0

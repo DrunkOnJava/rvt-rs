@@ -1,0 +1,80 @@
+export schema IFC4; elements with a numeric Tag: 132
+written instances 233; in the export 132, not in it 101, export elements not written 0
+category | name | any | rule (in export) | written (in export, not in export) | export classes of the written, categories of the instances
+-2000011 | Walls | 2 | 2 (2) | 2 (2, 0) | IfcWall 2 | category '-' 2 | type object IfcWallType/SOLIDWALL 2
+-2000045 | Lines:_<Sketch> | 328 | 328 (0) | 3 (0, 3) | 
+    not in the export: 1388558,1388568,1389150
+-2000051 | Lines | 137 | 137 (0) | 0 (0, 0) | 
+-2000066 | unnamed | 25 | 25 (0) | 0 (0, 0) | 
+-2000067 | unnamed | 12 | 12 (0) | 0 (0, 0) | 
+-2000068 | unnamed | 12 | 12 (0) | 0 (0, 0) | 
+-2000069 | unnamed | 5 | 5 (0) | 0 (0, 0) | 
+-2000079 | unnamed | 4 | 4 (0) | 0 (0, 0) | 
+-2000126 | Railings | 1 | 1 (1) | 1 (1, 0) | IfcRailing 1 | category '-' 1 | type object - 1
+-2000127 | unnamed | 6 | 0 (0) | 0 (0, 0) | 
+-2000151 | Generic_Models | 2 | 1 (1) | 1 (1, 0) | IfcBuildingElementProxy 1 | category '-' 1 | type object IfcBuildingElementProxyType/USERDEFINED 1
+-2000160 | unnamed | 7 | 7 (0) | 7 (0, 7) | 
+    not in the export: 1396604,1396610,1396616,1396622,1396628,1396804,1396807
+-2000180 | unnamed | 6 | 6 (6) | 6 (6, 0) | IfcRamp 1, IfcRampFlight 5 | category '-' 6 | type object - 5 | type object IfcRampType/STRAIGHT_RUN_RAMP 1
+-2000197 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000280 | unnamed | 8 | 0 (0) | 0 (0, 0) | 
+-2000400 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000500 | unnamed | 2 | 0 (0) | 0 (0, 0) | 
+-2000515 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000538 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000977 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001079 | unnamed | 7 | 7 (6) | 6 (6, 0) | IfcGeographicElement 6 | category '-' 6 | type object IfcGeographicElementType/TERRAIN 6
+-2001180 | Parking | 98 | 94 (0) | 91 (0, 91) | 
+    not in the export: 1371633,1371641,1371649,1371661,1371680,1371681,1371682,1371683,1371691,1371692,1371693,1371694,1371704,1371705,1371706,1371707,1371715,1371716,1371717,1371718
+-2001260 | unnamed | 111 | 104 (104) | 104 (104, 0) | IfcGeographicElement 98, IfcWasteTerminal 6 | category '-' 104 | type object IfcGeographicElementType/USERDEFINED 98 | type object IfcWasteTerminalType/WASTEDISPOSALUNIT 6
+-2001271 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001272 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001350 | Specialty_Equipment | 12 | 11 (11) | 11 (11, 0) | IfcWasteTerminal 11 | category '-' 11 | type object IfcWasteTerminalType/GULLYSUMP 11
+-2001360 | Planting | 2 | 1 (1) | 1 (1, 0) | IfcGeographicElement 1 | category '-' 1 | type object IfcGeographicElementType/USERDEFINED 1
+-2002000 | unnamed | 14 | 14 (0) | 0 (0, 0) | 
+-2003000 | unnamed | 5 | 0 (0) | 0 (0, 0) | 
+-2006020 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2006040 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2006045 | unnamed | 4 | 0 (0) | 0 (0, 0) | 
+export elements not written, by IFC class and where rvt-rs holds their id:
+category census export: schema IFC4; elements 137; numeric Tag 132
+category census export: IfcBuildingElementProxy 1 (numeric Tag 1)
+category census export: IfcGeographicElement 105 (numeric Tag 105)
+category census export: IfcRailing 1 (numeric Tag 1)
+category census export: IfcRamp 6 (numeric Tag 6)
+category census export: IfcRampFlight 5 (numeric Tag 5)
+category census export: IfcWall 2 (numeric Tag 2)
+category census export: IfcWasteTerminal 17 (numeric Tag 17)
+category census: -2000011 Walls any 2; placed 2 (2 in export, IfcWall=2); written 2 (2 in export, 0 not)
+category census: -2000045 Lines:_<Sketch> any 328; placed 328 (0 in export); written 3 (0 in export, 3 not); refused no_body_flat 144 (0 in export); refused no_body_line 181 (0 in export)
+category census: -2000051 Lines any 137; placed 137 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 6 (0 in export); refused no_body_line 131 (0 in export)
+category census: -2000066 unnamed any 25; placed 25 (0 in export); written 0 (0 in export, 0 not); refused no_body_line 25 (0 in export)
+category census: -2000067 unnamed any 12; placed 12 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 1 (0 in export); refused no_body_line 11 (0 in export)
+category census: -2000068 unnamed any 12; placed 12 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 3 (0 in export); refused no_body_line 9 (0 in export)
+category census: -2000069 unnamed any 5; placed 5 (0 in export); written 0 (0 in export, 0 not); refused no_body_line 5 (0 in export)
+category census: -2000079 unnamed any 4; placed 4 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 4 (0 in export)
+category census: -2000126 Railings any 1; placed 1 (1 in export, IfcRailing=1); written 1 (1 in export, 0 not)
+category census: -2000127 unnamed any 6; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 6 (0 in export)
+category census: -2000151 Generic_Models any 2; placed 1 (1 in export, IfcBuildingElementProxy=1); written 1 (1 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2000160 unnamed any 7; placed 7 (0 in export); written 7 (0 in export, 7 not)
+category census: -2000180 unnamed any 6; placed 6 (6 in export, IfcRamp=1, IfcRampFlight=5); written 6 (6 in export, 0 not)
+category census: -2000197 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2000280 unnamed any 8; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 8 (0 in export)
+category census: -2000400 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2000500 unnamed any 2; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 2 (0 in export)
+category census: -2000515 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2000538 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2000977 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001079 unnamed any 7; placed 7 (6 in export, IfcGeographicElement=6); written 6 (6 in export, 0 not); refused phase 1 (0 in export)
+category census: -2001180 Parking any 98; placed 94 (0 in export); written 91 (0 in export, 91 not); unplaced symbol 4 (0 in export); refused no_body_flat 3 (0 in export)
+category census: -2001260 unnamed any 111; placed 104 (104 in export, IfcGeographicElement=98, IfcWasteTerminal=6); written 104 (104 in export, 0 not); unplaced symbol 7 (0 in export)
+category census: -2001271 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001272 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001350 Specialty_Equipment any 12; placed 11 (11 in export, IfcWasteTerminal=11); written 11 (11 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2001360 Planting any 2; placed 1 (1 in export, IfcGeographicElement=1); written 1 (1 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2002000 unnamed any 14; placed 14 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 14 (0 in export)
+category census: -2003000 unnamed any 5; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 5 (0 in export)
+category census: -2006020 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2006040 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2006045 unnamed any 4; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 4 (0 in export)
+exit 0

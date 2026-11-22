@@ -1,0 +1,59 @@
+export schema IFC2X3; elements with a numeric Tag: 73
+written instances 85; in the export 73, not in it 12, export elements not written 0
+category | name | any | rule (in export) | written (in export, not in export) | export classes of the written, categories of the instances
+-2000011 | Walls | 8 | 8 (8) | 8 (8, 0) | IfcCurtainWall 1, IfcWallStandardCase 7 | category '-' 8 | type object IfcCurtainWallType/NOTDEFINED 1 | type object IfcWallType/STANDARD 7
+-2000023 | Doors | 6 | 6 (5) | 6 (5, 1) | IfcDoor 5 | category '-' 5 | type object IfcDoorStyle/- 5
+    not in the export: 417199
+-2000032 | Floors | 2 | 2 (2) | 2 (2, 0) | IfcSlab 2 | category '-' 2 | type object IfcSlabType/FLOOR 2
+-2000038 | Ceilings | 6 | 6 (6) | 6 (6, 0) | IfcCovering 6 | category '-' 6 | type object IfcCoveringType/CEILING 6
+-2000045 | Lines:_<Sketch> | 41 | 41 (0) | 0 (0, 0) | 
+-2000066 | unnamed | 10 | 10 (0) | 0 (0, 0) | 
+-2000080 | Furniture | 13 | 13 (13) | 13 (13, 0) | IfcFurnishingElement 13 | category '-' 13 | type object IfcFurnitureType/- 13
+-2000126 | Railings | 1 | 1 (1) | 1 (1, 0) | IfcRailing 1 | category '-' 1 | type object IfcRailingType/NOTDEFINED 1
+-2000160 | unnamed | 13 | 11 (0) | 11 (0, 11) | 
+    not in the export: 348738,348762,349701,355008,356992,357940,357959,360344,367791,373078,377333
+-2000170 | Curtain_Panels | 4 | 2 (2) | 2 (2, 0) | IfcPlate 2 | category '-' 2 | type object IfcPlateType/CURTAIN_PANEL 2
+-2000171 | Curtain_Wall_Mullions | 19 | 10 (10) | 10 (10, 0) | IfcMember 10 | category '-' 10 | type object IfcMemberType/MULLION 10
+-2000321 | unnamed | 3 | 3 (0) | 0 (0, 0) | 
+-2000500 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000977 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001000 | Casework | 10 | 10 (10) | 10 (10, 0) | IfcFurnishingElement 10 | category '-' 10 | type object IfcFurnitureType/- 10
+-2001160 | Plumbing_Fixtures | 7 | 7 (7) | 7 (7, 0) | IfcFlowTerminal 7 | category '-' 7 | type object IfcDistributionElementType/- 7
+-2001271 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001272 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001350 | Specialty_Equipment | 9 | 9 (9) | 9 (9, 0) | IfcBuildingElementProxy 9 | category '-' 9 | type object IfcBuildingElementProxyType/NOTDEFINED 9
+-2001352 | unnamed | 3 | 0 (0) | 0 (0, 0) | 
+export elements not written, by IFC class and where rvt-rs holds their id:
+category census export: schema IFC2X3; elements 73; numeric Tag 73
+category census export: IfcBuildingElementProxy 9 (numeric Tag 9)
+category census export: IfcCovering 6 (numeric Tag 6)
+category census export: IfcCurtainWall 1 (numeric Tag 1)
+category census export: IfcDoor 5 (numeric Tag 5)
+category census export: IfcFlowTerminal 7 (numeric Tag 7)
+category census export: IfcFurnishingElement 23 (numeric Tag 23)
+category census export: IfcMember 10 (numeric Tag 10)
+category census export: IfcPlate 2 (numeric Tag 2)
+category census export: IfcRailing 1 (numeric Tag 1)
+category census export: IfcSlab 2 (numeric Tag 2)
+category census export: IfcWallStandardCase 7 (numeric Tag 7)
+category census: -2000011 Walls any 8; placed 8 (8 in export, IfcCurtainWall=1, IfcWallStandardCase=7); written 8 (8 in export, 0 not)
+category census: -2000023 Doors any 6; placed 6 (5 in export, IfcDoor=5); written 6 (5 in export, 1 not)
+category census: -2000032 Floors any 2; placed 2 (2 in export, IfcSlab=2); written 2 (2 in export, 0 not)
+category census: -2000038 Ceilings any 6; placed 6 (6 in export, IfcCovering=6); written 6 (6 in export, 0 not)
+category census: -2000045 Lines:_<Sketch> any 41; placed 41 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 2 (0 in export); refused no_body_line 39 (0 in export)
+category census: -2000066 unnamed any 10; placed 10 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 3 (0 in export); refused no_body_line 7 (0 in export)
+category census: -2000080 Furniture any 13; placed 13 (13 in export, IfcFurnishingElement=13); written 13 (13 in export, 0 not)
+category census: -2000126 Railings any 1; placed 1 (1 in export, IfcRailing=1); written 1 (1 in export, 0 not)
+category census: -2000160 unnamed any 13; placed 11 (0 in export); written 11 (0 in export, 11 not); unplaced other_kind 2 (0 in export)
+category census: -2000170 Curtain_Panels any 4; placed 2 (2 in export, IfcPlate=2); written 2 (2 in export, 0 not); unplaced symbol 2 (0 in export)
+category census: -2000171 Curtain_Wall_Mullions any 19; placed 10 (10 in export, IfcMember=10); written 10 (10 in export, 0 not); unplaced symbol 9 (0 in export)
+category census: -2000321 unnamed any 3; placed 3 (0 in export); written 0 (0 in export, 0 not); refused no_body_line 3 (0 in export)
+category census: -2000500 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 1 (0 in export)
+category census: -2000977 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001000 Casework any 10; placed 10 (10 in export, IfcFurnishingElement=10); written 10 (10 in export, 0 not)
+category census: -2001160 Plumbing_Fixtures any 7; placed 7 (7 in export, IfcFlowTerminal=7); written 7 (7 in export, 0 not)
+category census: -2001271 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001272 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001350 Specialty_Equipment any 9; placed 9 (9 in export, IfcBuildingElementProxy=9); written 9 (9 in export, 0 not)
+category census: -2001352 unnamed any 3; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 3 (0 in export)
+exit 0

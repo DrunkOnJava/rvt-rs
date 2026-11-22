@@ -1,0 +1,44 @@
+export schema IFC4; elements with a numeric Tag: 23
+written instances 25; in the export 23, not in it 2, export elements not written 0
+category | name | any | rule (in export) | written (in export, not in export) | export classes of the written, categories of the instances
+-2000011 | Walls | 5 | 5 (5) | 5 (5, 0) | IfcWall 5 | category '-' 5 | type object IfcWallType/STANDARD 5
+-2000014 | Windows | 3 | 3 (3) | 3 (3, 0) | IfcWindow 3 | category '-' 3 | type object IfcWindowType/WINDOW 3
+-2000023 | Doors | 1 | 1 (1) | 1 (1, 0) | IfcDoor 1 | category '-' 1 | type object IfcDoorType/DOOR 1
+-2000035 | Roofs | 1 | 1 (1) | 1 (1, 0) | IfcSlab 1 | category '-' 1 | type object IfcRoofType/NOTDEFINED 1
+-2000045 | Lines:_<Sketch> | 6 | 6 (0) | 0 (0, 0) | 
+-2000120 | Stairs | 1 | 1 (1) | 1 (1, 0) | IfcStair 1 | category '-' 1 | type object IfcStairType/STRAIGHT_RUN_STAIR 1
+-2000126 | Railings | 2 | 2 (2) | 2 (2, 0) | IfcRailing 2 | category '-' 2 | type object IfcRailingType/NOTDEFINED 2
+-2000151 | Generic_Models | 9 | 9 (9) | 9 (9, 0) | IfcBuildingElementProxy 9 | category '-' 9 | type object IfcBuildingElementProxyType/NOTDEFINED 9
+-2000160 | unnamed | 2 | 2 (0) | 2 (0, 2) | 
+    not in the export: 3431,3433
+-2000500 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000919 | Stairs:_Runs | 1 | 1 (1) | 1 (1, 0) | IfcStairFlight 1 | category '-' 1 | type object IfcStairFlightType/STRAIGHT 1
+-2000977 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001271 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001272 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+export elements not written, by IFC class and where rvt-rs holds their id:
+category census export: schema IFC4; elements 24; numeric Tag 23
+category census export: IfcBuildingElementProxy 9 (numeric Tag 9)
+category census export: IfcDoor 1 (numeric Tag 1)
+category census export: IfcRailing 2 (numeric Tag 2)
+category census export: IfcRoof 1 (numeric Tag 1)
+category census export: IfcSlab 1 (numeric Tag 1)
+category census export: IfcStair 1 (numeric Tag 1)
+category census export: IfcStairFlight 1 (numeric Tag 1)
+category census export: IfcWall 5 (numeric Tag 5)
+category census export: IfcWindow 3 (numeric Tag 3)
+category census: -2000011 Walls any 5; placed 5 (5 in export, IfcWall=5); written 5 (5 in export, 0 not)
+category census: -2000014 Windows any 3; placed 3 (3 in export, IfcWindow=3); written 3 (3 in export, 0 not)
+category census: -2000023 Doors any 1; placed 1 (1 in export, IfcDoor=1); written 1 (1 in export, 0 not)
+category census: -2000035 Roofs any 1; placed 1 (1 in export, IfcSlab=1); written 1 (1 in export, 0 not)
+category census: -2000045 Lines:_<Sketch> any 6; placed 6 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 1 (0 in export); refused no_body_line 5 (0 in export)
+category census: -2000120 Stairs any 1; placed 1 (1 in export, IfcStair=1); written 1 (1 in export, 0 not)
+category census: -2000126 Railings any 2; placed 2 (2 in export, IfcRailing=2); written 2 (2 in export, 0 not)
+category census: -2000151 Generic_Models any 9; placed 9 (9 in export, IfcBuildingElementProxy=9); written 9 (9 in export, 0 not)
+category census: -2000160 unnamed any 2; placed 2 (0 in export); written 2 (0 in export, 2 not)
+category census: -2000500 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 1 (0 in export)
+category census: -2000919 Stairs:_Runs any 1; placed 1 (1 in export, IfcStairFlight=1); written 1 (1 in export, 0 not)
+category census: -2000977 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001271 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001272 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+exit 0

@@ -1,0 +1,37 @@
+export schema IFC2X3; elements with a numeric Tag: 123
+written instances 252; in the export 123, not in it 129, export elements not written 0
+category | name | any | rule (in export) | written (in export, not in export) | export classes of the written, categories of the instances
+-2000107 | unnamed | 3 | 0 (0) | 0 (0, 0) | 
+-2000500 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000977 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001160 | Plumbing_Fixtures | 7 | 7 (6) | 7 (6, 1) | IfcFlowTerminal 6 | category '-' 6 | type object IfcDistributionElementType/- 6
+    not in the export: 442378
+-2001271 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001272 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001352 | unnamed | 3 | 0 (0) | 0 (0, 0) | 
+-2003600 | unnamed | 11 | 11 (0) | 11 (0, 11) | 
+    not in the export: 448930,448931,448932,448933,448934,448935,448936,448937,448938,448939,448940
+-2008044 | Pipes | 63 | 63 (63) | 63 (63, 0) | IfcFlowSegment 63 | category '-' 63 | type object IfcPipeSegmentType/NOTDEFINED 63
+-2008045 | unnamed | 63 | 63 (0) | 63 (0, 63) | 
+    not in the export: 443720,443801,443889,443891,443896,443921,443923,443943,444000,444010,444094,444105,444125,444360,444369,444382,444394,444407,444419,444488
+-2008049 | Pipe_Fittings | 54 | 54 (54) | 54 (54, 0) | IfcFlowFitting 54 | category '-' 54 | type object IfcPipeFittingType/NOTDEFINED 54
+-2008072 | unnamed | 54 | 54 (0) | 54 (0, 54) | 
+    not in the export: 443814,443898,443906,443908,443938,443944,443958,444096,444106,444108,444371,444374,444377,444395,444397,444490,444500,444504,444600,444610
+export elements not written, by IFC class and where rvt-rs holds their id:
+category census export: schema IFC2X3; elements 123; numeric Tag 123
+category census export: IfcFlowFitting 54 (numeric Tag 54)
+category census export: IfcFlowSegment 63 (numeric Tag 63)
+category census export: IfcFlowTerminal 6 (numeric Tag 6)
+category census: -2000107 unnamed any 3; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 3 (0 in export)
+category census: -2000500 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 1 (0 in export)
+category census: -2000977 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001160 Plumbing_Fixtures any 7; placed 7 (6 in export, IfcFlowTerminal=6); written 7 (6 in export, 1 not)
+category census: -2001271 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001272 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001352 unnamed any 3; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 3 (0 in export)
+category census: -2003600 unnamed any 11; placed 11 (0 in export); written 11 (0 in export, 11 not)
+category census: -2008044 Pipes any 63; placed 63 (63 in export, IfcFlowSegment=63); written 63 (63 in export, 0 not)
+category census: -2008045 unnamed any 63; placed 63 (0 in export); written 63 (0 in export, 63 not)
+category census: -2008049 Pipe_Fittings any 54; placed 54 (54 in export, IfcFlowFitting=54); written 54 (54 in export, 0 not)
+category census: -2008072 unnamed any 54; placed 54 (0 in export); written 54 (0 in export, 54 not)
+exit 0

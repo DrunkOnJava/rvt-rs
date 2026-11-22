@@ -1,0 +1,166 @@
+export schema IFC2X3; elements with a numeric Tag: 1321
+written instances 1870; in the export 1314, not in it 556, export elements not written 7
+category | name | any | rule (in export) | written (in export, not in export) | export classes of the written, categories of the instances
+-2000011 | Walls | 260 | 256 (256) | 256 (256, 0) | IfcCurtainWall 9, IfcWall 12, IfcWallStandardCase 235 | category '-' 256 | type object IfcCurtainWallType/NOTDEFINED 9 | type object IfcWallType/STANDARD 247
+-2000014 | Windows | 71 | 70 (70) | 70 (70, 0) | IfcWindow 70 | category '-' 70 | type object IfcWindowStyle/- 70
+-2000023 | Doors | 72 | 68 (68) | 68 (68, 0) | IfcDoor 68 | category '-' 68 | type object IfcDoorStyle/- 68
+-2000032 | Floors | 9 | 9 (9) | 9 (9, 0) | IfcSlab 9 | category '-' 9 | type object IfcSlabType/FLOOR 9
+-2000035 | Roofs | 10 | 8 (8) | 8 (8, 0) | IfcRoof 2, IfcSlab 6 | category '-' 8 | type object - 8
+-2000045 | Lines:_<Sketch> | 157 | 157 (0) | 0 (0, 0) | 
+-2000051 | Lines | 126 | 126 (0) | 0 (0, 0) | 
+-2000066 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2000067 | unnamed | 12 | 12 (0) | 0 (0, 0) | 
+-2000068 | unnamed | 39 | 39 (0) | 0 (0, 0) | 
+-2000079 | unnamed | 10 | 10 (0) | 0 (0, 0) | 
+-2000095 | unnamed | 20 | 19 (0) | 19 (0, 19) | 
+    not in the export: 676616,678264,682773,682830,735089,735128,735187,735204,745007,745438,745467,1825715,1825768,1825798,1825829,1827397,1827411,1827425,1827439
+-2000107 | unnamed | 5 | 0 (0) | 0 (0, 0) | 
+-2000120 | Stairs | 6 | 6 (6) | 6 (6, 0) | IfcStair 6 | category '-' 6 | type object - 6
+-2000126 | Railings | 14 | 14 (14) | 14 (14, 0) | IfcRailing 14 | category '-' 14 | type object - 14
+-2000127 | unnamed | 80 | 0 (0) | 0 (0, 0) | 
+-2000150 | unnamed | 2 | 0 (0) | 0 (0, 0) | 
+-2000151 | Generic_Models | 25 | 22 (22) | 22 (22, 0) | IfcBuildingElementProxy 22 | category '-' 22 | type object IfcBuildingElementProxyType/NOTDEFINED 22
+-2000160 | unnamed | 73 | 73 (0) | 73 (0, 73) | 
+    not in the export: 1809820,1809828,1809907,1809910,1809913,1809916,1809919,1809922,1809925,1809928,1809931,1809934,1809937,1809940,1809943,1809946,1809949,1809952,1809978,1810599
+-2000170 | Curtain_Panels | 71 | 67 (67) | 67 (67, 0) | IfcPlate 67 | category '-' 67 | type object IfcPlateType/CURTAIN_PANEL 67
+-2000171 | Curtain_Wall_Mullions | 220 | 206 (206) | 206 (206, 0) | IfcMember 206 | category '-' 206 | type object IfcMemberType/MEMBER 206
+-2000192 | unnamed | 41 | 41 (0) | 0 (0, 0) | 
+-2000197 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000280 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000321 | unnamed | 63 | 63 (0) | 0 (0, 0) | 
+-2000400 | unnamed | 5 | 0 (0) | 0 (0, 0) | 
+-2000460 | unnamed | 2 | 0 (0) | 0 (0, 0) | 
+-2000480 | unnamed | 2 | 0 (0) | 0 (0, 0) | 
+-2000515 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2000530 | unnamed | 14 | 14 (0) | 6 (0, 6) | 
+    not in the export: 567854,570926,570941,572233,572372,572502
+-2000831 | unnamed | 7 | 7 (0) | 0 (0, 0) | 
+-2000919 | Stairs:_Runs | 6 | 6 (6) | 6 (6, 0) | IfcStairFlight 6 | category '-' 6 | type object - 6
+-2000945 | unnamed | 6 | 6 (0) | 0 (0, 0) | 
+-2000946 | unnamed | 14 | 14 (0) | 14 (0, 14) | 
+    not in the export: 567836,570910,570927,572215,572354,572484,799812,800388,800423,800444,800480,800501,800537,800558
+-2000954 | unnamed | 74 | 74 (0) | 0 (0, 0) | 
+-2001040 | Electrical_Equipment | 13 | 6 (6) | 6 (6, 0) | IfcBuildingElementProxy 6 | category '-' 6 | type object IfcBuildingElementProxyType/NOTDEFINED 6
+-2001140 | Mechanical_Equipment | 18 | 15 (15) | 15 (15, 0) | IfcBuildingElementProxy 15 | category '-' 15 | type object IfcBuildingElementProxyType/NOTDEFINED 15
+-2001271 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001272 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2001320 | Structural_Framing | 3 | 1 (1) | 1 (1, 0) | IfcBeam 1 | category '-' 1 | type object IfcBeamType/BEAM 1
+-2001330 | Structural_Columns | 148 | 114 (114) | 114 (114, 0) | IfcColumn 114 | category '-' 114 | type object IfcColumnType/COLUMN 114
+-2001391 | unnamed | 2 | 2 (2) | 2 (2, 0) | IfcFlowSegment 2 | category '-' 2 | type object IfcPipeSegmentType/GUTTER 2
+-2002000 | unnamed | 33 | 33 (0) | 0 (0, 0) | 
+-2003000 | unnamed | 8 | 0 (0) | 0 (0, 0) | 
+-2005002 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2005011 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2005020 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2005026 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2005100 | unnamed | 2 | 0 (0) | 0 (0, 0) | 
+-2006020 | unnamed | 4 | 0 (0) | 0 (0, 0) | 
+-2006040 | unnamed | 1 | 0 (0) | 0 (0, 0) | 
+-2006045 | unnamed | 5 | 0 (0) | 0 (0, 0) | 
+-2008044 | Pipes | 140 | 140 (140) | 140 (140, 0) | IfcFlowSegment 140 | category '-' 140 | type object IfcPipeSegmentType/NOTDEFINED 140
+-2008045 | unnamed | 140 | 140 (0) | 140 (0, 140) | 
+    not in the export: 725900,725909,726233,726239,726386,726403,726414,726429,726443,726753,726765,726775,726787,727201,727280,727300,727314,727422,727440,727449
+-2008049 | Pipe_Fittings | 181 | 128 (128) | 128 (128, 0) | IfcFlowFitting 128 | category '-' 128 | type object IfcPipeFittingType/NOTDEFINED 128
+-2008072 | unnamed | 128 | 128 (0) | 128 (0, 128) | 
+    not in the export: 726079,726231,726245,726401,726409,726426,726441,726449,726763,726771,726785,726795,727217,727296,727310,727324,727438,727446,727455,728618
+-2008126 | Cable_Tray_Fittings | 5 | 0 (0) | 0 (0, 0) | 
+-2008128 | Conduit_Fittings | 135 | 74 (74) | 74 (74, 0) | IfcFlowFitting 74 | category '-' 74 | type object IfcCableCarrierFittingType/NOTDEFINED 74
+-2008132 | Conduits | 102 | 102 (102) | 102 (102, 0) | IfcFlowSegment 102 | category '-' 102 | type object IfcCableCarrierSegmentType/NOTDEFINED 102
+-2008139 | unnamed | 102 | 102 (0) | 102 (0, 102) | 
+    not in the export: 745534,745543,745580,745598,745654,745661,745671,745874,746200,746314,746805,747159,747313,747326,748154,748249,748377,748386,748508,748522
+-2008141 | unnamed | 74 | 74 (0) | 74 (0, 74) | 
+    not in the export: 745567,745577,745603,745668,745678,745884,746815,747198,747201,747333,748171,748182,748375,748393,748527,748541,748549,748571,748712,748997
+-2009630 | unnamed | 1 | 1 (0) | 0 (0, 0) | 
+-2009636 | unnamed | 114 | 114 (0) | 0 (0, 0) | 
+-2009639 | unnamed | 9 | 9 (0) | 0 (0, 0) | 
+-2009645 | unnamed | 257 | 257 (0) | 0 (0, 0) | 
+export elements not written, by IFC class and where rvt-rs holds their id:
+  IfcElementAssembly: 3 (no frame 3)
+  IfcWallStandardCase: 4 (no frame 4)
+category census export: schema IFC2X3; elements 1327; numeric Tag 1321
+category census export: IfcBeam 1 (numeric Tag 1)
+category census export: IfcBuildingElementProxy 43 (numeric Tag 43)
+category census export: IfcColumn 114 (numeric Tag 114)
+category census export: IfcCurtainWall 9 (numeric Tag 9)
+category census export: IfcDoor 68 (numeric Tag 68)
+category census export: IfcElementAssembly 3 (numeric Tag 3)
+category census export: IfcFlowFitting 202 (numeric Tag 202)
+category census export: IfcFlowSegment 244 (numeric Tag 244)
+category census export: IfcMember 206 (numeric Tag 206)
+category census export: IfcPlate 67 (numeric Tag 67)
+category census export: IfcRailing 14 (numeric Tag 14)
+category census export: IfcRoof 8 (numeric Tag 8)
+category census export: IfcSlab 15 (numeric Tag 15)
+category census export: IfcStair 6 (numeric Tag 6)
+category census export: IfcStairFlight 6 (numeric Tag 6)
+category census export: IfcWall 12 (numeric Tag 12)
+category census export: IfcWallStandardCase 239 (numeric Tag 239)
+category census export: IfcWindow 70 (numeric Tag 70)
+category census: -2000011 Walls any 260; placed 256 (256 in export, IfcCurtainWall=9, IfcWall=12, IfcWallStandardCase=235); written 256 (256 in export, 0 not); unplaced container 4 (0 in export)
+category census: -2000014 Windows any 71; placed 70 (70 in export, IfcWindow=70); written 70 (70 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2000023 Doors any 72; placed 68 (68 in export, IfcDoor=68); written 68 (68 in export, 0 not); unplaced symbol 4 (0 in export)
+category census: -2000032 Floors any 9; placed 9 (9 in export, IfcSlab=9); written 9 (9 in export, 0 not)
+category census: -2000035 Roofs any 10; placed 8 (8 in export, IfcRoof=2, IfcSlab=6); written 8 (8 in export, 0 not); unplaced container 2 (0 in export)
+category census: -2000045 Lines:_<Sketch> any 157; placed 157 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 36 (0 in export); refused no_body_line 121 (0 in export)
+category census: -2000051 Lines any 126; placed 126 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 2 (0 in export); refused no_body_line 124 (0 in export)
+category census: -2000066 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 1 (0 in export)
+category census: -2000067 unnamed any 12; placed 12 (0 in export); written 0 (0 in export, 0 not); refused no_body_line 12 (0 in export)
+category census: -2000068 unnamed any 39; placed 39 (0 in export); written 0 (0 in export, 0 not); refused no_body_line 39 (0 in export)
+category census: -2000079 unnamed any 10; placed 10 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 3 (0 in export); refused no_body_line 7 (0 in export)
+category census: -2000095 unnamed any 20; placed 19 (0 in export); written 19 (0 in export, 19 not); unplaced container 1 (0 in export)
+category census: -2000107 unnamed any 5; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced other_kind 5 (0 in export)
+category census: -2000120 Stairs any 6; placed 6 (6 in export, IfcStair=6); written 6 (6 in export, 0 not)
+category census: -2000126 Railings any 14; placed 14 (14 in export, IfcRailing=14); written 14 (14 in export, 0 not)
+category census: -2000127 unnamed any 80; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 80 (0 in export)
+category census: -2000150 unnamed any 2; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 2 (0 in export)
+category census: -2000151 Generic_Models any 25; placed 22 (22 in export, IfcBuildingElementProxy=22); written 22 (22 in export, 0 not); unplaced symbol 3 (0 in export)
+category census: -2000160 unnamed any 73; placed 73 (0 in export); written 73 (0 in export, 73 not)
+category census: -2000170 Curtain_Panels any 71; placed 67 (67 in export, IfcPlate=67); written 67 (67 in export, 0 not); unplaced symbol 4 (0 in export)
+category census: -2000171 Curtain_Wall_Mullions any 220; placed 206 (206 in export, IfcMember=206); written 206 (206 in export, 0 not); unplaced symbol 14 (0 in export)
+category census: -2000192 unnamed any 41; placed 41 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 33 (0 in export); refused no_body_line 8 (0 in export)
+category census: -2000197 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2000280 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2000321 unnamed any 63; placed 63 (0 in export); written 0 (0 in export, 0 not); refused no_body_line 63 (0 in export)
+category census: -2000400 unnamed any 5; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 5 (0 in export)
+category census: -2000460 unnamed any 2; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 2 (0 in export)
+category census: -2000480 unnamed any 2; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 2 (0 in export)
+category census: -2000515 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2000530 unnamed any 14; placed 14 (0 in export); written 6 (0 in export, 6 not); refused no_body_flat 8 (0 in export)
+category census: -2000831 unnamed any 7; placed 7 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 1 (0 in export); refused no_body_line 6 (0 in export)
+category census: -2000919 Stairs:_Runs any 6; placed 6 (6 in export, IfcStairFlight=6); written 6 (6 in export, 0 not)
+category census: -2000945 unnamed any 6; placed 6 (0 in export); written 0 (0 in export, 0 not); refused no_body_line 6 (0 in export)
+category census: -2000946 unnamed any 14; placed 14 (0 in export); written 14 (0 in export, 14 not)
+category census: -2000954 unnamed any 74; placed 74 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 12 (0 in export); refused no_body_line 62 (0 in export)
+category census: -2001040 Electrical_Equipment any 13; placed 6 (6 in export, IfcBuildingElementProxy=6); written 6 (6 in export, 0 not); unplaced symbol 7 (0 in export)
+category census: -2001140 Mechanical_Equipment any 18; placed 15 (15 in export, IfcBuildingElementProxy=15); written 15 (15 in export, 0 not); unplaced symbol 3 (0 in export)
+category census: -2001271 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001272 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 1 (0 in export)
+category census: -2001320 Structural_Framing any 3; placed 1 (1 in export, IfcBeam=1); written 1 (1 in export, 0 not); unplaced symbol 2 (0 in export)
+category census: -2001330 Structural_Columns any 148; placed 114 (114 in export, IfcColumn=114); written 114 (114 in export, 0 not); unplaced symbol 34 (0 in export)
+category census: -2001391 unnamed any 2; placed 2 (2 in export, IfcFlowSegment=2); written 2 (2 in export, 0 not)
+category census: -2002000 unnamed any 33; placed 33 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 33 (0 in export)
+category census: -2003000 unnamed any 8; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 8 (0 in export)
+category census: -2005002 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2005011 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2005020 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2005026 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2005100 unnamed any 2; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 2 (0 in export)
+category census: -2006020 unnamed any 4; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 4 (0 in export)
+category census: -2006040 unnamed any 1; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 1 (0 in export)
+category census: -2006045 unnamed any 5; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 5 (0 in export)
+category census: -2008044 Pipes any 140; placed 140 (140 in export, IfcFlowSegment=140); written 140 (140 in export, 0 not)
+category census: -2008045 unnamed any 140; placed 140 (0 in export); written 140 (0 in export, 140 not)
+category census: -2008049 Pipe_Fittings any 181; placed 128 (128 in export, IfcFlowFitting=128); written 128 (128 in export, 0 not); unplaced symbol 53 (0 in export)
+category census: -2008072 unnamed any 128; placed 128 (0 in export); written 128 (0 in export, 128 not)
+category census: -2008126 Cable_Tray_Fittings any 5; placed 0 (0 in export); written 0 (0 in export, 0 not); unplaced symbol 5 (0 in export)
+category census: -2008128 Conduit_Fittings any 135; placed 74 (74 in export, IfcFlowFitting=74); written 74 (74 in export, 0 not); unplaced symbol 61 (0 in export)
+category census: -2008132 Conduits any 102; placed 102 (102 in export, IfcFlowSegment=102); written 102 (102 in export, 0 not)
+category census: -2008139 unnamed any 102; placed 102 (0 in export); written 102 (0 in export, 102 not)
+category census: -2008141 unnamed any 74; placed 74 (0 in export); written 74 (0 in export, 74 not)
+category census: -2009630 unnamed any 1; placed 1 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 1 (0 in export)
+category census: -2009636 unnamed any 114; placed 114 (0 in export); written 0 (0 in export, 0 not); refused no_body_line 114 (0 in export)
+category census: -2009639 unnamed any 9; placed 9 (0 in export); written 0 (0 in export, 0 not); refused no_body_flat 9 (0 in export)
+category census: -2009645 unnamed any 257; placed 257 (0 in export); written 0 (0 in export, 0 not); refused no_body_point 257 (0 in export)
+category census missed: IfcElementAssembly 3 (no frame 3)
+category census missed: IfcWallStandardCase 4 (no frame 4)
+exit 0
