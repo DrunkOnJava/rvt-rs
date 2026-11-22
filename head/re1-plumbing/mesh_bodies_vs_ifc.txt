@@ -1,0 +1,76 @@
+saved_graphics_mesh bodies scored: 60; in Revit's export 60
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcFlowFitting                   54       1        0       40        1          39  1.1758
+       30       0        0       20        0          30  PIPE-Elbow - Welded:-
+       10       0        0       10        0           0  PIPE-Tee - Welded:-
+        8       0        0        8        0           8  PIPE-Transition - Welded:-
+        4       0        0        0        0           0  Closet Bend Reducing:-
+        1       1        0        1        1           1  PIPE-Cap:-
+        1       0        0        1        0           0  Tee Vent:-
+IfcFlowTerminal                   6       6        1        6        6           6  1.0005
+        2       2        0        2        2           2  224200-FIXT-Rough In Sink-Wall:Grohe WB265_M
+        1       1        0        1        1           1  224200-FIXT-Rough In Tub-Wall:Tub_M
+        1       1        0        1        1           1  224200-FIXT-Rough In Shower-Wall:Shower_M
+        1       1        0        1        1           1  224200-FIXT-Rough In Sink-Wall:Whirlpool Washer_M
+        1       1        1        1        1           1  223313-WTRHTR-Tankless Electric:28kW
+  444676 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1144, Revit's vertices to rvt-rs's surface 0.01386 ft, rvt-rs's to Revit's 0.03433 ft
+  445080 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1705, Revit's vertices to rvt-rs's surface 0.0008155 ft, rvt-rs's to Revit's 0.02321 ft
+  447845 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1725, Revit's vertices to rvt-rs's surface 0.01731 ft, rvt-rs's to Revit's 0.01929 ft
+  445210 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1758, Revit's vertices to rvt-rs's surface 0.0003719 ft, rvt-rs's to Revit's 0.01893 ft
+  445172 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1758, Revit's vertices to rvt-rs's surface 0.0003716 ft, rvt-rs's to Revit's 0.01892 ft
+  447864 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1725, Revit's vertices to rvt-rs's surface 0.01731 ft, rvt-rs's to Revit's 0.01854 ft
+  445111 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1758, Revit's vertices to rvt-rs's surface 0.0003718 ft, rvt-rs's to Revit's 0.01831 ft
+  444721 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1197, Revit's vertices to rvt-rs's surface 0.01323 ft, rvt-rs's to Revit's 0.01758 ft
+  447350 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, Revit's vertices to rvt-rs's surface 2.917e-06 ft, rvt-rs's to Revit's 0.01124 ft
+  447354 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, Revit's vertices to rvt-rs's surface 2.917e-06 ft, rvt-rs's to Revit's 0.01124 ft
+  447179 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, Revit's vertices to rvt-rs's surface 2.348e-06 ft, rvt-rs's to Revit's 0.01124 ft
+  447243 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, Revit's vertices to rvt-rs's surface 2.57e-06 ft, rvt-rs's to Revit's 0.01123 ft
+  447596 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, Revit's vertices to rvt-rs's surface 2.593e-06 ft, rvt-rs's to Revit's 0.01123 ft
+  447376 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, Revit's vertices to rvt-rs's surface 2.11e-06 ft, rvt-rs's to Revit's 0.01123 ft
+  444489 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2160, Revit's vertices to rvt-rs's surface 2.909e-06 ft, rvt-rs's to Revit's 0.009277 ft
+  volume 444489 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2160, farthest vertex 0.009277 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447555 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2160, farthest vertex 0.009276 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 443937 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2160, farthest vertex 0.009277 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 444095 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2160, farthest vertex 0.009276 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447723 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2160, farthest vertex 0.009276 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447676 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2160, farthest vertex 0.009276 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447762 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2160, farthest vertex 0.009276 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 444599 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2160, farthest vertex 0.009276 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447596 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, farthest vertex 0.01123 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0008
+    Revit shells 1, signed volumes (cubic ft): 0.0006
+  volume 447376 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, farthest vertex 0.01123 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0008
+    Revit shells 1, signed volumes (cubic ft): 0.0006
+  volume 447354 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, farthest vertex 0.01124 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0008
+    Revit shells 1, signed volumes (cubic ft): 0.0006
+  volume 447243 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, farthest vertex 0.01123 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0008
+    Revit shells 1, signed volumes (cubic ft): 0.0006
+  volume 447179 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, farthest vertex 0.01124 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0008
+    Revit shells 1, signed volumes (cubic ft): 0.0006
+  volume 447350 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2166, farthest vertex 0.01124 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0008
+    Revit shells 1, signed volumes (cubic ft): 0.0006
+  volume 444370 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.3170, farthest vertex 0.008571 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0002
+    Revit shells 1, signed volumes (cubic ft): 0.0002
+exit 0

@@ -1,0 +1,10 @@
+record-box bodies: 4; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcFurniture                       2       0       0       0       2       0       0    0.111
+         2  Chair, Dining-NON-COLLECTUS:-
+IfcRailing                         1       0       0       0       1       0       0    0.019
+         1  Railing:-
+IfcSanitaryTerminal                1       0       0       0       1       0       0    0.021
+         1  Shower Head, Hand Held Sprayer - NON-COLLECTUS:-
+total                              4       0       0       0       4       0       0
+exit 0
