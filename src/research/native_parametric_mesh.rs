@@ -1010,11 +1010,13 @@ fn loop_polygon_within(
             let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
             let forward = da <= db;
             let (gap, near) = if forward { (da, a) } else { (db, b) };
-            // With no keeps this is the loose join's own test, unchanged.
+            // With no keeps this is the loose join's own test, unchanged. As on a cylinder, an
+            // approved gap is taken only where the edge's far end is at least the limit away, so
+            // that its near end is the only one that could join.
             let keep = keeps
                 .get(&k)
                 .copied()
-                .filter(|_| gap >= bound && gap < limit);
+                .filter(|_| gap >= bound && gap < limit && da.max(db) >= limit);
             if (gap >= bound && keep.is_none()) || !steps(last, near)? {
                 joined = false;
                 break;
@@ -1171,6 +1173,16 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 !keep.is_empty(),
                 "disconnected parametric trim in model coordinates"
             );
+            // `loop_join_bound`'s guard, kept: an edge shorter than the bound could join at
+            // either end, so the loop stays refused.
+            let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+            for seg in &segments {
+                ensure!(
+                    distance(at(seg[0])?, at(*seg.last().unwrap())?)
+                        >= LOOP_JOIN_BOUNDS[LOOP_JOIN_BOUNDS.len() - 1],
+                    "disconnected parametric trim in model coordinates"
+                );
+            }
             (LOOP_JOIN_BOUNDS[LOOP_JOIN_BOUNDS.len() - 1], keep)
         } else {
             anyhow::bail!("disconnected parametric trim in model coordinates")
