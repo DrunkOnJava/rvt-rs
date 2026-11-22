@@ -300,8 +300,11 @@ score() { # name args...
   # scorer, which is always asked for by name. The annotation alone left the
   # run green (run 45072403351), so each one is also listed in
   # scorer-failures-<shard>.txt, which the compare job fails the run on, after
-  # its uploads. A model whose results leave the runner only as counts is not
-  # named there, as its folder is not.
+  # its uploads. A model whose results leave the runner only as counts, or a
+  # pair once held out, is not named there: the list is kept with a run's
+  # outputs (tools/ci/keep-run-outputs.py), whose scan refuses those names. A
+  # run that writes it saves no base results for reuse, as its scorer's
+  # `exit N` line already keeps them from being whole.
   if [ "$status" != 0 ] && { [[ "$step" == probe_score* ]] || { [ "${#STEPS[@]}" -gt 0 ] && wanted "$step"; }; }; then
     echo "::error::$(basename "$dir"): the scorer $step, named in this run, exited $status (see its $step.txt)"
     local model; model=$(basename "$dir")
