@@ -1,0 +1,1 @@
+584c8a89315eef2b45ffdcdf55e74104f76623e0 fix(ifc): a plate roof cuts a wall's top only with its outline read; the probe lists every wall's native record; the report names what is a smaller error and what is unmeasured (#1471) (RE-351)

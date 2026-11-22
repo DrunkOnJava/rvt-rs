@@ -1,0 +1,4 @@
+     63  family instance | IfcPipeSegment | Name equal | ObjectType equal
+     54  family instance | IfcPipeFitting | Name equal | ObjectType equal
+      6  family instance | IfcSanitaryTerminal | Name equal | ObjectType equal
+exit 0

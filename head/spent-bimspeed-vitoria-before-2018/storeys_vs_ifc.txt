@@ -1,0 +1,12 @@
+1314 elements, 16 not on a storey
+      9  IfcBuildingElementProxy
+      6  IfcRailing
+      1  IfcStairFlight
+against Revit's export:
+   1251  same storey as Revit's
+     26  on a storey; Revit contains it in <IfcSpace>
+     21  a different storey from Revit's
+      9  on no storey; Revit's is a storey
+      7  on no storey; Revit's is another container
+  different, by type: IfcColumn 14, IfcPipeSegment 4, IfcPipeFitting 3
+exit 0

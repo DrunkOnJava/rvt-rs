@@ -1,0 +1,85 @@
+unfilled openings in Revit's export: 220; in rvt-rs's: 169; both: 158
+IfcCurtainWall in IfcWall:
+  revit: 70
+  written: 27
+  box compared: 27
+  box within 0.01 ft: 27
+  GlobalId equal: 27
+  Name equal: 27
+  PredefinedType equal: 27
+  Pset_OpeningElementCommon.Reference equal: 27
+  Pset_EnvironmentalImpactIndicators.Reference equal: 27
+  Depth in Revit's: 27
+  Depth equal: 27
+IfcDoor in IfcDoor:
+  revit: 4
+IfcDoor in IfcWall:
+  revit: 39
+  written: 25
+  box compared: 25
+  box within 0.01 ft: 25
+  GlobalId equal: 25
+  Name equal: 25
+  PredefinedType equal: 25
+  Pset_OpeningElementCommon.Reference equal: 25
+  Pset_EnvironmentalImpactIndicators.Reference equal: 25
+  Depth in Revit's: 25
+IfcFireSuppressionTerminal in IfcWall:
+  revit: 39
+  written: 39
+  box compared: 39
+  box within 0.01 ft: 39
+  GlobalId equal: 39
+  Name equal: 39
+  PredefinedType equal: 39
+  Pset_OpeningElementCommon.Reference equal: 39
+  Pset_EnvironmentalImpactIndicators.Reference equal: 39
+  Depth in Revit's: 39
+  Depth equal: 39
+IfcSlab in IfcSlab:
+  revit: 1
+  written: 1
+  box compared: 1
+  box within 0.01 ft: 1
+  GlobalId equal: 1
+  Name equal: 1
+  PredefinedType equal: 1
+  Pset_OpeningElementCommon.Reference equal: 1
+  Depth in Revit's: 1
+IfcWall in IfcWall:
+  revit: 1
+none in IfcSlab:
+  revit: 36
+  written: 36
+  box compared: 36
+  box within 0.01 ft: 36
+  Name equal: 36
+  PredefinedType equal: 36
+  Pset_OpeningElementCommon.Reference equal: 36
+none in IfcWall:
+  revit: 30
+  written: 30
+  box compared: 30
+  box within 0.01 ft: 30
+  GlobalId equal: 30
+  Name equal: 30
+  PredefinedType equal: 30
+  Pset_OpeningElementCommon.Reference equal: 30
+  Pset_EnvironmentalImpactIndicators.Reference equal: 30
+  Depth in Revit's: 30
+  Depth equal: 30
+written that Revit's export does not: 8
+  none in IfcWall: 8
+written that Revit's export does not but its export of a sibling file does, counted apart: 3
+  IfcCurtainWall in IfcWall, Tag 1815871 in 1815838: ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
+  IfcCurtainWall in IfcWall, Tag 1892067 in 1892039: ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
+  IfcFireSuppressionTerminal in IfcWall, Tag 3388647 in 1494012: ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
+  extra: none in IfcWall, Tag 2137992 in 2058501
+  extra: none in IfcWall, Tag 2138050 in 2058499
+  extra: none in IfcWall, Tag 2138402 in 2056770
+  extra: none in IfcWall, Tag 2138449 in 2056705
+  extra: none in IfcWall, Tag 2138640 in 2057670
+  extra: none in IfcWall, Tag 2138691 in 2057668
+  extra: none in IfcWall, Tag 2139036 in 2070689
+  extra: none in IfcWall, Tag 2139150 in 2070691
+exit 0

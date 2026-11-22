@@ -1,0 +1,98 @@
+Only in measure-head: areas_across_saves.txt
+Only in measure-head: areas_across_saves_2021.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-racbasicsampleproject/schema.txt measure-head/sample-2024-racbasicsampleproject/schema.txt
+--- measure-base/sample-2024-racbasicsampleproject/schema.txt	2026-11-09 03:20:37.367152451 +0000
++++ measure-head/sample-2024-racbasicsampleproject/schema.txt	2026-11-09 03:20:36.001142735 +0000
+@@ -4 +4 @@
+-  placement composition: 458 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 457 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racbasicsampleproject/bodies_across_saves.txt measure-head/sample-2026-racbasicsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2026-racbasicsampleproject/bodies_across_saves.txt	2026-11-09 03:20:37.521153546 +0000
++++ measure-head/sample-2026-racbasicsampleproject/bodies_across_saves.txt	2026-11-09 03:20:36.064143183 +0000
+@@ -15 +15 @@
+-cut openings: compared 25 against the 2025 save, and 1 openings beside them; their hosts 11: equal with the openings 5, differ by the openings alone 0, differ without them too 6, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
++cut openings: compared 25 against the 2025 save, and 1 openings beside them; their hosts 11: equal with the openings 11, differ by the openings alone 0, differ without them too 0, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
+@@ -101,6 +100,0 @@
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.GrossSideArea: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.GrossVolume: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.Height: equal 18, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.NetSideArea: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.NetVolume: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.BodyHeightSource: equal 0, differ 0, only here 16, only there 0
+@@ -108 +101,0 @@
+-properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.TopCoverElementId: equal 0, differ 0, only here 16, only there 0
+@@ -113 +106 @@
+-census: 441 bodies paired by Tag with the 2025 save's: same 424, differ 17 (pinned walls as pinned, source, volume and box, 16 of 16; roofs left as record boxes 1 of 1 expected), not in the 2025 save 0; did not mesh here 0, there 0
++census: 441 bodies paired by Tag with the 2025 save's: same 424, differ 1 (pinned walls as pinned, source, volume and box, 0 of 16; roofs left as record boxes 1 of 1 expected), not in the 2025 save 0; did not mesh here 0, there 0
+@@ -116,2 +109,18 @@
+-bodies across saves: PASS
+-exit 0
++  census: pinned wall 234869 is now the 2025 save's: remove its pin
++  census: pinned wall 428588 is now the 2025 save's: remove its pin
++  census: pinned wall 428745 is now the 2025 save's: remove its pin
++  census: pinned wall 429964 is now the 2025 save's: remove its pin
++  census: pinned wall 430064 is now the 2025 save's: remove its pin
++  census: pinned wall 430318 is now the 2025 save's: remove its pin
++  census: pinned wall 430361 is now the 2025 save's: remove its pin
++  census: pinned wall 430412 is now the 2025 save's: remove its pin
++  census: pinned wall 430859 is now the 2025 save's: remove its pin
++  census: pinned wall 497540 is now the 2025 save's: remove its pin
++  census: pinned wall 506386 is now the 2025 save's: remove its pin
++  census: pinned wall 506797 is now the 2025 save's: remove its pin
++  census: pinned wall 768442 is now the 2025 save's: remove its pin
++  census: pinned wall 937935 is now the 2025 save's: remove its pin
++  census: pinned wall 938974 is now the 2025 save's: remove its pin
++  census: pinned wall 939084 is now the 2025 save's: remove its pin
++bodies across saves: FAIL (16 differences)
++exit 1
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racbasicsampleproject/schema.txt measure-head/sample-2026-racbasicsampleproject/schema.txt
+--- measure-base/sample-2026-racbasicsampleproject/schema.txt	2026-11-09 03:20:37.848155872 +0000
++++ measure-head/sample-2026-racbasicsampleproject/schema.txt	2026-11-09 03:20:36.088143354 +0000
+@@ -4 +4 @@
+-  placement composition: 453 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 451 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racbasicsampleproject/bodies_across_saves.txt measure-head/sample-2027-racbasicsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2027-racbasicsampleproject/bodies_across_saves.txt	2026-11-09 03:20:37.874156057 +0000
++++ measure-head/sample-2027-racbasicsampleproject/bodies_across_saves.txt	2026-11-09 03:20:36.065143190 +0000
+@@ -15 +15 @@
+-cut openings: compared 25 against the 2025 save, and 1 openings beside them; their hosts 11: equal with the openings 5, differ by the openings alone 0, differ without them too 6, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
++cut openings: compared 25 against the 2025 save, and 1 openings beside them; their hosts 11: equal with the openings 11, differ by the openings alone 0, differ without them too 0, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
+@@ -102,6 +101,0 @@
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.GrossSideArea: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.GrossVolume: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.Height: equal 18, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.NetSideArea: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.NetVolume: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.BodyHeightSource: equal 0, differ 0, only here 16, only there 0
+@@ -109 +102,0 @@
+-properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.TopCoverElementId: equal 0, differ 0, only here 16, only there 0
+@@ -114 +107 @@
+-census: 441 bodies paired by Tag with the 2025 save's: same 424, differ 17 (pinned walls as pinned, source, volume and box, 16 of 16; roofs left as record boxes 1 of 1 expected), not in the 2025 save 0; did not mesh here 0, there 0
++census: 441 bodies paired by Tag with the 2025 save's: same 424, differ 1 (pinned walls as pinned, source, volume and box, 0 of 16; roofs left as record boxes 1 of 1 expected), not in the 2025 save 0; did not mesh here 0, there 0
+@@ -117,2 +110,18 @@
+-bodies across saves: PASS
+-exit 0
++  census: pinned wall 234869 is now the 2025 save's: remove its pin
++  census: pinned wall 428588 is now the 2025 save's: remove its pin
++  census: pinned wall 428745 is now the 2025 save's: remove its pin
++  census: pinned wall 429964 is now the 2025 save's: remove its pin
++  census: pinned wall 430064 is now the 2025 save's: remove its pin
++  census: pinned wall 430318 is now the 2025 save's: remove its pin
++  census: pinned wall 430361 is now the 2025 save's: remove its pin
++  census: pinned wall 430412 is now the 2025 save's: remove its pin
++  census: pinned wall 430859 is now the 2025 save's: remove its pin
++  census: pinned wall 497540 is now the 2025 save's: remove its pin
++  census: pinned wall 506386 is now the 2025 save's: remove its pin
++  census: pinned wall 506797 is now the 2025 save's: remove its pin
++  census: pinned wall 768442 is now the 2025 save's: remove its pin
++  census: pinned wall 937935 is now the 2025 save's: remove its pin
++  census: pinned wall 938974 is now the 2025 save's: remove its pin
++  census: pinned wall 939084 is now the 2025 save's: remove its pin
++bodies across saves: FAIL (16 differences)
++exit 1
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racbasicsampleproject/schema.txt measure-head/sample-2027-racbasicsampleproject/schema.txt
+--- measure-base/sample-2027-racbasicsampleproject/schema.txt	2026-11-09 03:20:38.007157003 +0000
++++ measure-head/sample-2027-racbasicsampleproject/schema.txt	2026-11-09 03:20:36.090143368 +0000
+@@ -4 +4 @@
+-  placement composition: 453 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 451 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched

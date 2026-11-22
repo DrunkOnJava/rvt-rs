@@ -1,0 +1,5 @@
+     32  ends
+     32  ends within 0.001 ft
+     32  ends within 0.01 ft
+     32  ends within 0.1 ft
+exit 0

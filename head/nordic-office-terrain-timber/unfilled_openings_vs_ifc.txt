@@ -1,0 +1,9 @@
+unfilled openings in Revit's export: 1; in rvt-rs's: 2; both: 0
+none in IfcWall:
+  revit: 1
+written that Revit's export does not: 2
+  none in IfcWall: 2
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+  extra: none in IfcWall, Tag 1351630 in 1351524
+  extra: none in IfcWall, Tag 1389150 in 1387731
+exit 0

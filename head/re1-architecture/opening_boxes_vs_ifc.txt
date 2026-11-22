@@ -1,0 +1,5 @@
+openings in Revit's export: 4; in rvt-rs's: 4; both: 4
+  IfcDoor within 0.001 ft: 4
+unfilled openings in Revit's export: 3; in rvt-rs's: 1; both: 1
+  IfcWallStandardCase over 1 ft: 1
+exit 0

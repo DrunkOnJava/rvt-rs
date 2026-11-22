@@ -1,0 +1,2 @@
+149 ('IfcColumn', 'name =', 'colour =')
+exit 0

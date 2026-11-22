@@ -1,0 +1,69 @@
+bodies across saves: sample-2026-rmeadvancedsampleproject, held to the 2024, 2025 saves
+beams and landings: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+stair runs: compared 0 against the 2025 save (none); left as boxes here, drawn in the 2025 save, not scored: 0
+sketch outlines: compared 78 against the 2024 save (IfcCovering 42, IfcSlab 36); left as boxes here, drawn in the 2024 save, not scored: 0
+sketch outlines against the 2025 save, not scored: 47 equal, 6 differ, 0 drawn otherwise there
+  sketch outlines against the 2025 save: 577552 IfcSlab GlobalId: 1N9xKXfWA0$AGwS8Elv7ik here, 2_BDY8JdoEBfgmPTU0yCfh there; IfcSlab GlobalId: 0Z$9S2fkc7ruo8APFQ9i7A here, 3j8_ljrcY8JOvyANsj2pDH there; IfcSlab GlobalId: 1sPTW0f3c08PPLgsb9lVxg here, 1GdTRPcvE5IOjfZrY8vOlp there; IfcSlab GlobalId: 3xP6qj2DACehYsIt4dkUH4 here, 3hnohDPSA9MP9yLk7MbrV8 there; IfcSlab GlobalId: 0SJwod_829dQeHGuLhfNL_ here, 17jKVBQTs6exNBAkQAbpfT there
+  sketch outlines against the 2025 save: 577724 IfcSlab GlobalId: 2DyN6BTrs6VA$7oUnwGzDP here, 00tXf3T6gF2PZi0S9lOxAv there; IfcSlab GlobalId: 2enK4j4Ik9SAPmjZ7i7kCx here, 2X6sxe2oUD2R3tZ8iJm6XM there; IfcSlab GlobalId: 07JjVuwIYFsPtlPPQnAlrb here, 1cr7KsAw_CUw$wG8jay_a$ there; IfcSlab GlobalId: 3Ko7gyd8w3seV_8JbPzJbU here, 1NJoIrqX_1pOALAY1dYdJr there; IfcSlab GlobalId: 1rfbgCVZUA4BQr9LTfESkW here, 0CdCdY7wYFXgfLd7$bps8U there
+  sketch outlines against the 2025 save: 577773 IfcSlab GlobalId: 1V$px3442F7hXhfbGGH3ps here, 3rOxfguI6EL8TZ_wm2Kpzp there; IfcSlab GlobalId: 2XbAptUjk3f8FkO0szI3oO here, 0VsqUjiA_E7O417_f$BOgi there; IfcSlab GlobalId: 1rXdF9X721KwQtZra8g5ay here, 00FY7CdW6BYfq5Bm1nTth4 there; IfcSlab GlobalId: 26N0w3HosDzh90F8j7CCky here, 0Lo5i1qkE2Xhp8qt9V4$Wt there; IfcSlab GlobalId: 1TrZyV7xE62vr6PndlR1KO here, 29b43RHvM6wQvgEUgrHOzW there
+  sketch outlines against the 2025 save: 577947 IfcSlab GlobalId: 3kR9mpLEA6PwkgrNcrM8Mn here, 3b8ZamRCQ2ofpq0b0xsV5b there; IfcSlab GlobalId: 2kiC1GR9oADOK71W4LuF1k here, 3gMzmE8hkBFOkS9IpcOmgO there; IfcSlab GlobalId: 0S6zUksqk4BgDRFnI5WACt here, 237GECzLg7I9ni5pJANU9_ there
+  sketch outlines against the 2025 save: 578586 IfcSlab GlobalId: 2smNoQPQs8PPaNvLy7Li6l here, 152ExJtoA62gdVoO$o3Kjs there; IfcSlab GlobalId: 1okXavO0I5wxC3$dVhXa8U here, 0$Q9iI1$MBDfEJNxaPHJ_S there; IfcSlab GlobalId: 2lgIQMFx61ox0GllsQ8iD3 here, 2yNDARJNE6afDrvlboJVyT there; IfcSlab GlobalId: 3HNk7qekc5fPFXxEvfm57g here, 0cBRV9QoMCNQadEEYcmqip there
+  sketch outlines against the 2025 save: 579067 IfcSlab GlobalId: 3fzdEe0RM1VB$9cSOjgLWu here, 25uEFrrPU0XPCIGRQybMOy there; IfcSlab GlobalId: 1lwNun3IE3MPmiXwtB5Ant here, 0W1r1gHS21Beti_YDjZTYh there; IfcSlab GlobalId: 19NE3VojIEIQaa9KotY19u here, 0f_bN0OPc0xx56cunppLmI there
+named elements: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+pipes: compared 488 against the 2025 save (IfcPipeSegment 488); left as boxes here, drawn in the 2025 save, not scored: 0
+pipes: 488 compared as cylinders (axis ends in either order, radius and length to 0.001 ft), 0 by vertices
+doors and windows: compared 107 against the 2024 save (IfcDoor 107); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 75
+ports: compared 6967 against the 2025 save (same 6967, differ 0, only here 0, only there 0; not placed here 19, there 19)
+cut openings: compared 107 against the 2025 save, and 0 openings beside them; their hosts 36: equal with the openings 36, differ by the openings alone 0, differ without them too 0, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
+door and window sizes: compared 124 against the 2025 save (same 124, differ 0; only in the 2025 save 0)
+properties: compared 5140 values (not counting Areas) the release lists add on 6712 paired elements against the 2025 save (equal 5140, differ 0, only here 0, only there 2244; doors' and windows' Areas, counted apart, equal: 107; Tags shared by more than one product, not paired: 6 here, 6 there)
+properties not added by the lists, not scored: IfcAirTerminal RvtElementRecordGeometry.SourceStream: equal 0, differ 309, only here 0, only there 0
+properties added by the lists: IfcBuildingElementProxy Pset_BuildingElementProxyCommon.IsExternal: equal 648, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcBuildingElementProxy RvtElementRecordGeometry.SourceStream: equal 0, differ 648, only here 0, only there 0
+properties not added by the lists, not scored: IfcCableCarrierFitting RvtElementRecordGeometry.SourceStream: equal 0, differ 14, only here 0, only there 0
+properties not added by the lists, not scored: IfcCableCarrierSegment RvtElementRecordGeometry.SourceStream: equal 0, differ 19, only here 0, only there 0
+properties added by the lists: IfcColumn Pset_ColumnCommon.IsExternal: equal 135, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcColumn RvtElementRecordGeometry.SourceStream: equal 0, differ 135, only here 0, only there 0
+properties added by the lists: IfcCovering Pset_CoveringCommon.IsExternal: equal 43, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcCovering RvtElementRecordGeometry.SourceStream: equal 0, differ 43, only here 0, only there 0
+properties added by the lists: IfcCurtainWall Pset_CurtainWallCommon.IsExternal: equal 0, differ 0, only here 0, only there 31
+properties not added by the lists, not scored: IfcCurtainWall RvtElementRecordGeometry.SourceStream: equal 0, differ 31, only here 0, only there 0
+properties added by the lists: IfcDoor Pset_DoorCommon.IsExternal: equal 124, differ 0, only here 0, only there 0
+properties added by the lists: IfcDoor Qto_DoorBaseQuantities.Area: equal 107, differ 0, only here 0, only there 0
+properties added by the lists: IfcDoor Qto_DoorBaseQuantities.Height: equal 107, differ 0, only here 0, only there 0
+properties added by the lists: IfcDoor Qto_DoorBaseQuantities.Width: equal 107, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcDoor RvtElementRecordGeometry.SourceStream: equal 0, differ 124, only here 0, only there 0
+properties not added by the lists, not scored: IfcDuctFitting RvtElementRecordGeometry.SourceStream: equal 0, differ 936, only here 0, only there 0
+properties added by the lists: IfcDuctSegment Qto_DuctSegmentBaseQuantities.Length: equal 710, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcDuctSegment RvtElementRecordGeometry.SourceStream: equal 0, differ 728, only here 0, only there 0
+properties not added by the lists, not scored: IfcLightFixture RvtElementRecordGeometry.SourceStream: equal 0, differ 410, only here 0, only there 0
+properties added by the lists: IfcMember .Name: equal 1450, differ 0, only here 0, only there 0
+properties added by the lists: IfcMember Pset_MemberCommon.IsExternal: equal 0, differ 0, only here 0, only there 1450
+properties not added by the lists, not scored: IfcMember RvtElementRecordGeometry.SourceStream: equal 0, differ 1450, only here 0, only there 0
+properties not added by the lists, not scored: IfcPipeFitting RvtElementRecordGeometry.SourceStream: equal 0, differ 489, only here 0, only there 0
+properties added by the lists: IfcPipeSegment Pset_PipeSegmentOccurrence.InvertElevation: equal 124, differ 0, only here 0, only there 0
+properties added by the lists: IfcPipeSegment Qto_PipeSegmentBaseQuantities.GrossCrossSectionArea: equal 488, differ 0, only here 0, only there 0
+properties added by the lists: IfcPipeSegment Qto_PipeSegmentBaseQuantities.Length: equal 488, differ 0, only here 0, only there 0
+properties added by the lists: IfcPipeSegment Qto_PipeSegmentBaseQuantities.OuterSurfaceArea: equal 488, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcPipeSegment RvtElementRecordGeometry.SourceStream: equal 0, differ 488, only here 0, only there 0
+properties added by the lists: IfcPlate Pset_PlateCommon.IsExternal: equal 0, differ 0, only here 0, only there 628
+properties not added by the lists, not scored: IfcPlate RvtElementRecordGeometry.SourceStream: equal 0, differ 629, only here 0, only there 0
+properties added by the lists: IfcRailing Pset_RailingCommon.Height: equal 14, differ 0, only here 0, only there 0
+properties added by the lists: IfcRailing Pset_RailingCommon.IsExternal: equal 14, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcRailing RvtElementRecordGeometry.SourceStream: equal 0, differ 14, only here 0, only there 0
+properties not added by the lists, not scored: IfcSanitaryTerminal RvtElementRecordGeometry.SourceStream: equal 0, differ 11, only here 0, only there 0
+properties added by the lists: IfcSlab Pset_SlabCommon.IsExternal: equal 15, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcSlab RvtElementRecordGeometry.SourceStream: equal 0, differ 15, only here 0, only there 0
+properties added by the lists: IfcSpace Pset_SpaceCommon.IsExternal: equal 76, differ 0, only here 0, only there 0
+properties added by the lists: IfcSpace Qto_SpaceBaseQuantities.Height: equal 76, differ 0, only here 0, only there 0
+properties added by the lists: IfcSpace Qto_SpaceBaseQuantities.NetVolume: equal 9, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcSpace RvtElementRecordGeometry.SourceStream: equal 0, differ 76, only here 0, only there 0
+properties added by the lists: IfcStair .Name: equal 8, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Other.Category: equal 8, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.IsExternal: equal 8, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcStair RvtElementRecordGeometry.SourceStream: equal 0, differ 8, only here 0, only there 0
+properties added by the lists: IfcWall Pset_WallCommon.IsExternal: equal 0, differ 0, only here 0, only there 135
+properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.SourceStream: equal 0, differ 135, only here 0, only there 0
+census: 6605 bodies paired by Tag with the 2025 save's: same 6605, differ 0 (pinned walls as pinned, source, volume and box, 0 of 0; roofs left as record boxes 0 of 0 expected), not in the 2025 save 0; did not mesh here 6, there 6
+bodies across saves: PASS
+exit 0

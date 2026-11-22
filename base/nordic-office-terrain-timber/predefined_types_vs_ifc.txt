@@ -1,0 +1,2 @@
+IfcStairFlightType PredefinedType: rvt-rs {}, Revit {}
+exit 0

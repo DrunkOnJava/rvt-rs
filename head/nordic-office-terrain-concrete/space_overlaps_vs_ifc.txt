@@ -1,0 +1,11 @@
+space overlaps: stored solid: 6 rooms; walls: above 0.1% of the area on 0, above 1% on 0, above 5% on 0, largest 0.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
+space overlaps: upward faces, stored solid: 6 paired rooms, area within 0.1% of Revit's on 6
+space overlaps: downward faces, stored solid: 6 paired rooms, area within 0.1% of Revit's on 6
+space overlaps: every face, stored solid: 6 paired rooms, area within 0.1% of Revit's on 6
+  03_0wbo9v06f0pakTaS3zF: stored_solid, up 236.75, floor 236.75, every face 236.75 ft2 (Revit up 236.75, floor 236.75, every face 236.75 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  03_0wbo9v06f0pakTaS3mj: stored_solid, up 225.97, floor 225.97, every face 225.97 ft2 (Revit up 225.97, floor 225.97, every face 225.97 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  03_0wbo9v06f0pakTaS3nl: stored_solid, up 139.86, floor 139.86, every face 139.86 ft2 (Revit up 139.86, floor 139.86, every face 139.86 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  03_0wbo9v06f0pakTaS3oL: stored_solid, up 129.15, floor 129.15, every face 129.15 ft2 (Revit up 129.15, floor 129.15, every face 129.15 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  00gOQ074DFVfD8V5PfyC3y: stored_solid, up 147.64, floor 147.64, every face 147.64 ft2 (Revit up 147.64, floor 147.64, every face 147.64 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  00gOQ074DFVfD8V5PfyCyT: stored_solid, up 148.44, floor 148.44, every face 148.44 ft2 (Revit up 148.44, floor 148.44, every face 148.44 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+exit 0

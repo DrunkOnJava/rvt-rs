@@ -1,0 +1,6 @@
+IfcStairFlightType PredefinedType: rvt-rs {'SPIRAL': 1, 'STRAIGHT': 1}, Revit {'SPIRAL': 1, 'STRAIGHT': 1}
+IfcStair: 16 in both; same 16, differs 0, unset in rvt-rs 0; Revit's: {'DOUBLE_RETURN_STAIR': 10, 'HALF_TURN_STAIR': 1, 'NOTDEFINED': 2, 'SPIRAL_STAIR': 1, 'STRAIGHT_RUN_STAIR': 2}
+IfcStairFlight: 35 in both; same 35, differs 0, unset in rvt-rs 0; Revit's: {'SPIRAL': 1, 'STRAIGHT': 34}
+IfcSlab: 63 in both; same 63, differs 0, unset in rvt-rs 0; Revit's: {'BASESLAB': 8, 'FLOOR': 18, 'LANDING': 27, 'ROOF': 10}
+IfcMember: 10003 in both; same 10003, differs 0, unset in rvt-rs 0; Revit's: {'MULLION': 10003}
+exit 0
