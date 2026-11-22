@@ -1,0 +1,29 @@
+door flips: placements: release 2025 probe doors 5 windows 0; the Revit export has 5 doors and windows, the rvt-rs export 5
+door flips: placements: rvt-rs site placement rotation is the identity: yes
+door flips: placements: probe elements 5; in the Revit export 5; not in the Revit export 0; not in the rvt-rs export 0; compared 5
+door flips: placements: IFC class equal to the Revit export 5 of 5
+door flips: placements doors bound to a plain wall: checked 4; same 1; half turn 0; quarter turn 3; other 0; rvt-rs axes are the default axes 4; decoded record carries both flips and the opening facing 4; rvt-rs voids a wall 4; Revit voids a wall 4
+door flips: placements doors bound to a plain wall state 00: n=2; same 0; half turn 0; quarter turn 2; other 0; default axes 2; rvt-rs X against the stored X: right angle 2
+door flips: placements doors bound to a plain wall state 01: n=1; same 0; half turn 0; quarter turn 1; other 0; default axes 1; rvt-rs X against the stored X: right angle 1
+door flips: placements doors bound to a plain wall state 11: n=1; same 1; half turn 0; quarter turn 0; other 0; default axes 1; rvt-rs X against the stored X: same 1
+door flips: placements doors bound to none: checked 1; same 0; half turn 1; quarter turn 0; other 0; rvt-rs axes are the default axes 1; decoded record carries both flips and the opening facing 1; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements doors bound to none state 10: n=1; same 0; half turn 1; quarter turn 0; other 0; default axes 1; rvt-rs X against the stored X: reverse 1
+door flips: placements doors no stored transform: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements doors X direction: Revit +X, rvt-rs +X: n=1
+door flips: placements doors X direction: Revit +Y, rvt-rs +X: n=2
+door flips: placements doors X direction: Revit -X, rvt-rs +X: n=1
+door flips: placements doors X direction: Revit -Y, rvt-rs +X: n=1
+door flips: placements doors origin in plan against Revit: within 0.01 ft 0, within 0.5 ft 0, within 3 ft 4, farther 1
+door flips: placements doors rvt-rs Z axis is up: 5 of 5
+door flips: placements windows bound to a plain wall: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements windows bound to none: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements windows no stored transform: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements windows origin in plan against Revit: within 0.01 ft 0, within 0.5 ft 0, within 3 ft 0, farther 0
+door flips: placements windows rvt-rs Z axis is up: 0 of 0
+door flips: placements all: checked 5; same 1; half turn 1; quarter turn 3; other 0
+row {"binding": "bound to a plain wall", "id": 416336, "kind": "door", "origin": "farther", "ours_axes": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "ours_vs_stored": "right angle", "ours_x": "+X", "st": "00", "theirs_axes": [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], "theirs_voids": true, "theirs_x": "+Y", "verdict": "quarter turn", "voids": true}
+row {"binding": "bound to a plain wall", "id": 416703, "kind": "door", "origin": "within 3 ft", "ours_axes": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "ours_vs_stored": "same", "ours_x": "+X", "st": "11", "theirs_axes": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "theirs_voids": true, "theirs_x": "+X", "verdict": "same", "voids": true}
+row {"binding": "bound to a plain wall", "id": 416909, "kind": "door", "origin": "within 3 ft", "ours_axes": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "ours_vs_stored": "right angle", "ours_x": "+X", "st": "00", "theirs_axes": [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], "theirs_voids": true, "theirs_x": "+Y", "verdict": "quarter turn", "voids": true}
+row {"binding": "bound to a plain wall", "id": 417097, "kind": "door", "origin": "within 3 ft", "ours_axes": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "ours_vs_stored": "right angle", "ours_x": "+X", "st": "01", "theirs_axes": [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], "theirs_voids": true, "theirs_x": "-Y", "verdict": "quarter turn", "voids": true}
+row {"binding": "bound to none", "id": 445975, "kind": "door", "origin": "within 3 ft", "ours_axes": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "ours_vs_stored": "reverse", "ours_x": "+X", "st": "10", "theirs_axes": [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]], "theirs_voids": false, "theirs_x": "-X", "verdict": "half turn", "voids": false}
+exit 0
