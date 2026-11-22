@@ -78,8 +78,10 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    (`piece`'s `at`: 0 is the step from the last edge back to the first) and against the signs of
    the step from P to Q in the surface's two parameters (`du_ft`, `dv_ft`; 0 for a component under
    1% of the other, as `piece`'s `sig=one` reads a step along one parameter). And against which of
-   the two edges' other faces comes first in the graph (the lower face index in `piecenbr`), in
-   case the face a mesher takes first fixes the corner it shares.
+   the two edges' other faces has the lower index in the decoded graph (`piecenbr`), in case the
+   face a mesher takes first fixes the corner it shares; and, for a corner seen from more than one
+   ring, whether that reading names the same end from every ring, since the rings of one corner
+   compare different faces while Revit keeps one point.
 
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
@@ -714,6 +716,16 @@ def main():
         ordered = [f"{w} first {o} {n}" for (cc, w, o), n in sorted(by_order.items()) if cc == c]
         if ordered:
             print(f"kept end by whose edge's other face comes first in the graph, {c}: " + ", ".join(ordered))
+        corner_order = collections.Counter()
+        for _, members in corners.items():
+            views = [g for g, _ in members if cohort(g) == c and ORDER.get(key_of(g)) in ("P's edge", "Q's edge")]
+            if len(views) < 2:
+                continue
+            picks = {tuple(np.round(point(g["p" if ORDER[key_of(g)] == "P's edge" else "q"]), 6)) for g in views}
+            corner_order["the same end" if len(picks) == 1 else "different ends"] += 1
+        if corner_order:
+            print(f"whose edge's other face comes first, on a corner seen from more than one ring, {c}: names "
+                  + ", ".join(f"{k} on {n} corners" for k, n in sorted(corner_order.items())))
         placed = [f"{w} {o} {n}" for (cc, w, o), n in sorted(by_place.items()) if cc == c]
         if placed:
             print(f"kept end by the gap's place in its ring, {c}: " + ", ".join(placed))
