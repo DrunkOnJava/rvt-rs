@@ -118,13 +118,17 @@
 //!     stored loop order (`m_next`) and which end of each is P or Q is the one that joins best, so
 //!     this is each edge's own stored direction at the gap;
 //!   pairorient graph=<ElementId> views=<face>:<loop>:<k>,<face>:<loop>:<k> cfg=<P/Q>+<P/Q>
-//!     candidate=<yes|no> gap=<ft>: a stored gap two rings of the graph hold, the same two
-//!     ends in model coordinates to 1e-6 ft, with each ring's `pieceorient` reading. The
-//!     candidate is the coordinated join the chair save suggests: one ring `last/first`, the
-//!     other `first/first` or `last/last`;
-//!   pairorients pairs=<n> candidate=<n> one_ring=<n> more_rings=<n> widest_candidate=<ft>:
-//!     over the file, the stored gaps two rings hold, those that meet the candidate, those
-//!     only one ring holds and those more than two do;
+//!     candidate=<yes|no> shared=<n> beyond=<class>/<class>+<class>/<class> exact=<yes|no>
+//!     gap=<ft>: a stored gap two rings of the graph hold, the same two ends in model
+//!     coordinates to 1e-6 ft, with each ring's `pieceorient` reading. The candidate is the
+//!     orientation rule the chair save suggests: one ring `last/first`, the other `first/first`
+//!     or `last/last`. `shared` counts the stored edges both rings' gaps name, `beyond` gives each
+//!     edge's other face by surface class, and `exact` is the export's coordinated join: the
+//!     candidate, one shared edge, and the other edge of each ring leading to a `HermiteSurf`;
+//!   pairorients pairs=<n> candidate=<n> exact=<n> exact_under_0.0001ft=<n> one_ring=<n>
+//!     more_rings=<n> widest_candidate=<ft>: over the file, the stored gaps two rings hold, those
+//!     that meet the candidate and the export's join, those only one ring holds and those more
+//!     than two do;
 //!   ownnbr graph=<ElementId> face=<n> loop=<n> at=<k> side=<a|b> order=<prev|next>
 //!     class=<class> poly_p=<ft> poly_q=<ft> end_p=<ft> end_q=<ft>
 //!     shared_p=<ft> shared_q=<ft> join=<ft>: the two edges adjacent to the shared edge in
@@ -738,6 +742,9 @@ struct OrientRow {
     face: usize,
     loop_index: usize,
     at: usize,
+    edges: [usize; 2],
+    /// Each edge's face other than this ring's, by surface class.
+    beyond: [String; 2],
     ends: [[i64; 3]; 2],
     cfg: &'static str,
     d: f64,
@@ -1169,11 +1176,17 @@ fn read_pieces(
         if let Ok(mut rows) = ORIENTS.lock() {
             let mut ends = [micro(g.p), micro(g.q)];
             ends.sort();
+            let beyond = [(g.a, g.a_side), (g.b, g.b_side)].map(|(e, side)| {
+                edge_faces(graph, e)[1 - side]
+                    .map_or_else(|| "none".to_string(), |f| surface_class(graph, f))
+            });
             rows.push(OrientRow {
                 graph: id,
                 face: fi,
                 loop_index,
                 at: g.at,
+                edges: [g.a, g.b],
+                beyond,
                 ends,
                 cfg: match (g.p_first, g.q_first) {
                     (true, true) => "first/first",
@@ -2069,6 +2082,7 @@ fn report_orient_pairs() {
         by_gap.entry((r.graph, r.ends)).or_default().push(r);
     }
     let (mut pairs, mut candidates, mut one, mut more) = (0, 0, 0, 0);
+    let (mut exact, mut exact_under) = (0, 0);
     let mut widest = 0f64;
     for ((graph, _), views) in &by_gap {
         match views.len() {
@@ -2083,8 +2097,27 @@ fn report_orient_pairs() {
                     candidates += 1;
                     widest = widest.max(a.d.max(b.d));
                 }
+                // The export's coordinated join: one stored edge shared by the two rings, and the
+                // other edge of each leading to a spline face, as at the chair save's corners.
+                let shared: Vec<usize> = a
+                    .edges
+                    .iter()
+                    .copied()
+                    .filter(|e| b.edges.contains(e))
+                    .collect();
+                let spline = |r: &OrientRow, shared: usize| {
+                    let k = usize::from(r.edges[0] == shared);
+                    r.beyond[k] == "HermiteSurf"
+                };
+                let topology = shared.len() == 1 && spline(a, shared[0]) && spline(b, shared[0]);
+                if candidate && topology {
+                    exact += 1;
+                    if a.d.max(b.d) < 1e-4 {
+                        exact_under += 1;
+                    }
+                }
                 println!(
-                    "pairorient graph={graph} views={}:{}:{},{}:{}:{} cfg={}+{} candidate={} gap={:.9}",
+                    "pairorient graph={graph} views={}:{}:{},{}:{}:{} cfg={}+{} candidate={} shared={} beyond={}/{}+{}/{} exact={} gap={:.9}",
                     a.face,
                     a.loop_index,
                     a.at,
@@ -2094,6 +2127,12 @@ fn report_orient_pairs() {
                     a.cfg,
                     b.cfg,
                     if candidate { "yes" } else { "no" },
+                    shared.len(),
+                    a.beyond[0],
+                    a.beyond[1],
+                    b.beyond[0],
+                    b.beyond[1],
+                    if candidate && topology { "yes" } else { "no" },
                     a.d.max(b.d)
                 );
             }
@@ -2101,6 +2140,6 @@ fn report_orient_pairs() {
         }
     }
     println!(
-        "pairorients pairs={pairs} candidate={candidates} one_ring={one} more_rings={more} widest_candidate={widest:.9}"
+        "pairorients pairs={pairs} candidate={candidates} exact={exact} exact_under_0.0001ft={exact_under} one_ring={one} more_rings={more} widest_candidate={widest:.9}"
     );
 }

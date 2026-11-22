@@ -812,7 +812,11 @@ def main():
             judged = collections.Counter()
             distinct = collections.defaultdict(set)
             widest = 0.0
-            for _, members in corners.items():
+            # Every outcome, scored or not: a corner Revit's export cannot judge is still reach.
+            every = collections.defaultdict(list)
+            for g, o in rows:
+                every[tuple(sorted([tuple(np.round(point(g["p"]), 6)), tuple(np.round(point(g["q"]), 6))]))].append((g, o))
+            for _, members in every.items():
                 views = [(g, o) for g, o in members if key_of(g) in ORIENT]
                 if len(views) != 2:
                     continue
@@ -823,8 +827,13 @@ def main():
                 (g1, o1), (g2, o2) = views[lf[0]], views[1 - lf[0]]
                 widest = max(widest, float(g1["gap"]), float(g2["gap"]))
                 same = tuple(np.round(point(g1["q"]), 6)) == tuple(np.round(point(g2["p"]), 6))
-                verdict = ("Revit keeps the last/first ring's Q" if (o1, o2) == ("q_only", "p_only") and same
-                           else f"otherwise, {o1} with {cfg[1 - lf[0]]} {o2}")
+                width = "under 0.0001 ft" if max(float(g1["gap"]), float(g2["gap"])) < 1e-4 else "0.0001 ft or more"
+                if o1 not in SCORED or o2 not in SCORED:
+                    verdict = f"{width}, not judged ({o1} with {o2})"
+                elif (o1, o2) == ("q_only", "p_only") and same:
+                    verdict = f"{width}, Revit keeps the last/first ring's Q"
+                else:
+                    verdict = f"{width}, otherwise, {o1} with {cfg[1 - lf[0]]} {o2}"
                 judged[verdict] += 1
                 distinct[verdict].add(tuple(sorted((key_of(g1), key_of(g2)))))
             if judged:
