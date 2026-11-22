@@ -168,6 +168,12 @@ def read_probe(path):
             elif line.startswith("pieceorient "):
                 f = fields(line)
                 ORIENT[(f["graph"], f["face"], f["loop"], f["at"])] = (f.get("p_is", "?"), f.get("q_is", "?"))
+            elif line.startswith("pairorient "):
+                f = fields(line)
+                if f.get("exact") == "yes":
+                    for view in f["views"].split(","):
+                        face, loop, at = view.split(":")
+                        EXACT.add((f["graph"], face, loop, at))
             elif line.startswith("ownnbr "):
                 f = fields(line)
                 OWN.setdefault((f["graph"], f["face"], f["loop"], f["at"]), []).append(f)
@@ -224,6 +230,8 @@ ORDER = {}
 OWN = {}
 # (graph, face, loop, at) -> whether P and Q are their edges' stored first or last points.
 ORIENT = {}
+# Stored gaps the export's coordinated join takes, by the probe's `pairorient ... exact=yes` (#2085).
+EXACT = set()
 
 
 def face_order(a, b):
@@ -828,6 +836,7 @@ def main():
                 widest = max(widest, float(g1["gap"]), float(g2["gap"]))
                 same = tuple(np.round(point(g1["q"]), 6)) == tuple(np.round(point(g2["p"]), 6))
                 width = "under 0.0001 ft" if max(float(g1["gap"]), float(g2["gap"])) < 1e-4 else "0.0001 ft or more"
+                width = ("the export's join, " if key_of(g1) in EXACT and key_of(g2) in EXACT else "orientation only, ") + width
                 if o1 not in SCORED or o2 not in SCORED:
                     verdict = f"{width}, not judged ({o1} with {o2})"
                 elif (o1, o2) == ("q_only", "p_only") and same:
