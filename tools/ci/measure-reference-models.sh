@@ -251,7 +251,7 @@ wanted() { # step
 # Whether a step is in a scorer list or is one of the steps run by name.
 listed() { # step
   local s
-  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc space_kinds_vs_ifc bodies_across_saves none; do
+  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc space_kinds_vs_ifc bodies_across_saves areas_across_saves none; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
@@ -795,6 +795,15 @@ for s in "${STEPS[@]:-}"; do
     echo "::error::$s reads a probe's output: dispatch it with -f probe=<probe> -f probe_scorer=$s, not in scorers" >&2
     exit 2
   fi
+  # A scorer of several saves or of a run's two sides, given one model's two
+  # files, prints its usage and exits 2 on every model (runs 44950815664 and
+  # 44953635018 named areas_across_saves, whose gate runs by itself whenever
+  # the samples are in the run, and is listed above for that reason).
+  case "$s" in
+    *_across_saves | *_vs_base)
+      echo "::error::$s compares several exports, not one model's with Revit's: an across-saves gate runs with -f samples=true, and a scorer of the two sides with -f pair_scorer=$s" >&2
+      exit 2 ;;
+  esac
 done
 # A run of one probe writes probe.txt (probe_score.txt, probe-pair.txt), a
 # run of several probe-<probe>.txt (probe_score-<probe>.txt, ...).
