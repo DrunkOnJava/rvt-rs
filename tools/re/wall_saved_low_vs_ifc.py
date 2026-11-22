@@ -6,22 +6,26 @@ Reads `probe_1385_wall_saved_mesh`'s output (`saved tag:<id> volume <ft3> box
 <z low> ...`, in feet, in the document frame) and Revit's IFC export of the same
 model. For each `IfcWall` whose `Tag` the probe names, it meshes the Body in
 IfcOpenShell's world coordinates, takes the vertices back into Revit's internal
-frame (`ifc_common.site_frame`) and prints:
+frame (`ifc_common.site_frame`) and prints, with `--list` (as Measure runs it),
+a line for each host:
 
     wall tag:<id> saved <z low> revit <z low> diff <ft>
     wall tag:<id> saved <z low> revit none
     wall tag:<id> saved <z low> revit unmeshed <reason>
-    hosts <n> meshed <m> in_export <k> equal <e> (to 0.001 ft) worst <ft>
+
+and always the count:
+
+    hosts <n> meshed <m> in_export <k> unmeshed <u> equal <e> (to 0.001 ft) worst <ft>
 
 `hosts` is the probe's count of walls that name a `WallEmbedWallGStep`,
 `meshed` those whose saved mesh it decoded, `in_export` those Revit's export
-also has as an `IfcWall` with that Tag, and `equal` those whose two lowest
-points agree to 0.001 ft. A host Revit's export does not have is listed and not
-counted.
+also has as an `IfcWall` with that Tag and IfcOpenShell meshes, `unmeshed`
+those it has and IfcOpenShell does not mesh, and `equal` those whose two lowest
+points agree to 0.001 ft. A host Revit's export does not have is in no count.
 
 Usage:
 
-    python3 tools/re/wall_saved_low_vs_ifc.py <probe output> <revit-export.ifc>
+    python3 tools/re/wall_saved_low_vs_ifc.py <probe output> <revit-export.ifc> [--list]
 
 Measure runs it as `-f probe=probe_1385_wall_saved_mesh -f
 probe_scorer=wall_saved_low_vs_ifc`.
@@ -57,14 +61,16 @@ def read_probe(path):
 
 
 def main(argv):
-    if len(argv) != 3:
+    listing = "--list" in argv[1:]
+    args = [arg for arg in argv[1:] if arg != "--list"]
+    if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
-    hosts, saved = read_probe(argv[1])
+    hosts, saved = read_probe(args[0])
     if hosts is None:
         print("the probe output has no `hosts` line", file=sys.stderr)
         return 1
-    model = ifcopenshell.open(argv[2])
+    model = ifcopenshell.open(args[1])
     frame = site_frame(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
@@ -76,11 +82,12 @@ def main(argv):
             continue
         if tag in saved:
             walls.setdefault(tag, []).append(wall)
-    in_export = equal = 0
+    in_export = unmeshed = equal = 0
     worst = 0.0
     for tag, low in sorted(saved.items()):
         if tag not in walls:
-            print(f"wall tag:{tag} saved {low:.4f} revit none")
+            if listing:
+                print(f"wall tag:{tag} saved {low:.4f} revit none")
             continue
         try:
             # A wall Revit exports in parts gives each part its Tag, so the
@@ -94,15 +101,18 @@ def main(argv):
             if not len(vertices):
                 raise RuntimeError("no vertices")
         except Exception as error:  # IfcOpenShell raises its own and RuntimeError
-            print(f"wall tag:{tag} saved {low:.4f} revit unmeshed {str(error).splitlines()[0]}")
+            unmeshed += 1
+            if listing:
+                print(f"wall tag:{tag} saved {low:.4f} revit unmeshed {str(error).splitlines()[0]}")
             continue
         revit = float(frame(vertices)[:, 2].min())
         diff = low - revit
         in_export += 1
         equal += abs(diff) <= TOLERANCE
         worst = max(worst, abs(diff))
-        print(f"wall tag:{tag} saved {low:.4f} revit {revit:.4f} diff {diff:+.5f}")
-    print(f"hosts {hosts} meshed {len(saved)} in_export {in_export} equal {equal} (to {TOLERANCE} ft) worst {worst:.5f}")
+        if listing:
+            print(f"wall tag:{tag} saved {low:.4f} revit {revit:.4f} diff {diff:+.5f}")
+    print(f"hosts {hosts} meshed {len(saved)} in_export {in_export} unmeshed {unmeshed} equal {equal} (to {TOLERANCE} ft) worst {worst:.5f}")
     return 0
 
 
