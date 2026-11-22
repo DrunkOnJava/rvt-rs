@@ -1,0 +1,73 @@
+  open_model
+  list_elements: 970 rows
+  get_element: 35 elements
+mcp answers: consistency basis: the export of this run
+mcp answers: consistency protocol: 5 compared, 0 differ
+mcp answers: consistency counts: 47 compared, 0 differ
+mcp answers: elements the export folds into the body of another element, not rows: 0
+mcp answers: rows that are opening elements, which the diagnostics do not count as building elements: 0
+mcp answers: IfcColumn: 256 rows
+mcp answers: IfcDoor: 132 rows
+mcp answers: IfcShadingDevice: 20 rows
+mcp answers: IfcSlab: 80 rows
+mcp answers: IfcSpace: 116 rows
+mcp answers: IfcWall: 360 rows
+mcp answers: IfcWindow: 6 rows
+mcp answers: rows listed: 970
+mcp answers: consistency parameter values: 1 compared, 0 differ
+mcp answers: consistency element membership: 970 compared, 0 differ
+mcp answers: consistency element entities: 970 compared, 0 differ
+mcp answers: consistency element names: 970 compared, 0 differ
+mcp answers: consistency element long names: 970 compared, 0 differ
+mcp answers: consistency element ids: 970 compared, 0 differ
+mcp answers: consistency element predefined types: 970 compared, 0 differ
+mcp answers: consistency element storeys: 970 compared, 0 differ
+mcp answers: IFC openings the writer cuts for doors and windows, in no row: 201
+mcp answers: IFC elements and spaces: 1171
+mcp answers: consistency levels: 15 compared, 0 differ
+mcp answers: consistency rooms: 116 compared, 0 differ
+mcp answers: rooms: 116
+mcp answers: rooms with an area: 116
+mcp answers: rooms without an area: 0
+mcp answers: rooms of space kind room: 0
+mcp answers: rooms of space kind area: 0
+mcp answers: rooms of space kind mep_space: 0
+mcp answers: rooms of space kind family_instance: 0
+mcp answers: rooms with no space kind: 116
+mcp answers: consistency details: 35 compared, 0 differ
+mcp answers: consistency type objects: 35 compared, 0 differ
+mcp answers: consistency type object sets: 35 compared, 0 differ
+mcp answers: get_element property and quantity sets compared: 284
+mcp answers: consistency diagnostics: 1 compared, 0 differ
+mcp answers: consistency export hash: 1 compared, 0 differ
+mcp answers: classes: Revit export, elements and spaces paired: 970
+mcp answers: classes: Revit export, elements left out for no Tag: 0
+mcp answers: classes: Revit export, elements left out for a repeated Tag: 0
+mcp answers: classes: the answers, elements and spaces paired: 970
+mcp answers: classes: the answers, rows left out for no Tag: 0
+mcp answers: classes: the answers, rows left out for a repeated Tag: 0
+mcp answers: class IfcColumn: revit 256, same 256, other 0, absent 0
+mcp answers: class IfcDoor: revit 132, same 132, other 0, absent 0
+mcp answers: class IfcShadingDevice: revit 20, same 20, other 0, absent 0
+mcp answers: class IfcSlab: revit 80, same 80, other 0, absent 0
+mcp answers: class IfcSpace: revit 116, same 116, other 0, absent 0
+mcp answers: class IfcWall: revit 360, same 360, other 0, absent 0
+mcp answers: class IfcWindow: revit 6, same 6, other 0, absent 0
+mcp answers: consistency class sets: 970 compared, 0 differ
+mcp answers: storeys: rows the answers and Revit export share: 854
+mcp answers: storeys: rows on the same storey as in Revit: 854
+mcp answers: rooms: in the answers: 116
+mcp answers: rooms: Revit spaces with a body: 116
+mcp answers: rooms: paired by GlobalId: 116
+mcp answers: rooms: paired with an area in the answers: 116
+mcp answers: rooms: paired without an area in the answers: 0
+mcp answers: rooms: area within 0.1% of Revit: 116
+mcp answers: rooms: area within 1% of Revit: 116
+mcp answers: rooms: area more than 1% from Revit: 0
+mcp answers: values: sampled rows the answers and Revit export share: 30
+mcp answers: values: property values Revit export does not write: 100
+mcp answers: values: property values in the answers: 100
+mcp answers: values: quantity values Revit export does not write: 38
+mcp answers: values: quantity values in the answers: 38
+mcp answers: consistency PASS: every check equal
+exit 0

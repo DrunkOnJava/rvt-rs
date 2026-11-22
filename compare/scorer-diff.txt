@@ -1,0 +1,1833 @@
+Only in measure-head: areas_across_saves.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/core-interior/mcp_answers_vs_ifc.txt measure-head/core-interior/mcp_answers_vs_ifc.txt
+--- measure-base/core-interior/mcp_answers_vs_ifc.txt	2026-11-05 12:47:43.881184221 +0000
++++ measure-head/core-interior/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.613190079 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 47 compared, 0 differ
++mcp answers: consistency counts: 50 compared, 0 differ
+@@ -32 +32 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 116
+@@ -36 +36 @@
+-mcp answers: rooms with no space kind: 116
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/core-interior/space_kinds_vs_ifc.txt measure-head/core-interior/space_kinds_vs_ifc.txt
+--- measure-base/core-interior/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.882184216 +0000
++++ measure-head/core-interior/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.613190079 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 116
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  2vrSC4nbr48vzSSOTHS450: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS451: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS452: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS453: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS454: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS455: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS457: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS458: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS45A: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS45B: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS45q: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS46d: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6IL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6J4: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6JW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6JX: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6JZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6Ja: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6Jb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6Jc: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6Je: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6Jf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6Jg: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS6Jh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2vrSC4nbr48vzSSOTHS7E0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/core-interior/witness-magnetar-2024-core-interior-slim.json measure-head/core-interior/witness-magnetar-2024-core-interior-slim.json
+--- measure-base/core-interior/witness-magnetar-2024-core-interior-slim.json	2026-11-05 12:47:43.882184216 +0000
++++ measure-head/core-interior/witness-magnetar-2024-core-interior-slim.json	2026-11-05 12:47:42.613190079 +0000
+@@ -45 +45 @@
+-      "IFCPROPERTYSINGLEVALUE": 27708,
++      "IFCPROPERTYSINGLEVALUE": 27824,
+@@ -708 +708 @@
+-  "observation_hash_sha256": "38095e4100a87cfe35d6ef0cf7a1c83b643b9226d0191bb707157f1fea84e3ff",
++  "observation_hash_sha256": "d689cbb994395b86162986b88bf2f350adc82b11b9e053251d91c07dea9e1f62",
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/core-interior/witness-magnetar-2024-core-interior.json measure-head/core-interior/witness-magnetar-2024-core-interior.json
+--- measure-base/core-interior/witness-magnetar-2024-core-interior.json	2026-11-05 12:47:43.948183911 +0000
++++ measure-head/core-interior/witness-magnetar-2024-core-interior.json	2026-11-05 12:47:42.696189695 +0000
+@@ -45 +45 @@
+-      "IFCPROPERTYSINGLEVALUE": 27708,
++      "IFCPROPERTYSINGLEVALUE": 27824,
+@@ -708 +708 @@
+-  "observation_hash_sha256": "38095e4100a87cfe35d6ef0cf7a1c83b643b9226d0191bb707157f1fea84e3ff",
++  "observation_hash_sha256": "d689cbb994395b86162986b88bf2f350adc82b11b9e053251d91c07dea9e1f62",
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/einhoven/mcp_answers_vs_ifc.txt measure-head/einhoven/mcp_answers_vs_ifc.txt
+--- measure-base/einhoven/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.001183667 +0000
++++ measure-head/einhoven/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.752189437 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/mcp_answers_vs_ifc.txt measure-head/nordic-office-as-built/mcp_answers_vs_ifc.txt
+--- measure-base/nordic-office-as-built/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.345182077 +0000
++++ measure-head/nordic-office-as-built/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.389191114 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 85 compared, 0 differ
++mcp answers: consistency counts: 88 compared, 0 differ
+@@ -49,2 +49,2 @@
+-mcp answers: rooms of space kind room: 0
+-mcp answers: rooms of space kind area: 0
++mcp answers: rooms of space kind room: 234
++mcp answers: rooms of space kind area: 30
+@@ -52,2 +52,2 @@
+-mcp answers: rooms of space kind family_instance: 0
+-mcp answers: rooms with no space kind: 308
++mcp answers: rooms of space kind family_instance: 44
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/space_kinds_vs_ifc.txt measure-head/nordic-office-as-built/space_kinds_vs_ifc.txt
+--- measure-base/nordic-office-as-built/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.345182077 +0000
++++ measure-head/nordic-office-as-built/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.895188776 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 234
++space kinds: area 30
+@@ -5,2 +5,2 @@
+-space kinds: family_instance 0
+-space kinds: no SpaceKind 308
++space kinds: family_instance 44
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  04HSGJmcD3bRsP58HjpIbw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  05MwHiS6LD$BIlHfVKbp73: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0C83sfLu9E9eQLJY7z8Xye: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0FmGuf5a54T9pmsaibMAqb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Ag5$: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Ag5j: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Ag5n: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEd: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEl: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEp: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEr: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEt: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEx: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgFD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgFH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgFJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgFP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgFQ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Agwi: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Agzb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Agzh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0SCHpckP52uejwTkqQpmS1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0SCHpckP52uejwTkqQpmjD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  ... 283 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/mcp_answers_vs_ifc.txt measure-head/nordic-office-permit/mcp_answers_vs_ifc.txt
+--- measure-base/nordic-office-permit/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.340182100 +0000
++++ measure-head/nordic-office-permit/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.916188679 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 85 compared, 0 differ
++mcp answers: consistency counts: 88 compared, 0 differ
+@@ -49,2 +49,2 @@
+-mcp answers: rooms of space kind room: 0
+-mcp answers: rooms of space kind area: 0
++mcp answers: rooms of space kind room: 234
++mcp answers: rooms of space kind area: 30
+@@ -52,2 +52,2 @@
+-mcp answers: rooms of space kind family_instance: 0
+-mcp answers: rooms with no space kind: 308
++mcp answers: rooms of space kind family_instance: 44
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/space_kinds_vs_ifc.txt measure-head/nordic-office-permit/space_kinds_vs_ifc.txt
+--- measure-base/nordic-office-permit/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.340182100 +0000
++++ measure-head/nordic-office-permit/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.916188679 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 234
++space kinds: area 30
+@@ -5,2 +5,2 @@
+-space kinds: family_instance 0
+-space kinds: no SpaceKind 308
++space kinds: family_instance 44
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  04HSGJmcD3bRsP58HjpIbw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  05MwHiS6LD$BIlHfVKbp73: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0C83sfLu9E9eQLJY7z8Xye: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  0FmGuf5a54T9pmsaibMAqb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Ag5$: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  0Q4MSUQx531vKL_w06Ag5j: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Ag5n: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEd: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEl: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEp: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  0Q4MSUQx531vKL_w06AgEr: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  0Q4MSUQx531vKL_w06AgEt: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgEx: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgFD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgFH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  0Q4MSUQx531vKL_w06AgFJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgFP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06AgFQ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Agwi: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Agzb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0Q4MSUQx531vKL_w06Agzh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0SCHpckP52uejwTkqQpmS1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0SCHpckP52uejwTkqQpmjD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  ... 283 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/mcp_answers_vs_ifc.txt measure-head/nordic-office-terrain-concrete/mcp_answers_vs_ifc.txt
+--- measure-base/nordic-office-terrain-concrete/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.029183537 +0000
++++ measure-head/nordic-office-terrain-concrete/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.752189437 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 33 compared, 0 differ
++mcp answers: consistency counts: 36 compared, 0 differ
+@@ -31 +31 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 7
+@@ -34,2 +34,2 @@
+-mcp answers: rooms of space kind family_instance: 0
+-mcp answers: rooms with no space kind: 9
++mcp answers: rooms of space kind family_instance: 2
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/space_kinds_vs_ifc.txt measure-head/nordic-office-terrain-concrete/space_kinds_vs_ifc.txt
+--- measure-base/nordic-office-terrain-concrete/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.029183537 +0000
++++ measure-head/nordic-office-terrain-concrete/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.752189437 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 7
+@@ -5,2 +5,2 @@
+-space kinds: family_instance 0
+-space kinds: no SpaceKind 9
++space kinds: family_instance 2
++space kinds: no SpaceKind 0
+@@ -13,11 +13,2 @@
+-space kinds: FAIL
+-  00gOQ074DFVfD8V5PfyC3y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  00gOQ074DFVfD8V5PfyCyT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  03_0wbo9v06f0pakTaS3mj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  03_0wbo9v06f0pakTaS3nl: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  03_0wbo9v06f0pakTaS3oL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  03_0wbo9v06f0pakTaS3qI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  03_0wbo9v06f0pakTaS3zF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0R_MrebNjFnuoocWuAk2Kj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  0R_MrebNjFnuoocWuAk2N$: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/mcp_answers_vs_ifc.txt measure-head/nordic-office-terrain-timber/mcp_answers_vs_ifc.txt
+--- measure-base/nordic-office-terrain-timber/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.030183533 +0000
++++ measure-head/nordic-office-terrain-timber/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.753189432 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 33 compared, 0 differ
++mcp answers: consistency counts: 36 compared, 0 differ
+@@ -31 +31 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 7
+@@ -34,2 +34,2 @@
+-mcp answers: rooms of space kind family_instance: 0
+-mcp answers: rooms with no space kind: 9
++mcp answers: rooms of space kind family_instance: 2
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/space_kinds_vs_ifc.txt measure-head/nordic-office-terrain-timber/space_kinds_vs_ifc.txt
+--- measure-base/nordic-office-terrain-timber/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.030183533 +0000
++++ measure-head/nordic-office-terrain-timber/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.753189432 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 7
+@@ -5,2 +5,2 @@
+-space kinds: family_instance 0
+-space kinds: no SpaceKind 9
++space kinds: family_instance 2
++space kinds: no SpaceKind 0
+@@ -13,11 +13,2 @@
+-space kinds: FAIL
+-  0R_MrebNjFnuoocWuAk2Kj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  0R_MrebNjFnuoocWuAk2N$: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  2MmZY6LULD6BJzTENJ1KH9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2MmZY6LULD6BJzTENJ1KIX: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2MmZY6LULD6BJzTENJ1KIt: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2MmZY6LULD6BJzTENJ1KIx: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2MmZY6LULD6BJzTENJ1KIz: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3igc3Fusj6sOV42sVpNc6m: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3igc3Fusj6sOV42sVpNc6p: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-00_Blank/mcp_answers_vs_ifc.txt measure-head/r2025-00_Blank/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-00_Blank/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.031183528 +0000
++++ measure-head/r2025-00_Blank/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.753189432 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 14 compared, 0 differ
++mcp answers: consistency counts: 17 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-01_Walls/mcp_answers_vs_ifc.txt measure-head/r2025-01_Walls/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-01_Walls/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.063183380 +0000
++++ measure-head/r2025-01_Walls/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.753189432 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 17 compared, 0 differ
++mcp answers: consistency counts: 20 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-02_1Slope/mcp_answers_vs_ifc.txt measure-head/r2025-02_1Slope/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-02_1Slope/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.064183375 +0000
++++ measure-head/r2025-02_1Slope/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.753189432 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-02_1Slope_Rafter2PlumbCut/mcp_answers_vs_ifc.txt measure-head/r2025-02_1Slope_Rafter2PlumbCut/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-02_1Slope_Rafter2PlumbCut/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.065183371 +0000
++++ measure-head/r2025-02_1Slope_Rafter2PlumbCut/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.753189432 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-02_1Slope_Rafter2SquareCut/mcp_answers_vs_ifc.txt measure-head/r2025-02_1Slope_Rafter2SquareCut/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-02_1Slope_Rafter2SquareCut/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.065183371 +0000
++++ measure-head/r2025-02_1Slope_Rafter2SquareCut/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.753189432 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-02_1Slope_Rafter2SquareCut_Overhang/mcp_answers_vs_ifc.txt measure-head/r2025-02_1Slope_Rafter2SquareCut_Overhang/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-02_1Slope_Rafter2SquareCut_Overhang/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.086183274 +0000
++++ measure-head/r2025-02_1Slope_Rafter2SquareCut_Overhang/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.753189432 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-03_2Slope_Rafter2SquareCut/mcp_answers_vs_ifc.txt measure-head/r2025-03_2Slope_Rafter2SquareCut/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-03_2Slope_Rafter2SquareCut/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.086183274 +0000
++++ measure-head/r2025-03_2Slope_Rafter2SquareCut/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.754189427 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-04_Gable/mcp_answers_vs_ifc.txt measure-head/r2025-04_Gable/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-04_Gable/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.087183269 +0000
++++ measure-head/r2025-04_Gable/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.754189427 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-04_Gable_Swapped_Slopes/mcp_answers_vs_ifc.txt measure-head/r2025-04_Gable_Swapped_Slopes/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-04_Gable_Swapped_Slopes/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.084183283 +0000
++++ measure-head/r2025-04_Gable_Swapped_Slopes/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.754189427 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-05_1Slope_ArrowDefined/mcp_answers_vs_ifc.txt measure-head/r2025-05_1Slope_ArrowDefined/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-05_1Slope_ArrowDefined/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.123183103 +0000
++++ measure-head/r2025-05_1Slope_ArrowDefined/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.754189427 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-06_1Slope_ArrowDefined_SetToSlope/mcp_answers_vs_ifc.txt measure-head/r2025-06_1Slope_ArrowDefined_SetToSlope/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-06_1Slope_ArrowDefined_SetToSlope/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.124183098 +0000
++++ measure-head/r2025-06_1Slope_ArrowDefined_SetToSlope/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.754189427 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-07_1Slope_ArrowDefined_2Cut50mmFascia/mcp_answers_vs_ifc.txt measure-head/r2025-07_1Slope_ArrowDefined_2Cut50mmFascia/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-07_1Slope_ArrowDefined_2Cut50mmFascia/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.124183098 +0000
++++ measure-head/r2025-07_1Slope_ArrowDefined_2Cut50mmFascia/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.754189427 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-08_LShapedHipRoof/mcp_answers_vs_ifc.txt measure-head/r2025-08_LShapedHipRoof/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-08_LShapedHipRoof/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.122183108 +0000
++++ measure-head/r2025-08_LShapedHipRoof/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.754189427 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-09_LShapedHipRoof_1Edge300Offset/mcp_answers_vs_ifc.txt measure-head/r2025-09_LShapedHipRoof_1Edge300Offset/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-09_LShapedHipRoof_1Edge300Offset/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.152182969 +0000
++++ measure-head/r2025-09_LShapedHipRoof_1Edge300Offset/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.755189423 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-10_LShapedHipRoof_1Edge300Offset_Hole/mcp_answers_vs_ifc.txt measure-head/r2025-10_LShapedHipRoof_1Edge300Offset_Hole/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-10_LShapedHipRoof_1Edge300Offset_Hole/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.152182969 +0000
++++ measure-head/r2025-10_LShapedHipRoof_1Edge300Offset_Hole/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.790189261 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-11_RoofByExtrusion/mcp_answers_vs_ifc.txt measure-head/r2025-11_RoofByExtrusion/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-11_RoofByExtrusion/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.166182904 +0000
++++ measure-head/r2025-11_RoofByExtrusion/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.790189261 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-12_Rooms_Door_Windows/mcp_answers_vs_ifc.txt measure-head/r2025-12_Rooms_Door_Windows/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-12_Rooms_Door_Windows/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.167182900 +0000
++++ measure-head/r2025-12_Rooms_Door_Windows/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.791189256 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 33 compared, 0 differ
++mcp answers: consistency counts: 36 compared, 0 differ
+@@ -31 +31 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 2
+@@ -35 +35 @@
+-mcp answers: rooms with no space kind: 2
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-12_Rooms_Door_Windows/space_kinds_vs_ifc.txt measure-head/r2025-12_Rooms_Door_Windows/space_kinds_vs_ifc.txt
+--- measure-base/r2025-12_Rooms_Door_Windows/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.168182895 +0000
++++ measure-head/r2025-12_Rooms_Door_Windows/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.791189256 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 2
+@@ -6 +6 @@
+-space kinds: no SpaceKind 2
++space kinds: no SpaceKind 0
+@@ -13,4 +13,2 @@
+-space kinds: FAIL
+-  3y_22PKRj7YwVPhMM8m67Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3y_22PKRj7YwVPhMM8m67i: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-13_Rooms_Stairs/mcp_answers_vs_ifc.txt measure-head/r2025-13_Rooms_Stairs/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-13_Rooms_Stairs/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.185182816 +0000
++++ measure-head/r2025-13_Rooms_Stairs/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.792189252 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 45 compared, 0 differ
++mcp answers: consistency counts: 48 compared, 0 differ
+@@ -35 +35 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 2
+@@ -39 +39 @@
+-mcp answers: rooms with no space kind: 2
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-13_Rooms_Stairs/space_kinds_vs_ifc.txt measure-head/r2025-13_Rooms_Stairs/space_kinds_vs_ifc.txt
+--- measure-base/r2025-13_Rooms_Stairs/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.185182816 +0000
++++ measure-head/r2025-13_Rooms_Stairs/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.792189252 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 2
+@@ -6 +6 @@
+-space kinds: no SpaceKind 2
++space kinds: no SpaceKind 0
+@@ -13,4 +13,2 @@
+-space kinds: FAIL
+-  3y_22PKRj7YwVPhMM8m67Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3y_22PKRj7YwVPhMM8m67i: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-14_Rooms_Stairs_endwithriserOFF/mcp_answers_vs_ifc.txt measure-head/r2025-14_Rooms_Stairs_endwithriserOFF/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-14_Rooms_Stairs_endwithriserOFF/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.181182835 +0000
++++ measure-head/r2025-14_Rooms_Stairs_endwithriserOFF/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.792189252 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 45 compared, 0 differ
++mcp answers: consistency counts: 48 compared, 0 differ
+@@ -35 +35 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 2
+@@ -39 +39 @@
+-mcp answers: rooms with no space kind: 2
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-14_Rooms_Stairs_endwithriserOFF/space_kinds_vs_ifc.txt measure-head/r2025-14_Rooms_Stairs_endwithriserOFF/space_kinds_vs_ifc.txt
+--- measure-base/r2025-14_Rooms_Stairs_endwithriserOFF/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.182182830 +0000
++++ measure-head/r2025-14_Rooms_Stairs_endwithriserOFF/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.792189252 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 2
+@@ -6 +6 @@
+-space kinds: no SpaceKind 2
++space kinds: no SpaceKind 0
+@@ -13,4 +13,2 @@
+-space kinds: FAIL
+-  3y_22PKRj7YwVPhMM8m67Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3y_22PKRj7YwVPhMM8m67i: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-15_Rooms_Stairs_NoRisers/mcp_answers_vs_ifc.txt measure-head/r2025-15_Rooms_Stairs_NoRisers/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-15_Rooms_Stairs_NoRisers/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.191182789 +0000
++++ measure-head/r2025-15_Rooms_Stairs_NoRisers/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.793189247 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 45 compared, 0 differ
++mcp answers: consistency counts: 48 compared, 0 differ
+@@ -35 +35 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 2
+@@ -39 +39 @@
+-mcp answers: rooms with no space kind: 2
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-15_Rooms_Stairs_NoRisers/space_kinds_vs_ifc.txt measure-head/r2025-15_Rooms_Stairs_NoRisers/space_kinds_vs_ifc.txt
+--- measure-base/r2025-15_Rooms_Stairs_NoRisers/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.191182789 +0000
++++ measure-head/r2025-15_Rooms_Stairs_NoRisers/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.751189441 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 2
+@@ -6 +6 @@
+-space kinds: no SpaceKind 2
++space kinds: no SpaceKind 0
+@@ -13,4 +13,2 @@
+-space kinds: FAIL
+-  3y_22PKRj7YwVPhMM8m67Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3y_22PKRj7YwVPhMM8m67i: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-16_Rooms_Stairs_Monolithic/mcp_answers_vs_ifc.txt measure-head/r2025-16_Rooms_Stairs_Monolithic/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-16_Rooms_Stairs_Monolithic/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.218182664 +0000
++++ measure-head/r2025-16_Rooms_Stairs_Monolithic/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.828189085 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 42 compared, 0 differ
++mcp answers: consistency counts: 45 compared, 0 differ
+@@ -34 +34 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 2
+@@ -38 +38 @@
+-mcp answers: rooms with no space kind: 2
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-16_Rooms_Stairs_Monolithic/space_kinds_vs_ifc.txt measure-head/r2025-16_Rooms_Stairs_Monolithic/space_kinds_vs_ifc.txt
+--- measure-base/r2025-16_Rooms_Stairs_Monolithic/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.219182659 +0000
++++ measure-head/r2025-16_Rooms_Stairs_Monolithic/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.828189085 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 2
+@@ -6 +6 @@
+-space kinds: no SpaceKind 2
++space kinds: no SpaceKind 0
+@@ -13,4 +13,2 @@
+-space kinds: FAIL
+-  3y_22PKRj7YwVPhMM8m67Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3y_22PKRj7YwVPhMM8m67i: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-17_Rooms_Stairs_Spiral/mcp_answers_vs_ifc.txt measure-head/r2025-17_Rooms_Stairs_Spiral/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-17_Rooms_Stairs_Spiral/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.279182382 +0000
++++ measure-head/r2025-17_Rooms_Stairs_Spiral/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.829189081 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 42 compared, 0 differ
++mcp answers: consistency counts: 45 compared, 0 differ
+@@ -34 +34 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 2
+@@ -38 +38 @@
+-mcp answers: rooms with no space kind: 2
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-17_Rooms_Stairs_Spiral/space_kinds_vs_ifc.txt measure-head/r2025-17_Rooms_Stairs_Spiral/space_kinds_vs_ifc.txt
+--- measure-base/r2025-17_Rooms_Stairs_Spiral/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.279182382 +0000
++++ measure-head/r2025-17_Rooms_Stairs_Spiral/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.829189081 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 2
+@@ -6 +6 @@
+-space kinds: no SpaceKind 2
++space kinds: no SpaceKind 0
+@@ -13,4 +13,2 @@
+-space kinds: FAIL
+-  3y_22PKRj7YwVPhMM8m67Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3y_22PKRj7YwVPhMM8m67i: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-18_WallJoins/mcp_answers_vs_ifc.txt measure-head/r2025-18_WallJoins/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-18_WallJoins/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.279182382 +0000
++++ measure-head/r2025-18_WallJoins/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.829189081 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 20 compared, 0 differ
++mcp answers: consistency counts: 23 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-20_T_U_Roof/mcp_answers_vs_ifc.txt measure-head/r2025-20_T_U_Roof/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-20_T_U_Roof/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.280182378 +0000
++++ measure-head/r2025-20_T_U_Roof/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.830189076 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/re1-architecture/mcp_answers_vs_ifc.txt measure-head/re1-architecture/mcp_answers_vs_ifc.txt
+--- measure-base/re1-architecture/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.281182373 +0000
++++ measure-head/re1-architecture/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.831189071 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 47 compared, 0 differ
++mcp answers: consistency counts: 50 compared, 0 differ
+@@ -38 +38 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 11
+@@ -42 +42 @@
+-mcp answers: rooms with no space kind: 11
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/re1-architecture/space_kinds_vs_ifc.txt measure-head/re1-architecture/space_kinds_vs_ifc.txt
+--- measure-base/re1-architecture/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.281182373 +0000
++++ measure-head/re1-architecture/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.831189071 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 11
+@@ -6 +6 @@
+-space kinds: no SpaceKind 11
++space kinds: no SpaceKind 0
+@@ -13,13 +13,2 @@
+-space kinds: FAIL
+-  3144CP5Ub2qhBtGD1R3W4g: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3YpJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3d69: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3i$a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3iBy: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3iOx: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3iP8: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3jgy: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3k8_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3k8c: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3144CP5Ub2qhBtGD1R3kPv: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/re1-electrical/mcp_answers_vs_ifc.txt measure-head/re1-electrical/mcp_answers_vs_ifc.txt
+--- measure-base/re1-electrical/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.282182368 +0000
++++ measure-head/re1-electrical/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.831189071 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 24 compared, 0 differ
++mcp answers: consistency counts: 27 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/re1-mechanical/mcp_answers_vs_ifc.txt measure-head/re1-mechanical/mcp_answers_vs_ifc.txt
+--- measure-base/re1-mechanical/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.282182368 +0000
++++ measure-head/re1-mechanical/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.832189067 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 30 compared, 0 differ
++mcp answers: consistency counts: 33 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/re1-plumbing/mcp_answers_vs_ifc.txt measure-head/re1-plumbing/mcp_answers_vs_ifc.txt
+--- measure-base/re1-plumbing/mcp_answers_vs_ifc.txt	2026-11-05 12:47:44.304182267 +0000
++++ measure-head/re1-plumbing/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.833189062 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 23 compared, 0 differ
++mcp answers: consistency counts: 26 compared, 0 differ
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rac_advanced_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2015-rac_advanced_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2015-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.781184683 +0000
++++ measure-head/sample-2015-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.341191335 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rac_basic_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2015-rac_basic_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2015-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.781184683 +0000
++++ measure-head/sample-2015-rac_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.341191335 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 14
+@@ -6 +6 @@
+-space kinds: no SpaceKind 14
++space kinds: no SpaceKind 0
+@@ -13,16 +13,2 @@
+-space kinds: FAIL
+-  2pfAHb2EL46hq_sMVbImE4: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  2wm6PO6TX9IxXwLP21HyQg: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eOWH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eOZ3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eOZQ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eObW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eObZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eOb_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eObb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eObg: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eObq: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eObv: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eOci: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3ch3OBgkrCEw4mDhJ2eOdV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rme_advanced_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2015-rme_advanced_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2015-rme_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.809184553 +0000
++++ measure-head/sample-2015-rme_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.364191229 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rme_basic_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2015-rme_basic_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2015-rme_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.836184429 +0000
++++ measure-head/sample-2015-rme_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.385191132 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2016-rac_advanced_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2016-rac_advanced_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2016-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.870184272 +0000
++++ measure-head/sample-2016-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.385191132 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2017-rac_advanced_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2017-rac_advanced_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2017-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.941183944 +0000
++++ measure-head/sample-2017-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.605190116 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2018-rac_advanced_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2018-rac_advanced_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2018-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.942183939 +0000
++++ measure-head/sample-2018-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.606190111 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rac_advanced_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2019-rac_advanced_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2019-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.979183768 +0000
++++ measure-head/sample-2019-rac_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.606190111 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rme_advanced_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2019-rme_advanced_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2019-rme_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.979183768 +0000
++++ measure-head/sample-2019-rme_advanced_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.657189875 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rme_basic_sample_project/space_kinds_vs_ifc.txt measure-head/sample-2019-rme_basic_sample_project/space_kinds_vs_ifc.txt
+--- measure-base/sample-2019-rme_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.980183763 +0000
++++ measure-head/sample-2019-rme_basic_sample_project/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.793189247 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2020-racadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2020-racadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2020-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.980183763 +0000
++++ measure-head/sample-2020-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.793189247 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2021-racadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2021-racadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2021-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.001183667 +0000
++++ measure-head/sample-2021-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.793189247 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 91
+@@ -6 +6 @@
+-space kinds: no SpaceKind 91
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  1DRIgGmAHBt9Ugpf6z41P$: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1DRIgGmAHBt9Ugpf6z41P_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1DRIgGmAHBt9Ugpf6z41Pu: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1DRIgGmAHBt9Ugpf6z41Pv: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Ei$: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiX: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiY: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39EiZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Ei_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Eib: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Eic: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Eid: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Eie: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Eif: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Eig: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Eih: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  1GE3M13VHAWxhxwcp39Eii: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  ... 66 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2022-racadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2022-racadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2022-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.001183667 +0000
++++ measure-head/sample-2022-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.793189247 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2023-racadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2023-racadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2023-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.002183662 +0000
++++ measure-head/sample-2023-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.846189002 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-racadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2024-racadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2024-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.771184729 +0000
++++ measure-head/sample-2024-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.314191460 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-rmeadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2024-rmeadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2024-rmeadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.795184618 +0000
++++ measure-head/sample-2024-rmeadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.346191312 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-rmebasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2024-rmebasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2024-rmebasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.795184618 +0000
++++ measure-head/sample-2024-rmebasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.346191312 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-rstbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2024-rstbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2024-rstbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.795184618 +0000
++++ measure-head/sample-2024-rstbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.346191312 +0000
+@@ -3 +3 @@
+-space kinds: area 0
++space kinds: area 1
+@@ -6 +6 @@
+-space kinds: no SpaceKind 1
++space kinds: no SpaceKind 0
+@@ -13,3 +13,2 @@
+-space kinds: FAIL
+-  0wWrXKmlH9o9quybISZT88: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-snowdon_towers_sample_architectural/space_kinds_vs_ifc.txt measure-head/sample-2024-snowdon_towers_sample_architectural/space_kinds_vs_ifc.txt
+--- measure-base/sample-2024-snowdon_towers_sample_architectural/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.836184429 +0000
++++ measure-head/sample-2024-snowdon_towers_sample_architectural/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.387191123 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 54
++space kinds: area 101
+@@ -6 +6 @@
+-space kinds: no SpaceKind 155
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  0O6JtV3qD1ChjiD28ljJgW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJgY: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJga: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJh$: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJh1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJh5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJh7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJh9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhv: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhx: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0O6JtV3qD1ChjiD28ljJhz: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0XunQJuDrCywXJ370JITAK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0XunQJuDrCywXJ370JITAe: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0XunQJuDrCywXJ370JITAg: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0XunQJuDrCywXJ370JITAi: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0XunQJuDrCywXJ370JITAk: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  ... 130 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-snowdon_towers_sample_structural/space_kinds_vs_ifc.txt measure-head/sample-2024-snowdon_towers_sample_structural/space_kinds_vs_ifc.txt
+--- measure-base/sample-2024-snowdon_towers_sample_structural/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.933183981 +0000
++++ measure-head/sample-2024-snowdon_towers_sample_structural/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.444190859 +0000
+@@ -3 +3 @@
+-space kinds: area 0
++space kinds: area 7
+@@ -6 +6 @@
+-space kinds: no SpaceKind 7
++space kinds: no SpaceKind 0
+@@ -13,9 +13,2 @@
+-space kinds: FAIL
+-  0oyMUfi$H9Hff8OPmSZj$_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+-  0oyMUfi$H9Hff8OPmSZj$c: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+-  0oyMUfi$H9Hff8OPmSZj2F: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+-  0oyMUfi$H9Hff8OPmSZj2s: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+-  0oyMUfi$H9Hff8OPmSZj91: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-  0oyMUfi$H9Hff8OPmSZj_g: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+-  0oyMUfi$H9Hff8OPmSZjsr: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2025-racadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2025-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.933183981 +0000
++++ measure-head/sample-2025-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.444190859 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-rmeadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2025-rmeadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2025-rmeadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.952183893 +0000
++++ measure-head/sample-2025-rmeadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.457190799 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-rmebasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2025-rmebasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2025-rmebasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.003183657 +0000
++++ measure-head/sample-2025-rmebasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.694189704 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-rstbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2025-rstbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2025-rstbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.003183657 +0000
++++ measure-head/sample-2025-rstbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.694189704 +0000
+@@ -3 +3 @@
+-space kinds: area 0
++space kinds: area 1
+@@ -6 +6 @@
+-space kinds: no SpaceKind 1
++space kinds: no SpaceKind 0
+@@ -13,3 +13,2 @@
+-space kinds: FAIL
+-  0wWrXKmlH9o9quybISZT88: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2026-racadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2026-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.003183657 +0000
++++ measure-head/sample-2026-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.694189704 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-rmeadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2026-rmeadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2026-rmeadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.003183657 +0000
++++ measure-head/sample-2026-rmeadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.694189704 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-rmebasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2026-rmebasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2026-rmebasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.003183657 +0000
++++ measure-head/sample-2026-rmebasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.695189700 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-rstbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2026-rstbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2026-rstbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.004183653 +0000
++++ measure-head/sample-2026-rstbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.695189700 +0000
+@@ -3 +3 @@
+-space kinds: area 0
++space kinds: area 1
+@@ -6 +6 @@
+-space kinds: no SpaceKind 1
++space kinds: no SpaceKind 0
+@@ -13,3 +13,2 @@
+-space kinds: FAIL
+-  0wWrXKmlH9o9quybISZT88: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2027-racadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2027-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.004183653 +0000
++++ measure-head/sample-2027-racadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.695189700 +0000
+@@ -2,2 +2,2 @@
+-space kinds: room 0
+-space kinds: area 0
++space kinds: room 91
++space kinds: area 25
+@@ -6 +6 @@
+-space kinds: no SpaceKind 116
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology_unchecked'
+-  ... 91 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-rmeadvancedsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2027-rmeadvancedsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2027-rmeadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.004183653 +0000
++++ measure-head/sample-2027-rmeadvancedsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.695189700 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-rmebasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2027-rmebasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2027-rmebasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.004183653 +0000
++++ measure-head/sample-2027-rmebasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.695189700 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 76
+@@ -6 +6 @@
+-space kinds: no SpaceKind 76
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+-  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+-  ... 51 more
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-rstbasicsampleproject/space_kinds_vs_ifc.txt measure-head/sample-2027-rstbasicsampleproject/space_kinds_vs_ifc.txt
+--- measure-base/sample-2027-rstbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:44.004183653 +0000
++++ measure-head/sample-2027-rstbasicsampleproject/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.695189700 +0000
+@@ -3 +3 @@
+-space kinds: area 0
++space kinds: area 1
+@@ -6 +6 @@
+-space kinds: no SpaceKind 1
++space kinds: no SpaceKind 0
+@@ -13,3 +13,2 @@
+-space kinds: FAIL
+-  0wWrXKmlH9o9quybISZT88: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+-exit 1
++space kinds: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/mcp_answers_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/mcp_answers_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/mcp_answers_vs_ifc.txt	2026-11-05 12:47:43.981183759 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/mcp_answers_vs_ifc.txt	2026-11-05 12:47:42.693189709 +0000
+@@ -6 +6 @@
+-mcp answers: consistency counts: 56 compared, 0 differ
++mcp answers: consistency counts: 59 compared, 0 differ
+@@ -43 +43 @@
+-mcp answers: rooms of space kind room: 0
++mcp answers: rooms of space kind room: 73
+@@ -47 +47 @@
+-mcp answers: rooms with no space kind: 73
++mcp answers: rooms with no space kind: 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/space_kinds_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/space_kinds_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/space_kinds_vs_ifc.txt	2026-11-05 12:47:43.981183759 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/space_kinds_vs_ifc.txt	2026-11-05 12:47:42.693189709 +0000
+@@ -2 +2 @@
+-space kinds: room 0
++space kinds: room 73
+@@ -6 +6 @@
+-space kinds: no SpaceKind 73
++space kinds: no SpaceKind 0
+@@ -13,28 +13,2 @@
+-space kinds: FAIL
+-  03OuxbOXE7sfBQMbcULoty: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  08SKyH$_6EMvVHlJDz_1iW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  09KG0s0McB0RFZMNBBG785: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  09bksLAfQ76OZMqtpmb0dT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  09shiYfyUF$BLlStVBQURV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0DBVn8ui67BRpLNOAJ$MWK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0G2T54XVg0Pw5Ag4yA9r28: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0SZji2hqU77fG0qrV8egGy: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0SaFWldi_3T8AM9Z4mvSXs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0UYjC$UwY74QHFjTzLzHwg: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0YZMiOJ3g2mPbQ4RGweYtd: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0hc_nbCRgDJwECv2sVo9en: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0jpiQser_5MAt$qMsjKQd1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0jrXVL$Dw1vRUbypskHGTR: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0lEpYGoiU6LeHFSoBxSyZ1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0nukNgE9Q0t8MR8rphA6pp: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0oreqxMtM9HOHb9zIpJh36: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0owZFdwd_4IO72eRyCe563: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0phYdLclk8t9$Fbw50pQOD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0rs3hNqNU9EOubG56Yu64c: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0ubxn2TyY4ZBy_E$CMfcgs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0w6$fxu0oFXvrsb7npU6Jp: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  0zENuwUScEew3uoIqCSUoY: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  12D0WTmOUAXuDJpXQSn5Il: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  15EdmMYXE3EfnODeK_iVw_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+-  ... 48 more
+-exit 1
++space kinds: PASS
++exit 0

@@ -1,0 +1,7 @@
+    360  system family | IfcWall | Name equal | ObjectType equal
+    256  family instance | IfcColumn | Name equal | ObjectType equal
+    132  family instance | IfcDoor | Name equal | ObjectType equal
+     80  system family | IfcSlab | Name equal | ObjectType equal
+     20  system family | IfcShadingDevice | Name equal | ObjectType equal
+      6  family instance | IfcWindow | Name equal | ObjectType equal
+exit 0

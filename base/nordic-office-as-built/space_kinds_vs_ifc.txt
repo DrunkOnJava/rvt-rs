@@ -1,0 +1,40 @@
+space kinds: IfcSpace 308
+space kinds: room 0
+space kinds: area 0
+space kinds: mep_space 0
+space kinds: family_instance 0
+space kinds: no SpaceKind 308
+space kinds: SpaceKind of another value 0
+space kinds: SpaceOutlineSource this scorer does not know 0
+space kinds: SpaceOutlineSource of an Area 30
+space kinds: area without an Area outline source 0
+space kinds: other kind with an Area outline source 0
+space kinds: spaces whose outline source agreement was not checked 0
+space kinds: FAIL
+  04HSGJmcD3bRsP58HjpIbw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  05MwHiS6LD$BIlHfVKbp73: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0C83sfLu9E9eQLJY7z8Xye: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0FmGuf5a54T9pmsaibMAqb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06Ag5$: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06Ag5j: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06Ag5n: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgEb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgEd: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgEj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgEl: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgEp: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgEr: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgEt: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgEx: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgFD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgFH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgFJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgFP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06AgFQ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06Agwi: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06Agzb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0Q4MSUQx531vKL_w06Agzh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0SCHpckP52uejwTkqQpmS1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0SCHpckP52uejwTkqQpmjD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  ... 283 more
+exit 1

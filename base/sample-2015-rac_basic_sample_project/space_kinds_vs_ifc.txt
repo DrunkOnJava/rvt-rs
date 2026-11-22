@@ -1,0 +1,28 @@
+space kinds: IfcSpace 14
+space kinds: room 0
+space kinds: area 0
+space kinds: mep_space 0
+space kinds: family_instance 0
+space kinds: no SpaceKind 14
+space kinds: SpaceKind of another value 0
+space kinds: SpaceOutlineSource this scorer does not know 0
+space kinds: SpaceOutlineSource of an Area 0
+space kinds: area without an Area outline source 0
+space kinds: other kind with an Area outline source 0
+space kinds: spaces whose outline source agreement was not checked 0
+space kinds: FAIL
+  2pfAHb2EL46hq_sMVbImE4: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  2wm6PO6TX9IxXwLP21HyQg: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eOWH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eOZ3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eOZQ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eObW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eObZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eOb_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eObb: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eObg: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eObq: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eObv: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eOci: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3ch3OBgkrCEw4mDhJ2eOdV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+exit 1

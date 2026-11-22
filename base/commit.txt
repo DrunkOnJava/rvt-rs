@@ -1,0 +1,1 @@
+5988d8398d17addba8bc67c4525bff69c0971c9f feat(ifc): Areas from Revit's plan topology, and on Revit 2025 to 2027 (#1261, #1194) (#1428)

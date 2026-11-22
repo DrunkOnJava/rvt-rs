@@ -1,0 +1,6 @@
+openings in Revit's export: 4; in rvt-rs's: 4; both: 4
+  within 0.01 ft: 4
+  within 0.26 ft: 4
+  within 1.0 ft: 4
+  largest difference: 0.00 ft
+exit 0

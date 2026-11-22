@@ -1,0 +1,5 @@
+2 walls in the GLB
+      2  compared, axis-parallel
+faces (across), axis-parallel: 2 walls; within 0.001 ft: 2 0.01 ft: 2 0.1 ft: 2 1.0 ft: 2; max 0.001 ft
+ends (along), axis-parallel: 2 walls; within 0.001 ft: 2 0.01 ft: 2 0.1 ft: 2 1.0 ft: 2; max 0.000 ft
+exit 0

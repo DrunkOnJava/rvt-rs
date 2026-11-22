@@ -1,0 +1,23 @@
+space kinds: IfcSpace 9
+space kinds: room 0
+space kinds: area 0
+space kinds: mep_space 0
+space kinds: family_instance 0
+space kinds: no SpaceKind 9
+space kinds: SpaceKind of another value 0
+space kinds: SpaceOutlineSource this scorer does not know 0
+space kinds: SpaceOutlineSource of an Area 0
+space kinds: area without an Area outline source 0
+space kinds: other kind with an Area outline source 0
+space kinds: spaces whose outline source agreement was not checked 0
+space kinds: FAIL
+  00gOQ074DFVfD8V5PfyC3y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  00gOQ074DFVfD8V5PfyCyT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  03_0wbo9v06f0pakTaS3mj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  03_0wbo9v06f0pakTaS3nl: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  03_0wbo9v06f0pakTaS3oL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  03_0wbo9v06f0pakTaS3qI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  03_0wbo9v06f0pakTaS3zF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  0R_MrebNjFnuoocWuAk2Kj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  0R_MrebNjFnuoocWuAk2N$: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+exit 1

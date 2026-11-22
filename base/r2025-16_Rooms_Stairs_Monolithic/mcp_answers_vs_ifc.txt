@@ -1,0 +1,79 @@
+  open_model
+  list_elements: 25 rows
+  get_element: 21 elements
+mcp answers: consistency basis: the export of this run
+mcp answers: consistency protocol: 5 compared, 0 differ
+mcp answers: consistency counts: 42 compared, 0 differ
+mcp answers: elements the export folds into the body of another element, not rows: 0
+mcp answers: rows that are opening elements, which the diagnostics do not count as building elements: 0
+mcp answers: IfcBuildingElementProxy: 9 rows
+mcp answers: IfcDoor: 1 rows
+mcp answers: IfcRailing: 2 rows
+mcp answers: IfcRoof: 1 rows
+mcp answers: IfcSpace: 2 rows
+mcp answers: IfcStair: 1 rows
+mcp answers: IfcStairFlight: 1 rows
+mcp answers: IfcWall: 5 rows
+mcp answers: IfcWindow: 3 rows
+mcp answers: rows listed: 25
+mcp answers: consistency parameter values: 1 compared, 0 differ
+mcp answers: consistency element membership: 25 compared, 0 differ
+mcp answers: consistency element entities: 25 compared, 0 differ
+mcp answers: consistency element names: 25 compared, 0 differ
+mcp answers: consistency element long names: 25 compared, 0 differ
+mcp answers: consistency element ids: 25 compared, 0 differ
+mcp answers: consistency element predefined types: 25 compared, 0 differ
+mcp answers: consistency element storeys: 25 compared, 0 differ
+mcp answers: IFC openings the writer cuts for doors and windows, in no row: 4
+mcp answers: IFC elements and spaces: 29
+mcp answers: consistency levels: 4 compared, 0 differ
+mcp answers: consistency rooms: 2 compared, 0 differ
+mcp answers: rooms: 2
+mcp answers: rooms with an area: 2
+mcp answers: rooms without an area: 0
+mcp answers: rooms of space kind room: 0
+mcp answers: rooms of space kind area: 0
+mcp answers: rooms of space kind mep_space: 0
+mcp answers: rooms of space kind family_instance: 0
+mcp answers: rooms with no space kind: 2
+mcp answers: consistency details: 21 compared, 0 differ
+mcp answers: consistency type objects: 21 compared, 0 differ
+mcp answers: consistency type object sets: 21 compared, 0 differ
+mcp answers: get_element property and quantity sets compared: 139
+mcp answers: consistency diagnostics: 1 compared, 0 differ
+mcp answers: consistency export hash: 1 compared, 0 differ
+mcp answers: classes: Revit export, elements and spaces paired: 25
+mcp answers: classes: Revit export, elements left out for no Tag: 0
+mcp answers: classes: Revit export, elements left out for a repeated Tag: 1
+mcp answers: classes: the answers, elements and spaces paired: 25
+mcp answers: classes: the answers, rows left out for no Tag: 0
+mcp answers: classes: the answers, rows left out for a repeated Tag: 0
+mcp answers: class IfcBuildingElementProxy: revit 9, same 9, other 0, absent 0
+mcp answers: class IfcDoor: revit 1, same 1, other 0, absent 0
+mcp answers: class IfcRailing: revit 2, same 2, other 0, absent 0
+mcp answers: class IfcRoof: revit 1, same 1, other 0, absent 0
+mcp answers: class IfcSpace: revit 2, same 2, other 0, absent 0
+mcp answers: class IfcStair: revit 1, same 1, other 0, absent 0
+mcp answers: class IfcStairFlight: revit 1, same 1, other 0, absent 0
+mcp answers: class IfcWall: revit 5, same 5, other 0, absent 0
+mcp answers: class IfcWindow: revit 3, same 3, other 0, absent 0
+mcp answers: consistency class sets: 25 compared, 0 differ
+mcp answers: storeys: rows the answers and Revit export share: 23
+mcp answers: storeys: rows on a storey where Revit has another container: 4
+mcp answers: storeys: rows on the same storey as in Revit: 19
+mcp answers: rooms: in the answers: 2
+mcp answers: rooms: Revit spaces with a body: 2
+mcp answers: rooms: paired by GlobalId: 2
+mcp answers: rooms: paired with an area in the answers: 2
+mcp answers: rooms: paired without an area in the answers: 0
+mcp answers: rooms: area within 0.1% of Revit: 2
+mcp answers: rooms: area within 1% of Revit: 2
+mcp answers: rooms: area more than 1% from Revit: 0
+mcp answers: values: sampled rows the answers and Revit export share: 19
+mcp answers: values: property values equal to Revit: 78
+mcp answers: values: property values in the answers: 78
+mcp answers: values: property or quantity values Revit writes that the answers lack: 56
+mcp answers: values: quantity values equal to Revit: 35
+mcp answers: values: quantity values in the answers: 35
+mcp answers: consistency PASS: every check equal
+exit 0

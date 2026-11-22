@@ -1,0 +1,10 @@
+rvt-rs coordinate reference: none in the header
+rvt-rs IfcMapConversion: none
+rvt-rs site placement: translation (0.000, 0.000, 0.000) rotation 0.0000 deg
+Revit coordinate reference: CoordinateReference [CoordinateBase: Shared Coordinates]
+Revit IfcMapConversion: none
+Revit site placement: translation (0.000, 0.000, 0.000) rotation 0.0000 deg
+elements tagged in both: 6; centres compared: 6
+fitted rvt-rs -> Revit: translation (-0.000, -0.000, -0.000) rotation 0.0000 deg; residual median 0.0000 max 0.0000
+Revit's site placement applied to rvt-rs: residual median 0.0000 max 0.0000
+exit 0

@@ -1,0 +1,41 @@
+  open_model
+  list_elements: 37 rows
+  get_element: 12 elements
+mcp answers: consistency basis: the export of this run
+mcp answers: consistency protocol: 5 compared, 0 differ
+mcp answers: consistency counts: 23 compared, 0 differ
+mcp answers: elements the export folds into the body of another element, not rows: 0
+mcp answers: rows that are opening elements, which the diagnostics do not count as building elements: 0
+mcp answers: IfcPlate: 9 rows
+mcp answers: IfcWall: 26 rows
+mcp answers: IfcWindow: 2 rows
+mcp answers: rows listed: 37
+mcp answers: consistency parameter values: 1 compared, 0 differ
+mcp answers: consistency element membership: 37 compared, 0 differ
+mcp answers: consistency element entities: 37 compared, 0 differ
+mcp answers: consistency element names: 37 compared, 0 differ
+mcp answers: consistency element long names: 37 compared, 0 differ
+mcp answers: consistency element ids: 37 compared, 0 differ
+mcp answers: consistency element predefined types: 37 compared, 0 differ
+mcp answers: consistency element storeys: 37 compared, 0 differ
+mcp answers: IFC openings the writer cuts for doors and windows, in no row: 2
+mcp answers: IFC elements and spaces: 39
+mcp answers: consistency levels: 4 compared, 0 differ
+mcp answers: consistency rooms: 0 compared, 0 differ
+mcp answers: rooms: 0
+mcp answers: rooms with an area: 0
+mcp answers: rooms without an area: 0
+mcp answers: rooms of space kind room: 0
+mcp answers: rooms of space kind area: 0
+mcp answers: rooms of space kind mep_space: 0
+mcp answers: rooms of space kind family_instance: 0
+mcp answers: rooms with no space kind: 0
+mcp answers: consistency details: 12 compared, 0 differ
+mcp answers: consistency type objects: 12 compared, 0 differ
+mcp answers: consistency type object sets: 12 compared, 0 differ
+mcp answers: get_element property and quantity sets compared: 56
+mcp answers: consistency diagnostics: 1 compared, 0 differ
+mcp answers: consistency export hash: 1 compared, 0 differ
+mcp answers: oracle: NOT MEASURED, Revit gave no export of this model
+mcp answers: consistency PASS: every check equal
+exit 0

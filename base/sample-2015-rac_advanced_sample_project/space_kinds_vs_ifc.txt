@@ -1,0 +1,40 @@
+space kinds: IfcSpace 116
+space kinds: room 0
+space kinds: area 0
+space kinds: mep_space 0
+space kinds: family_instance 0
+space kinds: no SpaceKind 116
+space kinds: SpaceKind of another value 0
+space kinds: SpaceOutlineSource this scorer does not know 0
+space kinds: SpaceOutlineSource of an Area 25
+space kinds: area without an Area outline source 0
+space kinds: other kind with an Area outline source 0
+space kinds: spaces whose outline source agreement was not checked 0
+space kinds: FAIL
+  06NqO8bQX07hzFUDJa89a_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89ab: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89as: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89au: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89aw: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89ay: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89bF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89in: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89j5: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89j7: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89j9: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89jB: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89jD: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89jF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89lH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89lJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89lL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89lZ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89ld: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89lf: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89lh: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89lj: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  06NqO8bQX07hzFUDJa89ll: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  0L6PAa8RD5WhJxVZAT8X5Y: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  0L6PAa8RD5WhJxVZAT8X5a: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  ... 91 more
+exit 1

@@ -1,0 +1,21 @@
+space kinds: IfcSpace 7
+space kinds: room 0
+space kinds: area 0
+space kinds: mep_space 0
+space kinds: family_instance 0
+space kinds: no SpaceKind 7
+space kinds: SpaceKind of another value 0
+space kinds: SpaceOutlineSource this scorer does not know 0
+space kinds: SpaceOutlineSource of an Area 7
+space kinds: area without an Area outline source 0
+space kinds: other kind with an Area outline source 0
+space kinds: spaces whose outline source agreement was not checked 0
+space kinds: FAIL
+  0oyMUfi$H9Hff8OPmSZj$_: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+  0oyMUfi$H9Hff8OPmSZj$c: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+  0oyMUfi$H9Hff8OPmSZj2F: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+  0oyMUfi$H9Hff8OPmSZj2s: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+  0oyMUfi$H9Hff8OPmSZj91: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+  0oyMUfi$H9Hff8OPmSZj_g: no SpaceKind; SpaceKind None, SpaceOutlineSource 'none'
+  0oyMUfi$H9Hff8OPmSZjsr: no SpaceKind; SpaceKind None, SpaceOutlineSource 'area_plan_topology'
+exit 1

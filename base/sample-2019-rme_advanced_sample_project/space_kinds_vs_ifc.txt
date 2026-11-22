@@ -1,0 +1,40 @@
+space kinds: IfcSpace 76
+space kinds: room 0
+space kinds: area 0
+space kinds: mep_space 0
+space kinds: family_instance 0
+space kinds: no SpaceKind 76
+space kinds: SpaceKind of another value 0
+space kinds: SpaceOutlineSource this scorer does not know 0
+space kinds: SpaceOutlineSource of an Area 0
+space kinds: area without an Area outline source 0
+space kinds: other kind with an Area outline source 0
+space kinds: spaces whose outline source agreement was not checked 0
+space kinds: FAIL
+  3XrBtx9eX7mQE6EqWHPfCP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfCs: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfDW: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfMG: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfMH: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfMI: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfMJ: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfMM: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfN0: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfN1: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfN2: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfN3: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfNC: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfND: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfNE: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfNF: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfNK: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfNL: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid_approximate'
+  3XrBtx9eX7mQE6EqWHPfNN: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfNO: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfNP: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfNS: no SpaceKind; SpaceKind None, SpaceOutlineSource 'stored_solid'
+  3XrBtx9eX7mQE6EqWHPfNT: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfNU: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  3XrBtx9eX7mQE6EqWHPfNV: no SpaceKind; SpaceKind None, SpaceOutlineSource 'record_box'
+  ... 51 more
+exit 1

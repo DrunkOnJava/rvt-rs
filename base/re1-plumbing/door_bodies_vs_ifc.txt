@@ -1,0 +1,2 @@
+0 IfcDoor in rvt-rs's file; tolerance 0.01 ft
+exit 0

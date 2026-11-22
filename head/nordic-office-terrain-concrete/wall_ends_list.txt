@@ -1,0 +1,8 @@
+straight and angled walls in both: 2; both ends within 0.001 ft: 2
+BodySource | start (Revit's joins there) | end (Revit's joins there) | walls; short/long = rvt-rs's wall shorter/longer there
+      1  partition_element_record_join_trimmed | start ok [free] | end ok [free]
+      1  partition_wall_centreline | start ok [free] | end ok [free]
+the 40 largest (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):
+  1351524 partition_element_record_join_trimmed 'MS-1' start -0.0000 end +0.0000 start[] end[] path 0
+  1387731 partition_wall_centreline 'MS-2' start -0.0000 end -0.0000 start[] end[] path 0
+exit 0

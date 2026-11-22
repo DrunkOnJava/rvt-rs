@@ -1,0 +1,15 @@
+Revit's export: 123 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+rvt-rs's export: 124 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcFlowFitting                       54      0     54      0  IfcPipeFitting 54
+IfcFlowSegment                       63      0     63      0  IfcPipeSegment 63
+IfcFlowTerminal                       6      0      6      0  IfcSanitaryTerminal 6
+written as another class, by Revit's category and export value, and rvt-rs's:
+      54  IfcFlowFitting -> IfcPipeFitting  Revit '-' '-' PredefinedType - type IfcPipeFittingType NOTDEFINED  rvt-rs 'Pipe Fittings' '-'  e.g. 443813
+      63  IfcFlowSegment -> IfcPipeSegment  Revit '-' '-' PredefinedType - type IfcPipeSegmentType NOTDEFINED  rvt-rs 'Pipes' '-'  e.g. 443719
+       6  IfcFlowTerminal -> IfcSanitaryTerminal  Revit '-' '-' PredefinedType - type IfcDistributionElementType -  rvt-rs 'Plumbing Fixtures' '-'  e.g. 442581
+extra in rvt-rs's export, by class:
+IfcSanitaryTerminal                   1
+extra IfcSanitaryTerminal (1):
+  442378  '224200-FIXT-Rough In Water Closet Tank:Water Closet Tank_M:442378'  '224200-FIXT-Rough In Water Closet Tank:Water Closet Tank_M'  storey 'Level 1'  category 'Plumbing Fixtures'  export as '-'
+exit 0
