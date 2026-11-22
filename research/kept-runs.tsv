@@ -53,7 +53,7 @@ run	commit	kept
 42106711251	2977cf634d3326a52c1adfd7097ed5b231124c0d	head 1888 files for 60 models; base 1853 files for 60 models; compare 1 file
 42106731054	bf4238722b3059a59225664108cb5092d957d869	head 11 files for 5 models; base 11 files for 5 models; compare 1 file
 42108271073	aefb7f0a7995f758ff31831b4d47dc8404c24538	head 107 files for 21 models
-42109657349	-	nothing: a Viewer tests run of 2026-11-05 whose artifacts are gone; its log's build line is kept as 42109657349-log
+42109657349	-	nothing: a Viewer tests run of 2026-11-05 that lists no artifact; its log's build line is kept as 42109657349-log
 42125048710	-	nothing: a Viewer tests run of 2026-11-05 that lists no artifact; its log's measurement lines are kept as 42125048710-log
 42127619521	b0b423da0b49c4f21af6ca1a836af645bd75a4d0	head 46 files for 9 models
 42135914864	cc1a09c6b324b739bd5709eb44273a37bd16a141	head 2146 files for 93 models; base 2144 files for 93 models; compare 1 file
@@ -82,5 +82,5 @@ run	commit	kept
 42106436497-probes	e4dee7a0d096743e78a904f20b1ca9dc51e08ebf	head 59 files for 58 models
 42108271073-probes	c636faa7a6694b94234e05b79aeee5f155f57afd	head 22 files for 21 models
 42109657349-log	ed933f84fff1da6d9d96ad06f0c5d90c577fd2c3	log 3 lines from 3 jobs
-42125048710-log	e52dccc3730fb8cab66eded9cc8c89ab5eb7c1c0	log 7 lines from 3 jobs
+42125048710-log	85fff80ddfdb56867adec0cd497daff060f5dfad	log 8 lines from 3 jobs
 42556745265-holdout	b979b8cfce303b87ac1e356bc1a36ca3922b4660	head 19 files for 18 models; base 19 files for 18 models
