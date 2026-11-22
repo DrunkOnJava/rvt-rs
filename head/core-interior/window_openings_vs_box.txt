@@ -1,0 +1,3 @@
+windows in both: 6, distinct: 1
+   6 min (0.0, 0.0, 0.0) max (0.0, 0.0, 0.0); e.g. 20898: rvt-rs size [0.5, 4.9213, 8.8583], Revit [0.5, 4.9213, 8.8583]
+exit 0

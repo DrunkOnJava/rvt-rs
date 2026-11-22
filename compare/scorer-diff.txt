@@ -1,0 +1,4 @@
+Only in measure-head/core-interior: probe_score.txt
+Only in measure-head/nordic-office-as-built: probe_score.txt
+Only in measure-head/nordic-office-permit: probe_score.txt
+Only in measure-head/re1-architecture: probe_score.txt

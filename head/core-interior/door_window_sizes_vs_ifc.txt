@@ -1,0 +1,3 @@
+IfcDoor: 132 matched by Tag, OverallWidth and OverallHeight equal 132  differ 0  $ 0
+IfcWindow: 6 matched by Tag, OverallWidth and OverallHeight equal 6  differ 0  $ 0
+exit 0

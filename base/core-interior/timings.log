@@ -1,0 +1,10 @@
+door_bodies_vs_ifc 4041
+global_ids_vs_ifc 650
+door_window_sizes_vs_ifc 750
+opening_hosts_vs_ifc 800
+opening_boxes_vs_ifc 1758
+openings_vs_ifc 1175
+type_objects_vs_ifc 1154
+unfilled_openings_vs_ifc 1185
+window_openings_vs_box 1688
+probe 5205
