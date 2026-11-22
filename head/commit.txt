@@ -1,0 +1,1 @@
+f9f71e688c36691d6bc51dd9c5d1fe589ac583ef feat(ifc): write LoadBearing on structural beams and columns, and their IsExternal on Revit 2015 to 2023 (#1158) (RE-285) (#1226)
