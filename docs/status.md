@@ -112,7 +112,7 @@ tolerance, its list of roofs that may differ (`ROOFS_NOT_THE_2025_BODY`, Griffin
 longer cuts the top of the walls under it unless its record box is exactly its type's layers and
 its outline is read (RE-351): the walls of `rac_basic` that its 2024 (15),
 2026 and 2027 (16) saves cut at roof 243274, up to 3.1865 m lower than its
-2025 save draws them (Measure run [42106436497](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106436497)), are drawn to their record
+2025 save draws them (Measure run [42106436497](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106436497) (kept: each save's `probe.txt` in the [file list][kept-40], the difference of its walls' `height_feet`)), are drawn to their record
 boxes as the 2025 save draws them (on the 2026 and 2027 saves all 16 are the
 2025 save's bodies, Measure run [42554270370](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42554270370) (kept: [2026 save][kept-1], [2027 save][kept-2]), and on the held-out AA house, Revit
 26.4's IFC4X3 export and the one Revit export the rule changes, the walls with
@@ -997,7 +997,7 @@ memory the file is read only when asked. The page keeps each element's answer,
 up to 64 and the least recently selected going first, until a file is opened
 again. `viewer/tests/parameters-row.spec.ts` holds the panel's entries for an
 element to the entries `rvt-elements` prints for the same ElementId, whole, on
-Einhoven and on Core Interior. Viewer tests run [42125048710](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42125048710) on head 3146f14e (CI runner, WASM without LTO): all 37 of
+Einhoven and on Core Interior. Viewer tests run [42125048710](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42125048710) (kept: the [log lines][kept-41] that print the figures of Einhoven, Core Interior and the office, its 927 MiB cap included) on head 3146f14e (CI runner, WASM without LTO): all 37 of
 Einhoven's tree elements were selected, 28 with parameters (369 entries, 332
 instance, 37 type, 8 named) equal to `rvt-elements`' and 7 with none showing
 the empty state; a read took a median of 153 ms (most 210 ms) in 17 MiB of wasm
@@ -1008,7 +1008,7 @@ entries in 3.9 s in 943 MiB, the open's worker 910 MiB (66.6 s), and the page
 then kept 2 answers, 4,654 characters of JSON. Under a V8 cap of 927 MiB of wasm
 memory, between the office's open and its read, a read really runs out of
 memory and the file is read only when asked from then on. The page's one
-script is 40.27 kB larger (8.65 kB gzipped) than in the build of d1de8adf,
+script is 40.27 kB larger (8.65 kB gzipped) than in the build of d1de8adf (kept: the two builds' size lines, [this run's][kept-41] and [run 42109657349's][kept-42]),
 mostly because the glue and the two workers it fetched later are inside it. The release-outside-the-range and
 experimental-release states are measured with the worker's answer replaced, as
 no such file is in the viewer's job.
@@ -2301,3 +2301,6 @@ acceptance limits are 0.3048 mm sampled distance and 0.01% volume error.
 [kept-37]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/320903807c665d39e4acf7a83adcbce96d81a26e?recursive=1
 [kept-38]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/68a42783041c94c1b73b6e4a4872075a2c85397d?recursive=1
 [kept-39]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/c636faa7a6694b94234e05b79aeee5f155f57afd/head/sample-2023-racadvancedsampleproject/probe.txt
+[kept-40]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/e4dee7a0d096743e78a904f20b1ca9dc51e08ebf?recursive=1
+[kept-41]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/85fff80ddfdb56867adec0cd497daff060f5dfad/log/lines.txt
+[kept-42]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/ed933f84fff1da6d9d96ad06f0c5d90c577fd2c3/log/lines.txt
