@@ -112,6 +112,18 @@
 //!     the bound or more in model coordinates, or one whose chain or points cannot be read;
 //!   keys loop=[..] edge=[..] endpoint=[..] interior=[..] face=[..]: once, the field names of
 //!     the first gap's loop, edge, edge points and face;
+//!   ownnbr graph=<ElementId> face=<n> loop=<n> at=<k> side=<a|b> order=<prev|next>
+//!     class=<class> poly_p=<ft> poly_q=<ft> end_p=<ft> end_q=<ft>
+//!     shared_p=<ft> shared_q=<ft> join=<ft>: the two edges adjacent to the shared edge in
+//!     its other face's loop, evaluated through that face. The shared-edge endpoint is
+//!     the one nearest its own gap end. For each adjacent edge the probe reports polyline
+//!     distances to P and Q, distances to P and Q from the two selected endpoints, and
+//!     their separation (`join`). The adjacent endpoint is the one nearest the selected
+//!     shared endpoint.
+//!     `ownnbrunread` gives the missing face, loop or placement.
+//!     Distances describe the stored samples; selecting a Revit endpoint still requires
+//!     the same-save reference.
+//!
 //!   pieces surface=<class> gaps=<n> one=<n> diagonal=<n> tenth_mm=<n> ends=<n> through=<n>
 //!     mid_covered=<n> orphan_near=<n> sides_disagree=<n> rings_under=<n> unread=<n>: by class;
 //!   graphs read=<n> refused=<n>: the graphs decoded, and those refused whole for the budget.
@@ -797,6 +809,79 @@ fn chain_neighbours(graph: &ObjectGraph, face: usize, e: usize) -> Option<[usize
     None
 }
 
+/// Place the shared edge and its loop neighbours through the other face's own evaluator.
+fn report_own_neighbours(
+    graph: &ObjectGraph,
+    cache: &EdgeCache,
+    gap: &Gap,
+    location: (u64, usize, usize),
+) {
+    let (id, face, loop_index) = location;
+    let at = gap.at;
+    let nearest_end = |line: &Polyline, point| {
+        let first = line[0];
+        let last = line[line.len() - 1];
+        if dist(first, point) <= dist(last, point) {
+            first
+        } else {
+            last
+        }
+    };
+    for (label, edge, side, ring_end) in [
+        ("a", gap.a, gap.a_side, gap.p),
+        ("b", gap.b, gap.b_side, gap.q),
+    ] {
+        let unread = |reason| {
+            println!(
+                "ownnbrunread graph={id} face={face} loop={loop_index} at={at} side={label} reason={reason}"
+            );
+        };
+        let Some(other) = edge_faces(graph, edge)[1 - side] else {
+            unread("face");
+            continue;
+        };
+        let Some(neighbours) = chain_neighbours(graph, other, edge) else {
+            unread("loop");
+            continue;
+        };
+        let line_on_other = |edge| {
+            let own_side = edge_faces(graph, edge)
+                .iter()
+                .position(|face| *face == Some(other))?;
+            let (_, placements, _) = cache
+                .xany
+                .iter()
+                .find(|(candidate, _, _)| *candidate == edge)?;
+            placements[own_side].as_ref()
+        };
+        let Some(shared) = line_on_other(edge) else {
+            unread("shared_edge");
+            continue;
+        };
+        let shared_end = nearest_end(shared, ring_end);
+        let class = surface_class(graph, other);
+        for (order, neighbour) in ["prev", "next"].into_iter().zip(neighbours) {
+            let Some(line) = line_on_other(neighbour) else {
+                println!(
+                    "ownnbrunread graph={id} face={face} loop={loop_index} at={at} side={label} order={order} reason=adjacent_edge"
+                );
+                continue;
+            };
+            let endpoint = nearest_end(line, shared_end);
+            println!(
+                "ownnbr graph={id} face={face} loop={loop_index} at={at} side={label} order={order} class={class} poly_p={:.9} poly_q={:.9} end_p={:.9} end_q={:.9} shared_p={:.9} shared_q={:.9} join={:.9}",
+                polyline_dist(gap.p, line),
+                polyline_dist(gap.q, line),
+                dist(endpoint, gap.p),
+                dist(endpoint, gap.q),
+                dist(shared_end, gap.p),
+                dist(shared_end, gap.q),
+                dist(endpoint, shared_end)
+            );
+        }
+    }
+}
+
 /// For each gap of `TOUCHING` or more in a failing ring's stored edges: whether the graph
 /// stores an edge that fills it, by pointers first and then by distance (#2085).
 #[allow(clippy::too_many_arguments)]
@@ -1013,6 +1098,7 @@ fn read_pieces(
             g.at,
             beside.join(" ")
         );
+        report_own_neighbours(graph, cache, g, (id, fi, loop_index));
         // Whose edge a `through` match is: this face's body or another, and whether it is one
         // of the edges that name this face but that no loop walked reaches.
         let own_body = cache.body.get(&fi).copied();
