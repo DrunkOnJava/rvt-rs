@@ -112,7 +112,7 @@ tolerance, its list of roofs that may differ (`ROOFS_NOT_THE_2025_BODY`, Griffin
 longer cuts the top of the walls under it unless its record box is exactly its type's layers and
 its outline is read (RE-351): the walls of `rac_basic` that its 2024 (15),
 2026 and 2027 (16) saves cut at roof 243274, up to 3.1865 m lower than its
-2025 save draws them (Measure run [42106436497](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106436497)), are drawn to their record
+2025 save draws them (Measure run [42106436497](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106436497) (kept: each save's `probe.txt` in the [file list][kept-40], the difference of its walls' `height_feet`)), are drawn to their record
 boxes as the 2025 save draws them (on the 2026 and 2027 saves all 16 are the
 2025 save's bodies, Measure run [42554270370](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42554270370) (kept: [2026 save][kept-1], [2027 save][kept-2]), and on the held-out AA house, Revit
 26.4's IFC4X3 export and the one Revit export the rule changes, the walls with
@@ -2301,3 +2301,4 @@ acceptance limits are 0.3048 mm sampled distance and 0.01% volume error.
 [kept-37]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/320903807c665d39e4acf7a83adcbce96d81a26e?recursive=1
 [kept-38]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/68a42783041c94c1b73b6e4a4872075a2c85397d?recursive=1
 [kept-39]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/c636faa7a6694b94234e05b79aeee5f155f57afd/head/sample-2023-racadvancedsampleproject/probe.txt
+[kept-40]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/e4dee7a0d096743e78a904f20b1ca9dc51e08ebf?recursive=1
