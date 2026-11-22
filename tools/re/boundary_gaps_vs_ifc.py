@@ -85,7 +85,10 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    each side's neighbouring edges placed through their own face), the sides on which a neighbour's
    end joins the shared edge within 1e-7 ft and lies at exactly one gap end within 1e-7 ft, against
    whether Revit keeps that end. And, where the bit is on one edge only, the stored gaps by graph,
-   since a gap's drawings agree: whether the split between the two ends follows the graph.
+   since a gap's drawings agree: whether the split between the two ends follows the graph. And,
+   where the probe prints `pieceorient`, the outcome against whether P and Q are their edges'
+   stored first or last points, and for the flagged gaps against the same for the flagged edge's
+   end and the other edge's end, counted once per stored gap.
 
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
@@ -162,6 +165,9 @@ def read_probe(path):
             elif line.startswith("piecemore "):
                 f = fields(line)
                 FLAGS[(f["graph"], f["face"], f["loop"], f["at"])] = (f.get("a_flags"), f.get("b_flags"))
+            elif line.startswith("pieceorient "):
+                f = fields(line)
+                ORIENT[(f["graph"], f["face"], f["loop"], f["at"])] = (f.get("p_is", "?"), f.get("q_is", "?"))
             elif line.startswith("ownnbr "):
                 f = fields(line)
                 OWN.setdefault((f["graph"], f["face"], f["loop"], f["at"]), []).append(f)
@@ -216,6 +222,8 @@ PLACE = {}
 ORDER = {}
 # (graph, face, loop, at) -> the probe's `ownnbr` rows for the gap (#2136).
 OWN = {}
+# (graph, face, loop, at) -> whether P and Q are their edges' stored first or last points.
+ORIENT = {}
 
 
 def face_order(a, b):
@@ -679,10 +687,14 @@ def main():
     # 9. Which end Revit keeps against the stored `m_flags` of the edges beside the gap.
     by_bit, by_pair, other_end = collections.Counter(), collections.Counter(), collections.Counter()
     by_graph_gap = {}
+    by_orient_flag = {}
     by_faces, by_reach, by_join = collections.Counter(), collections.Counter(), collections.Counter()
     flagged_side = collections.Counter()
     by_place, by_step, by_order = collections.Counter(), collections.Counter(), collections.Counter()
+    orient_seen = {}
     for g, o in scored:
+        if o in ONE_END and key_of(g) in ORIENT:
+            orient_seen.setdefault(key_of(g), (cohort(g), "/".join(ORIENT[key_of(g)]), o))
         by_order[(cohort(g), ORDER.get(key_of(g), "unread"), o)] += 1
         place, step = PLACE.get(key_of(g), ("unread", "??"))
         by_place[(cohort(g), place, o)] += 1
@@ -712,6 +724,12 @@ def main():
             flagged = "p_only" if a else "q_only"
             if o in (other, flagged):
                 by_graph_gap.setdefault((cohort(g), g["graph"], key_of(g)), "other" if o == other else "flagged")
+                orient = ORIENT.get(key_of(g))
+                if orient:
+                    flagged_is, other_is = (orient[0], orient[1]) if a else (orient[1], orient[0])
+                    by_orient_flag.setdefault(key_of(g), (cohort(g), f"flagged end {flagged_is}, other end {other_is}",
+                                                          "keeps the other edge's end" if o == other else "keeps the flagged edge's end",
+                                                          other_is))
             other_end[(cohort(g), "at the other edge's end only" if o == other else "at the flagged edge's end only" if o == flagged else "otherwise")] += 1
     # The `ownnbr` rows: a side whose neighbour joins the shared edge and lies at one gap end.
     own_sides, own_seen = collections.Counter(), {}
@@ -776,6 +794,20 @@ def main():
             sided = [f"meets {r}, {k} {n}" for (cc, bb, r, k), n in sorted(flagged_side.items()) if cc == c and bb == bound]
             if sided:
                 print(f"bit 0x{FLAG_BIT:x} on one edge only, where the flagged edge's other face's loop meets the gap within {bound}, {c}: " + "; ".join(sided))
+        oriented = collections.Counter((w, o) for cc, w, o in orient_seen.values() if cc == c)
+        if oriented:
+            print(f"kept end by whether P and Q are their edges' stored first or last points (P/Q), stored gaps, {c}: "
+                  + ", ".join(f"{w} {o} {n}" for (w, o), n in sorted(oriented.items())))
+        # The other (unflagged) edge is one stored edge shared by a corner's two rings, so its end's
+        # orientation reads the same from both; the flagged edge is a different edge in each ring.
+        other_oriented = collections.Counter((f"other end {oi}", k) for cc, _, k, oi in by_orient_flag.values() if cc == c)
+        if other_oriented:
+            print(f"bit 0x{FLAG_BIT:x} on one edge only, by the other edge's end's stored orientation, stored gaps, {c}: "
+                  + "; ".join(f"{w}: {k} {n}" for (w, k), n in sorted(other_oriented.items())))
+        flag_oriented = collections.Counter((w, k) for cc, w, k, _ in by_orient_flag.values() if cc == c)
+        if flag_oriented:
+            print(f"bit 0x{FLAG_BIT:x} on one edge only, by the two ends' stored orientation, stored gaps, {c}: "
+                  + "; ".join(f"{w}: {k} {n}" for (w, k), n in sorted(flag_oriented.items())))
         per_graph = collections.defaultdict(collections.Counter)
         for (cc, graph, _), kept in by_graph_gap.items():
             if cc == c:
