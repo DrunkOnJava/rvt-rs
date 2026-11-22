@@ -1,0 +1,1 @@
+5008247de01f35a305d74989992319786776f09e fix(ifc): the same-project gate reads the storey and the bodies, a topology that failed its own check is not replaced by the lines, and the two readers' outlines are compared by distance (#1261, #1194) (RE-333)

@@ -1,0 +1,6 @@
+frames: each file's site placement undone
+file-wide offset removed (ft): [0.0, 0.0, 0.0]
+class                            n  <=0.01ft   <=0.1     <=1     >1  no ref
+IfcDoor                          5         5       0       0      0       0
+total                            5         5       0       0      0       0
+exit 0

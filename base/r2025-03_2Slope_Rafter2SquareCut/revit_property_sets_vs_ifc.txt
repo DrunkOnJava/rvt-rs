@@ -1,0 +1,17 @@
+| level | set | equal | other set | differ | not written | Revit's, not written by rvt-rs |
+|---|---|---:|---:|---:|---:|---:|
+| instance | Constraints | 0 | 0 | 0 | 0 | 61 |
+| instance | Construction | 0 | 0 | 0 | 0 | 4 |
+| instance | Cross-Section Definition | 0 | 0 | 0 | 0 | 5 |
+| instance | Dimensions | 0 | 0 | 0 | 0 | 19 |
+| instance | Other | 30 | 0 | 0 | 0 | 0 |
+| instance | Phasing | 0 | 0 | 0 | 0 | 6 |
+| instance | Structural | 0 | 0 | 0 | 0 | 10 |
+| type | Analytical Properties | 0 | 0 | 0 | 0 | 12 |
+| type | Construction | 0 | 0 | 0 | 0 | 21 |
+| type | Graphics | 0 | 0 | 0 | 0 | 6 |
+| type | Identity Data | 6 | 0 | 0 | 0 | 0 |
+| type | Other | 12 | 0 | 0 | 0 | 0 |
+
+written by rvt-rs: 48; equal 48, other set 0, differ 0, not written by Revit 0; Revit's not written by rvt-rs: 144
+exit 0

@@ -1,0 +1,15 @@
+record-box bodies: 68; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcDuctFitting                    32       1       0       0       0      31       0    2.937
+        15  Rect Duct Transition - Angle:-
+        10  Rect Duct Elbow - Mitered:-
+         6  Rect Duct Tee:-
+IfcDuctSegment                    25      25       0       0       0       0       0    1.000
+IfcAirTerminal                     7       0       0       7       0       0       0    0.741
+         6  233713-AIRTRM-Supply Diffuser:300x150
+         1  233713-AIRTRM-Return Grille:600x600
+IfcPipeFitting                     3       0       0       0       3       0       0    0.368
+         3  Closet Bend Reducing:-
+IfcBuildingElementProxy            1       1       0       0       0       0       0    1.000
+total                             68      27       0       7       3      31       0
+exit 0
