@@ -1,0 +1,20 @@
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/schema.txt measure-head/nordic-office-as-built/schema.txt
+--- measure-base/nordic-office-as-built/schema.txt	2026-11-05 09:34:30.005669480 +0000
++++ measure-head/nordic-office-as-built/schema.txt	2026-11-05 09:34:28.924685097 +0000
+@@ -8,3 +8 @@
+-findings 4
+-1 IfcAirTerminalType IfcAirTerminalType.CorrectPredefinedType: (predefinedtype != IfcAirTerminalTypeEnum.USERDEFINED or (predefinedtype == IfcAirTerminalTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + w
+-1 IfcElectricApplianceType IfcElectricApplianceType.CorrectPredefinedType: (predefinedtype != IfcElectricApplianceTypeEnum.USERDEFINED or (predefinedtype == IfcElectricApplianceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERD
++findings 1
+@@ -12 +9,0 @@
+-1 IfcSpaceType IfcSpaceType.CorrectPredefinedType: (predefinedtype != IfcSpaceTypeEnum.USERDEFINED or (predefinedtype == IfcSpaceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + where 'USERDEFINED' = Ifc
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/schema.txt measure-head/nordic-office-permit/schema.txt
+--- measure-base/nordic-office-permit/schema.txt	2026-11-05 09:34:30.006669466 +0000
++++ measure-head/nordic-office-permit/schema.txt	2026-11-05 09:34:28.932684982 +0000
+@@ -8,3 +8 @@
+-findings 4
+-1 IfcAirTerminalType IfcAirTerminalType.CorrectPredefinedType: (predefinedtype != IfcAirTerminalTypeEnum.USERDEFINED or (predefinedtype == IfcAirTerminalTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + w
+-1 IfcElectricApplianceType IfcElectricApplianceType.CorrectPredefinedType: (predefinedtype != IfcElectricApplianceTypeEnum.USERDEFINED or (predefinedtype == IfcElectricApplianceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERD
++findings 1
+@@ -12 +9,0 @@
+-1 IfcSpaceType IfcSpaceType.CorrectPredefinedType: (predefinedtype != IfcSpaceTypeEnum.USERDEFINED or (predefinedtype == IfcSpaceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + where 'USERDEFINED' = Ifc
