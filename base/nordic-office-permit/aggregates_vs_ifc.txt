@@ -1,0 +1,5 @@
+    220  IfcCurtainWall: neither aggregates
+      2  IfcMember: only Revit aggregates
+  10029  IfcMember: same whole
+    269  IfcPlate: same whole
+exit 0

@@ -1,0 +1,2 @@
+no wall in both files
+exit 0

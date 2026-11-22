@@ -1,0 +1,5 @@
+9 walls in the GLB
+      9  compared, axis-parallel
+faces (across), axis-parallel: 9 walls; within 0.001 ft: 9 0.01 ft: 9 0.1 ft: 9 1.0 ft: 9; max 0.000 ft
+ends (along), axis-parallel: 9 walls; within 0.001 ft: 7 0.01 ft: 7 0.1 ft: 7 1.0 ft: 9; max 0.656 ft
+exit 0

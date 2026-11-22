@@ -1,0 +1,6 @@
+     27  family instance | IfcBuildingElementProxy | Name equal | ObjectType equal
+     12  family instance | IfcLightFixture | Name equal | ObjectType equal
+      5  family instance | IfcAlarm | Name equal | ObjectType equal
+      3  family instance | IfcBuildingElementProxy | Name differs | ObjectType equal
+      2  family instance | IfcElectricAppliance | Name equal | ObjectType equal
+exit 0

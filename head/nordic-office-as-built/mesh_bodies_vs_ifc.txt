@@ -1,0 +1,44 @@
+saved_graphics_mesh bodies scored: 538; in Revit's export 538
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcDoor                         269     265      261      269      265         269  1.0000
+       46      46       46       46       46          46  O-13:O-13
+       34      34       34       34       34          34  O-3:O-3.10x21
+       23      23       23       23       23          23  O-1:O-1.12x21
+       22      22       22       22       22          22  O-4:O-4.8x21
+       22      22       22       22       22          22  O-4:O-4.10x21
+       13      13       13       13       13          13  O-12:O-12
+IfcWindow                       269     269      269      269      269         269  1.0000
+      168     168      168      168      168         168  Puu-alumiini-ikkuna A:IKK-1.16x25
+       82      82       82       82       82          82  Puu-alumiini-ikkuna A:IKK-5.16x23
+       10      10       10       10       10          10  Puu-alumiini-ikkuna A:IKK-3.12x25.5
+        4       4        4        4        4           4  Puu-alumiini-ikkuna A:IKK-4.16x12
+        4       4        4        4        4           4  Puu-alumiini-ikkuna A:SI-1.12x23
+        1       1        1        1        1           1  Puu-alumiini-ikkuna A:IKK-6.10x23
+  2335861 IfcDoor 'O-9:O-9.12x21': volume ratio 0.9998, Revit's vertices to rvt-rs's surface 5.605e-05 ft, rvt-rs's to Revit's 0.004778 ft
+  3059254 IfcDoor 'UO-5:UO-5.12x21': volume ratio 1.0002, Revit's vertices to rvt-rs's surface 6.37e-05 ft, rvt-rs's to Revit's 0.001911 ft
+  1436505 IfcDoor 'UO-5:UO-5.12x21': volume ratio 1.0002, Revit's vertices to rvt-rs's surface 6.527e-05 ft, rvt-rs's to Revit's 0.00191 ft
+  1436183 IfcDoor 'UO-5:UO-5.12x21': volume ratio 1.0002, Revit's vertices to rvt-rs's surface 6.527e-05 ft, rvt-rs's to Revit's 0.00191 ft
+  3042845 IfcDoor 'O-3:O-3.12x21': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.57e-05 ft, rvt-rs's to Revit's 0.0005682 ft
+  1832768 IfcDoor 'O-3:O-3.12x21': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.648e-05 ft, rvt-rs's to Revit's 0.0005675 ft
+  1824431 IfcDoor 'O-3:O-3.12x21': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.57e-05 ft, rvt-rs's to Revit's 0.0005674 ft
+  1832410 IfcDoor 'O-3:O-3.12x21': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.659e-05 ft, rvt-rs's to Revit's 0.000567 ft
+  2066805 IfcDoor 'O-3:O-3.12x21': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.659e-05 ft, rvt-rs's to Revit's 0.000567 ft
+  2298375 IfcDoor 'O-3:O-3.12x21': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.566e-05 ft, rvt-rs's to Revit's 0.000567 ft
+  1447102 IfcDoor 'O-4:O-4.8x21': volume ratio 1.0001, Revit's vertices to rvt-rs's surface 5.648e-05 ft, rvt-rs's to Revit's 0.0005491 ft
+  3117687 IfcDoor 'O-4:O-4.8x21': volume ratio 1.0001, Revit's vertices to rvt-rs's surface 5.648e-05 ft, rvt-rs's to Revit's 0.0005491 ft
+  1383546 IfcDoor 'O-4:O-4.8x21': volume ratio 1.0001, Revit's vertices to rvt-rs's surface 5.618e-05 ft, rvt-rs's to Revit's 0.000549 ft
+  2607586 IfcDoor 'O-4:O-4.8x21': volume ratio 1.0001, Revit's vertices to rvt-rs's surface 5.636e-05 ft, rvt-rs's to Revit's 0.000549 ft
+  3016449 IfcDoor 'O-3:O-3.8x21': volume ratio 1.0001, Revit's vertices to rvt-rs's surface 5.684e-05 ft, rvt-rs's to Revit's 0.0005488 ft
+  volume 1382481 IfcDoor 'O-7:O-7.12x21': volume ratio 1.2455, farthest vertex 1.355e-06 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 2.4387 0.5987
+    Revit shells 1, signed volumes (cubic ft): 2.4387
+  volume 1623922 IfcDoor 'UO-3:UO-3.12x21': volume ratio 1.2455, farthest vertex 7.757e-07 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 2.4387 0.5987
+    Revit shells 1, signed volumes (cubic ft): 2.4387
+  volume 3448563 IfcDoor 'O-7:O-7.12x23': volume ratio 1.2501, farthest vertex 9.224e-08 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 2.5201 0.6302
+    Revit shells 1, signed volumes (cubic ft): 2.5201
+  volume 3444654 IfcDoor 'O-7:O-7.12x23': volume ratio 1.2501, farthest vertex 2.203e-06 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 2.5201 0.6302
+    Revit shells 1, signed volumes (cubic ft): 2.5201
+exit 0

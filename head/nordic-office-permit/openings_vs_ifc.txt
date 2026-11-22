@@ -1,0 +1,8 @@
+openings in Revit's export: 457; in rvt-rs's: 457; both: 457
+  within 0.01 ft: 450
+  within 0.26 ft: 450
+  within 1.0 ft: 451
+  largest difference: 4.20 ft
+  over 0.26 ft: 6 IfcDoor in IfcWall (over 1 ft)
+  over 0.26 ft: 1 IfcDoor in IfcWall (0.26 to 1 ft)
+exit 0

@@ -1,0 +1,9 @@
+Revit's ports on pipes rvt-rs draws as a cylinder: 0 on 0 pipes
+  port Z axis against the pipe at that end: 
+  In/Out by index: 
+  Z axis by In/Out: 
+rvt-rs's ports on those pipes: 
+Revit's ports joined to a segment's port: 
+rvt-rs's ports joined to a segment's port: 
+rvt-rs's ports no segment's port joins: 
+exit 0
