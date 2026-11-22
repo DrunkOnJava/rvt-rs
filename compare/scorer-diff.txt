@@ -1,0 +1,413 @@
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rme_advanced_sample_project/schema.txt measure-head/sample-2015-rme_advanced_sample_project/schema.txt
+--- measure-base/sample-2015-rme_advanced_sample_project/schema.txt	2026-11-04 00:29:23.584438342 +0000
++++ measure-head/sample-2015-rme_advanced_sample_project/schema.txt	2026-11-04 00:29:23.273439757 +0000
+@@ -4 +4 @@
+-  placement composition: 6809 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6842 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 6826 on 3326 objects and types
++sets 6840 on 3340 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rme_basic_sample_project/schema.txt measure-head/sample-2015-rme_basic_sample_project/schema.txt
+--- measure-base/sample-2015-rme_basic_sample_project/schema.txt	2026-11-04 00:29:23.634438115 +0000
++++ measure-head/sample-2015-rme_basic_sample_project/schema.txt	2026-11-04 00:29:23.273439757 +0000
+@@ -4 +4 @@
+-  placement composition: 6852 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6886 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 6914 on 3370 objects and types
++sets 6928 on 3384 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rme_advanced_sample_project/schema.txt measure-head/sample-2019-rme_advanced_sample_project/schema.txt
+--- measure-base/sample-2019-rme_advanced_sample_project/schema.txt	2026-11-04 00:29:23.635438110 +0000
++++ measure-head/sample-2019-rme_advanced_sample_project/schema.txt	2026-11-04 00:29:23.275439748 +0000
+@@ -4 +4 @@
+-  placement composition: 6809 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6842 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 6826 on 3326 objects and types
++sets 6840 on 3340 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rme_basic_sample_project/schema.txt measure-head/sample-2019-rme_basic_sample_project/schema.txt
+--- measure-base/sample-2019-rme_basic_sample_project/schema.txt	2026-11-04 00:29:23.635438110 +0000
++++ measure-head/sample-2019-rme_basic_sample_project/schema.txt	2026-11-04 00:29:23.275439748 +0000
+@@ -4 +4 @@
+-  placement composition: 6853 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6887 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 6916 on 3371 objects and types
++sets 6930 on 3385 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-rmeadvancedsampleproject/schema.txt measure-head/sample-2024-rmeadvancedsampleproject/schema.txt
+--- measure-base/sample-2024-rmeadvancedsampleproject/schema.txt	2026-11-04 00:29:23.655438019 +0000
++++ measure-head/sample-2024-rmeadvancedsampleproject/schema.txt	2026-11-04 00:29:23.277439738 +0000
+@@ -4 +4 @@
+-  placement composition: 6688 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6721 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -7 +7 @@
+-sets 12319 on 6003 objects and types
++sets 12333 on 6017 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-rmebasicsampleproject/schema.txt measure-head/sample-2024-rmebasicsampleproject/schema.txt
+--- measure-base/sample-2024-rmebasicsampleproject/schema.txt	2026-11-04 00:29:23.655438019 +0000
++++ measure-head/sample-2024-rmebasicsampleproject/schema.txt	2026-11-04 00:29:23.277439738 +0000
+@@ -4 +4 @@
+-  placement composition: 6732 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6766 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -7 +7 @@
+-sets 12416 on 6051 objects and types
++sets 12430 on 6065 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-snowdon_towers_sample_electrical/schema.txt measure-head/sample-2024-snowdon_towers_sample_electrical/schema.txt
+--- measure-base/sample-2024-snowdon_towers_sample_electrical/schema.txt	2026-11-04 00:29:23.655438019 +0000
++++ measure-head/sample-2024-snowdon_towers_sample_electrical/schema.txt	2026-11-04 00:29:23.277439738 +0000
+@@ -4 +4 @@
+-  placement composition: 1576 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 2428 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 3166 on 1588 objects and types
++sets 3488 on 1910 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-rmeadvancedsampleproject/schema.txt measure-head/sample-2025-rmeadvancedsampleproject/schema.txt
+--- measure-base/sample-2025-rmeadvancedsampleproject/schema.txt	2026-11-04 00:29:23.656438015 +0000
++++ measure-head/sample-2025-rmeadvancedsampleproject/schema.txt	2026-11-04 00:29:23.278439734 +0000
+@@ -4 +4 @@
+-  placement composition: 6688 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6721 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 12321 on 6003 objects and types
++sets 12335 on 6017 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-rmebasicsampleproject/schema.txt measure-head/sample-2025-rmebasicsampleproject/schema.txt
+--- measure-base/sample-2025-rmebasicsampleproject/schema.txt	2026-11-04 00:29:23.656438015 +0000
++++ measure-head/sample-2025-rmebasicsampleproject/schema.txt	2026-11-04 00:29:23.278439734 +0000
+@@ -4 +4 @@
+-  placement composition: 6732 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6766 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 12417 on 6051 objects and types
++sets 12431 on 6065 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-rmeadvancedsampleproject/schema.txt measure-head/sample-2026-rmeadvancedsampleproject/schema.txt
+--- measure-base/sample-2026-rmeadvancedsampleproject/schema.txt	2026-11-04 00:29:23.656438015 +0000
++++ measure-head/sample-2026-rmeadvancedsampleproject/schema.txt	2026-11-04 00:29:23.278439734 +0000
+@@ -4 +4 @@
+-  placement composition: 6688 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6721 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 12203 on 5994 objects and types
++sets 12217 on 6008 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-rmebasicsampleproject/schema.txt measure-head/sample-2026-rmebasicsampleproject/schema.txt
+--- measure-base/sample-2026-rmebasicsampleproject/schema.txt	2026-11-04 00:29:23.656438015 +0000
++++ measure-head/sample-2026-rmebasicsampleproject/schema.txt	2026-11-04 00:29:23.279439729 +0000
+@@ -4 +4 @@
+-  placement composition: 6732 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6766 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 12299 on 6042 objects and types
++sets 12313 on 6056 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-rmeadvancedsampleproject/schema.txt measure-head/sample-2027-rmeadvancedsampleproject/schema.txt
+--- measure-base/sample-2027-rmeadvancedsampleproject/schema.txt	2026-11-04 00:29:23.667437965 +0000
++++ measure-head/sample-2027-rmeadvancedsampleproject/schema.txt	2026-11-04 00:29:23.279439729 +0000
+@@ -4 +4 @@
+-  placement composition: 6688 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6721 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 12203 on 5994 objects and types
++sets 12217 on 6008 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-rmebasicsampleproject/schema.txt measure-head/sample-2027-rmebasicsampleproject/schema.txt
+--- measure-base/sample-2027-rmebasicsampleproject/schema.txt	2026-11-04 00:29:23.667437965 +0000
++++ measure-head/sample-2027-rmebasicsampleproject/schema.txt	2026-11-04 00:29:23.283439711 +0000
+@@ -4 +4 @@
+-  placement composition: 6732 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 6766 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 12299 on 6042 objects and types
++sets 12313 on 6056 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/box_bodies_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/box_bodies_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/box_bodies_vs_ifc.txt	2026-11-04 00:29:23.667437965 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/box_bodies_vs_ifc.txt	2026-11-04 00:29:23.279439729 +0000
+@@ -1 +1 @@
+-record-box bodies: 880; fill = Revit's body volume / its bounding box
++record-box bodies: 1058; fill = Revit's body volume / its bounding box
+@@ -4 +4 @@
+-IfcPipeSegment                   140       0       0     112      28       0       0    0.783
++IfcPipeSegment                   142       0       0     112      30       0       0    0.783
+@@ -6,0 +7 @@
++         2  Canalón:Canalón
+@@ -14,0 +16,4 @@
++IfcCableCarrierSegment           102       0       0      43      59       0       0    0.374
++       102  Tubo con uniones:Tubo
++IfcCableCarrierFitting            74       0       0      17      57       0       0    0.309
++        74  M_Codo de tubo - Aluminio:Estándar
+@@ -44 +49 @@
+-total                            880     375      19     225     255       0       6
++total                           1058     375      19     285     373       0       6
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/class_sets_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/class_sets_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/class_sets_vs_ifc.txt	2026-11-04 00:29:23.668437960 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/class_sets_vs_ifc.txt	2026-11-04 00:29:23.279439729 +0000
+@@ -2 +2 @@
+-rvt-rs's export: 1209 paired elements and spaces, 0 untagged and 0 repeated Tags left out
++rvt-rs's export: 1387 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+@@ -10,2 +10,2 @@
+-IfcFlowFitting                      202      0    128     74  IfcPipeFitting 128
+-IfcFlowSegment                      244      0    140    104  IfcPipeSegment 140
++IfcFlowFitting                      202      0    202      0  IfcCableCarrierFitting 74, IfcPipeFitting 128
++IfcFlowSegment                      244      0    244      0  IfcCableCarrierSegment 102, IfcPipeSegment 142
+@@ -25,0 +26 @@
++      74  IfcFlowFitting -> IfcCableCarrierFitting  Revit '-' '-' PredefinedType - type IfcCableCarrierFittingType NOTDEFINED  rvt-rs 'Conduit Fittings' '-'  e.g. 745566
+@@ -26,0 +28,2 @@
++     102  IfcFlowSegment -> IfcCableCarrierSegment  Revit '-' '-' PredefinedType - type IfcCableCarrierSegmentType NOTDEFINED  rvt-rs 'Conduits' '-'  e.g. 745533
++       2  IfcFlowSegment -> IfcPipeSegment  Revit '-' '-' PredefinedType - type IfcPipeSegmentType GUTTER  rvt-rs '-' '-'  e.g. 716074
+@@ -34,180 +36,0 @@
+-missing IfcFlowFitting (74):
+-  745566  'M_Codo de tubo - Aluminio:Estándar:745566'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  745576  'M_Codo de tubo - Aluminio:Estándar:745576'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  745602  'M_Codo de tubo - Aluminio:Estándar:745602'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  745667  'M_Codo de tubo - Aluminio:Estándar:745667'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  745677  'M_Codo de tubo - Aluminio:Estándar:745677'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  745883  'M_Codo de tubo - Aluminio:Estándar:745883'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  746814  'M_Codo de tubo - Aluminio:Estándar:746814'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  747197  'M_Codo de tubo - Aluminio:Estándar:747197'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  747200  'M_Codo de tubo - Aluminio:Estándar:747200'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  747332  'M_Codo de tubo - Aluminio:Estándar:747332'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748170  'M_Codo de tubo - Aluminio:Estándar:748170'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748181  'M_Codo de tubo - Aluminio:Estándar:748181'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748374  'M_Codo de tubo - Aluminio:Estándar:748374'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748392  'M_Codo de tubo - Aluminio:Estándar:748392'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748526  'M_Codo de tubo - Aluminio:Estándar:748526'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748540  'M_Codo de tubo - Aluminio:Estándar:748540'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748548  'M_Codo de tubo - Aluminio:Estándar:748548'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748570  'M_Codo de tubo - Aluminio:Estándar:748570'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748711  'M_Codo de tubo - Aluminio:Estándar:748711'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  748996  'M_Codo de tubo - Aluminio:Estándar:748996'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  749005  'M_Codo de tubo - Aluminio:Estándar:749005'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  749015  'M_Codo de tubo - Aluminio:Estándar:749015'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  749025  'M_Codo de tubo - Aluminio:Estándar:749025'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  749035  'M_Codo de tubo - Aluminio:Estándar:749035'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  749045  'M_Codo de tubo - Aluminio:Estándar:749045'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  749055  'M_Codo de tubo - Aluminio:Estándar:749055'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  749072  'M_Codo de tubo - Aluminio:Estándar:749072'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  749086  'M_Codo de tubo - Aluminio:Estándar:749086'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  749098  'M_Codo de tubo - Aluminio:Estándar:749098'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  751829  'M_Codo de tubo - Aluminio:Estándar:751829'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  751850  'M_Codo de tubo - Aluminio:Estándar:751850'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  751869  'M_Codo de tubo - Aluminio:Estándar:751869'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  751879  'M_Codo de tubo - Aluminio:Estándar:751879'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  751889  'M_Codo de tubo - Aluminio:Estándar:751889'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  751981  'M_Codo de tubo - Aluminio:Estándar:751981'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  752038  'M_Codo de tubo - Aluminio:Estándar:752038'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  752106  'M_Codo de tubo - Aluminio:Estándar:752106'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  752378  'M_Codo de tubo - Aluminio:Estándar:752378'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  752659  'M_Codo de tubo - Aluminio:Estándar:752659'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  753438  'M_Codo de tubo - Aluminio:Estándar:753438'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  753515  'M_Codo de tubo - Aluminio:Estándar:753515'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  753541  'M_Codo de tubo - Aluminio:Estándar:753541'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  753548  'M_Codo de tubo - Aluminio:Estándar:753548'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  753637  'M_Codo de tubo - Aluminio:Estándar:753637'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  753921  'M_Codo de tubo - Aluminio:Estándar:753921'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  753934  'M_Codo de tubo - Aluminio:Estándar:753934'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  754432  'M_Codo de tubo - Aluminio:Estándar:754432'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P3'  category '-'  export as '-'
+-  756912  'M_Codo de tubo - Aluminio:Estándar:756912'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  756921  'M_Codo de tubo - Aluminio:Estándar:756921'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757012  'M_Codo de tubo - Aluminio:Estándar:757012'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757022  'M_Codo de tubo - Aluminio:Estándar:757022'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757057  'M_Codo de tubo - Aluminio:Estándar:757057'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757168  'M_Codo de tubo - Aluminio:Estándar:757168'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757181  'M_Codo de tubo - Aluminio:Estándar:757181'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757253  'M_Codo de tubo - Aluminio:Estándar:757253'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757263  'M_Codo de tubo - Aluminio:Estándar:757263'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757273  'M_Codo de tubo - Aluminio:Estándar:757273'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757283  'M_Codo de tubo - Aluminio:Estándar:757283'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757293  'M_Codo de tubo - Aluminio:Estándar:757293'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757310  'M_Codo de tubo - Aluminio:Estándar:757310'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757322  'M_Codo de tubo - Aluminio:Estándar:757322'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757332  'M_Codo de tubo - Aluminio:Estándar:757332'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757436  'M_Codo de tubo - Aluminio:Estándar:757436'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757490  'M_Codo de tubo - Aluminio:Estándar:757490'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757586  'M_Codo de tubo - Aluminio:Estándar:757586'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757643  'M_Codo de tubo - Aluminio:Estándar:757643'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757655  'M_Codo de tubo - Aluminio:Estándar:757655'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757667  'M_Codo de tubo - Aluminio:Estándar:757667'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757684  'M_Codo de tubo - Aluminio:Estándar:757684'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  757693  'M_Codo de tubo - Aluminio:Estándar:757693'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  758767  'M_Codo de tubo - Aluminio:Estándar:758767'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  758781  'M_Codo de tubo - Aluminio:Estándar:758781'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  758868  'M_Codo de tubo - Aluminio:Estándar:758868'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-  759118  'M_Codo de tubo - Aluminio:Estándar:759118'  'M_Codo de tubo - Aluminio:Estándar'  storey 'P0'  category '-'  export as '-'
+-missing IfcFlowSegment (104):
+-  716074  'Canalón:Canalón:716074'  'Canalón:Canalón'  storey 'P5'  category '-'  export as '-'
+-  716076  'Canalón:Canalón:716076'  'Canalón:Canalón'  storey 'P5'  category '-'  export as '-'
+-  745533  'Tubo con uniones:Tubo:745533'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  745542  'Tubo con uniones:Tubo:745542'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  745579  'Tubo con uniones:Tubo:745579'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  745597  'Tubo con uniones:Tubo:745597'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  745653  'Tubo con uniones:Tubo:745653'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  745660  'Tubo con uniones:Tubo:745660'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  745670  'Tubo con uniones:Tubo:745670'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  745873  'Tubo con uniones:Tubo:745873'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  746199  'Tubo con uniones:Tubo:746199'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  746313  'Tubo con uniones:Tubo:746313'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  746804  'Tubo con uniones:Tubo:746804'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  747158  'Tubo con uniones:Tubo:747158'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  747312  'Tubo con uniones:Tubo:747312'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  747325  'Tubo con uniones:Tubo:747325'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748153  'Tubo con uniones:Tubo:748153'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748248  'Tubo con uniones:Tubo:748248'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748376  'Tubo con uniones:Tubo:748376'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748385  'Tubo con uniones:Tubo:748385'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748507  'Tubo con uniones:Tubo:748507'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748521  'Tubo con uniones:Tubo:748521'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748529  'Tubo con uniones:Tubo:748529'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748550  'Tubo con uniones:Tubo:748550'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748563  'Tubo con uniones:Tubo:748563'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748572  'Tubo con uniones:Tubo:748572'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  748951  'Tubo con uniones:Tubo:748951'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  748986  'Tubo con uniones:Tubo:748986'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  748998  'Tubo con uniones:Tubo:748998'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  749008  'Tubo con uniones:Tubo:749008'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  749018  'Tubo con uniones:Tubo:749018'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  749028  'Tubo con uniones:Tubo:749028'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  749038  'Tubo con uniones:Tubo:749038'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  749058  'Tubo con uniones:Tubo:749058'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  749067  'Tubo con uniones:Tubo:749067'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  749075  'Tubo con uniones:Tubo:749075'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  749101  'Tubo con uniones:Tubo:749101'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  751737  'Tubo con uniones:Tubo:751737'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  751815  'Tubo con uniones:Tubo:751815'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  751832  'Tubo con uniones:Tubo:751832'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  751853  'Tubo con uniones:Tubo:751853'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  751860  'Tubo con uniones:Tubo:751860'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  751872  'Tubo con uniones:Tubo:751872'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  751882  'Tubo con uniones:Tubo:751882'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  751906  'Tubo con uniones:Tubo:751906'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  752024  'Tubo con uniones:Tubo:752024'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  752094  'Tubo con uniones:Tubo:752094'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  752237  'Tubo con uniones:Tubo:752237'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  752647  'Tubo con uniones:Tubo:752647'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  752654  'Tubo con uniones:Tubo:752654'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  753426  'Tubo con uniones:Tubo:753426'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  753433  'Tubo con uniones:Tubo:753433'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  753504  'Tubo con uniones:Tubo:753504'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  753534  'Tubo con uniones:Tubo:753534'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  753543  'Tubo con uniones:Tubo:753543'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  753630  'Tubo con uniones:Tubo:753630'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  753897  'Tubo con uniones:Tubo:753897'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  753937  'Tubo con uniones:Tubo:753937'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  754380  'Tubo con uniones:Tubo:754380'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  754389  'Tubo con uniones:Tubo:754389'  'Tubo con uniones:Tubo'  storey 'P3'  category '-'  export as '-'
+-  756903  'Tubo con uniones:Tubo:756903'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  756914  'Tubo con uniones:Tubo:756914'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  756994  'Tubo con uniones:Tubo:756994'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757005  'Tubo con uniones:Tubo:757005'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757015  'Tubo con uniones:Tubo:757015'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757041  'Tubo con uniones:Tubo:757041'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757050  'Tubo con uniones:Tubo:757050'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757122  'Tubo con uniones:Tubo:757122'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757239  'Tubo con uniones:Tubo:757239'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757246  'Tubo con uniones:Tubo:757246'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757256  'Tubo con uniones:Tubo:757256'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757266  'Tubo con uniones:Tubo:757266'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757276  'Tubo con uniones:Tubo:757276'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757296  'Tubo con uniones:Tubo:757296'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757303  'Tubo con uniones:Tubo:757303'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757313  'Tubo con uniones:Tubo:757313'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757325  'Tubo con uniones:Tubo:757325'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757353  'Tubo con uniones:Tubo:757353'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757370  'Tubo con uniones:Tubo:757370'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757385  'Tubo con uniones:Tubo:757385'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757400  'Tubo con uniones:Tubo:757400'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757426  'Tubo con uniones:Tubo:757426'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757488  'Tubo con uniones:Tubo:757488'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757489  'Tubo con uniones:Tubo:757489'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757503  'Tubo con uniones:Tubo:757503'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757568  'Tubo con uniones:Tubo:757568'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757577  'Tubo con uniones:Tubo:757577'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757625  'Tubo con uniones:Tubo:757625'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757636  'Tubo con uniones:Tubo:757636'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757646  'Tubo con uniones:Tubo:757646'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757670  'Tubo con uniones:Tubo:757670'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757679  'Tubo con uniones:Tubo:757679'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  757686  'Tubo con uniones:Tubo:757686'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  758753  'Tubo con uniones:Tubo:758753'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  758760  'Tubo con uniones:Tubo:758760'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  758770  'Tubo con uniones:Tubo:758770'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  758794  'Tubo con uniones:Tubo:758794'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  758811  'Tubo con uniones:Tubo:758811'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  758826  'Tubo con uniones:Tubo:758826'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  758856  'Tubo con uniones:Tubo:758856'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  758863  'Tubo con uniones:Tubo:758863'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  759102  'Tubo con uniones:Tubo:759102'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  759111  'Tubo con uniones:Tubo:759111'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+-  759319  'Tubo con uniones:Tubo:759319'  'Tubo con uniones:Tubo'  storey 'P0'  category '-'  export as '-'
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/duct_bodies_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/duct_bodies_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/duct_bodies_vs_ifc.txt	2026-11-04 00:29:23.667437965 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/duct_bodies_vs_ifc.txt	2026-11-04 00:29:23.279439729 +0000
+@@ -1 +1,2 @@
+-ducts in Revit's export with a body: 244; rvt-rs writes one for 0 of them
++ducts in Revit's export with a body: 244; rvt-rs writes one for 104 of them
++world box within 0.01 ft of Revit's: 102 of 104 (worst 3.00000 ft)
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/global_ids_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/global_ids_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/global_ids_vs_ifc.txt	2026-11-04 00:29:23.667437965 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/global_ids_vs_ifc.txt	2026-11-04 00:29:23.280439725 +0000
+@@ -1 +1 @@
+-elements: {'differs': 1136}
++elements: {'differs': 1314}
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/names_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/names_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/names_vs_ifc.txt	2026-11-04 00:29:23.667437965 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/names_vs_ifc.txt	2026-11-04 00:29:23.280439725 +0000
+@@ -3 +3 @@
+-    140  family instance | IfcPipeSegment | Name differs | ObjectType differs
++    142  family instance | IfcPipeSegment | Name differs | ObjectType differs
+@@ -5,0 +6,2 @@
++    102  family instance | IfcCableCarrierSegment | Name differs | ObjectType differs
++     74  family instance | IfcCableCarrierFitting | Name equal | ObjectType equal
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/psets_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/psets_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/psets_vs_ifc.txt	2026-11-04 00:29:23.667437965 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/psets_vs_ifc.txt	2026-11-04 00:29:23.280439725 +0000
+@@ -1 +1 @@
+-Revit values on objects rvt-rs writes: 4961; equal: 2383; different: 0; missing: 2578; rvt-rs values Revit does not write: 20
++Revit values on objects rvt-rs writes: 5317; equal: 2457; different: 0; missing: 2860; rvt-rs values Revit does not write: 20
+@@ -15,0 +16 @@
++  Pset_DistributionFlowElementCommon.Reference: 176, equal 0, different 0, missing 176
+@@ -19 +20 @@
+-  Pset_EnvironmentalImpactIndicators.Reference: 1161, equal 600, different 0, missing 561
++  Pset_EnvironmentalImpactIndicators.Reference: 1339, equal 674, different 0, missing 665
+@@ -24 +25 @@
+-  Pset_PipeSegmentTypeCommon.Reference: 140, equal 0, different 0, missing 140
++  Pset_PipeSegmentTypeCommon.Reference: 142, equal 0, different 0, missing 142
+@@ -70 +71 @@
+-IFC2X3 lengths IFC4 holds as quantities, not scored here: 280
++IFC2X3 lengths IFC4 holds as quantities, not scored here: 484
+@@ -76 +77 @@
+-  Pset_EnvironmentalImpactIndicators.Reference: ('IfcIdentifier', 'Montante rectangular - 5x5 cm') x140, ('IfcIdentifier', 'LKS_GEN_Cobre') x122, ('IfcIdentifier', 'Acristalado') x67, ('IfcIdentifier', 'Montante rectangular - 2x2 cm') x66; on IfcMember x206, IfcFlowSegment x140, IfcWindow x70, IfcPlate x67
++  Pset_EnvironmentalImpactIndicators.Reference: ('IfcIdentifier', 'Montante rectangular - 5x5 cm') x140, ('IfcIdentifier', 'LKS_GEN_Cobre') x122, ('IfcIdentifier', 'Tubo') x102, ('IfcIdentifier', 'Acristalado') x67; on IfcFlowSegment x244, IfcMember x206, IfcWindow x70, IfcPlate x67
+@@ -81 +82,2 @@
+-  Pset_PipeSegmentTypeCommon.Reference: ('IfcIdentifier', 'LKS_GEN_Cobre') x122, ('IfcIdentifier', 'LKS_GEN_PVC') x18; on IfcFlowSegment x140
++  Pset_DistributionFlowElementCommon.Reference: ('IfcIdentifier', 'Tubo') x102, ('IfcIdentifier', 'Estándar') x74; on IfcFlowSegment x102, IfcFlowFitting x74
++  Pset_PipeSegmentTypeCommon.Reference: ('IfcIdentifier', 'LKS_GEN_Cobre') x122, ('IfcIdentifier', 'LKS_GEN_PVC') x18, ('IfcIdentifier', 'Canalón') x2; on IfcFlowSegment x142
+@@ -115 +116,0 @@
+-  Pset_StairFlightCommon.NumberOfRiser: ('IfcCountMeasure', 18.0) x4, ('IfcCountMeasure', 5.0) x1, ('IfcCountMeasure', 21.0) x1; on IfcStairFlight x6
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/schema.txt measure-head/spent-bimspeed-vitoria-before-2018/schema.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/schema.txt	2026-11-04 00:29:23.668437960 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/schema.txt	2026-11-04 00:29:23.280439725 +0000
+@@ -4 +4 @@
+-  placement composition: 1342 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 1520 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 1668 on 705 objects and types
++sets 1742 on 779 objects and types
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/storeys_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/storeys_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/storeys_vs_ifc.txt	2026-11-04 00:29:23.668437960 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/storeys_vs_ifc.txt	2026-11-04 00:29:23.280439725 +0000
+@@ -1 +1 @@
+-1136 elements, 16 not on a storey
++1314 elements, 16 not on a storey
+@@ -6 +6 @@
+-   1073  same storey as Revit's
++   1251  same storey as Revit's
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/type_objects_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/type_objects_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/type_objects_vs_ifc.txt	2026-11-04 00:29:23.668437960 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/type_objects_vs_ifc.txt	2026-11-04 00:29:23.280439725 +0000
+@@ -1,2 +1,2 @@
+-Revit types 1284 elements; 1102 of them are in ours
+-typed in ours: 592 of 1102
++Revit types 1284 elements; 1280 of them are in ours
++typed in ours: 592 of 1280
+@@ -8 +8 @@
+-untyped in ours, by class: {'IfcWall': 2, 'IfcWallStandardCase': 6, 'IfcWindow': 70, 'IfcCurtainWall': 9, 'IfcPlate': 67, 'IfcMember': 206, 'IfcDoor': 2, 'IfcFlowSegment': 140, 'IfcBuildingElementProxy': 8}
++untyped in ours, by class: {'IfcWall': 2, 'IfcWallStandardCase': 6, 'IfcWindow': 70, 'IfcCurtainWall': 9, 'IfcPlate': 67, 'IfcMember': 206, 'IfcDoor': 2, 'IfcFlowSegment': 244, 'IfcFlowFitting': 74, 'IfcBuildingElementProxy': 8}
+@@ -10 +10 @@
+-TypeName carried: 592 of 1102; equal to Revit's type: 592
++TypeName carried: 666 of 1280; equal to Revit's type: 666

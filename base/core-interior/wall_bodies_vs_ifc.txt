@@ -1,0 +1,5 @@
+360 walls in the GLB
+    360  compared, axis-parallel
+faces (across), axis-parallel: 360 walls; within 0.001 ft: 360 0.01 ft: 360 0.1 ft: 360 1.0 ft: 360; max 0.000 ft
+ends (along), axis-parallel: 360 walls; within 0.001 ft: 360 0.01 ft: 360 0.1 ft: 360 1.0 ft: 360; max 0.000 ft
+exit 0

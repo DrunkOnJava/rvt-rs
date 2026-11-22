@@ -1,0 +1,7 @@
+Revit's export: 9 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+rvt-rs's export: 9 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcWall                               9      9      0      0  
+written as another class, by Revit's category and export value, and rvt-rs's:
+extra in rvt-rs's export, by class:
+exit 0

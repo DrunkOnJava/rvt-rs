@@ -1,0 +1,21 @@
+straight and angled walls in both: 16; both ends within 0.001 ft: 16
+BodySource | start (Revit's joins there) | end (Revit's joins there) | walls; short/long = rvt-rs's wall shorter/longer there
+     16  partition_element_record_join_trimmed | start ok [free] | end ok [free]
+the 40 largest (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):
+  5924 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  5679 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start +0.0000 end -0.0000 start[] end[] path 0
+  5772 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  5834 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start +0.0000 end -0.0000 start[] end[] path 0
+  3975 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start +0.0000 end -0.0000 start[] end[] path 0
+  3795 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start +0.0000 end -0.0000 start[] end[] path 0
+  2789 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  2787 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start +0.0000 end -0.0000 start[] end[] path 0
+  5639 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  5801 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  5745 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  5889 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start +0.0000 end -0.0000 start[] end[] path 0
+  2790 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  3753 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  2788 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start +0.0000 end -0.0000 start[] end[] path 0
+  4013 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start +0.0000 end -0.0000 start[] end[] path 0
+exit 0

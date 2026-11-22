@@ -1,0 +1,11 @@
+Revit types 6 elements; 6 of them are in ours
+typed in ours: 6 of 6
+  entity agrees: 6 of 6
+  name agrees: 6 of 6
+  tag agrees: 6 of 6
+  global_id agrees: 6 of 6
+typed in ours but not in Revit's export: 0
+untyped in ours, by class: {}
+TypeName carried: 6 of 6; equal to Revit's type: 6
+type objects in ours: 2
+exit 0

@@ -1,0 +1,9 @@
+      9  family instance | IfcBuildingElementProxy | Name equal | ObjectType equal
+      5  system family | IfcWall | Name equal | ObjectType equal
+      3  family instance | IfcWindow | Name equal | ObjectType equal
+      2  system family | IfcRailing | Name equal | ObjectType equal
+      1  family instance | IfcDoor | Name equal | ObjectType equal
+      1  system family | IfcRoof | Name equal | ObjectType equal
+      1  system family | IfcStair | Name equal | ObjectType equal
+      1  system family | IfcStairFlight | Name equal | ObjectType equal
+exit 0
