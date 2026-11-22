@@ -77,7 +77,9 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    it is, against the end Revit keeps. And the outcome against the gap's place in its ring
    (`piece`'s `at`: 0 is the step from the last edge back to the first) and against the signs of
    the step from P to Q in the surface's two parameters (`du_ft`, `dv_ft`; 0 for a component under
-   1% of the other, as `piece`'s `sig=one` reads a step along one parameter).
+   1% of the other, as `piece`'s `sig=one` reads a step along one parameter). And against which of
+   the two edges' other faces comes first in the graph (the lower face index in `piecenbr`), in
+   case the face a mesher takes first fixes the corner it shares.
 
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
@@ -160,6 +162,7 @@ def read_probe(path):
                 NEIGHBOURS[key] = tuple(
                     (f.get(s) or "-").split(":")[1] if ":" in (f.get(s) or "") else "-" for s in ("a", "b"))
                 REACH[key] = tuple(reach(f.get(s), TOUCHING) for s in ("a", "b"))
+                ORDER[key] = face_order(f.get("a"), f.get("b"))
                 REACH_JOIN[key] = tuple(reach(f.get(s), JOIN) for s in ("a", "b"))
             elif line.startswith("gapxyz "):
                 gaps.append(fields(line))
@@ -200,6 +203,17 @@ REACH = {}
 REACH_JOIN = {}
 # (graph, face, loop, at) -> (`closing` or `inner`, the signs of the step from P to Q in u and v).
 PLACE = {}
+# (graph, face, loop, at) -> whose edge's other face comes first: `P's edge`, `Q's edge`, or unread.
+ORDER = {}
+
+
+def face_order(a, b):
+    """Which side's other face has the lower index in the graph, from `piecenbr`'s `a=` and `b=`."""
+    try:
+        fa, fb = int(a.split(":", 1)[0]), int(b.split(":", 1)[0])
+    except (AttributeError, ValueError):
+        return "unread"
+    return "P's edge" if fa < fb else "Q's edge" if fb < fa else "the same face"
 
 
 def signs(du, dv):
@@ -648,8 +662,9 @@ def main():
     by_bit, by_pair, other_end = collections.Counter(), collections.Counter(), collections.Counter()
     by_faces, by_reach, by_join = collections.Counter(), collections.Counter(), collections.Counter()
     flagged_side = collections.Counter()
-    by_place, by_step = collections.Counter(), collections.Counter()
+    by_place, by_step, by_order = collections.Counter(), collections.Counter(), collections.Counter()
     for g, o in scored:
+        by_order[(cohort(g), ORDER.get(key_of(g), "unread"), o)] += 1
         place, step = PLACE.get(key_of(g), ("unread", "??"))
         by_place[(cohort(g), place, o)] += 1
         by_step[(cohort(g), f"du{step[0]} dv{step[1]}", o)] += 1
@@ -696,6 +711,9 @@ def main():
         joined = [f"{a}/{b} {o} {n}" for (cc, (a, b), o), n in sorted(by_join.items()) if cc == c]
         if joined:
             print(f"where each edge's other face's loop meets P and Q within 1e-7 ft (P's edge/Q's edge), {c}: " + ", ".join(joined))
+        ordered = [f"{w} first {o} {n}" for (cc, w, o), n in sorted(by_order.items()) if cc == c]
+        if ordered:
+            print(f"kept end by whose edge's other face comes first in the graph, {c}: " + ", ".join(ordered))
         placed = [f"{w} {o} {n}" for (cc, w, o), n in sorted(by_place.items()) if cc == c]
         if placed:
             print(f"kept end by the gap's place in its ring, {c}: " + ", ".join(placed))
@@ -762,7 +780,7 @@ def main():
         for key, c in sorted(per_gap.items()):
             fl = flags_of(key)
             print(f"gap graph={key[0]} face={key[1]} loop={key[2]} at={key[3]} cohort={pieces.get(key, (None, '-', '-', None, None))[1]} "
-                  f"flags={'unread' if fl is None else f'{fl[0]}/{fl[1]}'} faces={'/'.join(NEIGHBOURS.get(key, ('unread', 'unread')))} reach={'/'.join(REACH.get(key, ('unread', 'unread')))} joins={'/'.join(REACH_JOIN.get(key, ('unread', 'unread')))} place={PLACE.get(key, ('unread', '??'))[0]} step=du{PLACE.get(key, ('unread', '??'))[1][0]}dv{PLACE.get(key, ('unread', '??'))[1][1]} "
+                  f"flags={'unread' if fl is None else f'{fl[0]}/{fl[1]}'} faces={'/'.join(NEIGHBOURS.get(key, ('unread', 'unread')))} reach={'/'.join(REACH.get(key, ('unread', 'unread')))} joins={'/'.join(REACH_JOIN.get(key, ('unread', 'unread')))} first={ORDER.get(key, 'unread').replace("'s edge", '')} place={PLACE.get(key, ('unread', '??'))[0]} step=du{PLACE.get(key, ('unread', '??'))[1][0]}dv{PLACE.get(key, ('unread', '??'))[1][1]} "
                   + " ".join(f"{k}={v}" for k, v in sorted(c.items())))
     return 0
 
