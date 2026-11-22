@@ -1008,7 +1008,7 @@ entries in 3.9 s in 943 MiB, the open's worker 910 MiB (66.6 s), and the page
 then kept 2 answers, 4,654 characters of JSON. Under a V8 cap of 927 MiB of wasm
 memory, between the office's open and its read, a read really runs out of
 memory and the file is read only when asked from then on. The page's one
-script is 40.27 kB larger (8.65 kB gzipped) than in the build of d1de8adf,
+script is 40.27 kB larger (8.65 kB gzipped) than in the build of d1de8adf (kept: the two builds' size lines, [this run's][kept-41] and [run 42109657349's][kept-42]),
 mostly because the glue and the two workers it fetched later are inside it. The release-outside-the-range and
 experimental-release states are measured with the worker's answer replaced, as
 no such file is in the viewer's job.
@@ -2302,4 +2302,5 @@ acceptance limits are 0.3048 mm sampled distance and 0.01% volume error.
 [kept-38]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/68a42783041c94c1b73b6e4a4872075a2c85397d?recursive=1
 [kept-39]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/c636faa7a6694b94234e05b79aeee5f155f57afd/head/sample-2023-racadvancedsampleproject/probe.txt
 [kept-40]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/e4dee7a0d096743e78a904f20b1ca9dc51e08ebf?recursive=1
-[kept-41]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/5b50fe19006031deea5c4508d88a6b2d2c9cd82d/log/lines.txt
+[kept-41]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/e52dccc3730fb8cab66eded9cc8c89ab5eb7c1c0/log/lines.txt
+[kept-42]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/ed933f84fff1da6d9d96ad06f0c5d90c577fd2c3/log/lines.txt
