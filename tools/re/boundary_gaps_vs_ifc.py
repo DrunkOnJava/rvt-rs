@@ -84,7 +84,8 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    compare different faces while Revit keeps one point. Where the probe prints `ownnbr` rows (#2136:
    each side's neighbouring edges placed through their own face), the sides on which a neighbour's
    end joins the shared edge within 1e-7 ft and lies at exactly one gap end within 1e-7 ft, against
-   whether Revit keeps that end.
+   whether Revit keeps that end. And, where the bit is on one edge only, the stored gaps by graph,
+   since a gap's drawings agree: whether the split between the two ends follows the graph.
 
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
@@ -677,6 +678,7 @@ def main():
                 print(f"{label}, {c}: {line}")
     # 9. Which end Revit keeps against the stored `m_flags` of the edges beside the gap.
     by_bit, by_pair, other_end = collections.Counter(), collections.Counter(), collections.Counter()
+    by_graph_gap = {}
     by_faces, by_reach, by_join = collections.Counter(), collections.Counter(), collections.Counter()
     flagged_side = collections.Counter()
     by_place, by_step, by_order = collections.Counter(), collections.Counter(), collections.Counter()
@@ -708,6 +710,8 @@ def main():
         if a != b:
             other = "q_only" if a else "p_only"
             flagged = "p_only" if a else "q_only"
+            if o in (other, flagged):
+                by_graph_gap.setdefault((cohort(g), g["graph"], key_of(g)), "other" if o == other else "flagged")
             other_end[(cohort(g), "at the other edge's end only" if o == other else "at the flagged edge's end only" if o == flagged else "otherwise")] += 1
     # The `ownnbr` rows: a side whose neighbour joins the shared edge and lies at one gap end.
     own_sides, own_seen = collections.Counter(), {}
@@ -772,6 +776,14 @@ def main():
             sided = [f"meets {r}, {k} {n}" for (cc, bb, r, k), n in sorted(flagged_side.items()) if cc == c and bb == bound]
             if sided:
                 print(f"bit 0x{FLAG_BIT:x} on one edge only, where the flagged edge's other face's loop meets the gap within {bound}, {c}: " + "; ".join(sided))
+        per_graph = collections.defaultdict(collections.Counter)
+        for (cc, graph, _), kept in by_graph_gap.items():
+            if cc == c:
+                per_graph[graph][kept] += 1
+        if per_graph:
+            print(f"bit 0x{FLAG_BIT:x} on one edge only, stored gaps by graph, {c}: "
+                  + "; ".join(f"{graph}: the other edge's end {k['other']}, the flagged edge's end {k['flagged']}"
+                              for graph, k in sorted(per_graph.items())))
         told = {k: n for (cc, k), n in other_end.items() if cc == c}
         if told:
             print(f"bit 0x{FLAG_BIT:x} on one edge only, {c}: {sum(told.values())} drawings; Revit's point "
