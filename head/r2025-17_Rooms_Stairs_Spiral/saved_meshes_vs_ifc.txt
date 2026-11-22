@@ -1,0 +1,5 @@
+file-wide offset removed (ft): [0.0, 0.0, 0.0]
+class                            n  <=0.01ft   <=0.1     <=1     >1  no ref
+IfcDoor                          1         1       0       0      0       0
+total                            1         1       0       0      0       0
+exit 0

@@ -1,0 +1,1 @@
+a98bd316b39335a4c74ad3f16004b1ff2f721e1d perf(reader): native passes skip the digest, GUID and IFC parameter no reader uses, and a wall's type id and top join are read in one pass (#1237) (#1275)

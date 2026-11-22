@@ -1,0 +1,14 @@
+7 walls drawn in layers in the GLB
+      7  of them one layer
+      7  drawn in layers in the GLB and present in the IFC
+      7  compared
+      7  compared, one layer
+  layer centres within 0.001 ft: 7 of 7
+  layer centres within 0.01 ft: 7 of 7
+  layer centres within 0.05 ft: 7 of 7
+  layer centres within 0.25 ft: 7 of 7
+  median 3.10e-07 ft, max 0.0000 ft
+  worst [(np.float64(0.0), 2788), (np.float64(0.0), 2789), (np.float64(0.0), 2790), (np.float64(0.0), 2892), (np.float64(0.0), 3753), (np.float64(0.0), 3795)]
+compared layers' colours against Revit's surface styles:
+      7  same
+exit 0

@@ -1,0 +1,6 @@
+saved_graphics_mesh bodies scored: 1; in Revit's export 1
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft  median volume ratio
+IfcDoor                           1       1        0        1        0  1.0002
+        1       1        0        1        0  Door-Passage-Single-Full_Lite:36" x 84" Storefront
+  6644 IfcDoor 'Door-Passage-Single-Full_Lite:36" x 84" Storefront': volume ratio 1.0002, Revit's vertices to rvt-rs's surface 0.001376 ft, rvt-rs's to Revit's 0.008483 ft
+exit 0

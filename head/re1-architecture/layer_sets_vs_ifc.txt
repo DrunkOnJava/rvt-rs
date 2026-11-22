@@ -1,0 +1,18 @@
+     37  Revit's usage: layer names equal
+     37  layer names: Revit's, in Revit's order
+     15  layer sets written
+     15  positions not comparable
+     15  set name = Revit's Family:Type
+  whole layer sets within 0.001 ft of Revit's: 15 of 15
+  whole layer sets within 0.01 ft of Revit's: 15 of 15
+  whole layer sets within 0.1 ft of Revit's: 15 of 15
+  worst [(0.0, '415751', 'IfcWall'), (0.0, '418450', 'IfcWall'), (0.0, '415911', 'IfcWall'), (0.0, '416297', 'IfcWall'), (0.0, '462510', 'IfcWall')]
+  layers placed by Revit's own usage within 0.001 ft of Revit's: 7 of 15
+  layers placed by Revit's own usage within 0.01 ft of Revit's: 7 of 15
+  layers placed by Revit's own usage within 0.1 ft of Revit's: 8 of 15
+  worst [(9.1864, '418811', 'IfcCovering'), (9.1864, '418819', 'IfcCovering'), (9.1864, '418827', 'IfcCovering'), (9.1864, '418835', 'IfcCovering'), (9.1864, '418843', 'IfcCovering')]
+  Revit's own usage against Revit's own body: sets within 0.001 ft of Revit's: 7 of 15
+  Revit's own usage against Revit's own body: sets within 0.01 ft of Revit's: 7 of 15
+  Revit's own usage against Revit's own body: sets within 0.1 ft of Revit's: 8 of 15
+  worst [(9.1864, '418811', 'IfcCovering'), (9.1864, '418819', 'IfcCovering'), (9.1864, '418827', 'IfcCovering'), (9.1864, '418835', 'IfcCovering'), (9.1864, '418843', 'IfcCovering')]
+exit 0

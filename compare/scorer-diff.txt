@@ -1,0 +1,24 @@
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/qtos_vs_ifc.txt measure-head/nordic-office-as-built/qtos_vs_ifc.txt
+--- measure-base/nordic-office-as-built/qtos_vs_ifc.txt	2026-11-03 15:23:56.465855616 +0000
++++ measure-head/nordic-office-as-built/qtos_vs_ifc.txt	2026-11-03 15:23:56.889853689 +0000
+@@ -1 +1 @@
+-Revit quantities on objects rvt-rs writes: 39388; equal: 29262; different: 1; missing: 10125; rvt-rs quantities Revit does not write: 0
++Revit quantities on objects rvt-rs writes: 39388; equal: 29448; different: 1; missing: 9939; rvt-rs quantities Revit does not write: 0
+@@ -28 +28 @@
+-  Qto_ColumnBaseQuantities.Length: 279, equal 93, different 0, missing 186
++  Qto_ColumnBaseQuantities.Length: 279, equal 279, different 0, missing 0
+@@ -89 +88,0 @@
+-  Qto_ColumnBaseQuantities.Length: 186; on IfcColumn x186
+diff -r -U0 -x commit.txt -x runner.txt -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/qtos_vs_ifc.txt measure-head/nordic-office-permit/qtos_vs_ifc.txt
+--- measure-base/nordic-office-permit/qtos_vs_ifc.txt	2026-11-03 15:23:56.526855339 +0000
++++ measure-head/nordic-office-permit/qtos_vs_ifc.txt	2026-11-03 15:23:56.946853430 +0000
+@@ -1 +1 @@
+-Revit quantities on objects rvt-rs writes: 39679; equal: 29512; different: 1; missing: 10166; rvt-rs quantities Revit does not write: 0
++Revit quantities on objects rvt-rs writes: 39679; equal: 29762; different: 1; missing: 9916; rvt-rs quantities Revit does not write: 0
+@@ -28 +28 @@
+-  Qto_ColumnBaseQuantities.Length: 327, equal 71, different 0, missing 256
++  Qto_ColumnBaseQuantities.Length: 327, equal 321, different 0, missing 6
+@@ -88 +87,0 @@
+-  Qto_ColumnBaseQuantities.Length: 256; on IfcColumn x256
+@@ -123,0 +123 @@
++  Qto_ColumnBaseQuantities.Length: 6; on IfcColumn x6

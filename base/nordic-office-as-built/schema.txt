@@ -1,0 +1,15 @@
+arity:
+  schema: IFC4
+  PredefinedType populated: IfcBeam=8, IfcColumn=279, IfcCovering=111, IfcDoor=269, IfcMember=10003, IfcSlab=63, IfcWall=607, IfcWindow=269
+  placement composition: 12747 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+validate:
+findings 0
+rules:
+findings 4
+1 IfcAirTerminalType IfcAirTerminalType.CorrectPredefinedType: (predefinedtype != IfcAirTerminalTypeEnum.USERDEFINED or (predefinedtype == IfcAirTerminalTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + w
+1 IfcElectricApplianceType IfcElectricApplianceType.CorrectPredefinedType: (predefinedtype != IfcElectricApplianceTypeEnum.USERDEFINED or (predefinedtype == IfcElectricApplianceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERD
+1 IfcRelAssociatesMaterial IfcRelAssociatesMaterial.AllowedElements: (sizeof([temp for temp in SELF.RelatedObjects if sizeof(typeof(temp) * ['ifc4.ifcelement', 'ifc4.ifcelementtype', 'ifc4.ifcwindowstyle', 'ifc4.ifcdoorstyle', 'ifc4.ifcstructuralmember', 'ifc4.ifcport']) == 0]) == 0) Violated by: (42 
+1 IfcSpaceType IfcSpaceType.CorrectPredefinedType: (predefinedtype != IfcSpaceTypeEnum.USERDEFINED or (predefinedtype == IfcSpaceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + where 'USERDEFINED' = Ifc
+property sets:
+sets 27270 on 13045 objects and types
+findings 0
