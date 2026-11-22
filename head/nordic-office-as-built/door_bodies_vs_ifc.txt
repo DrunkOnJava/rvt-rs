@@ -1,0 +1,6 @@
+269 IfcDoor in rvt-rs's file; tolerance 0.01 ft
+    155 mirror rule wrong
+     75 no host wall in rvt-rs's file
+     39 rvt-rs's box is Revit's
+    194 Revit's body off the wall's centre
+exit 0

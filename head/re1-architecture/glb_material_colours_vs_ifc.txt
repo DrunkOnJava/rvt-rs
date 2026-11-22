@@ -1,0 +1,6 @@
+8 ('IfcBuildingElementProxy', 'name =', 'colour =')
+7 ('IfcFlowTerminal', 'name =', 'colour =')
+23 ('IfcFurnishingElement', 'name =', 'colour =')
+10 ('IfcMember', 'name =', 'colour =')
+2 ('IfcPlate', 'name =', 'colour =')
+exit 0

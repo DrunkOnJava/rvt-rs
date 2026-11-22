@@ -1,0 +1,7 @@
+8 floors, roofs and ceilings drawn in layers in the GLB
+      6  IFCCOVERING in both
+      2  IFCSLAB in both
+      8  Revit styles the whole body with one material
+compared layers' colours against Revit's surface styles:
+      8  same
+exit 0

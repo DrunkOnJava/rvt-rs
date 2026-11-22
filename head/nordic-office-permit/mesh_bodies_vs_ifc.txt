@@ -1,0 +1,36 @@
+saved_graphics_mesh bodies scored: 311; in Revit's export 311
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft  median volume ratio
+IfcWindow                       265     265      265      265      265  1.0000
+      250     250      250      250      250  Puu-alumiini-ikkuna A:IKK-1.16x25
+       10      10       10       10       10  Puu-alumiini-ikkuna A:IKK-3.12x28
+        4       4        4        4        4  Puu-alumiini-ikkuna A:IKK-4.16x12
+        1       1        1        1        1  Puu-alumiini-ikkuna A:IKK-2.10x25
+IfcDoor                          46      44       44       46       46  1.0000
+       23      23       23       23       23  O-1:O-1.12x21
+        4       4        4        4        4  LU-1:LU-1.700x700
+        4       4        4        4        4  LU-2:LU-2
+        2       2        2        2        2  O-15:O-15.10x21
+        2       2        2        2        2  UO-6:UO-6.30x24
+        1       0        0        1        1  O-7:O-7.12x21
+  3269270 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.785e-06 ft, rvt-rs's to Revit's 2.209e-06 ft
+  1722215 IfcDoor 'O-16:O-16.1200x2000_180°': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.153e-06 ft, rvt-rs's to Revit's 2.71e-06 ft
+  2505639 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.598e-06 ft
+  2505638 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.59e-06 ft
+  2505637 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.59e-06 ft
+  2505636 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.598e-06 ft
+  2505635 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.59e-06 ft
+  2505634 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.59e-06 ft
+  2505633 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.598e-06 ft
+  2505632 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.59e-06 ft
+  2505631 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.59e-06 ft
+  2505264 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.598e-06 ft
+  2505263 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.59e-06 ft
+  2505262 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.59e-06 ft
+  2505254 IfcWindow 'Puu-alumiini-ikkuna A:IKK-1.16x25': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.6e-06 ft, rvt-rs's to Revit's 2.598e-06 ft
+  volume 1382481 IfcDoor 'O-7:O-7.12x21': volume ratio 1.2455, farthest vertex 1.355e-06 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 2.4387 0.5987
+    Revit shells 1, signed volumes (cubic ft): 2.4387
+  volume 1623922 IfcDoor 'UO-3:UO-3.12x21': volume ratio 1.2455, farthest vertex 1.355e-06 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 2.4387 0.5987
+    Revit shells 1, signed volumes (cubic ft): 2.4387
+exit 0

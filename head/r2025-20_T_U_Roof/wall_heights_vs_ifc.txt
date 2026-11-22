@@ -1,0 +1,29 @@
+cutter tag:4149 IfcRoof SweptSolid 20.4134 27.5902 1.8819 37.6792 1.8189 26.4252
+cutter tag:5941 IfcRoof SweptSolid 20.4134 39.2007 60.0049 116.7635 -13.2600 29.0628
+walls in both files: 16 (rvt-rs 16, Revit 16); offset 0.000000 ft
+  floors, roofs and footings with base Revit's and top Revit's: 2
+  base and top Revit's: 16
+plan turn Revit - rvt-rs: 0.000001 degrees (median wall-middle residual 0.0000 ft)
+surfaces rvt-rs: 2 bodies, 56 triangles
+surfaces Revit: 2 bodies, 124 triangles
+cut by the 2 floors, roofs and footings whose plan box overlaps the wall:
+  base: uncut and Revit's: 16
+  top: uncut and Revit's: 16
+wall tag:2787 rvt-rs 0.0000 13.1234 8.4436 28.7848 26.4252 27.0814 Revit 0.0000 13.1234
+wall tag:2788 rvt-rs 0.0000 13.1234 1.2258 1.8819 1.1628 11.3334 Revit 0.0000 13.1234
+wall tag:2789 rvt-rs 0.0000 13.1234 1.8819 37.6792 1.1628 1.8189 Revit 0.0000 13.1234
+wall tag:2790 rvt-rs 0.0000 13.1234 37.6792 38.3354 1.1628 11.3334 Revit 0.0000 13.1234
+wall tag:3753 rvt-rs 0.0000 13.1234 28.1287 28.7848 10.6772 26.4252 Revit 0.0000 13.1234
+wall tag:3795 rvt-rs 0.0000 13.1234 28.7848 37.6792 10.6772 11.3334 Revit 0.0000 13.1234
+wall tag:3975 rvt-rs 0.0000 13.1234 1.8819 9.0998 10.6772 11.3334 Revit 0.0000 13.1234
+wall tag:4013 rvt-rs 0.0000 13.1234 8.4436 9.0998 11.3334 26.4252 Revit 0.0000 13.1234
+wall tag:5639 rvt-rs 0.0000 13.1234 59.3488 78.7057 29.0628 29.7190 Revit 0.0000 13.1234
+wall tag:5679 rvt-rs 0.0000 13.1234 78.0495 78.7057 8.7216 29.0628 Revit 0.0000 13.1234
+wall tag:5745 rvt-rs 0.0000 13.1234 78.7057 98.3908 8.7216 9.3778 Revit 0.0000 13.1234
+wall tag:5772 rvt-rs 0.0000 13.1234 97.7346 98.3908 9.3778 29.7190 Revit 0.0000 13.1234
+wall tag:5801 rvt-rs 0.0000 13.1234 98.3908 116.7635 29.0628 29.7190 Revit 0.0000 13.1234
+wall tag:5834 rvt-rs 0.0000 13.1234 116.1073 116.7635 -13.2600 29.0628 Revit 0.0000 13.1234
+wall tag:5889 rvt-rs 0.0000 13.1234 59.3488 116.1073 -13.2600 -12.6039 Revit 0.0000 13.1234
+wall tag:5924 rvt-rs 0.0000 13.1234 59.3488 60.0049 -12.6039 29.0628 Revit 0.0000 13.1234
+
+exit 0

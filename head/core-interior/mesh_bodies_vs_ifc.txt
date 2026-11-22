@@ -1,0 +1,24 @@
+saved_graphics_mesh bodies scored: 138; in Revit's export 138
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft  median volume ratio
+IfcDoor                         132     132      132      132      132  1.0000
+       70      70       70       70       70  I_Single-Flush:3 x 8
+       50      50       50       50       50  I_Single-Flush:3 x 8 2 Hour
+       12      12       12       12       12  M_Single-Flush:0915 x 2134mm
+IfcWindow                         6       6        6        6        6  1.0000
+        6       6        6        6        6  Single Window:Standard
+  62908 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.775e-06 ft, rvt-rs's to Revit's 2.775e-06 ft
+  61146 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.775e-06 ft, rvt-rs's to Revit's 2.775e-06 ft
+  60265 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.775e-06 ft, rvt-rs's to Revit's 2.775e-06 ft
+  62027 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.775e-06 ft, rvt-rs's to Revit's 2.775e-06 ft
+  59384 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.775e-06 ft, rvt-rs's to Revit's 2.775e-06 ft
+  55804 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.775e-06 ft, rvt-rs's to Revit's 2.775e-06 ft
+  29923 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.775e-06 ft, rvt-rs's to Revit's 2.775e-06 ft
+  20866 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.775e-06 ft, rvt-rs's to Revit's 2.775e-06 ft
+  62907 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  62026 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  61145 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  60264 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  59383 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  55803 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  29922 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+exit 0
