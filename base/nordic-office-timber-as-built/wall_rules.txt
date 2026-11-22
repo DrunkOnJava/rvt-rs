@@ -1,0 +1,12 @@
+wall rules: base sources wall_base_cut_at_covering_floor=4 wall_base_sloped_at_covering_floor=11 wall_base_sloped_at_floor_covering_in_part=1
+wall rules: end sources none
+wall rules: ends order dependent 0
+wall rules: base refusals none
+wall rules: end refusals joined_wall_face_inside_the_wall=5
+wall rules: end reads unmarked none
+wall rules: profile sources wall_profile_level_past_the_high_end=1 wall_profile_sloped_past_the_high_end=6 wall_profile_sloped_past_the_low_end=2
+wall rules: profile refusals none
+wall rules: profile height checks carried_level_high=1 carried_sloped_high_falling_below=6 carried_sloped_low_falling_below=2
+wall rules: top stubs cut none
+wall rules: profile top sources none
+wall rules: profile cuts none

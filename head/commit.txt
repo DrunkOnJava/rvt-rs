@@ -1,0 +1,1 @@
+1d76c82fede5ee227ecc7d713f39e68abb226c3e fix(elements): of an element framed in several partitions the exporter keeps the newest frame, not the one with the greatest height (#1710) (RE-444) (#1799)

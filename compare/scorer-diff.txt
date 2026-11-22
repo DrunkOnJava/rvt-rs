@@ -1,0 +1,64 @@
+Only in measure-head: areas_across_saves.txt
+Only in measure-head: areas_across_saves_2021.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/wall_rules.txt measure-head/nordic-office-as-built/wall_rules.txt
+--- measure-base/nordic-office-as-built/wall_rules.txt	2026-11-12 04:14:32.736105675 +0000
++++ measure-head/nordic-office-as-built/wall_rules.txt	2026-11-12 04:14:31.454118648 +0000
+@@ -12 +12 @@
+-wall rules: profile cuts none
++wall rules: profile cuts wall_profile_cut_in_body=8
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/wall_rules.txt measure-head/nordic-office-permit/wall_rules.txt
+--- measure-base/nordic-office-permit/wall_rules.txt	2026-11-12 04:14:32.773105301 +0000
++++ measure-head/nordic-office-permit/wall_rules.txt	2026-11-12 04:14:31.456118628 +0000
+@@ -12 +12 @@
+-wall rules: profile cuts none
++wall rules: profile cuts wall_profile_cut_in_body=8
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/wall_rules.txt measure-head/nordic-office-terrain-concrete/wall_rules.txt
+--- measure-base/nordic-office-terrain-concrete/wall_rules.txt	2026-11-12 04:14:32.808104946 +0000
++++ measure-head/nordic-office-terrain-concrete/wall_rules.txt	2026-11-12 04:14:31.506118122 +0000
+@@ -12 +12 @@
+-wall rules: profile cuts none
++wall rules: profile cuts wall_profile_cut_in_body=2
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/wall_rules.txt measure-head/nordic-office-terrain-timber/wall_rules.txt
+--- measure-base/nordic-office-terrain-timber/wall_rules.txt	2026-11-12 04:14:32.808104946 +0000
++++ measure-head/nordic-office-terrain-timber/wall_rules.txt	2026-11-12 04:14:31.506118122 +0000
+@@ -12 +12 @@
+-wall rules: profile cuts none
++wall rules: profile cuts wall_profile_cut_in_body=2
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-timber-as-built/wall_rules.txt measure-head/nordic-office-timber-as-built/wall_rules.txt
+--- measure-base/nordic-office-timber-as-built/wall_rules.txt	2026-11-12 04:14:32.740105635 +0000
++++ measure-head/nordic-office-timber-as-built/wall_rules.txt	2026-11-12 04:14:31.457118618 +0000
+@@ -12 +12 @@
+-wall rules: profile cuts none
++wall rules: profile cuts wall_profile_cut_in_body=9
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-timber-permit/wall_rules.txt measure-head/nordic-office-timber-permit/wall_rules.txt
+--- measure-base/nordic-office-timber-permit/wall_rules.txt	2026-11-12 04:14:32.809104936 +0000
++++ measure-head/nordic-office-timber-permit/wall_rules.txt	2026-11-12 04:14:31.476118426 +0000
+@@ -1 +1 @@
+-wall rules: base sources wall_base_cut_at_covering_floor=4 wall_base_sloped_at_covering_floor=4 wall_base_sloped_at_floor_covering_in_part=8
++wall rules: base sources wall_base_cut_at_covering_floor=4 wall_base_sloped_at_covering_floor=11 wall_base_sloped_at_floor_covering_in_part=1
+@@ -5,5 +5,5 @@
+-wall rules: end refusals joined_wall_face_inside_the_wall=3
+-wall rules: end reads unmarked end_join_curve_not_at_the_box_end=2
+-wall rules: profile sources wall_profile_level_past_the_high_end=1 wall_profile_sloped_past_the_high_end=6
+-wall rules: profile refusals profile_level_cut_between_two_lines=1 profile_stub_longer_than_the_wall_is_thick=2
+-wall rules: profile height checks carried_level_high=1 carried_sloped_high_falling_below=6 kept_sloped_low_falling_below=2
++wall rules: end refusals joined_wall_face_inside_the_wall=5
++wall rules: end reads unmarked none
++wall rules: profile sources wall_profile_level_past_the_high_end=2 wall_profile_sloped_past_the_high_end=6 wall_profile_sloped_past_the_low_end=2
++wall rules: profile refusals none
++wall rules: profile height checks carried_level_high=2 carried_sloped_high_falling_below=6 carried_sloped_low_falling_below=2
+@@ -12 +12 @@
+-wall rules: profile cuts none
++wall rules: profile cuts wall_profile_cut_in_body=10
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-racbasicsampleproject/wall_rules.txt measure-head/sample-2024-racbasicsampleproject/wall_rules.txt
+--- measure-base/sample-2024-racbasicsampleproject/wall_rules.txt	2026-11-12 04:14:32.748105554 +0000
++++ measure-head/sample-2024-racbasicsampleproject/wall_rules.txt	2026-11-12 04:14:31.562117556 +0000
+@@ -12 +12 @@
+-wall rules: profile cuts none
++wall rules: profile cuts wall_profile_cut_in_body=2
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-snowdon_towers_sample_architectural/wall_rules.txt measure-head/sample-2024-snowdon_towers_sample_architectural/wall_rules.txt
+--- measure-base/sample-2024-snowdon_towers_sample_architectural/wall_rules.txt	2026-11-12 04:14:32.798105048 +0000
++++ measure-head/sample-2024-snowdon_towers_sample_architectural/wall_rules.txt	2026-11-12 04:14:31.608117090 +0000
+@@ -12 +12 @@
+-wall rules: profile cuts none
++wall rules: profile cuts wall_profile_cut_in_body=5

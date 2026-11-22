@@ -1,0 +1,12 @@
+wall rules: base sources wall_base_cut_at_covering_floor=9 wall_base_cut_at_floor_covering_in_part=11
+wall rules: end sources none
+wall rules: ends order dependent 0
+wall rules: base refusals none
+wall rules: end refusals none
+wall rules: end reads unmarked none
+wall rules: profile sources none
+wall rules: profile refusals none
+wall rules: profile height checks none
+wall rules: top stubs cut none
+wall rules: profile top sources none
+wall rules: profile cuts none
