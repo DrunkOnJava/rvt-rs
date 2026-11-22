@@ -1,0 +1,1 @@
+4ad28023b897f7c264754fbff8ad1c4da28a4d56 feat(rooms): a room whose stored solid the walk does not close takes the outline its solid's faces make, labelled stored_solid_faces or stored_solid_approximate (#90) (RE-316) (#1292)
