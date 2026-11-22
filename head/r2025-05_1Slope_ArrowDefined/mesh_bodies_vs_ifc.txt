@@ -1,0 +1,3 @@
+saved_graphics_mesh bodies scored: 0; in Revit's export 0
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+exit 0

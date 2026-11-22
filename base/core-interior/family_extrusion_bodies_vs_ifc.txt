@@ -1,0 +1,24 @@
+family_extrusions bodies scored: 37; in Revit's export 37
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcDoor                          37      37       37       37       37          37  1.0000
+       18      18       18       18       18          18  I_Single-Flush:3 x 8 2 Hour
+       11      11       11       11       11          11  M_Single-Flush:0915 x 2134mm
+        8       8        8        8        8           8  I_Single-Flush:3 x 8
+  62907 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  62026 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  61145 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  60264 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  59383 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  55803 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  29922 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  20865 IfcDoor 'I_Single-Flush:3 x 8': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.365e-06 ft, rvt-rs's to Revit's 2.365e-06 ft
+  55756 IfcDoor 'I_Single-Flush:3 x 8 2 Hour': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.194e-06 ft, rvt-rs's to Revit's 2.194e-06 ft
+  29875 IfcDoor 'I_Single-Flush:3 x 8 2 Hour': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.194e-06 ft, rvt-rs's to Revit's 2.194e-06 ft
+  55757 IfcDoor 'I_Single-Flush:3 x 8 2 Hour': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.074e-08 ft, rvt-rs's to Revit's 2.074e-08 ft
+  29876 IfcDoor 'I_Single-Flush:3 x 8 2 Hour': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.074e-08 ft, rvt-rs's to Revit's 2.074e-08 ft
+  62862 IfcDoor 'I_Single-Flush:3 x 8 2 Hour': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.842e-14 ft, rvt-rs's to Revit's 2.842e-14 ft
+  62861 IfcDoor 'I_Single-Flush:3 x 8 2 Hour': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.842e-14 ft, rvt-rs's to Revit's 2.842e-14 ft
+  61100 IfcDoor 'I_Single-Flush:3 x 8 2 Hour': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.842e-14 ft, rvt-rs's to Revit's 2.842e-14 ft
+
+scored bodies with an arc in a profile: none
+exit 0

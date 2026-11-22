@@ -1,0 +1,9 @@
+family_extrusions bodies scored: 2; in Revit's export 2
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcFlowTerminal                   2       2        2        2        2           2  1.0000
+        2       2        2        2        2           2  230913-Thermostat:230913-Thermostat
+  928765 IfcFlowTerminal '230913-Thermostat:230913-Thermostat': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.73e-06 ft, rvt-rs's to Revit's 1.73e-06 ft
+  928758 IfcFlowTerminal '230913-Thermostat:230913-Thermostat': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 7.511e-07 ft, rvt-rs's to Revit's 7.511e-07 ft
+
+scored bodies with an arc in a profile: none
+exit 0

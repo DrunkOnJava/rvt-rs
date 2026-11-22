@@ -1,0 +1,44 @@
+family_extrusions bodies scored: 87; in Revit's export 87
+decided by the fine tessellation (both files write true curves): 78 of 87 bodies
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio  decided by fine
+IfcWasteTerminal                 78      78       78       78       78          78  1.0000               78
+       62      62       62       62       62          62                       62  Lattiakaivo:LK-1
+       16      16       16       16       16          16                       16  Lattiakaivo:VK-1.Kattokaivo
+IfcDoor                           4       4        4        4        4           4  1.0000                0
+        4       4        4        4        4           4                        0  LU-2:LU-2
+IfcFurniture                      3       3        3        3        3           3  1.0000                0
+        3       3        3        3        3           3                        0  PK-1:PK-1.3600
+IfcBuildingElementProxy           2       2        2        2        2           2  1.0000                0
+        2       2        2        2        2           2                        0  HISSI-HEN-1:HISSI-HEN-1
+  3269270 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.4e-05 ft, rvt-rs's to Revit's 1.686e-06 ft
+  3270669 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.267e-05 ft, rvt-rs's to Revit's 2.192e-06 ft
+  3270703 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.267e-05 ft, rvt-rs's to Revit's 2.192e-06 ft
+  3270587 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.205e-05 ft, rvt-rs's to Revit's 1.601e-06 ft
+  2586760 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.99e-06 ft, rvt-rs's to Revit's 1.99e-06 ft (fine tessellation)
+  3098148 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.94e-06 ft, rvt-rs's to Revit's 1.94e-06 ft (fine tessellation)
+  2983892 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.937e-06 ft, rvt-rs's to Revit's 1.937e-06 ft (fine tessellation)
+  2607912 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.81e-06 ft, rvt-rs's to Revit's 1.809e-06 ft (fine tessellation)
+  2633698 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.804e-06 ft, rvt-rs's to Revit's 1.804e-06 ft (fine tessellation)
+  3031711 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
+  2613760 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
+  3031701 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
+  3031691 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
+  3031679 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
+  2637086 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.634e-06 ft, rvt-rs's to Revit's 1.634e-06 ft (fine tessellation)
+
+fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 78 of 87 bodies meshed in both, 78 of them meshed differently
+fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
+fine IfcWasteTerminal                 78      78       78       78       78          78        78       78       78  1.0000 0.000002
+fine total                            78      78       78       78       78          78        78       78       78  1.0000 0.000002
+fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
+fine change IfcWasteTerminal                 78     78     78      0      0      0     78      0      0      0
+fine change total                            78     78     78      0      0      0     78      0      0      0
+fine bodies that miss 'ref on ours': 0
+
+scored bodies with an arc in a profile: 78
+     n ref on ours 0.001 ft 1e-5 ft  vol 1% vol .01%  Revit's form; rvt-rs's arcs
+    78          78       78      78      78       78  all; all; 78 of them decided by the fine tessellation
+    78          78       78      78      78       78  all; arcs over 0.12 ft; 78 of them decided by the fine tessellation
+    78          78       78      78      78       78  extrusion of indexed curve with arcs; arcs over 0.12 ft; decided by the fine tessellation
+scored bodies with an arc that miss 'ref on ours': 0
+exit 0

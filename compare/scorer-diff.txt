@@ -1,0 +1,458 @@
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/family_extrusion_bodies_vs_ifc.txt measure-head/nordic-office-as-built/family_extrusion_bodies_vs_ifc.txt
+--- measure-base/nordic-office-as-built/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:51.941483142 +0000
++++ measure-head/nordic-office-as-built/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:50.903485068 +0000
+@@ -1,8 +1,12 @@
+-family_extrusions bodies scored: 9; in Revit's export 9
+-class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+-IfcDoor                           4       4        4        4        4           4  1.0000
+-        4       4        4        4        4           4  LU-2:LU-2
+-IfcFurniture                      3       3        3        3        3           3  1.0000
+-        3       3        3        3        3           3  PK-1:PK-1.3600
+-IfcBuildingElementProxy           2       2        2        2        2           2  1.0000
+-        2       2        2        2        2           2  HISSI-HEN-1:HISSI-HEN-1
++family_extrusions bodies scored: 87; in Revit's export 87
++decided by the fine tessellation (both files write true curves): 78 of 87 bodies
++class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio  decided by fine
++IfcWasteTerminal                 78      78       78       78       78          78  1.0000               78
++       62      62       62       62       62          62                       62  Lattiakaivo:LK-1
++       16      16       16       16       16          16                       16  Lattiakaivo:VK-1.Kattokaivo
++IfcDoor                           4       4        4        4        4           4  1.0000                0
++        4       4        4        4        4           4                        0  LU-2:LU-2
++IfcFurniture                      3       3        3        3        3           3  1.0000                0
++        3       3        3        3        3           3                        0  PK-1:PK-1.3600
++IfcBuildingElementProxy           2       2        2        2        2           2  1.0000                0
++        2       2        2        2        2           2                        0  HISSI-HEN-1:HISSI-HEN-1
+@@ -13,5 +17,11 @@
+-  3437475 IfcBuildingElementProxy 'HISSI-HEN-1:HISSI-HEN-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.512e-06 ft, rvt-rs's to Revit's 1.512e-06 ft
+-  3235464 IfcFurniture 'PK-1:PK-1.3600': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.383e-06 ft, rvt-rs's to Revit's 5.287e-07 ft
+-  3235192 IfcFurniture 'PK-1:PK-1.3600': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.383e-06 ft, rvt-rs's to Revit's 5.287e-07 ft
+-  3230067 IfcFurniture 'PK-1:PK-1.3600': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.383e-06 ft, rvt-rs's to Revit's 5.287e-07 ft
+-  3437318 IfcBuildingElementProxy 'HISSI-HEN-1:HISSI-HEN-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.179e-06 ft, rvt-rs's to Revit's 1.179e-06 ft
++  2586760 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.99e-06 ft, rvt-rs's to Revit's 1.99e-06 ft (fine tessellation)
++  3098148 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.94e-06 ft, rvt-rs's to Revit's 1.94e-06 ft (fine tessellation)
++  2983892 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.937e-06 ft, rvt-rs's to Revit's 1.937e-06 ft (fine tessellation)
++  2607912 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.81e-06 ft, rvt-rs's to Revit's 1.809e-06 ft (fine tessellation)
++  2633698 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.804e-06 ft, rvt-rs's to Revit's 1.804e-06 ft (fine tessellation)
++  3031711 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  2613760 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  3031701 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  3031691 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  3031679 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  2637086 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.634e-06 ft, rvt-rs's to Revit's 1.634e-06 ft (fine tessellation)
+@@ -19 +29,15 @@
+-scored bodies with an arc in a profile: none
++fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 78 of 87 bodies meshed in both, 78 of them meshed differently
++fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
++fine IfcWasteTerminal                 78      78       78       78       78          78        78       78       78  1.0000 0.000002
++fine total                            78      78       78       78       78          78        78       78       78  1.0000 0.000002
++fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
++fine change IfcWasteTerminal                 78     78     78      0      0      0     78      0      0      0
++fine change total                            78     78     78      0      0      0     78      0      0      0
++fine bodies that miss 'ref on ours': 0
++
++scored bodies with an arc in a profile: 78
++     n ref on ours 0.001 ft 1e-5 ft  vol 1% vol .01%  Revit's form; rvt-rs's arcs
++    78          78       78      78      78       78  all; all; 78 of them decided by the fine tessellation
++    78          78       78      78      78       78  all; arcs over 0.12 ft; 78 of them decided by the fine tessellation
++    78          78       78      78      78       78  extrusion of indexed curve with arcs; arcs over 0.12 ft; decided by the fine tessellation
++scored bodies with an arc that miss 'ref on ours': 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/mesh_bodies_vs_ifc.txt measure-head/nordic-office-as-built/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-as-built/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:51.942483137 +0000
++++ measure-head/nordic-office-as-built/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:50.903485068 +0000
+@@ -2 +2 @@
+-saved_graphics_mesh bodies scored: 1641; in Revit's export 1641
++saved_graphics_mesh bodies scored: 1563; in Revit's export 1563
+@@ -32,3 +31,0 @@
+-IfcWasteTerminal                 78      78        0       78        0          78  1.0035
+-       62      62        0       62        0          62  Lattiakaivo:LK-1
+-       16      16        0       16        0          16  Lattiakaivo:VK-1.Kattokaivo
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/saved_meshes_vs_ifc.txt measure-head/nordic-office-as-built/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-as-built/saved_meshes_vs_ifc.txt	2026-11-04 18:17:51.942483137 +0000
++++ measure-head/nordic-office-as-built/saved_meshes_vs_ifc.txt	2026-11-04 18:17:50.904485071 +0000
+@@ -9 +8,0 @@
+-IfcWasteTerminal                78        78       0       0      0       0
+@@ -20 +19 @@
+-total                        11025     11025       0       0      0       0
++total                        10947     10947       0       0      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/space_profiles_vs_ifc.txt measure-head/nordic-office-as-built/space_profiles_vs_ifc.txt
+--- measure-base/nordic-office-as-built/space_profiles_vs_ifc.txt	2026-11-04 18:17:51.942483137 +0000
++++ measure-head/nordic-office-as-built/space_profiles_vs_ifc.txt	2026-11-04 18:17:50.904485071 +0000
+@@ -7 +7 @@
+-space profiles: vertices within 0.01 ft 117, off 189
++space profiles: vertices within 0.01 ft 159, off 147
+@@ -12 +12,2 @@
+-space profiles: rvt-rs family instance saved mesh: 44, area within 0.1% 44, outline within 0.01 ft 43, both 43, boundary within 0.01 ft 44
++space profiles: rvt-rs family instance family body: 42, area within 0.1% 42, outline within 0.01 ft 42, both 42, boundary within 0.01 ft 42
++space profiles: rvt-rs family instance saved mesh: 2, area within 0.1% 2, outline within 0.01 ft 1, both 1, boundary within 0.01 ft 2
+@@ -17 +18,2 @@
+-space profiles: rvt-rs family instance saved mesh height: 44, lowest and highest vertex within 0.01 ft 44
++space profiles: rvt-rs family instance family body height: 42, lowest and highest vertex within 0.01 ft 42
++space profiles: rvt-rs family instance saved mesh height: 2, lowest and highest vertex within 0.01 ft 2
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/family_extrusion_bodies_vs_ifc.txt measure-head/nordic-office-permit/family_extrusion_bodies_vs_ifc.txt
+--- measure-base/nordic-office-permit/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:51.944483129 +0000
++++ measure-head/nordic-office-permit/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:50.908485086 +0000
+@@ -1,8 +1,12 @@
+-family_extrusions bodies scored: 9; in Revit's export 9
+-class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+-IfcDoor                           4       4        4        4        4           4  1.0000
+-        4       4        4        4        4           4  LU-2:LU-2
+-IfcFurniture                      3       3        3        3        3           3  1.0000
+-        3       3        3        3        3           3  PK-1:PK-1.3600
+-IfcBuildingElementProxy           2       2        2        2        2           2  1.0000
+-        2       2        2        2        2           2  HISSI-HEN-1:HISSI-HEN-1
++family_extrusions bodies scored: 87; in Revit's export 87
++decided by the fine tessellation (both files write true curves): 78 of 87 bodies
++class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio  decided by fine
++IfcWasteTerminal                 78      78       78       78       78          78  1.0000               78
++       62      62       62       62       62          62                       62  Lattiakaivo:LK-1
++       16      16       16       16       16          16                       16  Lattiakaivo:VK-1.Kattokaivo
++IfcDoor                           4       4        4        4        4           4  1.0000                0
++        4       4        4        4        4           4                        0  LU-2:LU-2
++IfcFurniture                      3       3        3        3        3           3  1.0000                0
++        3       3        3        3        3           3                        0  PK-1:PK-1.3600
++IfcBuildingElementProxy           2       2        2        2        2           2  1.0000                0
++        2       2        2        2        2           2                        0  HISSI-HEN-1:HISSI-HEN-1
+@@ -13,5 +17,11 @@
+-  3437475 IfcBuildingElementProxy 'HISSI-HEN-1:HISSI-HEN-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.512e-06 ft, rvt-rs's to Revit's 1.512e-06 ft
+-  3235464 IfcFurniture 'PK-1:PK-1.3600': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.383e-06 ft, rvt-rs's to Revit's 5.287e-07 ft
+-  3235192 IfcFurniture 'PK-1:PK-1.3600': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.383e-06 ft, rvt-rs's to Revit's 5.287e-07 ft
+-  3230067 IfcFurniture 'PK-1:PK-1.3600': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.383e-06 ft, rvt-rs's to Revit's 5.287e-07 ft
+-  3437318 IfcBuildingElementProxy 'HISSI-HEN-1:HISSI-HEN-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.179e-06 ft, rvt-rs's to Revit's 1.179e-06 ft
++  2586760 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.99e-06 ft, rvt-rs's to Revit's 1.99e-06 ft (fine tessellation)
++  3098148 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.94e-06 ft, rvt-rs's to Revit's 1.94e-06 ft (fine tessellation)
++  2983892 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.937e-06 ft, rvt-rs's to Revit's 1.937e-06 ft (fine tessellation)
++  2607912 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.81e-06 ft, rvt-rs's to Revit's 1.809e-06 ft (fine tessellation)
++  2633698 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.804e-06 ft, rvt-rs's to Revit's 1.804e-06 ft (fine tessellation)
++  3031711 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  2613760 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  3031701 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  3031691 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  3031679 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft (fine tessellation)
++  2637086 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.634e-06 ft, rvt-rs's to Revit's 1.634e-06 ft (fine tessellation)
+@@ -19 +29,15 @@
+-scored bodies with an arc in a profile: none
++fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 78 of 87 bodies meshed in both, 78 of them meshed differently
++fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
++fine IfcWasteTerminal                 78      78       78       78       78          78        78       78       78  1.0000 0.000002
++fine total                            78      78       78       78       78          78        78       78       78  1.0000 0.000002
++fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
++fine change IfcWasteTerminal                 78     78     78      0      0      0     78      0      0      0
++fine change total                            78     78     78      0      0      0     78      0      0      0
++fine bodies that miss 'ref on ours': 0
++
++scored bodies with an arc in a profile: 78
++     n ref on ours 0.001 ft 1e-5 ft  vol 1% vol .01%  Revit's form; rvt-rs's arcs
++    78          78       78      78      78       78  all; all; 78 of them decided by the fine tessellation
++    78          78       78      78      78       78  all; arcs over 0.12 ft; 78 of them decided by the fine tessellation
++    78          78       78      78      78       78  extrusion of indexed curve with arcs; arcs over 0.12 ft; decided by the fine tessellation
++scored bodies with an arc that miss 'ref on ours': 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/mesh_bodies_vs_ifc.txt measure-head/nordic-office-permit/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-permit/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:51.945483125 +0000
++++ measure-head/nordic-office-permit/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:50.908485086 +0000
+@@ -2 +2 @@
+-saved_graphics_mesh bodies scored: 1729; in Revit's export 1729
++saved_graphics_mesh bodies scored: 1651; in Revit's export 1651
+@@ -27,3 +26,0 @@
+-IfcWasteTerminal                 78      78        0       78        0          78  1.0035
+-       62      62        0       62        0          62  Lattiakaivo:LK-1
+-       16      16        0       16        0          16  Lattiakaivo:VK-1.Kattokaivo
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/saved_meshes_vs_ifc.txt measure-head/nordic-office-permit/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-permit/saved_meshes_vs_ifc.txt	2026-11-04 18:17:51.945483125 +0000
++++ measure-head/nordic-office-permit/saved_meshes_vs_ifc.txt	2026-11-04 18:17:50.908485086 +0000
+@@ -9 +8,0 @@
+-IfcWasteTerminal                78        78       0       0      0       0
+@@ -20 +19 @@
+-total                        11140     11138       1       1      0       0
++total                        11062     11060       1       1      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/space_profiles_vs_ifc.txt measure-head/nordic-office-permit/space_profiles_vs_ifc.txt
+--- measure-base/nordic-office-permit/space_profiles_vs_ifc.txt	2026-11-04 18:17:51.945483125 +0000
++++ measure-head/nordic-office-permit/space_profiles_vs_ifc.txt	2026-11-04 18:17:50.969485310 +0000
+@@ -7 +7 @@
+-space profiles: vertices within 0.01 ft 115, off 193
++space profiles: vertices within 0.01 ft 157, off 151
+@@ -12 +12,2 @@
+-space profiles: rvt-rs family instance saved mesh: 44, area within 0.1% 44, outline within 0.01 ft 43, both 43, boundary within 0.01 ft 44
++space profiles: rvt-rs family instance family body: 42, area within 0.1% 42, outline within 0.01 ft 42, both 42, boundary within 0.01 ft 42
++space profiles: rvt-rs family instance saved mesh: 2, area within 0.1% 2, outline within 0.01 ft 1, both 1, boundary within 0.01 ft 2
+@@ -17 +18,2 @@
+-space profiles: rvt-rs family instance saved mesh height: 44, lowest and highest vertex within 0.01 ft 44
++space profiles: rvt-rs family instance family body height: 42, lowest and highest vertex within 0.01 ft 42
++space profiles: rvt-rs family instance saved mesh height: 2, lowest and highest vertex within 0.01 ft 2
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/family_extrusion_bodies_vs_ifc.txt measure-head/nordic-office-terrain-concrete/family_extrusion_bodies_vs_ifc.txt
+--- measure-base/nordic-office-terrain-concrete/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:52.000482896 +0000
++++ measure-head/nordic-office-terrain-concrete/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:51.028485527 +0000
+@@ -1,2 +1,16 @@
+-family_extrusions bodies scored: 0; in Revit's export 0
+-class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
++family_extrusions bodies scored: 11; in Revit's export 11
++decided by the fine tessellation (both files write true curves): 11 of 11 bodies
++class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio  decided by fine
++IfcWasteTerminal                 11      11       11       11       11          11  1.0000               11
++       11      11       11       11       11          11                       11  Hulevesikaivo:HVK-1
++  1392198 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.833e-06 ft, rvt-rs's to Revit's 1.104e-06 ft (fine tessellation)
++  1392196 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.82e-06 ft, rvt-rs's to Revit's 1.716e-06 ft (fine tessellation)
++  1392197 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.82e-06 ft, rvt-rs's to Revit's 1.716e-06 ft (fine tessellation)
++  1392205 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.79e-06 ft, rvt-rs's to Revit's 1.79e-06 ft (fine tessellation)
++  1392200 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.585e-06 ft, rvt-rs's to Revit's 1.729e-06 ft (fine tessellation)
++  1392195 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.308e-06 ft, rvt-rs's to Revit's 1.308e-06 ft (fine tessellation)
++  1392204 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.171e-06 ft, rvt-rs's to Revit's 1.171e-06 ft (fine tessellation)
++  1392201 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.109e-06 ft, rvt-rs's to Revit's 1.109e-06 ft (fine tessellation)
++  1392202 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.109e-06 ft, rvt-rs's to Revit's 1.109e-06 ft (fine tessellation)
++  1392199 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.09e-06 ft, rvt-rs's to Revit's 1.09e-06 ft (fine tessellation)
++  1392203 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.034e-06 ft, rvt-rs's to Revit's 1.034e-06 ft (fine tessellation)
+@@ -4 +18,15 @@
+-scored bodies with an arc in a profile: none
++fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 11 of 11 bodies meshed in both, 11 of them meshed differently
++fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
++fine IfcWasteTerminal                 11      11       11       11       11          11        11       11       11  1.0000 0.000002
++fine total                            11      11       11       11       11          11        11       11       11  1.0000 0.000002
++fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
++fine change IfcWasteTerminal                 11     11     11      0      0      0     11      0      0      0
++fine change total                            11     11     11      0      0      0     11      0      0      0
++fine bodies that miss 'ref on ours': 0
++
++scored bodies with an arc in a profile: 11
++     n ref on ours 0.001 ft 1e-5 ft  vol 1% vol .01%  Revit's form; rvt-rs's arcs
++    11          11       11      11      11       11  all; all; 11 of them decided by the fine tessellation
++    11          11       11      11      11       11  all; arcs over 0.12 ft; 11 of them decided by the fine tessellation
++    11          11       11      11      11       11  extrusion of indexed curve with arcs; arcs over 0.12 ft; decided by the fine tessellation
++scored bodies with an arc that miss 'ref on ours': 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/mesh_bodies_vs_ifc.txt measure-head/nordic-office-terrain-concrete/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-terrain-concrete/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:52.000482896 +0000
++++ measure-head/nordic-office-terrain-concrete/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:51.028485527 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 16; in Revit's export 16
++saved_graphics_mesh bodies scored: 5; in Revit's export 5
+@@ -3,2 +2,0 @@
+-IfcWasteTerminal                 11      11        0       11        0          11  1.0008
+-       11      11        0       11        0          11  Hulevesikaivo:HVK-1
+@@ -10,11 +7,0 @@
+-  1392205 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392200 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392196 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392197 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392204 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008706 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392201 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392202 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392199 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392203 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392198 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008702 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392195 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008699 ft, rvt-rs's to Revit's 0.001581 ft
+@@ -24,0 +12 @@
++  1385641 IfcRampFlight 'Ramp:AP-ajoramppi': volume ratio 0.5000, Revit's vertices to rvt-rs's surface 2.023e-06 ft, rvt-rs's to Revit's 1.307e-06 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/saved_meshes_vs_ifc.txt measure-head/nordic-office-terrain-concrete/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-terrain-concrete/saved_meshes_vs_ifc.txt	2026-11-04 18:17:52.000482896 +0000
++++ measure-head/nordic-office-terrain-concrete/saved_meshes_vs_ifc.txt	2026-11-04 18:17:51.028485527 +0000
+@@ -2 +2 @@
+-file-wide offset removed (ft): [-0.0, -0.0, 0.0]
++file-wide offset removed (ft): [-0.0, 0.0, -0.0]
+@@ -4 +3,0 @@
+-IfcWasteTerminal                11        11       0       0      0       0
+@@ -7 +6 @@
+-total                           16        16       0       0      0       0
++total                            5         5       0       0      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/family_extrusion_bodies_vs_ifc.txt measure-head/nordic-office-terrain-timber/family_extrusion_bodies_vs_ifc.txt
+--- measure-base/nordic-office-terrain-timber/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:52.054482672 +0000
++++ measure-head/nordic-office-terrain-timber/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:51.028485527 +0000
+@@ -1,2 +1,16 @@
+-family_extrusions bodies scored: 0; in Revit's export 0
+-class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
++family_extrusions bodies scored: 11; in Revit's export 11
++decided by the fine tessellation (both files write true curves): 11 of 11 bodies
++class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio  decided by fine
++IfcWasteTerminal                 11      11       11       11       11          11  1.0000               11
++       11      11       11       11       11          11                       11  Hulevesikaivo:HVK-1
++  1395053 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.833e-06 ft, rvt-rs's to Revit's 1.104e-06 ft (fine tessellation)
++  1394993 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.82e-06 ft, rvt-rs's to Revit's 1.716e-06 ft (fine tessellation)
++  1395023 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.82e-06 ft, rvt-rs's to Revit's 1.716e-06 ft (fine tessellation)
++  1395257 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.79e-06 ft, rvt-rs's to Revit's 1.79e-06 ft (fine tessellation)
++  1395111 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.585e-06 ft, rvt-rs's to Revit's 1.729e-06 ft (fine tessellation)
++  1394736 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.308e-06 ft, rvt-rs's to Revit's 1.308e-06 ft (fine tessellation)
++  1395237 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.171e-06 ft, rvt-rs's to Revit's 1.171e-06 ft (fine tessellation)
++  1395137 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.109e-06 ft, rvt-rs's to Revit's 1.109e-06 ft (fine tessellation)
++  1395171 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.109e-06 ft, rvt-rs's to Revit's 1.109e-06 ft (fine tessellation)
++  1395083 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.09e-06 ft, rvt-rs's to Revit's 1.09e-06 ft (fine tessellation)
++  1395203 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.034e-06 ft, rvt-rs's to Revit's 1.034e-06 ft (fine tessellation)
+@@ -4 +18,15 @@
+-scored bodies with an arc in a profile: none
++fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 11 of 11 bodies meshed in both, 11 of them meshed differently
++fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
++fine IfcWasteTerminal                 11      11       11       11       11          11        11       11       11  1.0000 0.000002
++fine total                            11      11       11       11       11          11        11       11       11  1.0000 0.000002
++fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
++fine change IfcWasteTerminal                 11     11     11      0      0      0     11      0      0      0
++fine change total                            11     11     11      0      0      0     11      0      0      0
++fine bodies that miss 'ref on ours': 0
++
++scored bodies with an arc in a profile: 11
++     n ref on ours 0.001 ft 1e-5 ft  vol 1% vol .01%  Revit's form; rvt-rs's arcs
++    11          11       11      11      11       11  all; all; 11 of them decided by the fine tessellation
++    11          11       11      11      11       11  all; arcs over 0.12 ft; 11 of them decided by the fine tessellation
++    11          11       11      11      11       11  extrusion of indexed curve with arcs; arcs over 0.12 ft; decided by the fine tessellation
++scored bodies with an arc that miss 'ref on ours': 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/mesh_bodies_vs_ifc.txt measure-head/nordic-office-terrain-timber/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-terrain-timber/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:52.054482672 +0000
++++ measure-head/nordic-office-terrain-timber/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:51.028485527 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 16; in Revit's export 16
++saved_graphics_mesh bodies scored: 5; in Revit's export 5
+@@ -3,2 +2,0 @@
+-IfcWasteTerminal                 11      11        0       11        0          11  1.0008
+-       11      11        0       11        0          11  Hulevesikaivo:HVK-1
+@@ -10,11 +7,0 @@
+-  1395257 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395111 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+-  1394993 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395023 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395237 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008706 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395137 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395171 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395083 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395203 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395053 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008702 ft, rvt-rs's to Revit's 0.001581 ft
+-  1394736 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008699 ft, rvt-rs's to Revit's 0.001581 ft
+@@ -24,0 +12 @@
++  1385641 IfcRampFlight 'Ramp:AP-ajoramppi': volume ratio 0.5000, Revit's vertices to rvt-rs's surface 2.023e-06 ft, rvt-rs's to Revit's 1.307e-06 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/saved_meshes_vs_ifc.txt measure-head/nordic-office-terrain-timber/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-terrain-timber/saved_meshes_vs_ifc.txt	2026-11-04 18:17:52.054482672 +0000
++++ measure-head/nordic-office-terrain-timber/saved_meshes_vs_ifc.txt	2026-11-04 18:17:51.028485527 +0000
+@@ -2 +2 @@
+-file-wide offset removed (ft): [-0.0, -0.0, 0.0]
++file-wide offset removed (ft): [-0.0, 0.0, -0.0]
+@@ -4 +3,0 @@
+-IfcWasteTerminal                11        11       0       0      0       0
+@@ -7 +6 @@
+-total                           16        16       0       0      0       0
++total                            5         5       0       0      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-architecture/family_extrusion_bodies_vs_ifc.txt measure-head/re1-architecture/family_extrusion_bodies_vs_ifc.txt
+--- measure-base/re1-architecture/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:52.069482609 +0000
++++ measure-head/re1-architecture/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:51.041485575 +0000
+@@ -1,2 +1,2 @@
+-family_extrusions bodies scored: 7; in Revit's export 7
+-decided by the fine tessellation (both files write true curves): 1 of 7 bodies
++family_extrusions bodies scored: 8; in Revit's export 8
++decided by the fine tessellation (both files write true curves): 2 of 8 bodies
+@@ -7 +7,2 @@
+-IfcBuildingElementProxy           2       2        2        2        2           2  1.0000                1
++IfcBuildingElementProxy           3       3        3        3        3           3  1.0000                2
++        1       1        1        1        1           1                        1  Dispenser, Toilet Paper - NON-COLLECTUS:-
+@@ -10,0 +12 @@
++  360331 IfcBuildingElementProxy 'Dispenser, Toilet Paper - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.626e-06 ft, rvt-rs's to Revit's 5.907e-06 ft (fine tessellation)
+@@ -18 +20 @@
+-fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 1 of 7 bodies meshed in both, 1 of them meshed differently
++fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 2 of 8 bodies meshed in both, 2 of them meshed differently
+@@ -20,2 +22,2 @@
+-fine IfcBuildingElementProxy           1       1        1        1        1           1         1        1        1  1.0000 0.000003
+-fine total                             1       1        1        1        1           1         1        1        1  1.0000 0.000003
++fine IfcBuildingElementProxy           2       2        2        2        2           2         2        2        2  1.0000 0.000006
++fine total                             2       2        2        2        2           2         2        2        2  1.0000 0.000006
+@@ -23,2 +25,2 @@
+-fine change IfcBuildingElementProxy           1      1      1      0      0      0      1      0      0      0
+-fine change total                             1      1      1      0      0      0      1      0      0      0
++fine change IfcBuildingElementProxy           2      2      1      0      1      0      1      0      1      0
++fine change total                             2      2      1      0      1      0      1      0      1      0
+@@ -27 +29 @@
+-scored bodies with an arc in a profile: 1
++scored bodies with an arc in a profile: 2
+@@ -29 +31,2 @@
+-     1           1        1       1       1        1  all; all; 1 of them decided by the fine tessellation
++     2           2        2       2       2        2  all; all; 2 of them decided by the fine tessellation
++     1           1        1       1       1        1  all; arcs over 0.12 ft; 1 of them decided by the fine tessellation
+@@ -30,0 +34 @@
++     1           1        1       1       1        1  extrusion of circle + extrusion of rectangle; arcs over 0.12 ft; decided by the fine tessellation
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-architecture/mesh_bodies_vs_ifc.txt measure-head/re1-architecture/mesh_bodies_vs_ifc.txt
+--- measure-base/re1-architecture/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:52.069482609 +0000
++++ measure-head/re1-architecture/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:51.042485578 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 46; in Revit's export 46
++saved_graphics_mesh bodies scored: 45; in Revit's export 45
+@@ -12 +12 @@
+-IfcBuildingElementProxy           7       7        6        7        6           7  1.0000
++IfcBuildingElementProxy           6       6        6        6        6           6  1.0000
+@@ -15 +14,0 @@
+-        1       1        0        1        0           1  Dispenser, Toilet Paper - NON-COLLECTUS:-
+@@ -39 +37,0 @@
+-  360331 IfcBuildingElementProxy 'Dispenser, Toilet Paper - NON-COLLECTUS:-': volume ratio 1.0047, Revit's vertices to rvt-rs's surface 0.0009143 ft, rvt-rs's to Revit's 0.001552 ft
+@@ -47,0 +46 @@
++  366924 IfcFurnishingElement 'Cabinet, Base Integrated Trash Single-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.91e-06 ft, rvt-rs's to Revit's 1.882e-06 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-architecture/saved_meshes_vs_ifc.txt measure-head/re1-architecture/saved_meshes_vs_ifc.txt
+--- measure-base/re1-architecture/saved_meshes_vs_ifc.txt	2026-11-04 18:17:52.069482609 +0000
++++ measure-head/re1-architecture/saved_meshes_vs_ifc.txt	2026-11-04 18:17:51.042485578 +0000
+@@ -6 +5,0 @@
+-IfcBuildingElementProxy          7         7       0       0      0       0
+@@ -7,0 +7 @@
++IfcBuildingElementProxy          6         6       0       0      0       0
+@@ -10 +10 @@
+-total                           46        46       0       0      0       0
++total                           45        45       0       0      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-electrical/family_extrusion_bodies_vs_ifc.txt measure-head/re1-electrical/family_extrusion_bodies_vs_ifc.txt
+--- measure-base/re1-electrical/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:52.069482609 +0000
++++ measure-head/re1-electrical/family_extrusion_bodies_vs_ifc.txt	2026-11-04 18:17:51.042485578 +0000
+@@ -1,4 +1,13 @@
+-family_extrusions bodies scored: 2; in Revit's export 2
+-class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+-IfcFlowTerminal                   2       2        2        2        2           2  1.0000
+-        2       2        2        2        2           2  230913-Thermostat:230913-Thermostat
++family_extrusions bodies scored: 8; in Revit's export 8
++decided by the fine tessellation (both files write true curves): 6 of 8 bodies
++class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio  decided by fine
++IfcBuildingElementProxy           6       6        6        6        6           6  1.0000                6
++        6       6        6        6        6           6                        6  283513-OCC:Occupancy Sensor
++IfcFlowTerminal                   2       2        2        2        2           2  1.0000                0
++        2       2        2        2        2           2                        0  230913-Thermostat:230913-Thermostat
++  806264 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.537e-06 ft, rvt-rs's to Revit's 7.058e-06 ft (fine tessellation)
++  806248 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 4.249e-06 ft, rvt-rs's to Revit's 6.935e-06 ft (fine tessellation)
++  799007 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.806e-06 ft, rvt-rs's to Revit's 6.752e-06 ft (fine tessellation)
++  806274 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 4.473e-06 ft, rvt-rs's to Revit's 6.446e-06 ft (fine tessellation)
++  806296 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.708e-06 ft, rvt-rs's to Revit's 5.946e-06 ft (fine tessellation)
++  806286 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 4.42e-06 ft, rvt-rs's to Revit's 5.577e-06 ft (fine tessellation)
+@@ -8 +17,15 @@
+-scored bodies with an arc in a profile: none
++fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 6 of 8 bodies meshed in both, 6 of them meshed differently
++fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
++fine IfcBuildingElementProxy           6       6        6        6        6           6         6        6        6  1.0000 0.000006
++fine total                             6       6        6        6        6           6         6        6        6  1.0000 0.000006
++fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
++fine change IfcBuildingElementProxy           6      6      6      0      0      0      6      0      0      0
++fine change total                             6      6      6      0      0      0      6      0      0      0
++fine bodies that miss 'ref on ours': 0
++
++scored bodies with an arc in a profile: 6
++     n ref on ours 0.001 ft 1e-5 ft  vol 1% vol .01%  Revit's form; rvt-rs's arcs
++     6           6        6       6       6        6  all; all; 6 of them decided by the fine tessellation
++     6           6        6       6       6        6  all; arcs over 0.12 ft; 6 of them decided by the fine tessellation
++     6           6        6       6       6        6  extrusion of circle; arcs over 0.12 ft; decided by the fine tessellation
++scored bodies with an arc that miss 'ref on ours': 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-electrical/mesh_bodies_vs_ifc.txt measure-head/re1-electrical/mesh_bodies_vs_ifc.txt
+--- measure-base/re1-electrical/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:52.069482609 +0000
++++ measure-head/re1-electrical/mesh_bodies_vs_ifc.txt	2026-11-04 18:17:51.042485578 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 45; in Revit's export 45
++saved_graphics_mesh bodies scored: 39; in Revit's export 39
+@@ -3 +3 @@
+-IfcBuildingElementProxy          28      28       22       28       22          28  1.0000
++IfcBuildingElementProxy          22      22       22       22       22          22  1.0000
+@@ -6 +5,0 @@
+-        6       6        0        6        0           6  283513-OCC:Occupancy Sensor
+@@ -9,0 +9 @@
++        1       1        1        1        1           1  262726-RECEPT:120V Special Purpose Outlet - Washer
+@@ -29,5 +29,5 @@
+-  806286 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009333 ft, rvt-rs's to Revit's 0.001574 ft
+-  806248 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009341 ft, rvt-rs's to Revit's 0.001573 ft
+-  799007 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009336 ft, rvt-rs's to Revit's 0.001573 ft
+-  806296 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009335 ft, rvt-rs's to Revit's 0.001573 ft
+-  806274 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009328 ft, rvt-rs's to Revit's 0.001573 ft
++  476469 IfcBuildingElementProxy '262726-RECEPT:120V Special Purpose Outlet - Washer': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.522e-06 ft, rvt-rs's to Revit's 3.493e-06 ft
++  476602 IfcBuildingElementProxy '262726-RECEPT:240V Special Purpose Outlet - Dryer (2 Poles)': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.522e-06 ft, rvt-rs's to Revit's 3.493e-06 ft
++  478205 IfcBuildingElementProxy '262726-RECEPT:120V Duplex': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.993e-06 ft, rvt-rs's to Revit's 3.424e-06 ft
++  808280 IfcBuildingElementProxy '262726-RECEPT:120V Duplex GFCI Above Counter': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.356e-06 ft, rvt-rs's to Revit's 3.233e-06 ft
++  508466 IfcBuildingElementProxy '260923-SWITCH:120V Single Pole': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.948e-06 ft, rvt-rs's to Revit's 3.152e-06 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-electrical/saved_meshes_vs_ifc.txt measure-head/re1-electrical/saved_meshes_vs_ifc.txt
+--- measure-base/re1-electrical/saved_meshes_vs_ifc.txt	2026-11-04 18:17:52.070482605 +0000
++++ measure-head/re1-electrical/saved_meshes_vs_ifc.txt	2026-11-04 18:17:51.042485578 +0000
+@@ -4 +4 @@
+-IfcBuildingElementProxy         28        28       0       0      0       0
++IfcBuildingElementProxy         22        22       0       0      0       0
+@@ -7 +7 @@
+-total                           45        45       0       0      0       0
++total                           39        39       0       0      0       0

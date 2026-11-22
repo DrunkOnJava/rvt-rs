@@ -1,0 +1,33 @@
+family_extrusions bodies scored: 11; in Revit's export 11
+decided by the fine tessellation (both files write true curves): 11 of 11 bodies
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio  decided by fine
+IfcWasteTerminal                 11      11       11       11       11          11  1.0000               11
+       11      11       11       11       11          11                       11  Hulevesikaivo:HVK-1
+  1395053 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.833e-06 ft, rvt-rs's to Revit's 1.104e-06 ft (fine tessellation)
+  1394993 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.82e-06 ft, rvt-rs's to Revit's 1.716e-06 ft (fine tessellation)
+  1395023 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.82e-06 ft, rvt-rs's to Revit's 1.716e-06 ft (fine tessellation)
+  1395257 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.79e-06 ft, rvt-rs's to Revit's 1.79e-06 ft (fine tessellation)
+  1395111 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.585e-06 ft, rvt-rs's to Revit's 1.729e-06 ft (fine tessellation)
+  1394736 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.308e-06 ft, rvt-rs's to Revit's 1.308e-06 ft (fine tessellation)
+  1395237 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.171e-06 ft, rvt-rs's to Revit's 1.171e-06 ft (fine tessellation)
+  1395137 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.109e-06 ft, rvt-rs's to Revit's 1.109e-06 ft (fine tessellation)
+  1395171 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.109e-06 ft, rvt-rs's to Revit's 1.109e-06 ft (fine tessellation)
+  1395083 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.09e-06 ft, rvt-rs's to Revit's 1.09e-06 ft (fine tessellation)
+  1395203 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.034e-06 ft, rvt-rs's to Revit's 1.034e-06 ft (fine tessellation)
+
+fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 11 of 11 bodies meshed in both, 11 of them meshed differently
+fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
+fine IfcWasteTerminal                 11      11       11       11       11          11        11       11       11  1.0000 0.000002
+fine total                            11      11       11       11       11          11        11       11       11  1.0000 0.000002
+fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
+fine change IfcWasteTerminal                 11     11     11      0      0      0     11      0      0      0
+fine change total                            11     11     11      0      0      0     11      0      0      0
+fine bodies that miss 'ref on ours': 0
+
+scored bodies with an arc in a profile: 11
+     n ref on ours 0.001 ft 1e-5 ft  vol 1% vol .01%  Revit's form; rvt-rs's arcs
+    11          11       11      11      11       11  all; all; 11 of them decided by the fine tessellation
+    11          11       11      11      11       11  all; arcs over 0.12 ft; 11 of them decided by the fine tessellation
+    11          11       11      11      11       11  extrusion of indexed curve with arcs; arcs over 0.12 ft; decided by the fine tessellation
+scored bodies with an arc that miss 'ref on ours': 0
+exit 0

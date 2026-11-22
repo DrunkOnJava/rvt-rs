@@ -1,0 +1,37 @@
+family_extrusions bodies scored: 8; in Revit's export 8
+decided by the fine tessellation (both files write true curves): 2 of 8 bodies
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio  decided by fine
+IfcFurnishingElement              5       5        5        5        5           5  1.0000                0
+        4       4        4        4        4           4                        0  Tatatami Kantoma-NON-COLLECTUS:-
+        1       1        1        1        1           1                        0  End Table-NON-COLLECTUS:-
+IfcBuildingElementProxy           3       3        3        3        3           3  1.0000                2
+        1       1        1        1        1           1                        1  Dispenser, Toilet Paper - NON-COLLECTUS:-
+        1       1        1        1        1           1                        1  Hook, Garment and Towel - NON-COLLECTUS:-
+        1       1        1        1        1           1                        0  Mirror, Vanity - NON-COLLECTUS:-
+  376255 IfcBuildingElementProxy 'Mirror, Vanity - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.966e-06 ft, rvt-rs's to Revit's 1.01e-05 ft
+  360331 IfcBuildingElementProxy 'Dispenser, Toilet Paper - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.626e-06 ft, rvt-rs's to Revit's 5.907e-06 ft (fine tessellation)
+  370475 IfcBuildingElementProxy 'Hook, Garment and Towel - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.826e-06 ft, rvt-rs's to Revit's 3.477e-06 ft (fine tessellation)
+  378158 IfcFurnishingElement 'Tatatami Kantoma-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.032e-06 ft, rvt-rs's to Revit's 1.696e-06 ft
+  378159 IfcFurnishingElement 'Tatatami Kantoma-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.639e-06 ft, rvt-rs's to Revit's 1.296e-06 ft
+  378160 IfcFurnishingElement 'Tatatami Kantoma-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.091e-06 ft, rvt-rs's to Revit's 1.332e-06 ft
+  354140 IfcFurnishingElement 'End Table-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.803e-06 ft, rvt-rs's to Revit's 1.797e-06 ft
+  378157 IfcFurnishingElement 'Tatatami Kantoma-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.428e-06 ft, rvt-rs's to Revit's 9.426e-07 ft
+
+fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 2 of 8 bodies meshed in both, 2 of them meshed differently
+fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
+fine IfcBuildingElementProxy           2       2        2        2        2           2         2        2        2  1.0000 0.000006
+fine total                             2       2        2        2        2           2         2        2        2  1.0000 0.000006
+fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
+fine change IfcBuildingElementProxy           2      2      1      0      1      0      1      0      1      0
+fine change total                             2      2      1      0      1      0      1      0      1      0
+fine bodies that miss 'ref on ours': 0
+
+scored bodies with an arc in a profile: 2
+     n ref on ours 0.001 ft 1e-5 ft  vol 1% vol .01%  Revit's form; rvt-rs's arcs
+     2           2        2       2       2        2  all; all; 2 of them decided by the fine tessellation
+     1           1        1       1       1        1  all; arcs over 0.12 ft; 1 of them decided by the fine tessellation
+     1           1        1       1       1        1  all; arcs up to 0.12 ft; 1 of them decided by the fine tessellation
+     1           1        1       1       1        1  extrusion of circle + extrusion of rectangle; arcs over 0.12 ft; decided by the fine tessellation
+     1           1        1       1       1        1  extrusion of circle + extrusion of rectangle; arcs up to 0.12 ft; decided by the fine tessellation
+scored bodies with an arc that miss 'ref on ours': 0
+exit 0

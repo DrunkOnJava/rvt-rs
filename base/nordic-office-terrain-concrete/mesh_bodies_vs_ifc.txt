@@ -1,0 +1,37 @@
+saved_graphics_mesh bodies scored: 16; in Revit's export 16
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcWasteTerminal                 11      11        0       11        0          11  1.0008
+       11      11        0       11        0          11  Hulevesikaivo:HVK-1
+IfcRampFlight                     4       0        0        4        4           4  0.5000
+        3       0        0        3        3           3  Ramp:AP-ajoramppi
+        1       0        0        1        1           1  Ramp:AP-ulkoluiska
+IfcBuildingElementProxy           1       1        1        1        1           1  1.0000
+        1       1        1        1        1           1  Kohdistuskappale:3x2x1
+  1392205 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+  1392200 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+  1392196 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+  1392197 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+  1392204 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008706 ft, rvt-rs's to Revit's 0.001581 ft
+  1392201 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+  1392202 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+  1392199 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+  1392203 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+  1392198 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008702 ft, rvt-rs's to Revit's 0.001581 ft
+  1392195 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008699 ft, rvt-rs's to Revit's 0.001581 ft
+  1337610 IfcBuildingElementProxy 'Kohdistuskappale:3x2x1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.551e-06 ft, rvt-rs's to Revit's 2.153e-06 ft
+  1385462 IfcRampFlight 'Ramp:AP-ajoramppi': volume ratio 0.5000, Revit's vertices to rvt-rs's surface 3.151e-06 ft, rvt-rs's to Revit's 4.635e-07 ft
+  1385926 IfcRampFlight 'Ramp:AP-ajoramppi': volume ratio 0.5000, Revit's vertices to rvt-rs's surface 1.355e-06 ft, rvt-rs's to Revit's 2.393e-06 ft
+  1387294 IfcRampFlight 'Ramp:AP-ulkoluiska': volume ratio 0.5000, Revit's vertices to rvt-rs's surface 2.131e-06 ft, rvt-rs's to Revit's 1.355e-06 ft
+  volume 1385926 IfcRampFlight 'Ramp:AP-ajoramppi': volume ratio 0.5000, farthest vertex 2.393e-06 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 454.0118
+    Revit shells 1, signed volumes (cubic ft): 908.0228
+  volume 1385462 IfcRampFlight 'Ramp:AP-ajoramppi': volume ratio 0.5000, farthest vertex 3.151e-06 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 453.9512
+    Revit shells 1, signed volumes (cubic ft): 907.9024
+  volume 1387294 IfcRampFlight 'Ramp:AP-ulkoluiska': volume ratio 0.5000, farthest vertex 2.131e-06 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 222.4373
+    Revit shells 1, signed volumes (cubic ft): 444.8747
+  volume 1385641 IfcRampFlight 'Ramp:AP-ajoramppi': volume ratio 0.5000, farthest vertex 2.023e-06 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 2871.0779
+    Revit shells 1, signed volumes (cubic ft): 5742.1569
+exit 0

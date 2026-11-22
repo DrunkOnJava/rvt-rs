@@ -1,0 +1,20 @@
+family_extrusions bodies scored: 9; in Revit's export 9
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcDoor                           4       4        4        4        4           4  1.0000
+        4       4        4        4        4           4  LU-2:LU-2
+IfcFurniture                      3       3        3        3        3           3  1.0000
+        3       3        3        3        3           3  PK-1:PK-1.3600
+IfcBuildingElementProxy           2       2        2        2        2           2  1.0000
+        2       2        2        2        2           2  HISSI-HEN-1:HISSI-HEN-1
+  3269270 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.4e-05 ft, rvt-rs's to Revit's 1.686e-06 ft
+  3270669 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.267e-05 ft, rvt-rs's to Revit's 2.192e-06 ft
+  3270703 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.267e-05 ft, rvt-rs's to Revit's 2.192e-06 ft
+  3270587 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.205e-05 ft, rvt-rs's to Revit's 1.601e-06 ft
+  3437475 IfcBuildingElementProxy 'HISSI-HEN-1:HISSI-HEN-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.512e-06 ft, rvt-rs's to Revit's 1.512e-06 ft
+  3235464 IfcFurniture 'PK-1:PK-1.3600': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.383e-06 ft, rvt-rs's to Revit's 5.287e-07 ft
+  3235192 IfcFurniture 'PK-1:PK-1.3600': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.383e-06 ft, rvt-rs's to Revit's 5.287e-07 ft
+  3230067 IfcFurniture 'PK-1:PK-1.3600': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.383e-06 ft, rvt-rs's to Revit's 5.287e-07 ft
+  3437318 IfcBuildingElementProxy 'HISSI-HEN-1:HISSI-HEN-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.179e-06 ft, rvt-rs's to Revit's 1.179e-06 ft
+
+scored bodies with an arc in a profile: none
+exit 0
