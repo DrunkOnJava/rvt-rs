@@ -805,6 +805,34 @@ def main():
             if pairs:
                 print("stored orientation of a corner's rings, on corners seen from more than one ring, every cohort: "
                       + "; ".join(f"{k}: {n}" for k, n in sorted(pairs.items())))
+        # The coordinated join the chair save suggests (#2085): a gap two rings hold, one ring's P and Q
+        # its edges' last and first points, the other's both first or both last, joined at the
+        # first ring's Q. Every such corner Revit does not join there would make the rule wrong.
+        if c == COHORTS[0]:
+            judged = collections.Counter()
+            distinct = collections.defaultdict(set)
+            widest = 0.0
+            for _, members in corners.items():
+                views = [(g, o) for g, o in members if key_of(g) in ORIENT]
+                if len(views) != 2:
+                    continue
+                cfg = ["/".join(ORIENT[key_of(g)]) for g, _ in views]
+                lf = [i for i, k in enumerate(cfg) if k == "last/first"]
+                if len(lf) != 1 or cfg[1 - lf[0]] not in ("first/first", "last/last"):
+                    continue
+                (g1, o1), (g2, o2) = views[lf[0]], views[1 - lf[0]]
+                widest = max(widest, float(g1["gap"]), float(g2["gap"]))
+                same = tuple(np.round(point(g1["q"]), 6)) == tuple(np.round(point(g2["p"]), 6))
+                verdict = ("Revit keeps the last/first ring's Q" if (o1, o2) == ("q_only", "p_only") and same
+                           else f"otherwise, {o1} with {cfg[1 - lf[0]]} {o2}")
+                judged[verdict] += 1
+                distinct[verdict].add(tuple(sorted((key_of(g1), key_of(g2)))))
+            if judged:
+                print(f"coordinated join (#2085), corners two rings hold, one last/first and one first/first or last/last, "
+                      f"widest gap {widest:.9f} ft: " + "; ".join(f"{k}: {n} corners, {len(distinct[k])} distinct gaps"
+                                                            for k, n in sorted(judged.items())))
+            else:
+                print("coordinated join (#2085): no corner two rings hold meets it")
         oriented = collections.Counter((w, o) for cc, w, o in orient_seen.values() if cc == c)
         if oriented:
             print(f"kept end by whether P and Q are their edges' stored first or last points (P/Q), stored gaps, {c}: "

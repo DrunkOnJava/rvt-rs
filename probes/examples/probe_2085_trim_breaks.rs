@@ -117,6 +117,14 @@
 //!     (`m_firstAndLastEdgePnts`), and Q of the edge after it. The ring's edges are in their
 //!     stored loop order (`m_next`) and which end of each is P or Q is the one that joins best, so
 //!     this is each edge's own stored direction at the gap;
+//!   pairorient graph=<ElementId> views=<face>:<loop>:<k>,<face>:<loop>:<k> cfg=<P/Q>+<P/Q>
+//!     candidate=<yes|no> gap=<ft>: a stored gap two rings of the graph hold, the same two
+//!     ends in model coordinates to 1e-6 ft, with each ring's `pieceorient` reading. The
+//!     candidate is the coordinated join the chair save suggests: one ring `last/first`, the
+//!     other `first/first` or `last/last`;
+//!   pairorients pairs=<n> candidate=<n> one_ring=<n> more_rings=<n> widest_candidate=<ft>:
+//!     over the file, the stored gaps two rings hold, those that meet the candidate, those
+//!     only one ring holds and those more than two do;
 //!   ownnbr graph=<ElementId> face=<n> loop=<n> at=<k> side=<a|b> order=<prev|next>
 //!     class=<class> poly_p=<ft> poly_q=<ft> end_p=<ft> end_q=<ft>
 //!     shared_p=<ft> shared_q=<ft> join=<ft>: the two edges adjacent to the shared edge in
@@ -188,6 +196,7 @@
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
@@ -723,6 +732,23 @@ fn loop_chain(graph: &ObjectGraph, fi: usize, li: usize) -> Option<Vec<(usize, u
     Some(out)
 }
 
+/// A stored gap as `pieceorient` reads it, kept to pair the rings that hold the same gap.
+struct OrientRow {
+    graph: u64,
+    face: usize,
+    loop_index: usize,
+    at: usize,
+    ends: [[i64; 3]; 2],
+    cfg: &'static str,
+    d: f64,
+}
+/// Every stored gap read, across surface classes, since a gap's two rings can be on two.
+static ORIENTS: Mutex<Vec<OrientRow>> = Mutex::new(Vec::new());
+/// A point of model coordinates to 1e-6 ft, the scorer's corner key.
+fn micro(p: [f64; 3]) -> [i64; 3] {
+    p.map(|x| (x * 1e6).round() as i64)
+}
+
 /// One gap of a loop's stored edges of `TOUCHING` or more, in model coordinates.
 struct Gap {
     at: usize,
@@ -1140,6 +1166,24 @@ fn read_pieces(
             if g.p_first { "first" } else { "last" },
             if g.q_first { "first" } else { "last" }
         );
+        if let Ok(mut rows) = ORIENTS.lock() {
+            let mut ends = [micro(g.p), micro(g.q)];
+            ends.sort();
+            rows.push(OrientRow {
+                graph: id,
+                face: fi,
+                loop_index,
+                at: g.at,
+                ends,
+                cfg: match (g.p_first, g.q_first) {
+                    (true, true) => "first/first",
+                    (true, false) => "first/last",
+                    (false, true) => "last/first",
+                    (false, false) => "last/last",
+                },
+                d: g.d,
+            });
+        }
         // Whose edge a `through` match is: this face's body or another, and whether it is one
         // of the edges that name this face but that no loop walked reaches.
         let own_body = cache.body.get(&fi).copied();
@@ -2009,5 +2053,54 @@ fn main() -> Result<()> {
             );
         }
     }
+    report_orient_pairs();
     Ok(())
+}
+
+/// The stored gaps two rings of a graph hold, each with both rings' `pieceorient` reading,
+/// and whether they meet the coordinated join the chair save suggests (#2085).
+fn report_orient_pairs() {
+    let Ok(rows) = ORIENTS.lock() else {
+        return;
+    };
+    type GapKey = (u64, [[i64; 3]; 2]);
+    let mut by_gap: BTreeMap<GapKey, Vec<&OrientRow>> = BTreeMap::new();
+    for r in rows.iter() {
+        by_gap.entry((r.graph, r.ends)).or_default().push(r);
+    }
+    let (mut pairs, mut candidates, mut one, mut more) = (0, 0, 0, 0);
+    let mut widest = 0f64;
+    for ((graph, _), views) in &by_gap {
+        match views.len() {
+            1 => one += 1,
+            2 => {
+                pairs += 1;
+                let (a, b) = (views[0], views[1]);
+                let same_end = |c: &str| c == "first/first" || c == "last/last";
+                let candidate = (a.cfg == "last/first" && same_end(b.cfg))
+                    || (b.cfg == "last/first" && same_end(a.cfg));
+                if candidate {
+                    candidates += 1;
+                    widest = widest.max(a.d.max(b.d));
+                }
+                println!(
+                    "pairorient graph={graph} views={}:{}:{},{}:{}:{} cfg={}+{} candidate={} gap={:.9}",
+                    a.face,
+                    a.loop_index,
+                    a.at,
+                    b.face,
+                    b.loop_index,
+                    b.at,
+                    a.cfg,
+                    b.cfg,
+                    if candidate { "yes" } else { "no" },
+                    a.d.max(b.d)
+                );
+            }
+            _ => more += 1,
+        }
+    }
+    println!(
+        "pairorients pairs={pairs} candidate={candidates} one_ring={one} more_rings={more} widest_candidate={widest:.9}"
+    );
 }
