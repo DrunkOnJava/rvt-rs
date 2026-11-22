@@ -1,0 +1,139 @@
+psets: Revit values on objects rvt-rs writes: 624; equal: 378; different: 0; missing: 246; rvt-rs values Revit does not write: 0
+psets:   Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+psets:   Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingCommon.Reference: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingElementProxyCommon.IsExternal: 5, equal 0, different 0, missing 5
+psets:   Pset_BuildingElementProxyCommon.Reference: 5, equal 5, different 0, missing 0
+psets:   Pset_BuildingStoreyCommon.AboveGround: 4, equal 4, different 0, missing 0
+psets:   Pset_BuildingStoreyCommon.Reference: 4, equal 4, different 0, missing 0
+psets:   Pset_DoorCommon.FireRating: 15, equal 0, different 0, missing 15
+psets:   Pset_DoorCommon.IsExternal: 13, equal 13, different 0, missing 0
+psets:   Pset_DoorCommon.Reference: 13, equal 13, different 0, missing 0
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 114, equal 108, different 0, missing 6
+psets:   Pset_FurnitureTypeCommon.Reference: 6, equal 6, different 0, missing 0
+psets:   Pset_ManufacturerTypeInformation.Manufacturer: 16, equal 0, different 0, missing 16
+psets:   Pset_ReinforcementBarPitchOfSlab.Reference: 8, equal 2, different 0, missing 6
+psets:   Pset_ReinforcementBarPitchOfWall.Reference: 59, equal 59, different 0, missing 0
+psets:   Pset_RoofCommon.IsExternal: 1, equal 1, different 0, missing 0
+psets:   Pset_RoofCommon.Reference: 1, equal 1, different 0, missing 0
+psets:   Pset_RoofCommon.ThermalTransmittance: 1, equal 0, different 0, missing 1
+psets:   Pset_SanitaryTerminalTypeCommon.Reference: 6, equal 6, different 0, missing 0
+psets:   Pset_SlabCommon.IsExternal: 8, equal 2, different 0, missing 6
+psets:   Pset_SlabCommon.LoadBearing: 8, equal 0, different 0, missing 8
+psets:   Pset_SlabCommon.PitchAngle: 8, equal 2, different 0, missing 6
+psets:   Pset_SlabCommon.Reference: 8, equal 2, different 0, missing 6
+psets:   Pset_SlabCommon.ThermalTransmittance: 2, equal 0, different 0, missing 2
+psets:   Pset_SpaceCommon.IsExternal: 18, equal 0, different 0, missing 18
+psets:   Pset_SpaceCommon.Reference: 18, equal 13, different 0, missing 5
+psets:   Pset_WallCommon.ExtendToStructure: 59, equal 59, different 0, missing 0
+psets:   Pset_WallCommon.IsExternal: 59, equal 0, different 0, missing 59
+psets:   Pset_WallCommon.LoadBearing: 59, equal 0, different 0, missing 59
+psets:   Pset_WallCommon.Reference: 59, equal 59, different 0, missing 0
+psets:   Pset_WallCommon.ThermalTransmittance: 11, equal 0, different 0, missing 11
+psets:   Pset_WindowCommon.IsExternal: 17, equal 2, different 0, missing 15
+psets:   Pset_WindowCommon.Reference: 16, equal 16, different 0, missing 0
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 1
+psets:   Pset_OpeningElementCommon.Reference: 1
+psets: rvt-rs values Revit does not write, on objects Revit writes and on others:
+Revit quantities on objects rvt-rs writes: 846; equal: 135; different: 0; missing: 711; rvt-rs quantities Revit does not write: 0
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 39
+walls whose Length is rvt-rs's curve's: 35; Revit's Axis's: 24; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+  Qto_BodyGeometryValidation.GrossSurfaceArea: 18, equal 0, different 0, missing 18
+  Qto_BodyGeometryValidation.GrossVolume: 18, equal 0, different 0, missing 18
+  Qto_BodyGeometryValidation.NetSurfaceArea: 127, equal 0, different 0, missing 127
+  Qto_BodyGeometryValidation.NetVolume: 127, equal 0, different 0, missing 127
+  Qto_BuildingElementProxyQuantities.NetSurfaceArea: 5, equal 0, different 0, missing 5
+  Qto_BuildingElementProxyQuantities.NetVolume: 5, equal 0, different 0, missing 5
+  Qto_DoorBaseQuantities.Area: 13, equal 0, different 0, missing 13
+  Qto_DoorBaseQuantities.Height: 13, equal 0, different 0, missing 13
+  Qto_DoorBaseQuantities.Width: 13, equal 0, different 0, missing 13
+  Qto_OpeningElementBaseQuantities.Depth: 15, equal 0, different 0, missing 15
+  Qto_OpeningElementBaseQuantities.Height: 2, equal 0, different 0, missing 2
+  Qto_OpeningElementBaseQuantities.Width: 2, equal 0, different 0, missing 2
+  Qto_RoofBaseQuantities.GrossArea: 1, equal 0, different 0, missing 1
+  Qto_RoofBaseQuantities.NetArea: 1, equal 0, different 0, missing 1
+  Qto_RoofBaseQuantities.ProjectedArea: 1, equal 0, different 0, missing 1
+  Qto_SlabBaseQuantities.Depth: 8, equal 0, different 0, missing 8
+  Qto_SlabBaseQuantities.GrossArea: 8, equal 8, different 0, missing 0
+  Qto_SlabBaseQuantities.GrossVolume: 8, equal 0, different 0, missing 8
+  Qto_SlabBaseQuantities.Length: 3, equal 0, different 0, missing 3
+  Qto_SlabBaseQuantities.NetArea: 8, equal 0, different 0, missing 8
+  Qto_SlabBaseQuantities.NetVolume: 8, equal 2, different 0, missing 6
+  Qto_SlabBaseQuantities.Width: 3, equal 0, different 0, missing 3
+  Qto_SpaceBaseQuantities.GrossCeilingArea: 13, equal 0, different 0, missing 13
+  Qto_SpaceBaseQuantities.GrossFloorArea: 13, equal 0, different 0, missing 13
+  Qto_SpaceBaseQuantities.GrossVolume: 8, equal 0, different 0, missing 8
+  Qto_SpaceBaseQuantities.Height: 13, equal 13, different 0, missing 0
+  Qto_SpaceBaseQuantities.NetFloorArea: 13, equal 0, different 0, missing 13
+  Qto_SpaceBaseQuantities.NetVolume: 13, equal 0, different 0, missing 13
+  Qto_WallBaseQuantities.GrossFootprintArea: 36, equal 8, different 0, missing 28
+  Qto_WallBaseQuantities.GrossSideArea: 36, equal 8, different 0, missing 28
+  Qto_WallBaseQuantities.GrossVolume: 36, equal 8, different 0, missing 28
+  Qto_WallBaseQuantities.Height: 36, equal 8, different 0, missing 28
+  Qto_WallBaseQuantities.Length: 20, equal 5, different 0, missing 15
+  Qto_WallBaseQuantities.NetSideArea: 36, equal 8, different 0, missing 28
+  Qto_WallBaseQuantities.NetVolume: 59, equal 8, different 0, missing 51
+  Qto_WallBaseQuantities.Width: 59, equal 59, different 0, missing 0
+  Qto_WindowBaseQuantities.Area: 16, equal 0, different 0, missing 16
+  Qto_WindowBaseQuantities.Height: 16, equal 0, different 0, missing 16
+  Qto_WindowBaseQuantities.Width: 16, equal 0, different 0, missing 16
+exit 0
+names:      59  system family | IfcWall | Name equal | ObjectType differs
+names:      16  family instance | IfcWindow | Name equal | ObjectType differs
+names:      13  family instance | IfcDoor | Name equal | ObjectType differs
+names:       6  system family | IfcSlab | Name differs | ObjectType equal
+names:       6  family instance | IfcSanitaryTerminal | Name equal | ObjectType differs
+names:       6  family instance | IfcFurniture | Name equal | ObjectType differs
+names:       3  family instance | IfcBuildingElementProxy | Name equal | ObjectType differs
+names:       2  family instance | IfcBuildingElementProxy | Name differs | ObjectType differs
+names:       2  system family | IfcSlab | Name equal | ObjectType differs
+names:       1  system family | IfcRoof | Name equal | ObjectType differs
+layer sets:     320  layer names: Revit's, in Revit's order
+layer sets:      61  layer sets written
+layer sets:      61  positions not comparable
+layer sets:      61  set name = Revit's Family:Type
+layer sets:   whole layer sets within 0.001 ft of Revit's: 61 of 61
+layer sets:   whole layer sets within 0.01 ft of Revit's: 61 of 61
+layer sets:   whole layer sets within 0.1 ft of Revit's: 61 of 61
+class sets: Revit's export: 128 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class sets: rvt-rs's export: 127 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class sets: IfcBuildingElementProxy               5      5      0      0  
+class sets: IfcDoor                              13     13      0      0  
+class sets: IfcFurniture                          6      6      0      0  
+class sets: IfcGeographicElement                  1      0      0      1  
+class sets: IfcRoof                               1      1      0      0  
+class sets: IfcSanitaryTerminal                   6      6      0      0  
+class sets: IfcSlab                               8      8      0      0  
+class sets: IfcSpace                             13     13      0      0  
+class sets: IfcWall                              59     59      0      0  
+class sets: IfcWindow                            16     16      0      0  
+global ids: elements: {"GlobalId = Revit's": 114}
+global ids: storeys: 4 of 4 equal Revit's
+global ids: storeys whose GlobalId is one of Revit's: 4 of 4
+global ids: IfcProject: 0 of 1 equal Revit's
+global ids: IfcSite: 0 of 1 equal Revit's
+global ids: IfcBuilding: 0 of 1 equal Revit's
+global ids: spaces: 13 of 13 equal one of Revit's
+space profiles: matched by globalid
+space profiles: IfcSpace in rvt-rs 13, in Revit 13, with a body 13 and 13
+space profiles: in both 12, only in rvt-rs 0, only in Revit 0
+space profiles: only in Revit and in rvt-rs without a body 0, paired where the Revit top surface has no area 1
+space profiles: area within 0.1% 10, within 1% 10, off 2
+space profiles: outline within 0.01 ft 0, off 12
+space profiles: vertices within 0.01 ft 0, off 12
+space profiles: boundary within 0.01 ft 0, off 12
+space profiles: area within 0.1% and outline within 0.01 ft 0
+space profiles: lowest and highest vertex within 0.01 ft 0, off 12
+space profiles: rvt-rs room stored solid: 12, area within 0.1% 10, outline within 0.01 ft 0, both 0, boundary within 0.01 ft 0
+space profiles: rvt-rs room stored solid height: 12, lowest and highest vertex within 0.01 ft 0
+space overlaps: upward faces, stored solid: 13 paired rooms, area within 0.1% of Revit's on 10
+space overlaps: downward faces, stored solid: 13 paired rooms, area within 0.1% of Revit's on 10
+space overlaps: every face, stored solid: 13 paired rooms, area within 0.1% of Revit's on 10
+storeys: 114 elements, 16 not on a storey
+storeys:       6  IfcSanitaryTerminal
+storeys:       6  IfcFurniture
+storeys:       4  IfcBuildingElementProxy
+storeys: against Revit's export:
+storeys:     114  same storey as Revit's
