@@ -952,7 +952,7 @@ fn loop_join_bound(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> R
 /// #2085, research branch only: the gaps of a loop the coordinated join takes, by where each is
 /// in the loop (0 the closing gap), and whether it keeps Q, the next edge's end, or P, the
 /// loop's own last point ([`crate::native_saved_mesh::coordinated_join_keeps`]).
-type Keeps = std::collections::BTreeMap<usize, bool>;
+type Keeps = BTreeMap<usize, bool>;
 
 /// `loop_polygon` at a bound looser than `STRICT_JOIN` (#2085 candidate). A gap at or over
 /// `bound` that `keeps` names, under the coordinated join's limit, keeps the end it names
