@@ -1,0 +1,1 @@
+61f2080b55a35ecb8f7735954d54f1a401f107d0 feat(ifc)!: write the openings a cabinet and a door cut in a wall, and a curtain wall's where nothing trims it (#1165) (RE-338) (#1400)

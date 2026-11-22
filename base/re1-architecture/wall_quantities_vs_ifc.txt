@@ -1,0 +1,5 @@
+walls with Qto_WallBaseQuantities in Revit's export that rvt-rs also writes: 0 (rvt-rs 7, Revit 7)
+walls without a mesh: {}
+cutter tag:418660 IfcSlab lo=-0.065617 hi=0.000000
+cutter tag:418772 IfcSlab lo=-0.131234 hi=0.000000
+exit 0

@@ -1,0 +1,43 @@
+opening 3fQlH4$5W904PnIvVi2Eo1 'O-7:O-7.12x21:1382481:1' in 1382481: host key, opening number 1
+opening 05LomId9Mn6JkcJhndiUkS 'Floor:VP-1:418397' in 1384047: no key found
+opening 298Elwmo$gPm3YonUDo1Wf 'Floor:VP-1:418397' in 1384047: no key found
+opening 03F$xUVbItBY8VmCjq8ctG 'Floor:VP-1:418397' in 1384047: no key found
+opening 1JppRW5M2j7TD_rWwtNFhB 'Floor:VP-1:418397' in 1384047: no key found
+opening 1OCzRSUtw4OhLWEKYPRsSs 'Floor:VP-1:418397' in 1384047: no key found
+opening 0JR7mXosQ331$m_jvv9Lk8 'Floor:VP-1:418397' in 1384047: no key found
+opening 06e$2zQr6fpU24d5pdOuE8 'Floor:VP-1:418397' in 1451421: no key found
+opening 0h_f_vx_36mWLcvHpTBjBz 'Floor:VP-1:418397' in 1451421: no key found
+opening 2TNrOxwaXipiwlflWtDKVd 'Floor:VP-1:418397' in 1451421: no key found
+opening 3kbO41jJ26umc6RmJ$enT7 'Floor:VP-1:418397' in 1451421: no key found
+opening 0BYZO3ZB0AjobVHw68Hou1 'Floor:VP-1:418397' in 1451421: no key found
+opening 00B2OdjcAiyivRe1Rttw0I 'Floor:VP-1:418397' in 1451421: no key found
+opening 3bnJxE2B7HMTM1MVyNr$Cd 'Floor:VP-1:418397' in 1451421: no key found
+opening 3w9TORu7Z$UjUYH$zmd9qM 'Floor:VP-1:418397' in 1451421: no key found
+opening 1NA2PuYilYNfKf9wlW5$$o 'Floor:VP-1:418397' in 1457693: no key found
+opening 0JA0G7INv4s9bGs1XJUtLU 'Floor:VP-1:418397' in 1457693: no key found
+opening 37McdY81poGZ6Q_t$CvblW 'Floor:VP-1:418397' in 1457693: no key found
+opening 28$rP8yEXHQFJ6hJ6x19sw 'Floor:VP-1:418397' in 1457693: no key found
+opening 0LrzGfGLVbrUKPGs3MsFBc 'Floor:VP-1:418397' in 1457693: no key found
+opening 2gNAscGjTecHj1GHbrvydw 'Floor:VP-1:418397' in 1457693: no key found
+opening 2i1cfpIIUaMbdm2S3gud07 'Floor:VP-1:418397' in 1457693: no key found
+opening 12CZ7Bq3iQ3_TZuTT_UjYu 'Floor:VP-1:418397' in 1457693: no key found
+opening 2DojQ5LYgEFtv2kw95crqb 'Floor:VP-1:418397' in 1457693: no key found
+opening 0Qk$euzhE1Na3G6bGVu3vS 'Floor:VP-1:418397' in 1457785: no key found
+opening 2moeVnauZIE4j$Lnl0oBYu 'Floor:VP-1:418397' in 1457785: no key found
+opening 2BjAFjj$ybj5$uZvfmn9i6 'Floor:VP-1:418397' in 1457785: no key found
+opening 0GPOi0Ff$5UrKvFRXsslpb 'Floor:VP-1:418397' in 1457785: no key found
+opening 1zNG2n67FoWB5x4IhlEvxB 'Floor:VP-1:418397' in 1457785: no key found
+opening 3AZNKOumRIDzTzpI_SAULl 'Floor:VP-1:418397' in 1457785: no key found
+opening 1jkOL$31wzX8MXOEbzYU$0 'Floor:VP-1:418397' in 1457785: no key found
+opening 0GudPjLjzpAduWHmu4hH_9 'Floor:VP-1:418397' in 1457785: no key found
+opening 1z1zOgEdepEY25IouDDMTM 'Floor:VP-1:418397' in 1457785: no key found
+opening 1DpSeF9zqicaAZvRgqoui5 'Floor:VP-1:418397' in 1474132: no key found
+opening 3u4T9e0kev2xNkMvIJtgh1 'Floor:VP-1:418397' in 1474132: no key found
+opening 3yWMMaXrZM8HsKG$tE5Gur 'Floor:VP-1:418397' in 1474132: no key found
+opening 2On7ppglvk4nSxqqcu6laK 'UO-3:UO-3.12x21:1623922:1' in 1623922: host key, opening number 1
+opening 3YaXsZK7DWAzH8QHq$vLLn 'Basic Roof:YP-1:2991742:1' in 2991742: host key, opening number 1
+opening 2_vAcrRri2S49gzbvjYOW1 'Basic Roof:YP-1:2991742:2' in 2991742: host key, opening number 2
+opening 0DdCEMitnLfOdlYT2LDb3G 'Basic Roof:YP-1:2991742:3' in 2991742: host key, opening number 3
+opening 2bZgoAmVzSxbOlfXcVBbmd 'Basic Roof:YP-1:2991742:4' in 2991742: host key, opening number 4
+6 of 41 openings in hosts other than walls have a key
+exit 0

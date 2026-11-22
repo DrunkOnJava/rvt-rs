@@ -1,0 +1,39 @@
+walls 7 in both files (rvt-rs 7, Revit 7); offset 0.000000 ft; plan turn -0.131584 degrees
+floors, roofs and footings: rvt-rs 2, Revit 2
+wall tag:415431 length 25.9945 thickness 0.4265 area rvt-rs 11.0820 Revit 11.0659 differ 0.9980 low/high rvt-rs 0.0000 11.5157 Revit 0.0000 11.5157 plan rvt-rs -178.3942 -177.9677 150.7904 176.7849 Revit -178.4394 -177.9534 150.8334 176.7796 stations 104
+levels tag:415431 rvt-rs 11.516=11.0820[-178.3942 -177.9677 150.7904 176.7849] 7.874=4.0580[-178.3942 -177.9677 155.0391 176.5153] | Revit 11.516=11.0659[-178.4394 -177.9534 150.8334 176.7796] 7.874=4.0580[-178.4388 -177.9630 155.0329 176.5100]
+top tag:415431 rvt-rs 0.00-25.99:11.5157 | Revit 0.00-25.99:11.5157 | hits 2
+plan tag:415431 points 520 equal 520 taller 0 lower 0 | form rvt-rs SweptSolid IfcExtrudedAreaSolid/IfcArbitraryClosedProfileDefx1 | Revit SweptSolid IfcExtrudedAreaSolid/IfcRectangleProfileDefx1
+faces tag:415431 top 11.5157 rvt-rs 11.0820 Revit 11.0659 taller 0.0000 lower 0.0000 volume rvt-rs 95.6652 Revit 95.4793
+wall tag:415751 length 5.8422 thickness 0.4265 area rvt-rs 2.4869 Revit 2.4708 differ 0.1919 low/high rvt-rs 0.0000 11.5157 Revit 0.0000 11.5157 plan rvt-rs -184.1872 -178.3450 170.6344 171.0610 Revit -184.2193 -178.4253 170.6148 171.0547 stations 24
+levels tag:415751 rvt-rs 11.516=2.4869[-184.1872 -178.3450 170.6344 171.0610] | Revit 11.516=2.4708[-184.2193 -178.4253 170.6148 171.0547]
+top tag:415751 rvt-rs 0.00-5.84:11.5157 | Revit 0.00-5.84:11.5157 | hits 2
+plan tag:415751 points 120 equal 120 taller 0 lower 0 | form rvt-rs SweptSolid IfcExtrudedAreaSolid/IfcArbitraryClosedProfileDefx1 | Revit SweptSolid IfcExtrudedAreaSolid/IfcRectangleProfileDefx1
+faces tag:415751 top 11.5157 rvt-rs 2.4869 Revit 2.4708 taller 0.0000 lower 0.0000 volume rvt-rs 28.6386 Revit 28.4526
+wall tag:415911 length 15.3941 thickness 0.4265 area rvt-rs 6.5657 Revit 6.3838 differ 0.4626 low/high rvt-rs 0.0000 11.5157 Revit -0.0000 11.5157 plan rvt-rs -184.1872 -168.7931 162.4395 162.8660 Revit -184.2004 -168.8054 162.4199 162.8818 stations 62
+levels tag:415911 rvt-rs 11.516=6.5657[-184.1872 -168.7931 162.4395 162.8660] 8.202=1.3993[-177.4943 -174.2134 162.4395 162.8660] 7.874=2.0990[-183.7279 -178.8066 162.4395 162.8660] | Revit 11.516=6.3838[-184.2004 -168.8054 162.4199 162.8818] 8.202=1.3993[-177.5076 -174.2257 162.4353 162.8694] 7.874=2.0990[-183.7411 -178.8189 162.4210 162.8588]
+top tag:415911 rvt-rs 0.00-15.39:11.5157 | Revit 0.00-5.71:11.5157,5.71-6.21:-,6.21-15.39:11.5157 | hits 2
+plan tag:415911 points 300 equal 300 taller 0 lower 0 | form rvt-rs SweptSolid IfcExtrudedAreaSolid/IfcRectangleProfileDefx1 | Revit SweptSolid IfcExtrudedAreaSolid/IfcRectangleProfileDefx1
+faces tag:415911 top 11.5157 rvt-rs 6.5657 Revit 6.3838 taller 0.0000 lower 0.0000 volume rvt-rs 47.6048 Revit 45.5100
+wall tag:416297 length 5.1973 thickness 0.4265 area rvt-rs 2.1820 Revit 2.2167 differ 0.4177 low/high rvt-rs 0.0000 11.5157 Revit 0.0000 11.5157 plan rvt-rs -175.0696 -174.6431 171.5875 176.7849 Revit -175.1148 -174.6764 171.5889 176.7872 stations 21
+levels tag:416297 rvt-rs 11.516=2.1820[-175.0696 -174.6431 171.5875 176.7849] 7.874=1.0495[-175.0696 -174.6431 174.0782 176.5388] | Revit 11.516=2.2167[-175.1148 -174.6764 171.5889 176.7872] 7.874=1.0495[-175.1143 -174.6821 174.0795 176.5411]
+top tag:416297 rvt-rs 0.00-5.20:11.5157 | Revit 0.00-5.20:11.5157 | hits 2
+plan tag:416297 points 103 equal 103 taller 0 lower 0 | form rvt-rs SweptSolid IfcExtrudedAreaSolid/IfcArbitraryClosedProfileDefx1 | Revit SweptSolid IfcExtrudedAreaSolid/IfcRectangleProfileDefx1
+faces tag:416297 top 11.5157 rvt-rs 2.1820 Revit 2.2167 taller 0.0000 lower 0.0000 volume rvt-rs 16.8638 Revit 17.2635
+wall tag:418450 length 6.2273 thickness 0.4265 area rvt-rs 2.5298 Revit 2.4951 differ 0.1437 low/high rvt-rs 0.0000 11.5157 Revit 0.0000 11.5157 plan rvt-rs -175.0204 -168.7931 171.5875 172.0141 Revit -174.6774 -168.8264 171.5899 172.0298 stations 25
+levels tag:418450 rvt-rs 11.516=2.5298[-175.0204 -168.7931 171.5875 172.0141] | Revit 11.516=2.4951[-174.6774 -168.8264 171.5899 172.0298]
+top tag:418450 rvt-rs 0.00-0.25:-,0.25-6.23:11.5157 | Revit 0.00-0.25:-,0.25-6.23:11.5157 | hits 2
+plan tag:418450 points 119 equal 119 taller 0 lower 0 | form rvt-rs SweptSolid IfcExtrudedAreaSolid/IfcArbitraryClosedProfileDefx1 | Revit SweptSolid IfcExtrudedAreaSolid/IfcRectangleProfileDefx1
+faces tag:418450 top 11.5157 rvt-rs 2.5298 Revit 2.4951 taller 0.0000 lower 0.0000 volume rvt-rs 29.1326 Revit 28.7328
+wall tag:445898 length 5.8422 thickness 0.4265 area rvt-rs 2.4869 Revit 2.4708 differ 0.1834 low/high rvt-rs 0.0000 11.5157 Revit 0.0000 11.5157 plan rvt-rs -184.1872 -178.3450 166.1563 166.5828 Revit -184.2090 -178.4150 166.1367 166.5765 stations 24
+levels tag:445898 rvt-rs 11.516=2.4869[-184.1872 -178.3450 166.1563 166.5828] | Revit 11.516=2.4708[-184.2090 -178.4150 166.1367 166.5765]
+top tag:445898 rvt-rs 0.00-5.84:11.5157 | Revit 0.00-5.84:11.5157 | hits 2
+plan tag:445898 points 120 equal 120 taller 0 lower 0 | form rvt-rs SweptSolid IfcExtrudedAreaSolid/IfcArbitraryClosedProfileDefx1 | Revit SweptSolid IfcExtrudedAreaSolid/IfcRectangleProfileDefx1
+faces tag:445898 top 11.5157 rvt-rs 2.4869 Revit 2.4708 taller 0.0000 lower 0.0000 volume rvt-rs 28.6386 Revit 28.4526
+wall tag:462510 length 15.3941 thickness 0.4265 area rvt-rs 6.5657 Revit 6.5657 differ 0.2873 low/high rvt-rs 8.0873 11.5157 Revit 8.0873 11.5157 plan rvt-rs -184.1872 -168.7931 150.4131 150.8396 Revit -184.1728 -168.7778 150.3936 150.8554 stations 62
+levels tag:462510 rvt-rs 11.516=6.5657[-184.1872 -168.7931 150.4131 150.8396] | Revit 11.516=6.5657[-184.1728 -168.7778 150.3936 150.8554]
+top tag:462510 rvt-rs 0.00-15.39:11.5157 | Revit 0.00-15.39:11.5157 | hits 2
+plan tag:462510 points 310 equal 310 taller 0 lower 0 | form rvt-rs SweptSolid IfcExtrudedAreaSolid/IfcRectangleProfileDefx1 | Revit SweptSolid IfcExtrudedAreaSolid/IfcRectangleProfileDefx1
+faces tag:462510 top 11.5157 rvt-rs 6.5657 Revit 6.5657 taller 0.0000 lower 0.0000 volume rvt-rs 22.5105 Revit 22.5105
+summary walls 7; equal on the centre line 6; equal over the plan 7 of 7 compared; points 1592 equal 1592 taller 0 lower 0; full-height area taller 0.0000 lower 0.0000 ft2
+exit 0
