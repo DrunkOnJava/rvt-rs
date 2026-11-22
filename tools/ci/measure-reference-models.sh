@@ -798,12 +798,18 @@ for s in "${STEPS[@]:-}"; do
   # A scorer of several saves or of a run's two sides, given one model's two
   # files, prints its usage and exits 2 on every model (runs 44950815664 and
   # 44953635018 named areas_across_saves, whose gate runs by itself whenever
-  # the samples are in the run, and is listed above for that reason).
+  # the samples are in the run, and is listed above for that reason; run
+  # 43649253933 named changed_bodies_vs_ifc, which takes three). Its name says
+  # so, or its usage line takes three files or more outside its [options].
+  usage=$(grep -m1 -E "python3? +tools/re/$s\.py" "$SCORERS/$s.py" | sed -E 's/\[[^]]*\]//g' || true)
+  files=$(grep -o '<[^>]*>' <<< "$usage" | wc -l)
   case "$s" in
-    *_across_saves | *_vs_base)
-      echo "::error::$s compares several exports, not one model's with Revit's: an across-saves gate runs with -f samples=true, and a scorer of the two sides with -f pair_scorer=$s" >&2
-      exit 2 ;;
+    *_across_saves | *_vs_base) files=3 ;;
   esac
+  if [ "$files" -ge 3 ]; then
+    echo "::error::$s compares several exports, not one model's with Revit's: an across-saves gate runs with -f samples=true, and a scorer of the two sides with -f pair_scorer=$s" >&2
+    exit 2
+  fi
 done
 # A run of one probe writes probe.txt (probe_score.txt, probe-pair.txt), a
 # run of several probe-<probe>.txt (probe_score-<probe>.txt, ...).
