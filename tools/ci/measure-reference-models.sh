@@ -804,10 +804,13 @@ for s in "${STEPS[@]:-}"; do
   usage=$(grep -m1 -E "python3? +tools/re/$s\.py" "$SCORERS/$s.py" | sed -E 's/\[[^]]*\]//g' || true)
   files=$(grep -o '<[^>]*>' <<< "$usage" | wc -l)
   case "$s" in
-    *_across_saves | *_vs_base) files=3 ;;
+    *_across_saves) why="it compares several saves: an across-saves gate runs with -f samples=true" ;;
+    *_vs_base) why="it compares a run's two sides: dispatch it with -f pair_scorer=$s" ;;
+    *) why="its usage takes three files or more: run it on the kept exports"
+       [ "$files" -ge 3 ] || why="" ;;
   esac
-  if [ "$files" -ge 3 ]; then
-    echo "::error::$s compares several exports, not one model's with Revit's: an across-saves gate runs with -f samples=true, and a scorer of the two sides with -f pair_scorer=$s" >&2
+  if [ -n "$why" ]; then
+    echo "::error::$s is not run on one model's export and Revit's: $why" >&2
     exit 2
   fi
 done
