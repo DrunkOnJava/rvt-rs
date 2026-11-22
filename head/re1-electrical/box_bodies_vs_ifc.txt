@@ -1,0 +1,12 @@
+record-box bodies: 49; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcBuildingElementProxy           30       1       0      27       1       1       0    0.625
+         6  260923-SWITCH:120V Single Pole
+         6  283513-OCC:Occupancy Sensor
+         6  262726-RECEPT:120V Duplex
+IfcLightFixture                   12       2       0      10       0       0       0    0.779
+        10  265100-LIGHT-CAN:6"
+IfcAlarm                           5       5       0       0       0       0       0    1.000
+IfcElectricAppliance               2       2       0       0       0       0       0    1.000
+total                             49      10       0      37       1       1       0
+exit 0

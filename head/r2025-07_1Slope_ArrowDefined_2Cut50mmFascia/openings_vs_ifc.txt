@@ -1,0 +1,5 @@
+openings in Revit's export: 0; in rvt-rs's: 0; both: 0
+  within 0.01 ft: 0
+  within 0.26 ft: 0
+  within 1.0 ft: 0
+exit 0

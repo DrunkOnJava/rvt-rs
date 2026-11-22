@@ -1,0 +1,9 @@
+bodies across saves: sample-2025-rstbasicsampleproject, held to the 2024 saves
+beams and landings: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 354 (IfcBeam 354)
+stair runs: not applicable, the 2025 save is the reference of the later saves and this is the 2025 save (1 drawn here)
+sketch outlines: compared 5 against the 2024 save (IfcSlab 5); left as boxes here, drawn in the 2024 save, not scored: 0
+named elements: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+  beams and landings: 0 drawn as partition_beam_axis, fewer than the 345 it holds
+  beams and landings: 0 drawn as partition_beam_box_along_axis, fewer than the 9 it holds
+bodies across saves: FAIL (2 differences)
+exit 1

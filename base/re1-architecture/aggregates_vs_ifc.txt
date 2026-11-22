@@ -1,0 +1,4 @@
+      1  IfcCurtainWall: neither aggregates
+     10  IfcMember: same whole
+      2  IfcPlate: same whole
+exit 0

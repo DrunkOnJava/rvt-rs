@@ -1,0 +1,21 @@
+    256  family instance | IfcWall | Name differs | ObjectType differs
+    206  family instance | IfcMember | Name differs | ObjectType differs
+    142  family instance | IfcPipeSegment | Name differs | ObjectType differs
+    128  family instance | IfcPipeFitting | Name equal | ObjectType equal
+    114  family instance | IfcColumn | Name equal | ObjectType equal
+    102  family instance | IfcCableCarrierSegment | Name differs | ObjectType differs
+     74  family instance | IfcCableCarrierFitting | Name equal | ObjectType equal
+     70  family instance | IfcWindow | Name differs | ObjectType differs
+     67  family instance | IfcPlate | Name differs | ObjectType differs
+     66  family instance | IfcDoor | Name equal | ObjectType equal
+     29  family instance | IfcBuildingElementProxy | Name equal | ObjectType equal
+     14  family instance | IfcRailing | Name differs | ObjectType differs
+      9  family instance | IfcSlab | Name differs | ObjectType differs
+      8  family instance | IfcBuildingElementProxy | Name differs | ObjectType differs
+      8  family instance | IfcRoof | Name differs | ObjectType differs
+      6  family instance | IfcBuildingElementProxy | Name differs | ObjectType equal
+      6  family instance | IfcStair | Name differs | ObjectType differs
+      6  family instance | IfcStairFlight | Name differs | ObjectType differs
+      2  family instance | IfcDoor | Name differs | ObjectType differs
+      1  family instance | IfcBeam | Name equal | ObjectType equal
+exit 0

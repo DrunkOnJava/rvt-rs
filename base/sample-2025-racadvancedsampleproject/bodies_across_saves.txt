@@ -1,0 +1,33 @@
+bodies across saves: sample-2025-racadvancedsampleproject, held to the 2024 saves
+named 111931, 2025 save: no product with a body
+named 111931, 2024 save: no product with a body
+named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=440.512245 m3, 24 vertices
+named 139803, 2024 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=True volume=4.15431293 m3, 8 vertices
+named 147534, 2024 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+named 176909, 2025 save: IfcRailing BodySource=partition_element_record_bbox ProfileResolved=False volume=4.14763839 m3, 8 vertices
+named 176909, 2024 save: IfcRailing BodySource=partition_element_record_bbox ProfileResolved=False volume=4.14763839 m3, 8 vertices
+named 201262, 2025 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=6.87512864 m3, 8 vertices
+named 201262, 2024 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=5.33213143 m3, 268 vertices
+named 201312, 2025 save: no product with a body
+named 201312, 2024 save: no product with a body
+beams and landings: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 42 (IfcBeam 37, IfcSlab 5)
+stair runs: not applicable, the 2025 save is the reference of the later saves and this is the 2025 save (10 drawn here)
+sketch outlines: of the 6 elements whose sketch holds an arc, 0 are outlines compared equal here (none); the other 6 are boxes here or not outlines
+sketch outlines: compared 86 against the 2024 save (IfcCovering 64, IfcRoof 5, IfcSlab 17); left as boxes here, drawn in the 2024 save, not scored: 0
+named elements: compared 1 against the 2024 save (IfcCovering 1); left as boxes here, drawn in the 2024 save, not scored: 0
+  beams and landings: 0 drawn as partition_beam_axis, fewer than the 29 it holds
+  beams and landings: 0 drawn as partition_beam_box_along_axis, fewer than the 8 it holds
+  beams and landings: 0 drawn as native_landing_tread, fewer than the 5 it holds
+  sketch outlines: 139803 IfcSlab differs in volume: 440.512245 m3 here, 441.111228 m3 in the 2024 save
+  sketch outlines: 139803 IfcSlab differs in vertices: the farthest is 9.6919 ft from the earlier save's
+  sketch outlines: 201262 IfcRoof differs in volume: 6.87512864 m3 here, 5.33213143 m3 in the 2024 save
+  sketch outlines: 201262 IfcRoof differs in vertices: the farthest is 25.8085 ft from the earlier save's
+  sketch outlines: 139803 was not compared equal, and is required
+  sketch outlines: 201262 was not compared equal, and is required
+  named elements: 147534 IfcCovering differs in ProfileResolved: True here, False in the 2024 save
+  named elements: 147534 IfcCovering differs in volume: 4.15431293 m3 here, 5.14728698 m3 in the 2024 save
+  named elements: 147534 IfcCovering differs in vertices: the farthest is 10.1350 ft from the earlier save's
+  named elements: 147534 was not compared equal, and is required
+bodies across saves: FAIL (13 differences)
+exit 1

@@ -1,0 +1,28 @@
+bodies across saves: sample-2026-racadvancedsampleproject, held to the 2024, 2025 saves
+named 111931, 2026 save: no product with a body
+named 111931, 2024 save: no product with a body
+named 111931, 2025 save: no product with a body
+named 139803, 2026 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+named 139803, 2024 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=440.512245 m3, 24 vertices
+named 147534, 2026 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+named 147534, 2024 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=True volume=4.15431293 m3, 8 vertices
+named 176909, 2026 save: IfcRailing BodySource=partition_element_record_bbox ProfileResolved=False volume=4.14763839 m3, 8 vertices
+named 176909, 2024 save: IfcRailing BodySource=partition_element_record_bbox ProfileResolved=False volume=4.14763839 m3, 8 vertices
+named 176909, 2025 save: IfcRailing BodySource=partition_element_record_bbox ProfileResolved=False volume=4.14763839 m3, 8 vertices
+named 201262, 2026 save: IfcRoof BodySource=partition_element_record_bbox ProfileResolved=False volume=48.7663636 m3, 8 vertices
+named 201262, 2024 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=5.33213143 m3, 268 vertices
+named 201262, 2025 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=6.87512864 m3, 8 vertices
+named 201312, 2026 save: no product with a body
+named 201312, 2024 save: no product with a body
+named 201312, 2025 save: no product with a body
+beams and landings: compared 42 against the 2024 save (IfcBeam 37, IfcSlab 5); left as boxes here, drawn in the 2024 save, not scored: 0
+stair runs: compared 10 against the 2025 save (IfcStairFlight 10); left as boxes here, drawn in the 2025 save, not scored: 0
+sketch outlines: of the 6 elements whose sketch holds an arc, 1 are outlines compared equal here (139803); the other 5 are boxes here or not outlines
+sketch outlines: compared 82 against the 2024 save (IfcCovering 64, IfcRoof 1, IfcSlab 17); left as boxes here, drawn in the 2024 save, not scored: 4 (IfcRoof 4)
+sketch outlines against the 2025 save, not scored: 81 equal, 1 differ, 0 drawn otherwise there
+  sketch outlines against the 2025 save: 139803 IfcSlab volume: 441.111228 m3 here, 440.512245 m3 there; IfcSlab vertices: the farthest is 9.6919 ft from the earlier save's here
+named elements: compared 1 against the 2024 save (IfcCovering 1); left as boxes here, drawn in the 2024 save, not scored: 0
+bodies across saves: PASS
+exit 0

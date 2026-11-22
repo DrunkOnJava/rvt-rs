@@ -1,0 +1,3 @@
+0 floors, roofs and ceilings drawn in layers in the GLB
+compared layers' colours against Revit's surface styles:
+exit 0

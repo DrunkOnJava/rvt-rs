@@ -1,0 +1,1 @@
+830a4d941dcfda0a8a90444a3605e469ef2eff07 feat(ifc): shaft openings are cut on Revit 2024 only, and a later release counts the shafts it did not cut (#1440) (RE-345)

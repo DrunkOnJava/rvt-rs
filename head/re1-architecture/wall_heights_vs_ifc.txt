@@ -1,0 +1,26 @@
+cutter tag:418660 IfcSlab SweptSolid -0.0656 0.0000 -184.1872 -168.7931 162.4395 176.7849
+cutter tag:418772 IfcSlab SweptSolid -0.1312 0.0000 -177.9677 -168.7931 150.8396 162.4395
+walls in both files: 7 (rvt-rs 7, Revit 7); offset 0.000000 ft
+  floors, roofs and footings with base Revit's and top Revit's: 2
+  base and top Revit's: 7
+plan turn Revit - rvt-rs: -0.131584 degrees (median wall-middle residual 0.0393 ft)
+surfaces rvt-rs: 2 bodies, 40 triangles
+surfaces Revit: 2 bodies, 40 triangles
+over tag:415431 418660:-0.0656,0.0000:-0.0656,0.0000
+over tag:415751 418660:-0.0656,0.0000:-0.0656,0.0000
+over tag:415911 418660:-0.0656,0.0000:-0.0656,0.0000
+over tag:416297 418660:-0.0656,0.0000:-0.0656,0.0000
+over tag:418450 418660:-0.0656,0.0000:-0.0656,0.0000
+over tag:445898 418660:-0.0656,0.0000:-0.0656,0.0000
+cut by the 2 floors, roofs and footings whose plan box overlaps the wall:
+  base: uncut and Revit's: 7
+  top: uncut and Revit's: 7
+wall tag:415431 rvt-rs 0.0000 11.5157 -178.3942 -177.9677 150.7904 176.7849 Revit 0.0000 11.5157
+wall tag:415751 rvt-rs 0.0000 11.5157 -184.1872 -178.3450 170.6344 171.0610 Revit 0.0000 11.5157
+wall tag:415911 rvt-rs 0.0000 11.5157 -184.1872 -168.7931 162.4395 162.8660 Revit -0.0000 11.5157
+wall tag:416297 rvt-rs 0.0000 11.5157 -175.0696 -174.6431 171.5875 176.7849 Revit 0.0000 11.5157
+wall tag:418450 rvt-rs 0.0000 11.5157 -175.0204 -168.7931 171.5875 172.0141 Revit 0.0000 11.5157
+wall tag:445898 rvt-rs 0.0000 11.5157 -184.1872 -178.3450 166.1563 166.5828 Revit 0.0000 11.5157
+wall tag:462510 rvt-rs 8.0873 11.5157 -184.1872 -168.7931 150.4131 150.8396 Revit 8.0873 11.5157
+
+exit 0

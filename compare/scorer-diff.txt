@@ -1,0 +1,94 @@
+Only in measure-head: areas_across_saves.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racadvancedsampleproject/bodies_across_saves.txt measure-head/sample-2025-racadvancedsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2025-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 19:26:13.118209513 +0000
++++ measure-head/sample-2025-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 19:26:07.872197200 +0000
+@@ -4 +4 @@
+-named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=440.512245 m3, 24 vertices
++named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+@@ -6 +6 @@
+-named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=True volume=4.15431293 m3, 8 vertices
++named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+@@ -10 +10 @@
+-named 201262, 2025 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=6.87512864 m3, 8 vertices
++named 201262, 2025 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=5.33213143 m3, 268 vertices
+@@ -14 +14 @@
+-beams and landings: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 42 (IfcBeam 37, IfcSlab 5)
++beams and landings: compared 42 against the 2024 save (IfcBeam 37, IfcSlab 5); left as boxes here, drawn in the 2024 save, not scored: 0
+@@ -16 +16 @@
+-sketch outlines: of the 6 elements whose sketch holds an arc, 0 are outlines compared equal here (none); the other 6 are boxes here or not outlines
++sketch outlines: of the 6 elements whose sketch holds an arc, 2 are outlines compared equal here (139803, 201262); the other 4 are boxes here or not outlines
+@@ -19,15 +19,2 @@
+-  beams and landings: 0 drawn as partition_beam_axis, fewer than the 29 it holds
+-  beams and landings: 0 drawn as partition_beam_box_along_axis, fewer than the 8 it holds
+-  beams and landings: 0 drawn as native_landing_tread, fewer than the 5 it holds
+-  sketch outlines: 139803 IfcSlab differs in volume: 440.512245 m3 here, 441.111228 m3 in the 2024 save
+-  sketch outlines: 139803 IfcSlab differs in vertices: the farthest is 9.6919 ft from the earlier save's
+-  sketch outlines: 201262 IfcRoof differs in volume: 6.87512864 m3 here, 5.33213143 m3 in the 2024 save
+-  sketch outlines: 201262 IfcRoof differs in vertices: the farthest is 25.8085 ft from the earlier save's
+-  sketch outlines: 139803 was not compared equal, and is required
+-  sketch outlines: 201262 was not compared equal, and is required
+-  named elements: 147534 IfcCovering differs in ProfileResolved: True here, False in the 2024 save
+-  named elements: 147534 IfcCovering differs in volume: 4.15431293 m3 here, 5.14728698 m3 in the 2024 save
+-  named elements: 147534 IfcCovering differs in vertices: the farthest is 10.1350 ft from the earlier save's
+-  named elements: 147534 was not compared equal, and is required
+-bodies across saves: FAIL (13 differences)
+-exit 1
++bodies across saves: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racadvancedsampleproject/schema.txt measure-head/sample-2025-racadvancedsampleproject/schema.txt
+--- measure-base/sample-2025-racadvancedsampleproject/schema.txt	2026-11-05 19:26:13.222209758 +0000
++++ measure-head/sample-2025-racadvancedsampleproject/schema.txt	2026-11-05 19:26:08.029197544 +0000
+@@ -10 +10 @@
+-sets 11627 on 5737 objects and types
++sets 11637 on 5737 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racbasicsampleproject/schema.txt measure-head/sample-2025-racbasicsampleproject/schema.txt
+--- measure-base/sample-2025-racbasicsampleproject/schema.txt	2026-11-05 19:26:13.236209791 +0000
++++ measure-head/sample-2025-racbasicsampleproject/schema.txt	2026-11-05 19:26:08.043197577 +0000
+@@ -10 +10 @@
+-sets 965 on 478 objects and types
++sets 967 on 478 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-rstbasicsampleproject/bodies_across_saves.txt measure-head/sample-2025-rstbasicsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2025-rstbasicsampleproject/bodies_across_saves.txt	2026-11-05 19:26:13.548210525 +0000
++++ measure-head/sample-2025-rstbasicsampleproject/bodies_across_saves.txt	2026-11-05 19:26:08.345945970 +0000
+@@ -2 +2 @@
+-beams and landings: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 354 (IfcBeam 354)
++beams and landings: compared 354 against the 2024 save (IfcBeam 354); left as boxes here, drawn in the 2024 save, not scored: 0
+@@ -6,4 +6,2 @@
+-  beams and landings: 0 drawn as partition_beam_axis, fewer than the 345 it holds
+-  beams and landings: 0 drawn as partition_beam_box_along_axis, fewer than the 9 it holds
+-bodies across saves: FAIL (2 differences)
+-exit 1
++bodies across saves: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racadvancedsampleproject/bodies_across_saves.txt measure-head/sample-2026-racadvancedsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2026-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 19:26:13.554210539 +0000
++++ measure-head/sample-2026-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 19:26:08.357198315 +0000
+@@ -7 +7 @@
+-named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=440.512245 m3, 24 vertices
++named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+@@ -10 +10 @@
+-named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=True volume=4.15431293 m3, 8 vertices
++named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+@@ -16 +16 @@
+-named 201262, 2025 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=6.87512864 m3, 8 vertices
++named 201262, 2025 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=5.33213143 m3, 268 vertices
+@@ -24,2 +24 @@
+-sketch outlines against the 2025 save, not scored: 81 equal, 1 differ, 0 drawn otherwise there
+-  sketch outlines against the 2025 save: 139803 IfcSlab volume: 441.111228 m3 here, 440.512245 m3 there; IfcSlab vertices: the farthest is 9.6919 ft from the earlier save's here
++sketch outlines against the 2025 save, not scored: 82 equal, 0 differ, 0 drawn otherwise there
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racadvancedsampleproject/bodies_across_saves.txt measure-head/sample-2027-racadvancedsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2027-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 19:26:13.969211515 +0000
++++ measure-head/sample-2027-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 19:26:08.747199232 +0000
+@@ -7 +7 @@
+-named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=440.512245 m3, 24 vertices
++named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+@@ -10 +10 @@
+-named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=True volume=4.15431293 m3, 8 vertices
++named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+@@ -16 +16 @@
+-named 201262, 2025 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=6.87512864 m3, 8 vertices
++named 201262, 2025 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=5.33213143 m3, 268 vertices
+@@ -24,2 +24 @@
+-sketch outlines against the 2025 save, not scored: 81 equal, 1 differ, 0 drawn otherwise there
+-  sketch outlines against the 2025 save: 139803 IfcSlab volume: 441.111228 m3 here, 440.512245 m3 there; IfcSlab vertices: the farthest is 9.6919 ft from the earlier save's here
++sketch outlines against the 2025 save, not scored: 82 equal, 0 differ, 0 drawn otherwise there
