@@ -1,0 +1,6 @@
+22 elements, 0 not on a storey
+against Revit's export:
+     16  same storey as Revit's
+      6  a different storey from Revit's
+  different, by type: IfcRamp 6
+exit 0

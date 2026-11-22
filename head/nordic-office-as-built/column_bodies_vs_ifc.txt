@@ -1,0 +1,3 @@
+family_type_hollow_section: 79 columns; in Revit's export 79; vertices within 0.001 ft and volume within 0.0001: 79; every Revit vertex on rvt-rs's surface: 79
+family_type_i_section: 0 columns; in Revit's export 0; vertices within 0.001 ft and volume within 0.0001: 0; every Revit vertex on rvt-rs's surface: 0
+exit 0

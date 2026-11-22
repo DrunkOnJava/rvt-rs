@@ -1,0 +1,32 @@
+Revit values on objects rvt-rs writes: 208; equal: 182; different: 0; missing: 26; rvt-rs values Revit does not write: 0
+  Pset_AirSideSystemInformation.Name: 2, equal 0, different 0, missing 2
+  Pset_AirTerminalTypeCommon.Reference: 7, equal 7, different 0, missing 0
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_BuildingStoreyCommon.AboveGround: 2, equal 2, different 0, missing 0
+  Pset_DuctConnection.ConnectionType: 6, equal 0, different 0, missing 6
+  Pset_DuctFittingTypeCommon.Reference: 32, equal 32, different 0, missing 0
+  Pset_DuctSegmentTypeCommon.Reference: 25, equal 25, different 0, missing 0
+  Pset_DuctSegmentTypeCommon.Shape: 31, equal 25, different 0, missing 6
+  Pset_EnvironmentalImpactIndicators.Reference: 74, equal 74, different 0, missing 0
+  Pset_ManufacturerTypeInformation.Manufacturer: 3, equal 0, different 0, missing 3
+  Pset_PipeConnection.ConnectionType: 6, equal 0, different 0, missing 6
+  Pset_PipeFittingTypeCommon.Reference: 3, equal 3, different 0, missing 0
+  Pset_PipeSegmentOccurrence.InvertElevation: 6, equal 6, different 0, missing 0
+  Pset_PipeSegmentTypeCommon.Reference: 6, equal 6, different 0, missing 0
+  Pset_ProductRequirements.Name: 2, equal 0, different 0, missing 2
+IFC4 properties IFC2X3's definitions do not have, which Revit's IFC2X3 export cannot write, not scored: 3
+  Pset_BuildingElementProxyCommon.IsExternal: 1
+  Pset_BuildingStoreyCommon.Reference: 2
+IFC2X3 lengths IFC4 holds as quantities, not scored here: 93
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+Revit's most common values where rvt-rs writes none:
+  Pset_DuctConnection.ConnectionType: ('list', (('IfcText', 'Generic'),)) x6; on IfcFlowSegment x6
+  Pset_DuctSegmentTypeCommon.Shape: ('enumerated', (('IfcLabel', 'ROUND'),)) x6; on IfcFlowSegment x6
+  Pset_PipeConnection.ConnectionType: ('list', (('IfcLabel', 'Generic'),)) x6; on IfcFlowSegment x6
+  Pset_ManufacturerTypeInformation.Manufacturer: ('IfcLabel', 'Titus') x2, ('IfcLabel', 'CARRIER') x1; on IfcAirTerminalType x2, IfcBuildingElementProxyType x1
+  Pset_AirSideSystemInformation.Name: ('IfcLabel', 'Level 1') x1, ('IfcLabel', 'Level 2') x1; on IfcBuildingStorey x2
+  Pset_ProductRequirements.Name: ('IfcLabel', 'Level 1') x1, ('IfcLabel', 'Level 2') x1; on IfcBuildingStorey x2
+  Pset_BuildingCommon.NumberOfStoreys: ('IfcInteger', 2) x1; on IfcBuilding x1
+exit 0

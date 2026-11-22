@@ -1,0 +1,15 @@
+Revit's export: 74 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+rvt-rs's export: 74 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcBuildingElementProxy               1      1      0      0  
+IfcFlowFitting                       35      0     35      0  IfcDuctFitting 32, IfcPipeFitting 3
+IfcFlowSegment                       31      0     31      0  IfcDuctSegment 25, IfcPipeSegment 6
+IfcFlowTerminal                       7      0      7      0  IfcAirTerminal 7
+written as another class, by Revit's category and export value, and rvt-rs's:
+      32  IfcFlowFitting -> IfcDuctFitting  Revit '-' '-' PredefinedType - type IfcDuctFittingType NOTDEFINED  rvt-rs 'Duct Fittings' '-'  e.g. 434968
+       3  IfcFlowFitting -> IfcPipeFitting  Revit '-' '-' PredefinedType - type IfcPipeFittingType NOTDEFINED  rvt-rs 'Pipe Fittings' '-'  e.g. 442037
+      25  IfcFlowSegment -> IfcDuctSegment  Revit '-' '-' PredefinedType - type IfcDuctSegmentType NOTDEFINED  rvt-rs 'Ducts' '-'  e.g. 428274
+       6  IfcFlowSegment -> IfcPipeSegment  Revit '-' '-' PredefinedType - type IfcPipeSegmentType NOTDEFINED  rvt-rs 'Pipes' '-'  e.g. 441731
+       7  IfcFlowTerminal -> IfcAirTerminal  Revit '-' '-' PredefinedType - type IfcAirTerminalType NOTDEFINED  rvt-rs 'Air Terminals' '-'  e.g. 433643
+extra in rvt-rs's export, by class:
+exit 0
