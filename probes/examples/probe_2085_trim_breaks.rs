@@ -112,6 +112,10 @@
 //!     the bound or more in model coordinates, or one whose chain or points cannot be read;
 //!   keys loop=[..] edge=[..] endpoint=[..] interior=[..] face=[..]: once, the field names of
 //!     the first gap's loop, edge, edge points and face;
+//!   pieceorient graph=<ElementId> face=<n> loop=<n> at=<k> p_is=<first|last> q_is=<first|last>:
+//!     whether the gap's P is the stored first or last point of the edge before it
+//!     (`m_firstAndLastEdgePnts`), and Q of the edge after it. The ring's P and Q follow the
+//!     direction that joins best, so this is the edges' own stored direction at the gap;
 //!   ownnbr graph=<ElementId> face=<n> loop=<n> at=<k> side=<a|b> order=<prev|next>
 //!     class=<class> poly_p=<ft> poly_q=<ft> end_p=<ft> end_q=<ft>
 //!     shared_p=<ft> shared_q=<ft> join=<ft>: the two edges adjacent to the shared edge in
@@ -729,6 +733,11 @@ struct Gap {
     q: [f64; 3],
     duv: [f64; 2],
     d: f64,
+    /// Whether P is the stored first point of the edge before the gap (`m_firstAndLastEdgePnts[0]`),
+    /// and whether Q is the stored first point of the edge after it: the ring's P and Q follow the
+    /// direction that joins best, not the stored one.
+    p_first: bool,
+    q_first: bool,
 }
 
 /// The gaps of `TOUCHING` or more the loop's stored edges leave, each edge joined at its
@@ -750,10 +759,19 @@ fn open_gaps(graph: &ObjectGraph, chain: &[(usize, usize)], s: Surf) -> Option<V
         } else {
             (p0[0], p0[p0.len() - 1])
         };
+        // Whether `first` and `last` are their edge's stored first point.
+        let first_is_first = !reverse;
+        let mut last_is_first = reverse;
         let mut prev = 0usize;
         let mut gaps = Vec::new();
         let mut worst: f64 = 0.0;
-        let gap = |at: usize, prev: usize, from: [f64; 2], to: [f64; 2], gaps: &mut Vec<Gap>| {
+        let gap = |at: usize,
+                   prev: usize,
+                   from: ([f64; 2], bool),
+                   to: ([f64; 2], bool),
+                   gaps: &mut Vec<Gap>| {
+            let (from, p_first) = from;
+            let (to, q_first) = to;
             let d = dist(s.at(from), s.at(to));
             if d >= TOUCHING {
                 gaps.push(Gap {
@@ -766,22 +784,38 @@ fn open_gaps(graph: &ObjectGraph, chain: &[(usize, usize)], s: Surf) -> Option<V
                     q: s.at(to),
                     duv: [to[0] - from[0], to[1] - from[1]],
                     d,
+                    p_first,
+                    q_first,
                 });
             }
             d
         };
         for (k, pts) in segs.iter().enumerate().skip(1) {
             let (h, t) = (pts[0], pts[pts.len() - 1]);
-            let (near, far) = if dist(s.at(last), s.at(h)) <= dist(s.at(last), s.at(t)) {
-                (h, t)
-            } else {
-                (t, h)
-            };
-            worst = worst.max(gap(k, prev, last, near, &mut gaps));
+            let ((near, near_is_first), (far, far_is_first)) =
+                if dist(s.at(last), s.at(h)) <= dist(s.at(last), s.at(t)) {
+                    ((h, true), (t, false))
+                } else {
+                    ((t, false), (h, true))
+                };
+            worst = worst.max(gap(
+                k,
+                prev,
+                (last, last_is_first),
+                (near, near_is_first),
+                &mut gaps,
+            ));
             last = far;
+            last_is_first = far_is_first;
             prev = k;
         }
-        worst = worst.max(gap(0, prev, last, first, &mut gaps));
+        worst = worst.max(gap(
+            0,
+            prev,
+            (last, last_is_first),
+            (first, first_is_first),
+            &mut gaps,
+        ));
         if best.as_ref().is_none_or(|(w, _)| worst < *w) {
             best = Some((worst, gaps));
         }
@@ -1099,6 +1133,12 @@ fn read_pieces(
             beside.join(" ")
         );
         report_own_neighbours(graph, cache, g, (id, fi, loop_index));
+        println!(
+            "pieceorient graph={id} face={fi} loop={loop_index} at={} p_is={} q_is={}",
+            g.at,
+            if g.p_first { "first" } else { "last" },
+            if g.q_first { "first" } else { "last" }
+        );
         // Whose edge a `through` match is: this face's body or another, and whether it is one
         // of the edges that name this face but that no loop walked reaches.
         let own_body = cache.body.get(&fi).copied();
