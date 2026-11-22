@@ -1,8 +1,10 @@
 # Keep a Measure run's small scored outputs past the 90 days GitHub keeps its artifacts (#2124).
 #
-# The evidence pages cite Measure runs by id. This copies a run's scorer outputs, `ifc.sha256`
-# files and digests of its `diagnostics.json` files (tools/ci/keep-run-outputs.py says which and
-# why) into a commit of their own, with no parent, and pushes it to `refs/evidence/<run id>`. A ref
+# The evidence pages cite Measure runs by id. This copies what those citations read from a run's
+# `measure-head`, `measure-base`, `measure-verdict` and `compare-scorer-diff` artifacts (scorer
+# outputs, export digests, export diagnostics, timings and the verdict; tools/ci/keep-run-outputs.py
+# says which and why) into a commit of their own, with no parent, and pushes it to
+# `refs/evidence/<run id>`. A ref
 # outside refs/heads and refs/tags is not fetched by a clone, so the kept outputs cost a clone
 # nothing, and GitHub serves the commit's tree at
 # https://github.com/DrunkOnJava/rvt-rs/tree/<commit>, where a citation links to it.
@@ -44,6 +46,8 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             tools/ci/keep-run-outputs.py
+            research/holdout-models.tsv
+            research/holdout-archive-models.tsv
           sparse-checkout-cone-mode: false
       - name: Keep the outputs
         shell: bash
@@ -68,18 +72,26 @@ jobs:
             echo "::error::refs/evidence/$RUN_ID exists; delete it first to keep the run again"
             exit 1
           fi
-          artifact=$(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" --jq '.artifacts[] | select(.name == "measure-head" and (.expired | not)) | .id' | sed -n 1p)
-          if [ -z "$artifact" ]; then
-            echo "::error::run $RUN_ID has no measure-head artifact left to keep"
+          names=$(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" --jq '.artifacts[] | select(.expired | not) | .name')
+          found=0
+          for name in measure-head measure-base measure-verdict compare-scorer-diff; do
+            if grep -qx "$name" <<< "$names"; then
+              gh run download "$RUN_ID" --repo "$REPO" -n "$name" -D "$RUNNER_TEMP/in/$name"
+              found=1
+            fi
+          done
+          if [ "$found" = 0 ]; then
+            echo "::error::run $RUN_ID has no artifact left to keep"
             exit 1
           fi
-          gh run download "$RUN_ID" --repo "$REPO" -n measure-head -D "$RUNNER_TEMP/in"
-          python3 tools/ci/keep-run-outputs.py "$RUNNER_TEMP/in" "$RUNNER_TEMP/out" --run "$RUN_ID" --artifact "$artifact" | tee -a "$GITHUB_STEP_SUMMARY"
-          export GIT_INDEX_FILE="$RUNNER_TEMP/index"
-          (cd "$RUNNER_TEMP/out" && git --git-dir="$GITHUB_WORKSPACE/.git" --work-tree=. add -A .)
-          tree=$(git write-tree)
-          commit=$(GIT_AUTHOR_NAME="github-actions[bot]" GIT_AUTHOR_EMAIL="41898282+github-actions[bot]@users.noreply.github.com" \
+          python3 tools/ci/keep-run-outputs.py "$RUNNER_TEMP/in" "$RUNNER_TEMP/out" --run "$RUN_ID" --root "$GITHUB_WORKSPACE" | tee -a "$GITHUB_STEP_SUMMARY"
+          cd "$RUNNER_TEMP/out"
+          git init -q
+          git add -A
+          GIT_AUTHOR_NAME="github-actions[bot]" GIT_AUTHOR_EMAIL="41898282+github-actions[bot]@users.noreply.github.com" \
             GIT_COMMITTER_NAME="github-actions[bot]" GIT_COMMITTER_EMAIL="41898282+github-actions[bot]@users.noreply.github.com" \
-            git commit-tree "$tree" -m "Measure run $RUN_ID: kept outputs (#2124)")
-          git -c "http.extraheader=$auth" push "$remote" "$commit:refs/evidence/$RUN_ID"
+            git commit -q -m "Measure run $RUN_ID: kept outputs (#2124)"
+          commit=$(git rev-parse HEAD)
+          echo "files in the commit: $(git ls-tree -r HEAD --name-only | wc -l)" | tee -a "$GITHUB_STEP_SUMMARY"
+          git -c "http.extraheader=$auth" push "$remote" "HEAD:refs/evidence/$RUN_ID"
           echo "kept run $RUN_ID as refs/evidence/$RUN_ID, commit $commit: https://github.com/$REPO/tree/$commit" | tee -a "$GITHUB_STEP_SUMMARY"
