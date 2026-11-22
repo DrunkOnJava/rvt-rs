@@ -2259,7 +2259,7 @@ fn tessellate_trimmed(
 #[cfg(test)]
 mod tests {
     use super::{
-        CUT_BUDGET, CUT_BUDGET_EXCEEDED, inside_polygon, keep_triangle, loop_polygon_within,
+        CUT_BUDGET, CUT_BUDGET_EXCEEDED, Keeps, inside_polygon, keep_triangle, loop_polygon_within,
         profile_reach, trim_steps, trimmed_cells,
     };
     use crate::native_parametric_surface::{Curve, ParametricSurface};
@@ -2452,7 +2452,7 @@ mod tests {
             vec![[0., 1.], [0., 0.]],
         ];
         for _ in 0..2 {
-            let ring = loop_polygon_within(&surface, &segments, 1e-6).unwrap();
+            let ring = loop_polygon_within(&surface, &segments, 1e-6, &Keeps::new()).unwrap();
             let mut knots = vec![0., 0.25, left, apex, 0.75, 1.];
             knots.extend(ring.iter().map(|p| p[0]));
             knots.sort_by(f64::total_cmp);
