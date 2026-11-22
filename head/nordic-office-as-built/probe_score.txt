@@ -1,0 +1,90 @@
+wall tag:1341937 saved 183.0709 revit 183.0709 diff +0.00003
+wall tag:1348324 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:1429758 saved 183.0709 revit 183.0709 diff +0.00003
+wall tag:1450967 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:1450972 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:1450988 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:1452545 saved 195.2100 revit none
+wall tag:1452553 saved 195.2100 revit none
+wall tag:1457513 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:1479272 saved 235.9580 revit 235.9580 diff -0.00001
+wall tag:1630966 saved 235.9580 revit 235.9580 diff -0.00001
+wall tag:1714038 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:1714470 saved 195.2100 revit none
+wall tag:1794430 saved 195.2100 revit none
+wall tag:1795194 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:1813063 saved 195.2100 revit none
+wall tag:1815729 saved 195.2100 revit none
+wall tag:1815737 saved 195.2100 revit none
+wall tag:1815747 saved 195.2100 revit none
+wall tag:1815818 saved 195.2100 revit none
+wall tag:1815838 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:1815846 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:1815855 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:1815926 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:1892039 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:1892047 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:1892053 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:1892122 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:2041385 saved 182.0866 revit 182.0866 diff -0.00001
+wall tag:2041443 saved 182.0866 revit 182.0866 diff -0.00001
+wall tag:2041479 saved 182.0866 revit 182.0866 diff -0.00001
+wall tag:2098938 saved 204.0682 revit 204.0682 diff -0.00004
+wall tag:2103576 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:2104286 saved 195.2100 revit none
+wall tag:2105250 saved 229.9869 revit 229.9869 diff +0.00002
+wall tag:2174880 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:2177158 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:2177212 saved 204.0682 revit 204.0682 diff -0.00004
+wall tag:2178914 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:2178961 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:2179171 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:2180467 saved 195.2100 revit none
+wall tag:2180468 saved 195.2100 revit none
+wall tag:2180469 saved 195.2100 revit none
+wall tag:2181428 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:2181501 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:2182078 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:2293116 saved 190.2887 revit 190.2887 diff -0.00001
+wall tag:2293158 saved 182.0866 revit 182.0866 diff -0.00001
+wall tag:2294996 saved 190.2887 revit 190.2887 diff -0.00001
+wall tag:2294997 saved 182.0866 revit 182.0866 diff -0.00001
+wall tag:2489409 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:2491432 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:2495621 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:2495664 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:2496448 saved 195.2100 revit none
+wall tag:2496491 saved 195.2100 revit none
+wall tag:2500586 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:2500627 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:2655484 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:2724158 saved 182.0866 revit 182.0866 diff -0.00001
+wall tag:2746863 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:2905180 saved 196.1942 revit none
+wall tag:2905182 saved 196.1942 revit none
+wall tag:2905185 saved 196.1942 revit none
+wall tag:2905197 saved 196.1942 revit none
+wall tag:2964905 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:2991697 saved 235.9580 revit 235.9580 diff -0.00001
+wall tag:3014164 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:3109034 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:3110938 saved 195.2100 revit none
+wall tag:3123365 saved 208.8255 revit 208.8255 diff +0.00004
+wall tag:3123530 saved 195.2100 revit none
+wall tag:3123875 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:3123955 saved 221.7848 revit 221.7848 diff +0.00002
+wall tag:3124829 saved 195.8661 revit 195.8661 diff -0.00004
+wall tag:3449245 saved 182.0866 revit 182.0866 diff -0.00001
+wall tag:3450274 saved 190.2887 revit 190.2887 diff -0.00001
+wall tag:3458395 saved 195.8661 revit none
+wall tag:3458464 saved 195.8661 revit none
+wall tag:3458466 saved 195.8661 revit none
+wall tag:3458467 saved 195.8661 revit none
+wall tag:3458491 saved 195.8661 revit none
+wall tag:3458528 saved 195.8661 revit none
+wall tag:3458529 saved 195.8661 revit none
+wall tag:3458559 saved 195.8661 revit none
+wall tag:3458615 saved 195.8661 revit none
+wall tag:3458710 saved 195.8661 revit none
+hosts 88 meshed 88 in_export 57 unmeshed 0 equal 57 (to 0.001 ft) worst 0.00004
+exit 0
