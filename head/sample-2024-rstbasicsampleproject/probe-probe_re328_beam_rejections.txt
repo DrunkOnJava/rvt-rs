@@ -1,0 +1,21 @@
+release 2024
+layout_supported true
+streams_not_read 0
+beams 370
+unattached 25
+along_line 345
+one_line open_closure 25
+one_line open_closure free_length box_longer <=1e0 9
+one_line open_closure free_length box_shorter <=1e-1 16
+one_line open_closure i_section known 3
+one_line open_closure i_section unknown 22
+one_line open_closure level_on_axis 9
+one_line open_closure lines_in_data 2 25
+one_line open_closure other_line_fits false 25
+one_line open_closure rotation nonzero 16
+one_line open_closure rotation zero 9
+one_line open_closure sloped 16
+open_closure miss <=1e-1 16
+open_closure miss <=1e0 9
+unattached one_line 25
+exit 0

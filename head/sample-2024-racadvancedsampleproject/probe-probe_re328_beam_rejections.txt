@@ -1,0 +1,17 @@
+release 2024
+layout_supported true
+streams_not_read 0
+beams 38
+unattached 9
+along_line 29
+one_line open_closure 8
+one_line open_closure free_length box_longer <=1e0 8
+one_line open_closure i_section unknown 8
+one_line open_closure level_on_axis 8
+one_line open_closure lines_in_data 2 8
+one_line open_closure other_line_fits false 8
+one_line open_closure rotation zero 8
+open_closure miss <=1e0 8
+unattached no_line 1
+unattached one_line 8
+exit 0

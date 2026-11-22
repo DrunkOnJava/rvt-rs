@@ -1,0 +1,37 @@
+release 2024
+layout_supported true
+streams_not_read 0
+beams 942
+targets 19
+controls 400
+control level_on_axis 333
+control level_on_axis body section equal ends equal 156
+control level_on_axis body section equal ends mesh_inside 60
+control level_on_axis body section mesh_inside ends equal 8
+control level_on_axis body section mesh_inside ends mesh_inside 108
+control level_on_axis box_vs_mesh equal 156
+control level_on_axis box_vs_mesh mesh_inside 176
+control level_on_axis mesh none 1
+control level_on_axis mesh whole 332
+control level_rotated 65
+control level_rotated body section equal ends mesh_inside 64
+control level_rotated body section mesh_inside ends mesh_inside 1
+control level_rotated box_vs_mesh mesh_inside 65
+control level_rotated mesh whole 65
+control sloped 2
+control sloped body section mesh_inside ends mesh_inside 2
+control sloped box_vs_mesh mesh_inside 2
+control sloped mesh whole 2
+target end_outside level_on_axis 2
+target end_outside level_on_axis mesh none 2
+target open_closure level_on_axis 2
+target open_closure level_on_axis box_vs_mesh mesh_inside 2
+target open_closure level_on_axis free section equal ends mesh_inside 2
+target open_closure level_on_axis mesh whole 2
+target open_closure level_rotated 15
+target open_closure level_rotated box_vs_mesh equal 12
+target open_closure level_rotated box_vs_mesh mesh_inside 3
+target open_closure level_rotated free section equal ends equal 12
+target open_closure level_rotated free section equal ends mesh_inside 3
+target open_closure level_rotated mesh whole 15
+exit 0

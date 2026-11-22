@@ -1,0 +1,22 @@
+release 2024
+layout_supported true
+streams_not_read 0
+beams 38
+targets 8
+controls 29
+control level_on_axis 27
+control level_on_axis body section equal ends mesh_inside 4
+control level_on_axis box_vs_mesh mesh_inside 4
+control level_on_axis mesh partial 23
+control level_on_axis mesh whole 4
+control sloped 2
+control sloped body section equal ends mesh_inside 2
+control sloped box_vs_mesh mesh_inside 2
+control sloped mesh whole 2
+target open_closure level_on_axis 8
+target open_closure level_on_axis box_vs_mesh equal 4
+target open_closure level_on_axis box_vs_mesh mesh_inside 4
+target open_closure level_on_axis free section equal ends equal 4
+target open_closure level_on_axis free section equal ends mesh_inside 4
+target open_closure level_on_axis mesh whole 8
+exit 0

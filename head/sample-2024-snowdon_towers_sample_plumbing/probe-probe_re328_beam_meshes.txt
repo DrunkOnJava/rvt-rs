@@ -1,0 +1,7 @@
+release 2024
+layout_supported true
+streams_not_read 0
+beams 0
+targets 0
+controls 0
+exit 0

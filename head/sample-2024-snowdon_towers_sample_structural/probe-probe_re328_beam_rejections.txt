@@ -1,0 +1,28 @@
+release 2024
+layout_supported true
+streams_not_read 0
+beams 942
+unattached 19
+along_line 923
+end_outside ends 2 2
+end_outside overshoot level_on_axis across_line 2
+end_outside size <=1e2 2
+end_outside without_ends_test level_on_axis open_closure 2
+one_line end_outside 2
+one_line end_outside free_length box_longer <=1e1 2
+one_line end_outside i_section unknown 2
+one_line end_outside level_on_axis 2
+one_line end_outside lines_in_data 2 2
+one_line end_outside other_line_fits false 2
+one_line end_outside rotation zero 2
+one_line open_closure 17
+one_line open_closure free_length box_longer <=1e0 17
+one_line open_closure i_section known 17
+one_line open_closure level_on_axis 2
+one_line open_closure level_rotated 15
+one_line open_closure lines_in_data 2 17
+one_line open_closure other_line_fits false 17
+one_line open_closure rotation zero 17
+open_closure miss <=1e0 17
+unattached one_line 19
+exit 0
