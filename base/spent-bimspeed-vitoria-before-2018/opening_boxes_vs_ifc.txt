@@ -1,0 +1,3 @@
+openings in Revit's export: 136; in rvt-rs's: 0; both: 0
+unfilled openings in Revit's export: 5; in rvt-rs's: 0; both: 0
+exit 0

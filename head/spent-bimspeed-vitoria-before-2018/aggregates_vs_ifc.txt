@@ -1,0 +1,3 @@
+    206  IfcMember: only Revit aggregates
+     67  IfcPlate: only Revit aggregates
+exit 0

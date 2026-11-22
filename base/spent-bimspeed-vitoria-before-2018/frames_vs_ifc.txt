@@ -1,0 +1,9 @@
+rvt-rs coordinate reference: none in the header
+rvt-rs IfcMapConversion: none
+rvt-rs site placement: translation (0.000, 0.000, 0.000) rotation 0.0000 deg
+Revit coordinate reference: none in the header
+Revit IfcMapConversion: none
+Revit site placement: translation (0.000, 0.000, 0.000) rotation 0.0000 deg
+elements tagged in both: 0; centres compared: 0
+too few to fit a frame
+exit 0
