@@ -1,0 +1,15 @@
+straight and angled walls in both: 9; both ends within 0.001 ft: 9
+BodySource | start (Revit's joins there) | end (Revit's joins there) | walls; short/long = rvt-rs's wall shorter/longer there
+      7  partition_element_record_join_trimmed | start ok [free] | end ok [free]
+      2  partition_wall_centreline_layer_joins | start ok [free] | end ok [free]
+the 40 largest (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):
+  4047 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  3695 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  3590 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  3522 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  4567 partition_wall_centreline_layer_joins 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  4122 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  4511 partition_wall_centreline_layer_joins 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  3641 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start -0.0000 end +0.0000 start[] end[] path 0
+  3468 partition_element_record_join_trimmed 'Basic Wall:Wall 1' start +0.0000 end -0.0000 start[] end[] path 0
+exit 0

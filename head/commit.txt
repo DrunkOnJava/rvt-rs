@@ -1,0 +1,1 @@
+4ca938ad01041b5bb88da04dedc07304a67409bb feat(elements): Furniture Systems get no Reference, are contained in their room and draw as furniture; RE-352 states what is measured (#1444)

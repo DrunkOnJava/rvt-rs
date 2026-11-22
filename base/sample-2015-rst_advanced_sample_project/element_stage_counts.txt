@@ -1,0 +1,29 @@
+Revit 2015, layout 2015, 1 streams
+  markers: 5093
+  declared_id: 5087
+  frame_outside_stream: 0
+  category_out_of_range: 38
+  box_not_valid: 0
+  no_declared_id: 6
+  records: 5049
+  id_from_enclosing_record: 0
+  not_placed_instances: 831
+  placed_instances: 4218
+  without_volume: 3293
+  with_volume: 925
+  superseded: 0
+  nested_components: 0
+  selected: 925
+  in_non_primary_design_option: 0
+  not_in_export_phase: 0
+  nested_in_door_or_window: 0
+  category_not_exported: 20
+  handed_to_export: 905
+  stream_not_read: 0
+  written_to_model: 905
+  id_already_held: 0
+  below_min_confidence: 0
+  not_written_by_class: {}
+  exported.building_elements: 905
+ok
+exit 0

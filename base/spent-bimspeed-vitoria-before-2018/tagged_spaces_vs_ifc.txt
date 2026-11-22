@@ -1,0 +1,12 @@
+Revit's export: 73 IfcSpace, 0 named Family:Type:ElementId
+  Name: 
+  LongName: 
+  ObjectType: 
+  PredefinedType: 
+  CompositionType: 
+  relation: 
+  body: 
+  type object: 
+  property set: 
+rvt-rs writes the same Tags as: 
+exit 0

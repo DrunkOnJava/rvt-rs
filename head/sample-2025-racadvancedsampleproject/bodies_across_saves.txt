@@ -1,0 +1,21 @@
+bodies across saves: sample-2025-racadvancedsampleproject, held to the 2024 saves
+named 111931, 2025 save: no product with a body
+named 111931, 2024 save: no product with a body
+named 139803, 2025 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+named 139803, 2024 save: IfcSlab BodySource=partition_element_record_bbox ProfileResolved=True volume=441.111228 m3, 170 vertices
+named 147534, 2025 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+named 147534, 2024 save: IfcCovering BodySource=partition_element_record_bbox ProfileResolved=False volume=5.14728698 m3, 8 vertices
+named 176909, 2025 save: IfcRailing BodySource=partition_element_record_bbox ProfileResolved=False volume=4.14763839 m3, 8 vertices
+named 176909, 2024 save: IfcRailing BodySource=partition_element_record_bbox ProfileResolved=False volume=4.14763839 m3, 8 vertices
+named 201262, 2025 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=5.33213143 m3, 268 vertices
+named 201262, 2024 save: IfcRoof BodySource=partition_roof_slope ProfileResolved=True volume=5.33213143 m3, 268 vertices
+named 201312, 2025 save: no product with a body
+named 201312, 2024 save: no product with a body
+beams and landings: compared 42 against the 2024 save (IfcBeam 37, IfcSlab 5); left as boxes here, drawn in the 2024 save, not scored: 0
+stair runs: not applicable, the 2025 save is the reference of the later saves and this is the 2025 save (10 drawn here)
+sketch outlines: of the 6 elements whose sketch holds an arc, 2 are outlines compared equal here (139803, 201262); the other 4 are boxes here or not outlines
+sketch outlines: compared 86 against the 2024 save (IfcCovering 64, IfcRoof 5, IfcSlab 17); left as boxes here, drawn in the 2024 save, not scored: 0
+named elements: compared 1 against the 2024 save (IfcCovering 1); left as boxes here, drawn in the 2024 save, not scored: 0
+doors and windows: compared 107 against the 2024 save (IfcDoor 83, IfcWindow 24); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 66
+bodies across saves: PASS
+exit 0

@@ -1,0 +1,1 @@
+daf361021a4d2905972c7598858efb67cda28008 ci: the Rust install and the wasm-bindgen steps are two composite actions (#1457) (#1491)

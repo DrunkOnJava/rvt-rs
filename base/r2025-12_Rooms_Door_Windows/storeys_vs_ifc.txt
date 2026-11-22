@@ -1,0 +1,6 @@
+19 elements, 6 not on a storey
+      6  IfcBuildingElementProxy
+against Revit's export:
+     17  same storey as Revit's
+      2  on no storey; Revit's is a storey
+exit 0

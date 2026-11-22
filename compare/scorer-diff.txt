@@ -1,0 +1,206 @@
+Only in measure-head: areas_across_saves.txt
+Only in measure-head: areas_across_saves_2021.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rac_basic_sample_project/element_stage_counts.txt measure-head/sample-2015-rac_basic_sample_project/element_stage_counts.txt
+--- measure-base/sample-2015-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:44.353899456 +0000
++++ measure-head/sample-2015-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:39.722868048 +0000
+@@ -20,2 +20,2 @@
+-  category_not_exported: 45
+-  handed_to_export: 471
++  category_not_exported: 42
++  handed_to_export: 474
+@@ -23 +23 @@
+-  written_to_model: 470
++  written_to_model: 473
+@@ -27 +27 @@
+-  exported.building_elements: 470
++  exported.building_elements: 473
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rac_basic_sample_project/schema.txt measure-head/sample-2015-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2015-rac_basic_sample_project/schema.txt	2026-11-06 00:47:44.362899026 +0000
++++ measure-head/sample-2015-rac_basic_sample_project/schema.txt	2026-11-06 00:47:39.729868097 +0000
+@@ -4 +4 @@
+-  placement composition: 501 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 504 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2016-rac_basic_sample_project/element_stage_counts.txt measure-head/sample-2016-rac_basic_sample_project/element_stage_counts.txt
+--- measure-base/sample-2016-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:44.812877527 +0000
++++ measure-head/sample-2016-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:40.189871352 +0000
+@@ -20,2 +20,2 @@
+-  category_not_exported: 45
+-  handed_to_export: 465
++  category_not_exported: 42
++  handed_to_export: 468
+@@ -23 +23 @@
+-  written_to_model: 464
++  written_to_model: 467
+@@ -27 +27 @@
+-  exported.building_elements: 464
++  exported.building_elements: 467
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2016-rac_basic_sample_project/schema.txt measure-head/sample-2016-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2016-rac_basic_sample_project/schema.txt	2026-11-06 00:47:44.817877288 +0000
++++ measure-head/sample-2016-rac_basic_sample_project/schema.txt	2026-11-06 00:47:40.200871430 +0000
+@@ -4 +4 @@
+-  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2017-rac_basic_sample_project/element_stage_counts.txt measure-head/sample-2017-rac_basic_sample_project/element_stage_counts.txt
+--- measure-base/sample-2017-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:44.918872462 +0000
++++ measure-head/sample-2017-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:40.308872195 +0000
+@@ -20,2 +20,2 @@
+-  category_not_exported: 45
+-  handed_to_export: 465
++  category_not_exported: 42
++  handed_to_export: 468
+@@ -23 +23 @@
+-  written_to_model: 464
++  written_to_model: 467
+@@ -27 +27 @@
+-  exported.building_elements: 464
++  exported.building_elements: 467
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2017-rac_basic_sample_project/schema.txt measure-head/sample-2017-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2017-rac_basic_sample_project/schema.txt	2026-11-06 00:47:44.927872032 +0000
++++ measure-head/sample-2017-rac_basic_sample_project/schema.txt	2026-11-06 00:47:40.312872223 +0000
+@@ -4 +4 @@
+-  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2018-rac_basic_sample_project/element_stage_counts.txt measure-head/sample-2018-rac_basic_sample_project/element_stage_counts.txt
+--- measure-base/sample-2018-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:44.999868592 +0000
++++ measure-head/sample-2018-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:40.406872888 +0000
+@@ -20,2 +20,2 @@
+-  category_not_exported: 45
+-  handed_to_export: 465
++  category_not_exported: 42
++  handed_to_export: 468
+@@ -23 +23 @@
+-  written_to_model: 464
++  written_to_model: 467
+@@ -27 +27 @@
+-  exported.building_elements: 464
++  exported.building_elements: 467
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2018-rac_basic_sample_project/schema.txt measure-head/sample-2018-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2018-rac_basic_sample_project/schema.txt	2026-11-06 00:47:45.003868401 +0000
++++ measure-head/sample-2018-rac_basic_sample_project/schema.txt	2026-11-06 00:47:40.410872916 +0000
+@@ -4 +4 @@
+-  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rac_basic_sample_project/element_stage_counts.txt measure-head/sample-2019-rac_basic_sample_project/element_stage_counts.txt
+--- measure-base/sample-2019-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:45.078864818 +0000
++++ measure-head/sample-2019-rac_basic_sample_project/element_stage_counts.txt	2026-11-06 00:47:40.489873475 +0000
+@@ -20,2 +20,2 @@
+-  category_not_exported: 45
+-  handed_to_export: 465
++  category_not_exported: 42
++  handed_to_export: 468
+@@ -23 +23 @@
+-  written_to_model: 464
++  written_to_model: 467
+@@ -27 +27 @@
+-  exported.building_elements: 464
++  exported.building_elements: 467
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rac_basic_sample_project/schema.txt measure-head/sample-2019-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2019-rac_basic_sample_project/schema.txt	2026-11-06 00:47:45.082864627 +0000
++++ measure-head/sample-2019-rac_basic_sample_project/schema.txt	2026-11-06 00:47:40.493873504 +0000
+@@ -4 +4 @@
+-  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2020-racbasicsampleproject/element_stage_counts.txt measure-head/sample-2020-racbasicsampleproject/element_stage_counts.txt
+--- measure-base/sample-2020-racbasicsampleproject/element_stage_counts.txt	2026-11-06 00:47:45.342480586 +0000
++++ measure-head/sample-2020-racbasicsampleproject/element_stage_counts.txt	2026-11-06 00:47:40.736875223 +0000
+@@ -20,2 +20,2 @@
+-  category_not_exported: 45
+-  handed_to_export: 465
++  category_not_exported: 42
++  handed_to_export: 468
+@@ -23 +23 @@
+-  written_to_model: 464
++  written_to_model: 467
+@@ -27 +27 @@
+-  exported.building_elements: 464
++  exported.building_elements: 467
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2020-racbasicsampleproject/schema.txt measure-head/sample-2020-racbasicsampleproject/schema.txt
+--- measure-base/sample-2020-racbasicsampleproject/schema.txt	2026-11-06 00:47:45.346852974 +0000
++++ measure-head/sample-2020-racbasicsampleproject/schema.txt	2026-11-06 00:47:40.741875259 +0000
+@@ -4 +4 @@
+-  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2021-racbasicsampleproject/element_stage_counts.txt measure-head/sample-2021-racbasicsampleproject/element_stage_counts.txt
+--- measure-base/sample-2021-racbasicsampleproject/element_stage_counts.txt	2026-11-06 00:47:45.416853471 +0000
++++ measure-head/sample-2021-racbasicsampleproject/element_stage_counts.txt	2026-11-06 00:47:40.821596550 +0000
+@@ -20,2 +20,2 @@
+-  category_not_exported: 45
+-  handed_to_export: 465
++  category_not_exported: 42
++  handed_to_export: 468
+@@ -23 +23 @@
+-  written_to_model: 464
++  written_to_model: 467
+@@ -27 +27 @@
+-  exported.building_elements: 464
++  exported.building_elements: 467
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2021-racbasicsampleproject/schema.txt measure-head/sample-2021-racbasicsampleproject/schema.txt
+--- measure-base/sample-2021-racbasicsampleproject/schema.txt	2026-11-06 00:47:45.427853549 +0000
++++ measure-head/sample-2021-racbasicsampleproject/schema.txt	2026-11-06 00:47:40.824875846 +0000
+@@ -4 +4 @@
+-  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2022-racbasicsampleproject/element_stage_counts.txt measure-head/sample-2022-racbasicsampleproject/element_stage_counts.txt
+--- measure-base/sample-2022-racbasicsampleproject/element_stage_counts.txt	2026-11-06 00:47:45.503854088 +0000
++++ measure-head/sample-2022-racbasicsampleproject/element_stage_counts.txt	2026-11-06 00:47:40.882876256 +0000
+@@ -20,2 +20,2 @@
+-  category_not_exported: 45
+-  handed_to_export: 465
++  category_not_exported: 42
++  handed_to_export: 468
+@@ -23 +23 @@
+-  written_to_model: 464
++  written_to_model: 467
+@@ -27 +27 @@
+-  exported.building_elements: 464
++  exported.building_elements: 467
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2022-racbasicsampleproject/schema.txt measure-head/sample-2022-racbasicsampleproject/schema.txt
+--- measure-base/sample-2022-racbasicsampleproject/schema.txt	2026-11-06 00:47:45.509854130 +0000
++++ measure-head/sample-2022-racbasicsampleproject/schema.txt	2026-11-06 00:47:40.886876285 +0000
+@@ -4 +4 @@
+-  placement composition: 495 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2023-racbasicsampleproject/element_stage_counts.txt measure-head/sample-2023-racbasicsampleproject/element_stage_counts.txt
+--- measure-base/sample-2023-racbasicsampleproject/element_stage_counts.txt	2026-11-06 00:47:45.585854670 +0000
++++ measure-head/sample-2023-racbasicsampleproject/element_stage_counts.txt	2026-11-06 00:47:40.964876837 +0000
+@@ -20,2 +20,2 @@
+-  category_not_exported: 45
+-  handed_to_export: 465
++  category_not_exported: 42
++  handed_to_export: 468
+@@ -23 +23 @@
+-  written_to_model: 464
++  written_to_model: 467
+@@ -27 +27 @@
+-  exported.building_elements: 464
++  exported.building_elements: 467
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2023-racbasicsampleproject/schema.txt measure-head/sample-2023-racbasicsampleproject/schema.txt
+--- measure-base/sample-2023-racbasicsampleproject/schema.txt	2026-11-06 00:47:45.595854741 +0000
++++ measure-head/sample-2023-racbasicsampleproject/schema.txt	2026-11-06 00:47:40.975876915 +0000
+@@ -4 +4 @@
+-  placement composition: 462 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 465 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-racbasicsampleproject/schema.txt measure-head/sample-2024-racbasicsampleproject/schema.txt
+--- measure-base/sample-2024-racbasicsampleproject/schema.txt	2026-11-06 00:47:44.684883642 +0000
++++ measure-head/sample-2024-racbasicsampleproject/schema.txt	2026-11-06 00:47:39.846868925 +0000
+@@ -4 +4 @@
+-  placement composition: 455 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 458 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racbasicsampleproject/schema.txt measure-head/sample-2025-racbasicsampleproject/schema.txt
+--- measure-base/sample-2025-racbasicsampleproject/schema.txt	2026-11-06 00:47:45.760855911 +0000
++++ measure-head/sample-2025-racbasicsampleproject/schema.txt	2026-11-06 00:47:41.199878500 +0000
+@@ -4 +4 @@
+-  placement composition: 447 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 450 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racbasicsampleproject/schema.txt measure-head/sample-2026-racbasicsampleproject/schema.txt
+--- measure-base/sample-2026-racbasicsampleproject/schema.txt	2026-11-06 00:47:46.068858097 +0000
++++ measure-head/sample-2026-racbasicsampleproject/schema.txt	2026-11-06 00:47:41.671881840 +0000
+@@ -4 +4 @@
+-  placement composition: 449 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 452 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racbasicsampleproject/schema.txt measure-head/sample-2027-racbasicsampleproject/schema.txt
+--- measure-base/sample-2027-racbasicsampleproject/schema.txt	2026-11-06 00:47:46.364860196 +0000
++++ measure-head/sample-2027-racbasicsampleproject/schema.txt	2026-11-06 00:47:42.110884947 +0000
+@@ -4 +4 @@
+-  placement composition: 449 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 452 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched

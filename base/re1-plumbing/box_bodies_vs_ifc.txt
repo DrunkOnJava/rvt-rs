@@ -1,0 +1,12 @@
+record-box bodies: 61; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcPipeFitting                    54       0       0      16      38       0       0    0.494
+        30  PIPE-Elbow - Welded:-
+        10  PIPE-Tee - Welded:-
+         8  PIPE-Transition - Welded:-
+IfcSanitaryTerminal                7       0       1       0       5       0       1    0.021
+         2  224200-FIXT-Rough In Sink-Wall:Grohe WB265_M
+         1  224200-FIXT-Rough In Tub-Wall:Tub_M
+         1  224200-FIXT-Rough In Shower-Wall:Shower_M
+total                             61       0       1      16      43       0       1
+exit 0
