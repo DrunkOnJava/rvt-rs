@@ -1,0 +1,29 @@
+saved_graphics_mesh bodies scored: 6; in Revit's export 6
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcWindow                         3       3        3        3        3           3  1.0000
+        3       3        3        3        3           3  Window-Fixed:24" x 36"
+IfcMember                         2       2        2        2        2           2  1.0000
+        2       2        2        2        2           2  Stringer:Stringer - 50 mm Width
+IfcDoor                           1       1        0        1        0           0  1.0002
+        1       1        0        1        0           0  Door-Passage-Single-Full_Lite:36" x 84" Storefront
+  6644 IfcDoor 'Door-Passage-Single-Full_Lite:36" x 84" Storefront': volume ratio 1.0002, Revit's vertices to rvt-rs's surface 0.001376 ft, rvt-rs's to Revit's 0.008483 ft
+  12560 IfcWindow 'Window-Fixed:24" x 36"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.832e-06 ft, rvt-rs's to Revit's 1.832e-06 ft
+  12573 IfcWindow 'Window-Fixed:24" x 36"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12538 IfcWindow 'Window-Fixed:24" x 36"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12768 IfcMember 'Stringer:Stringer - 50 mm Width': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 6.117e-07 ft, rvt-rs's to Revit's 1.114e-06 ft
+  12767 IfcMember 'Stringer:Stringer - 50 mm Width': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 6.117e-07 ft, rvt-rs's to Revit's 1.114e-06 ft
+
+fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 6 of 6 bodies meshed in both, 0 of them meshed differently
+fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
+fine IfcWindow                         3       3        3        3        3           3         3        3        3  1.0000 0.000002
+fine IfcMember                         2       2        2        2        2           2         2        2        2  1.0000 0.000001
+fine IfcDoor                           1       1        0        1        0           0         1        1        0  1.0002 0.001376
+fine total                             6       6        5        6        5           5         6        6        5  1.0000 0.001376
+fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
+fine change IfcWindow                         3      0      3      0      0      0      3      0      0      0
+fine change IfcMember                         2      0      2      0      0      0      2      0      0      0
+fine change IfcDoor                           1      0      0      0      0      1      0      0      0      1
+fine change total                             6      0      5      0      0      1      5      0      0      1
+fine bodies that miss 'ref on ours': 1
+  fine 6644 IfcDoor 'Door-Passage-Single-Full_Lite:36" x 84" Storefront': Revit's vertices to rvt-rs's surface 0.001376 ft (default 0.001376), rvt-rs's to Revit's 0.008483 ft (default 0.008483), volume ratio 1.0002 (default 1.0002)
+exit 0

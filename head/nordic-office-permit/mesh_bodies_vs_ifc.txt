@@ -1,0 +1,163 @@
+IfcMember: 9706 bodies, every 33th scored
+saved_graphics_mesh bodies scored: 1738; in Revit's export 1738
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcMember                       295     295      295      295      295         295  1.0000
+      259     259      259      259      259         259  Rectangular Mullion:50 x 50 mm alumiini maalattu
+       28      28       28       28       28          28  Rectangular Mullion:50 x 50 mm
+        8       8        8        8        8           8  Rectangular Mullion:50 x 150 mm
+IfcColumn                       289     289      289      289      289         289  1.0000
+      249     249      249      249      249         249  Concrete-Square-Column:PI-1
+       28      28       28       28       28          28  Concrete-Square-Column:PI-2
+       12      12       12       12       12          12  Concrete-Rectangular-Column:PI-3
+IfcDoor                         269     267      263      269      265         269  1.0000
+       46      46       46       46       46          46  O-13:O-13
+       34      34       34       34       34          34  O-3:O-3.10x21
+       23      23       23       23       23          23  O-1:O-1.12x21
+       22      22       22       22       22          22  O-4:O-4.8x21
+       22      22       22       22       22          22  O-4:O-4.10x21
+       15      15       15       15       15          15  O-12:O-12
+IfcPlate                        269     269      269      269      269         269  1.0000
+      267     267      267      267      267         267  System Panel:Lasitettu
+        2       2        2        2        2           2  System Panel:Umpi
+IfcWindow                       265     265      265      265      265         265  1.0000
+      250     250      250      250      250         250  Puu-alumiini-ikkuna A:IKK-1.16x25
+       10      10       10       10       10          10  Puu-alumiini-ikkuna A:IKK-3.12x28
+        4       4        4        4        4           4  Puu-alumiini-ikkuna A:IKK-4.16x12
+        1       1        1        1        1           1  Puu-alumiini-ikkuna A:IKK-2.10x25
+IfcWasteTerminal                 78      78        0       78        0          78  1.0035
+       62      62        0       62        0          62  Lattiakaivo:LK-1
+       16      16        0       16        0          16  Lattiakaivo:VK-1.Kattokaivo
+IfcFurniture                     68      68       68       68       68          68  1.0000
+       10      10       10       10       10          10  TVA-1:TVA-1
+        7       7        7        7        7           7  LAD-1:LAD-1
+        6       6        6        6        6           6  PK-2:PK-2.2400
+        6       6        6        6        6           6  PK-1:PK-1.400
+        6       6        6        6        6           6  PK-1:PK-1.800
+        4       4        4        4        4           4  PK-1:PK-1.3800
+IfcElectricAppliance             50      50       50       50       50          50  1.0000
+       13      13       13       13       13          13  Yleinen sähkölaite:JK-600
+       13      13       13       13       13          13  Yleinen sähkölaite:APK-600
+        7       7        7        7        7           7  Yleinen sähkölaite:U-600
+        4       4        4        4        4           4  Yleinen sähkölaite:JK-1600
+        3       3        3        3        3           3  Yleinen sähkölaite:JK-1000
+        2       2        2        2        2           2  Yleinen sähkölaite:L-850
+IfcSanitaryTerminal              47      47       34       34       34          34  1.0000
+       20      20       20       20       20          20  Tiskiallas 50:PA-1.600x500
+       14      14       14       14       14          14  Tiskiallas 50:PA-1.600x450
+       12      12        0        0        0           0  Sink Kitchen-Single:PA-5.600x600
+        1       1        0        0        0           0  Sink Kitchen-Single:PA-5.600x800
+IfcLightFixture                  43      43       43       43       43          43  1.0000
+       35      35       35       35       35          35  LEX Exit Sign - EURO - Wall Mounted:OPA-1
+        8       8        8        8        8           8  LEX Exit Sign - EURO - Ceiling Mounted:OPA-2
+IfcFireSuppressionTerminal       40      40       40       40       40          40  1.0000
+       40      40       40       40       40          40  Pikapaloposti:VAR-2.PPP
+IfcBuildingElementProxy          12      12       12       12       12          12  1.0000
+        6       6        6        6        6           6  Wall Sweep:JSV-5
+        3       3        3        3        3           3  Wall Sweep:JSV-4
+        2       2        2        2        2           2  HISSI-HEN-1:HISSI-HEN-1
+        1       1        1        1        1           1  Kohdistuskappale:3x2x1
+IfcRamp                           4       4        4        4        4           4  1.0000
+        4       4        4        4        4           4  Ramp:AP-ulkoluiska
+IfcWall                           4       1        0        0        0           2  1.1304
+        2       1        0        0        0           0  Basic Wall:VS-11
+        2       0        0        0        0           2  Basic Wall:VS-3
+IfcStair                          2       2        0        2        2           2  1.0003
+        2       2        0        2        2           2  LADDER
+IfcRampFlight                     1       0        0        1        1           1  0.5000
+        1       0        0        1        1           1  Ramp:AP-ulkoluiska
+IfcFlowTerminal                   1       1        0        0        0           0  1.0019
+        1       1        0        0        0           0  Sink Kitchen-Single:PA-5.500x600
+IfcAirTerminal                    1       1        1        1        1           1  1.0000
+        1       1        1        1        1           1  Yleinen sähkölaite:HUU-3000
+  1795396 IfcWall 'Basic Wall:VS-11': volume ratio 0.9888, Revit's vertices to rvt-rs's surface 0.3018 ft, rvt-rs's to Revit's 1.307e-06 ft
+  3128240 IfcWall 'Basic Wall:VS-3': volume ratio 1.2647, Revit's vertices to rvt-rs's surface 1.307e-06 ft, rvt-rs's to Revit's 0.06032 ft
+  3128244 IfcWall 'Basic Wall:VS-3': volume ratio 1.2647, Revit's vertices to rvt-rs's surface 1.307e-06 ft, rvt-rs's to Revit's 0.06032 ft
+  1693193 IfcWall 'Basic Wall:VS-11': volume ratio 0.9961, Revit's vertices to rvt-rs's surface 0.04265 ft, rvt-rs's to Revit's 4.886e-07 ft
+  2640752 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3123919 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3112712 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3120724 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3123866 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3023844 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  2983890 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3020449 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003946 ft, rvt-rs's to Revit's 0.01061 ft
+  3016436 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003946 ft, rvt-rs's to Revit's 0.01061 ft
+  3012930 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0017, Revit's vertices to rvt-rs's surface 0.003946 ft, rvt-rs's to Revit's 0.01061 ft
+  2305557 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x800': volume ratio 1.0013, Revit's vertices to rvt-rs's surface 0.003945 ft, rvt-rs's to Revit's 0.01061 ft
+  volume 1795396 IfcWall 'Basic Wall:VS-11': volume ratio 0.9888, farthest vertex 0.3018 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 89.9017
+    Revit shells 3, signed volumes (cubic ft): 50.7082 20.4002 19.8088
+  volume 1382481 IfcDoor 'O-7:O-7.12x21': volume ratio 1.2455, farthest vertex 1.355e-06 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 2.4387 0.5987
+    Revit shells 1, signed volumes (cubic ft): 2.4387
+  volume 1623922 IfcDoor 'UO-3:UO-3.12x21': volume ratio 1.2455, farthest vertex 1.355e-06 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 2.4387 0.5987
+    Revit shells 1, signed volumes (cubic ft): 2.4387
+  volume 3128240 IfcWall 'Basic Wall:VS-3': volume ratio 1.2647, farthest vertex 0.06032 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 1.3420
+    Revit shells 1, signed volumes (cubic ft): 1.0611
+  volume 3128244 IfcWall 'Basic Wall:VS-3': volume ratio 1.2647, farthest vertex 0.06032 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 1.3420
+    Revit shells 1, signed volumes (cubic ft): 1.0611
+  volume 1440596 IfcRampFlight 'Ramp:AP-ulkoluiska': volume ratio 0.5000, farthest vertex 1.307e-06 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 6.1094
+    Revit shells 1, signed volumes (cubic ft): 12.2189
+
+fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 1738 of 1738 bodies meshed in both, 123 of them meshed differently
+fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
+fine IfcMember                       295     295      295      295      295         295       295      295      295  1.0000 0.000002
+fine IfcColumn                       289     289      289      289      289         289       289      289      289  1.0000 0.000001
+fine IfcDoor                         269     267      263      269      265         269       269      269       46  1.0000 0.000423
+fine IfcPlate                        269     269      269      269      269         269       269      269      269  1.0000 0.000003
+fine IfcWindow                       265     265      265      265      265         265       265      265      265  1.0000 0.000003
+fine IfcWasteTerminal                 78      78        0       78       59          59        78       78        0  0.9962 0.001001
+fine IfcFurniture                     68      68       68       68       68          68        68       68       68  1.0000 0.000002
+fine IfcElectricAppliance             50      50       50       50       50          50        50       50       50  1.0000 0.000002
+fine IfcSanitaryTerminal              47      47       34       34       34          34        34       34       34  1.0000 0.003946
+fine IfcLightFixture                  43      43       43       43       43          43        43       43       43  1.0000 0.000003
+fine IfcFireSuppressionTerminal       40      40       40       40       40          40        40       40       40  1.0000 0.000002
+fine IfcBuildingElementProxy          12      12       12       12       12          12        12       12       12  1.0000 0.000004
+fine IfcRamp                           4       4        4        4        4           4         4        4        4  1.0000 0.000001
+fine IfcWall                           4       1        0        0        0           2         2        2        0  1.1304 0.301837
+fine IfcStair                          2       2        0        2        2           2         2        2        0  0.9986 0.000282
+fine IfcAirTerminal                    1       1        1        1        1           1         1        1        1  1.0000 0.000002
+fine IfcFlowTerminal                   1       1        0        0        0           0         0        0        0  1.0019 0.003944
+fine IfcRampFlight                     1       0        0        1        1           1         1        1        1  0.5000 0.000001
+fine total                          1738    1732     1633     1720     1697        1703      1722     1722     1417  1.0000 0.301837
+fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
+fine change IfcMember                       295      0    295      0      0      0    295      0      0      0
+fine change IfcColumn                       289      0    289      0      0      0    289      0      0      0
+fine change IfcDoor                         269      0    269      0      0      0    265      0      0      4
+fine change IfcPlate                        269      0    269      0      0      0    269      0      0      0
+fine change IfcWindow                       265      0    265      0      0      0    265      0      0      0
+fine change IfcWasteTerminal                 78     78     59     19      0      0      0      0     59     19
+fine change IfcFurniture                     68      0     68      0      0      0     68      0      0      0
+fine change IfcElectricAppliance             50      0     50      0      0      0     50      0      0      0
+fine change IfcSanitaryTerminal              47      0     34      0      0     13     34      0      0     13
+fine change IfcLightFixture                  43     43     43      0      0      0     43      0      0      0
+fine change IfcFireSuppressionTerminal       40      0     40      0      0      0     40      0      0      0
+fine change IfcBuildingElementProxy          12      0     12      0      0      0     12      0      0      0
+fine change IfcRamp                           4      0      4      0      0      0      4      0      0      0
+fine change IfcWall                           4      0      2      0      0      2      0      0      0      4
+fine change IfcStair                          2      2      2      0      0      0      2      0      0      0
+fine change IfcAirTerminal                    1      0      1      0      0      0      1      0      0      0
+fine change IfcFlowTerminal                   1      0      0      0      0      1      0      0      0      1
+fine change IfcRampFlight                     1      0      1      0      0      0      1      0      0      0
+fine change total                          1738    123   1703     19      0     16   1638      0     59     41
+fine bodies that miss 'ref on ours': 35
+  fine 1795396 IfcWall 'Basic Wall:VS-11': Revit's vertices to rvt-rs's surface 0.3018 ft (default 0.3018), rvt-rs's to Revit's 1.307e-06 ft (default 1.307e-06), volume ratio 0.9888 (default 0.9888)
+  fine 1693193 IfcWall 'Basic Wall:VS-11': Revit's vertices to rvt-rs's surface 0.04265 ft (default 0.04265), rvt-rs's to Revit's 4.886e-07 ft (default 4.886e-07), volume ratio 0.9961 (default 0.9961)
+  fine 3020449 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003946 ft (default 0.003946), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 3016436 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003946 ft (default 0.003946), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 3012930 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003946 ft (default 0.003946), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 2305557 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x800': Revit's vertices to rvt-rs's surface 0.003945 ft (default 0.003945), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0013 (default 1.0013)
+  fine 2063332 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003945 ft (default 0.003945), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 2061605 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003945 ft (default 0.003945), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 2983890 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003944 ft (default 0.003944), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 3123866 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003944 ft (default 0.003944), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 3023844 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003944 ft (default 0.003944), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 3123919 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003944 ft (default 0.003944), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 3112712 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003944 ft (default 0.003944), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 3120724 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003944 ft (default 0.003944), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+  fine 2640752 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': Revit's vertices to rvt-rs's surface 0.003944 ft (default 0.003944), rvt-rs's to Revit's 0.01061 ft (default 0.01061), volume ratio 1.0017 (default 1.0017)
+exit 0

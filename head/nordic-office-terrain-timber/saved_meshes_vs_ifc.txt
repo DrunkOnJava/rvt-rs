@@ -1,0 +1,16 @@
+frames: each file's site placement undone
+file-wide offset removed (ft): [-0.0, -0.0, 0.0]
+class                            n  <=0.01ft   <=0.1     <=1     >1  no ref
+IfcWasteTerminal                11        11       0       0      0       0
+IfcRamp                          4         4       0       0      0       0
+IfcBuildingElementProxy          1         1       0       0      0       0
+total                           16        16       0       0      0       0
+
+fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 16 of 16 sampled elements meshed
+fine file-wide offset removed (ft): [-0.0, -0.0, 0.0]
+fine class                            n default<=.001 <=0.001ft <=0.01ft  <=0.1   <=1    >1  no ref
+fine IfcWasteTerminal                11            11        11       11      0     0     0       0
+fine IfcRamp                          4             4         4        4      0     0     0       0
+fine IfcBuildingElementProxy          1             1         1        1      0     0     0       0
+fine total                           16            16        16       16      0     0     0       0
+exit 0

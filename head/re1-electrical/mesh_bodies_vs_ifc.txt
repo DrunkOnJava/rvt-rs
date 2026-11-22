@@ -1,0 +1,48 @@
+saved_graphics_mesh bodies scored: 47; in Revit's export 47
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcBuildingElementProxy          28      28       22       28       22          28  1.0000
+        6       6        6        6        6           6  262726-RECEPT:120V Duplex
+        6       6        6        6        6           6  260923-SWITCH:120V Single Pole
+        6       6        0        6        0           6  283513-OCC:Occupancy Sensor
+        3       3        3        3        3           3  262726-RECEPT:120V Duplex GFCI Above Counter
+        2       2        2        2        2           2  262726-JBOX:JBox
+        1       1        1        1        1           1  262416-PANEL:120/208V_1P_125A_42 Circuits
+IfcFlowTerminal                  14      14        4       14        4          14  1.0046
+       10      10        0       10        0          10  265100-LIGHT-CAN:6"
+        2       2        2        2        2           2  265100-LIGHT-LED:24"x24"
+        2       2        2        2        2           2  230913-Thermostat:230913-Thermostat
+IfcDistributionControlElement      5       5        5        5        5           5  1.0000
+        1       1        1        1        1           1  284641-Strobe:Strobe Ceiling
+        1       1        1        1        1           1  284641-Horn Fire:Horn Ceiling
+        1       1        1        1        1           1  284631-Smoke Detector:Smoke Detector
+        1       1        1        1        1           1  284631-CO:Carbon Monoxide Detector Ceiling
+        1       1        1        1        1           1  284911-CO2:CO2 Detector Ceiling
+  441154 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009329 ft, rvt-rs's to Revit's 0.001575 ft
+  441150 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009328 ft, rvt-rs's to Revit's 0.001575 ft
+  441151 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009327 ft, rvt-rs's to Revit's 0.001575 ft
+  441152 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009327 ft, rvt-rs's to Revit's 0.001575 ft
+  441153 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009327 ft, rvt-rs's to Revit's 0.001575 ft
+  441155 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009324 ft, rvt-rs's to Revit's 0.001575 ft
+  441156 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009326 ft, rvt-rs's to Revit's 0.001575 ft
+  443943 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009324 ft, rvt-rs's to Revit's 0.001575 ft
+  443942 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009324 ft, rvt-rs's to Revit's 0.001575 ft
+  441149 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009322 ft, rvt-rs's to Revit's 0.001575 ft
+  806286 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009333 ft, rvt-rs's to Revit's 0.001574 ft
+  806248 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009341 ft, rvt-rs's to Revit's 0.001573 ft
+  799007 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009336 ft, rvt-rs's to Revit's 0.001573 ft
+  806296 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009335 ft, rvt-rs's to Revit's 0.001573 ft
+  806274 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009328 ft, rvt-rs's to Revit's 0.001573 ft
+
+fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 47 of 47 bodies meshed in both, 16 of them meshed differently
+fine class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours ref .0015 ref .002  1e-5 ft  median volume ratio, largest ref on ours (ft)
+fine IfcBuildingElementProxy          28      28       22       28       28          28        28       28       22  1.0000 0.000953
+fine IfcFlowTerminal                  14      14        4       14       14          14        14       14        4  0.9962 0.000953
+fine IfcDistributionControlElement      5       5        5        5        5           5         5        5        5  1.0000 0.000002
+fine total                            47      47       31       47       47          47        47       47       31  1.0000 0.000953
+fine change class                             n differ  bodies meshed differently; then holding 'ref on ours' (0.001 ft): both, default only, fine only, neither; then the same for both directions within 0.001 ft
+fine change IfcBuildingElementProxy          28      6     28      0      0      0     22      0      6      0
+fine change IfcFlowTerminal                  14     10     14      0      0      0      4      0     10      0
+fine change IfcDistributionControlElement      5      0      5      0      0      0      5      0      0      0
+fine change total                            47     16     47      0      0      0     31      0     16      0
+fine bodies that miss 'ref on ours': 0
+exit 0

@@ -1,0 +1,5 @@
+saved_graphics_mesh bodies scored: 0; in Revit's export 0
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+
+fine tessellation: IfcOpenShell mesher-linear-deflection 3.048e-06 m (1e-5 ft) and mesher-angular-deflection 0.03 rad, both files; 0 of 0 bodies meshed in both, 0 of them meshed differently
+exit 0
