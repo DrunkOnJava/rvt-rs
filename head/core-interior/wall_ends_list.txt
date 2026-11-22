@@ -1,0 +1,46 @@
+straight and angled walls in both: 360; both ends within 0.001 ft: 360
+BodySource | start (Revit's joins there) | end (Revit's joins there) | walls; short/long = rvt-rs's wall shorter/longer there
+    351  partition_element_record_join_trimmed | start ok [free] | end ok [free]
+      9  partition_wall_centreline | start ok [free] | end ok [free]
+the 40 largest (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):
+  62901 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  62900 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  62898 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  62020 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  62019 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  62017 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  61139 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  61138 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  61136 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  60258 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  60257 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  60255 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  59377 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  59376 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  59374 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  55797 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  55796 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  55794 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  29916 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  29915 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  29913 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  20859 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  20858 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  20856 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  62899 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  62018 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  61137 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  60256 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  59375 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  55795 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  29914 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  20857 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start +0.0000 end -0.0000 start[] end[] path 0
+  62964 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  62083 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  61202 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  60321 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  59440 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  21023 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  62886 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+  62005 partition_element_record_join_trimmed 'Basic Wall:6" Interior Partition' start -0.0000 end +0.0000 start[] end[] path 0
+exit 0

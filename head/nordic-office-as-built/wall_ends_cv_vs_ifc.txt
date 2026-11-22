@@ -1,0 +1,6 @@
+      1  angled, not scored
+   1212  ends
+   1103  ends within 0.001 ft
+   1103  ends within 0.01 ft
+   1112  ends within 0.1 ft
+exit 0

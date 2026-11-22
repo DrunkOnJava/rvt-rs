@@ -1,0 +1,5 @@
+7 walls in the GLB
+      7  compared, axis-parallel
+faces (across), axis-parallel: 7 walls; within 0.001 ft: 7 0.01 ft: 7 0.1 ft: 7 1.0 ft: 7; max 0.000 ft
+ends (along), axis-parallel: 7 walls; within 0.001 ft: 3 0.01 ft: 3 0.1 ft: 6 1.0 ft: 7; max 0.377 ft
+exit 0

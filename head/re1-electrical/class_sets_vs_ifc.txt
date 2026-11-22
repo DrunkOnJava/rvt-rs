@@ -1,0 +1,12 @@
+Revit's export: 49 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+rvt-rs's export: 49 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcBuildingElementProxy              30     30      0      0  
+IfcDistributionControlElement         5      0      5      0  IfcAlarm 5
+IfcFlowTerminal                      14      0     14      0  IfcElectricAppliance 2, IfcLightFixture 12
+written as another class, by Revit's category and export value, and rvt-rs's:
+       5  IfcDistributionControlElement -> IfcAlarm  Revit '-' '-' PredefinedType - type IfcAlarmType NOTDEFINED  rvt-rs '-' '-'  e.g. 453227
+      12  IfcFlowTerminal -> IfcLightFixture  Revit '-' '-' PredefinedType - type IfcLightFixtureType NOTDEFINED  rvt-rs 'Lighting Fixtures' '-'  e.g. 441149
+       2  IfcFlowTerminal -> IfcElectricAppliance  Revit '-' '-' PredefinedType - type IfcElectricApplianceType NOTDEFINED  rvt-rs '-' '-'  e.g. 928758
+extra in rvt-rs's export, by class:
+exit 0
