@@ -1,0 +1,70 @@
+straight and angled walls in both: 607; both ends within 0.001 ft: 514
+BodySource | start (Revit's joins there) | end (Revit's joins there) | walls; short/long = rvt-rs's wall shorter/longer there
+    214  partition_wall_centreline_layer_joins | start ok [free] | end ok [free]
+    209  partition_element_record_join_trimmed | start ok [free] | end ok [free]
+     86  partition_wall_centreline | start ok [free] | end ok [free]
+     14  partition_wall_centreline | start ok [free] | end long [free]
+     13  partition_wall_centreline_layer_joins | start short [free] | end ok [free]
+     10  partition_element_record_join_trimmed | start short [free] | end ok [free]
+      7  partition_wall_centreline | start long [free] | end ok [free]
+      7  partition_wall_centreline_layer_joins | start ok [free] | end short [free]
+      7  partition_element_record_join_trimmed | start ok [free] | end long [free]
+      6  partition_wall_centreline_layer_joins | start long [free] | end ok [free]
+      5  partition_element_record_join_trimmed | start ok [free] | end short [free]
+      5  saved_graphics_mesh | start ok [free] | end ok [free]
+      4  partition_element_record_join_trimmed | start long [free] | end ok [free]
+      4  partition_wall_centreline_layer_joins | start long [free] | end long [free]
+      3  partition_wall_centreline_layer_joins | start ok [free] | end long [free]
+      2  partition_element_record_join_trimmed | start short [free] | end short [free]
+      2  partition_wall_centreline | start ok [free] | end short [free]
+      1  partition_element_record_join_trimmed | start short [free] | end long [free]
+      1  partition_wall_centreline_layer_joins | start short [free] | end short [free]
+      1  partition_wall_centreline_layer_joins | start long [free] | end short [free]
+      1  partition_wall_centreline | start long [free] | end long [free]
+      1  partition_wall_centreline | start short [free] | end ok [free]
+      1  saved_graphics_mesh | start short [free] | end ok [free]
+      1  partition_wall_centreline | start short [free] | end long [free]
+      1  partition_wall_centreline | start long [free] | end short [free]
+      1  partition_element_record_join_trimmed | start long [free] | end short [free]
+the 40 largest (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):
+  1457415 partition_element_record_join_trimmed 'VS-5' start -1.6061 end +0.0000 start[] end[] path 0
+  3039425 partition_wall_centreline_layer_joins 'US-2' start +1.4928 end +0.0000 start[] end[] path 0
+  1491862 partition_wall_centreline_layer_joins 'US-2' start +1.4829 end +0.0000 start[] end[] path 0
+  1348465 partition_element_record_join_trimmed 'US-1' start +1.3287 end +1.3287 start[] end[] path 0
+  1348462 partition_element_record_join_trimmed 'US-1' start -0.0000 end +1.3287 start[] end[] path 0
+  1348538 partition_element_record_join_trimmed 'US-1' start +1.3287 end +1.3287 start[] end[] path 0
+  1348537 partition_element_record_join_trimmed 'US-1' start +1.3287 end +0.0000 start[] end[] path 0
+  1348536 partition_element_record_join_trimmed 'US-1' start +1.3287 end -0.0000 start[] end[] path 0
+  1348463 partition_element_record_join_trimmed 'US-1' start +1.3287 end -0.0000 start[] end[] path 0
+  1348325 partition_wall_centreline_layer_joins 'US-1' start -1.3287 end +0.0000 start[] end[] path 0
+  1348324 partition_wall_centreline_layer_joins 'US-1' start -0.0000 end +1.3287 start[] end[] path 0
+  1348326 partition_wall_centreline_layer_joins 'US-1' start -1.3287 end -0.0000 start[] end[] path 0
+  1429758 partition_element_record_join_trimmed 'US-1' start +1.3287 end +0.0000 start[] end[] path 0
+  1341937 partition_element_record_join_trimmed 'US-1' start +1.3287 end +0.0000 start[] end[] path 0
+  1344124 partition_element_record_join_trimmed 'US-1' start +1.3287 end -0.0000 start[] end[] path 0
+  3054557 partition_wall_centreline_layer_joins 'US-2' start +0.0000 end +1.2533 start[] end[] path 0
+  3020409 partition_wall_centreline 'VS-2' start -0.0000 end -1.2467 start[] end[] path 0
+  2181428 partition_wall_centreline_layer_joins 'VS-11' start -0.0000 end -1.1614 start[] end[] path 0
+  3490650 partition_wall_centreline_layer_joins 'KS-3' start -1.0827 end +0.0000 start[] end[] path 0
+  3020463 partition_wall_centreline 'VS-2' start -0.0000 end -1.0827 start[] end[] path 0
+  2181501 partition_wall_centreline 'VS-11' start -0.0000 end -1.0532 start[] end[] path 0
+  3011915 partition_element_record_join_trimmed 'VS-2' start +0.0000 end -1.0327 start[] end[] path 0
+  1671972 partition_wall_centreline_layer_joins 'US-4' start +0.0000 end +0.9843 start[] end[] path 0
+  1436343 partition_wall_centreline 'VS-2' start -0.9402 end -0.0000 start[] end[] path 0
+  3066118 partition_wall_centreline 'VS-3' start +0.0000 end -0.9402 start[] end[] path 0
+  1746324 partition_wall_centreline_layer_joins 'VS-11' start -0.8596 end -0.8596 start[] end[] path 0
+  1660027 partition_wall_centreline_layer_joins 'VS-11' start -0.8596 end -0.8596 start[] end[] path 0
+  1488456 partition_wall_centreline 'VS-6' start -0.7792 end +0.0000 start[] end[] path 0
+  2215053 partition_element_record_join_trimmed 'PE-1' start -0.7792 end +0.0000 start[] end[] path 0
+  1727582 partition_wall_centreline 'VS-6' start +0.0000 end -0.7792 start[] end[] path 0
+  2176481 partition_wall_centreline_layer_joins 'VS-3' start -0.1936 end -0.7546 start[] end[] path 0
+  2182047 partition_wall_centreline 'VS-3' start +0.1936 end -0.7546 start[] end[] path 0
+  3020444 partition_element_record_join_trimmed 'VS-2' start -0.0000 end -0.7546 start[] end[] path 0
+  1457511 partition_wall_centreline_layer_joins 'VS-3' start -0.7546 end +0.0000 start[] end[] path 0
+  1746098 partition_wall_centreline 'VS-3' start -0.7546 end -0.1936 start[] end[] path 0
+  1494012 partition_wall_centreline 'KS-2' start +0.0000 end -0.6562 start[] end[] path 0
+  3128240 partition_wall_centreline_layer_joins 'VS-3' start +0.0000 end +0.6562 start[] end[] path 0
+  3054728 partition_wall_centreline_layer_joins 'US-2' start +0.6135 end +0.0000 start[] end[] path 0
+  1347199 partition_element_record_join_trimmed 'KS-1' start +0.5429 end -0.5085 start[] end[] path 0
+  3015330 partition_wall_centreline_layer_joins 'VS-3' start +0.4921 end -0.0000 start[] end[] path 0
+exit 0

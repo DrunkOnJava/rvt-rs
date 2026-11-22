@@ -1,0 +1,61 @@
+  open_model
+  list_elements: 74 rows
+  get_element: 24 elements
+mcp answers: consistency basis: the export of this run
+mcp answers: consistency protocol: 5 compared, 0 differ
+mcp answers: consistency counts: 30 compared, 0 differ
+mcp answers: elements the export folds into the body of another element, not rows: 0
+mcp answers: rows that are opening elements, which the diagnostics do not count as building elements: 0
+mcp answers: IfcAirTerminal: 7 rows
+mcp answers: IfcBuildingElementProxy: 1 rows
+mcp answers: IfcDuctFitting: 32 rows
+mcp answers: IfcDuctSegment: 25 rows
+mcp answers: IfcPipeFitting: 3 rows
+mcp answers: IfcPipeSegment: 6 rows
+mcp answers: rows listed: 74
+mcp answers: consistency parameter values: 1 compared, 0 differ
+mcp answers: consistency element membership: 74 compared, 0 differ
+mcp answers: consistency element entities: 74 compared, 0 differ
+mcp answers: consistency element names: 74 compared, 0 differ
+mcp answers: consistency element long names: 74 compared, 0 differ
+mcp answers: consistency element ids: 74 compared, 0 differ
+mcp answers: consistency element predefined types: 74 compared, 0 differ
+mcp answers: consistency element storeys: 74 compared, 0 differ
+mcp answers: IFC openings the writer cuts for doors and windows, in no row: 0
+mcp answers: IFC elements and spaces: 74
+mcp answers: consistency levels: 2 compared, 0 differ
+mcp answers: consistency rooms: 0 compared, 0 differ
+mcp answers: rooms: 0
+mcp answers: rooms with an area: 0
+mcp answers: rooms without an area: 0
+mcp answers: consistency details: 24 compared, 0 differ
+mcp answers: consistency type objects: 24 compared, 0 differ
+mcp answers: consistency type object sets: 24 compared, 0 differ
+mcp answers: get_element property and quantity sets compared: 159
+mcp answers: consistency diagnostics: 1 compared, 0 differ
+mcp answers: consistency export hash: 1 compared, 0 differ
+mcp answers: classes: Revit export, elements and spaces paired: 74
+mcp answers: classes: Revit export, elements left out for no Tag: 0
+mcp answers: classes: Revit export, elements left out for a repeated Tag: 0
+mcp answers: classes: the answers, elements and spaces paired: 74
+mcp answers: classes: the answers, rows left out for no Tag: 0
+mcp answers: classes: the answers, rows left out for a repeated Tag: 0
+mcp answers: class IfcBuildingElementProxy: revit 1, same 1, other 0, absent 0
+mcp answers: class IfcFlowFitting: revit 35, same 0, other 35, absent 0
+mcp answers: class IfcFlowSegment: revit 31, same 0, other 31, absent 0
+mcp answers: class IfcFlowTerminal: revit 7, same 0, other 7, absent 0
+mcp answers: consistency class sets: 74 compared, 0 differ
+mcp answers: storeys: rows the answers and Revit export share: 74
+mcp answers: storeys: rows on the same storey as in Revit: 74
+mcp answers: rooms: in the answers: 0
+mcp answers: rooms: Revit spaces with a body: 0
+mcp answers: rooms: paired by GlobalId: 0
+mcp answers: rooms: paired with an area in the answers: 0
+mcp answers: rooms: paired without an area in the answers: 0
+mcp answers: rooms: area within 0.1% of Revit: 0
+mcp answers: rooms: area within 1% of Revit: 0
+mcp answers: rooms: area more than 1% from Revit: 0
+mcp answers: oracle: NOT MEASURED, the export of Revit could not be read or scored
+  error: 'ifc_type'
+mcp answers: consistency PASS: every check equal
+exit 0

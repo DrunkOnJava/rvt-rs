@@ -1,0 +1,11 @@
+Revit types 18 elements; 18 of them are in ours
+typed in ours: 18 of 18
+  entity agrees: 18 of 18
+  name agrees: 18 of 18
+  tag agrees: 18 of 18
+  global_id agrees: 18 of 18
+typed in ours but not in Revit's export: 0
+untyped in ours, by class: {}
+TypeName carried: 18 of 18; equal to Revit's type: 18
+type objects in ours: 2
+exit 0

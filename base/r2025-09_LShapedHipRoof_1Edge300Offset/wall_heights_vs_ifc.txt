@@ -1,0 +1,33 @@
+cutter tag:3823 IfcRoof Brep 13.1234 19.1513 1.2258 38.3354 1.1628 20.0440
+walls in both files: 7 (rvt-rs 7, Revit 7); offset 0.000000 ft
+  floors, roofs and footings with base Revit's and top Revit's: 1
+  base and top Revit's: 7
+plan turn Revit - rvt-rs: -0.000000 degrees (median wall-middle residual 0.0000 ft)
+surfaces rvt-rs: 1 bodies, 308 triangles
+surfaces Revit: 1 bodies, 80 triangles
+over tag:2787 3823:13.3128,13.8901:13.3128,13.8901
+over tag:2788 3823:13.3128,13.8901:13.3128,13.8901
+over tag:2789 3823:13.3128,13.8901:13.3128,13.8901
+over tag:2790 3823:14.2970,14.8744:14.2970,14.8744
+over tag:2892 3823:18.3220,18.8993:18.3220,18.8993
+over tag:3753 3823:13.3128,13.8901:13.3128,13.8901
+over tag:3795 3823:13.3128,13.8901:13.3128,13.8901
+cut by the 1 floors, roofs and footings whose plan box overlaps the wall:
+  base: uncut and Revit's: 7
+  top: cut, not Revit's: 6
+  top: uncut and Revit's: 1
+wall tag:2787 rvt-rs 0.0000 13.5022 1.2258 28.7848 19.3878 20.0440 Revit 0.0000 13.5022
+wall tag:2788 rvt-rs 0.0000 13.5022 1.2258 1.8819 1.1628 19.3878 Revit 0.0000 13.5022
+wall tag:2789 rvt-rs 0.0000 20.4134 1.8819 37.6792 1.1628 1.8189 Revit 0.0000 20.4134
+wall tag:2790 rvt-rs 0.0000 14.4865 37.6792 38.3354 1.1628 11.3334 Revit 0.0000 14.4865
+wall tag:2892 rvt-rs 0.0000 18.5114 19.4525 20.1087 1.8189 19.3878 Revit 0.0000 18.5114
+wall tag:3753 rvt-rs 0.0000 13.5022 28.1287 28.7848 10.6772 19.3878 Revit 0.0000 13.5022
+wall tag:3795 rvt-rs 0.0000 13.5022 28.7848 37.6792 10.6772 11.3334 Revit 0.0000 13.5022
+crossed tag:2787 top:3823:passes:over
+crossed tag:2788 top:3823:passes:over
+crossed tag:2790 top:3823:passes:over
+crossed tag:2892 top:3823:passes:over
+crossed tag:3753 top:3823:passes:over
+crossed tag:3795 top:3823:passes:over
+
+exit 0

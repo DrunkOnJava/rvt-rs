@@ -1,0 +1,5 @@
+IfcMaterial: rvt-rs 87, Revit 10
+Revit's styled materials: 9; same colour and transparency: 9
+different: []
+unstyled or absent in rvt-rs: []
+exit 0

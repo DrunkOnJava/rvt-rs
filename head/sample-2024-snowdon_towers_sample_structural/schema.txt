@@ -1,0 +1,13 @@
+arity:
+  schema: IFC4
+  PredefinedType populated: IfcBeam=942, IfcColumn=74, IfcSlab=27, IfcWall=58
+  placement composition: 1297 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+validate:
+findings 0
+rules:
+findings 10
+7 IfcShapeRepresentation IfcShapeRepresentation.CorrectItemsForType: IfcShapeRepresentationTypes(SELF.RepresentationType, SELF.Items) Violated by: False + where False = IfcShapeRepresentationTypes('SweptSolid', (#=IfcFixedReferenceSweptAreaSolid(#,#,#,$,$,#),)) + where 'SweptSolid' =
+3 IfcShapeRepresentation IfcShapeRepresentation.CorrectItemsForType: IfcShapeRepresentationTypes(SELF.RepresentationType, SELF.Items) Violated by: False + where False = IfcShapeRepresentationTypes('SweptSolid', (#=IfcFixedReferenceSweptAreaSolid(#,#,#,$,$,#),)) + where 'SweptSoli
+property sets:
+sets 3895 on 1602 objects and types
+findings 0
