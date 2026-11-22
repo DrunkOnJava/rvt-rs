@@ -1,0 +1,4 @@
+13 ('IfcBuildingElementProxy', 'name =', 'colour =')
+114 ('IfcColumn', 'name =', 'colour =')
+72 ('revit', 'no colour')
+exit 0

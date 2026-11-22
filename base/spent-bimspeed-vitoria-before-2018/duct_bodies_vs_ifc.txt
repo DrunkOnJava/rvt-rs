@@ -1,0 +1,3 @@
+ducts in Revit's export with a body: 244; rvt-rs writes one for 104 of them
+world box within 0.01 ft of Revit's: 102 of 104 (worst 3.00000 ft)
+exit 0

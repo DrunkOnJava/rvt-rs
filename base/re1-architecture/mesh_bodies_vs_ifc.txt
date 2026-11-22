@@ -1,0 +1,13 @@
+saved_graphics_mesh bodies scored: 5; in Revit's export 5
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcDoor                           5       5        5        5        5           5  1.0000
+        2       2        2        2        2           2  Single-Flush:Single-Flush
+        1       1        1        1        1           1  Door-Double-Sliding:84" x 94"
+        1       1        1        1        1           1  Door-Double-Sliding:60" x 94"
+        1       1        1        1        1           1  Door-Curtain-Wall-Double-Glas:69" x 72"
+  445975 IfcDoor 'Door-Curtain-Wall-Double-Glas:69" x 72"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.95e-06 ft, rvt-rs's to Revit's 2.361e-06 ft
+  417097 IfcDoor 'Single-Flush:Single-Flush': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.361e-06 ft, rvt-rs's to Revit's 1.361e-06 ft
+  416336 IfcDoor 'Door-Double-Sliding:84" x 94"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 9.206e-07 ft, rvt-rs's to Revit's 9.206e-07 ft
+  416703 IfcDoor 'Door-Double-Sliding:60" x 94"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 8.876e-07 ft, rvt-rs's to Revit's 8.876e-07 ft
+  416909 IfcDoor 'Single-Flush:Single-Flush': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 7.423e-07 ft, rvt-rs's to Revit's 7.423e-07 ft
+exit 0

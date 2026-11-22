@@ -1,0 +1,9 @@
+     16  layer names: Revit's, in Revit's order
+     16  layer sets written
+     16  positions not comparable
+     16  set name = Revit's Family:Type
+  whole layer sets within 0.001 ft of Revit's: 16 of 16
+  whole layer sets within 0.01 ft of Revit's: 16 of 16
+  whole layer sets within 0.1 ft of Revit's: 16 of 16
+  worst [(0.0, '4013', 'IfcWall'), (0.0, '5889', 'IfcWall'), (0.0, '5801', 'IfcWall'), (0.0, '5745', 'IfcWall'), (0.0, '5639', 'IfcWall')]
+exit 0

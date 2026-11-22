@@ -1,0 +1,26 @@
+Revit's export: 9 IfcSpace, 2 named Family:Type:ElementId
+  Name: Family:Type:ElementId 2
+  LongName: None 2
+  ObjectType: Parking Space:AP 2
+  PredefinedType: PARKING 2
+  CompositionType: None 2
+  relation: in nothing 2
+  body: Body/MappedRepresentation:IfcMappedItem 2
+  type object: IfcSpaceType PARKING 'AP' 2
+  property set: Pset_SpaceCommon 2, Pset_SpaceHeaterTypeCommon 2, Qto_SpaceBaseQuantities 2
+  Pset_SpaceCommon.IsExternal: False 2
+  Pset_SpaceCommon.Reference: AP 2
+  Pset_SpaceHeaterTypeCommon.Reference: AP 2
+  Qto_SpaceBaseQuantities.GrossVolume: 0.0017741899999999882 2
+  Qto_SpaceBaseQuantities.Height: 101.59999999999937 2
+  Qto_SpaceBaseQuantities.NetVolume: 0.001774189999999445 2
+rvt-rs writes the same Tags as: IfcSpace aggregated in IfcBuildingStorey 2
+  Name: equal 2
+  LongName: equal 2
+  ObjectType: equal 2
+  PredefinedType: equal 2
+  type object: equal 2
+  Pset_SpaceCommon.Reference: equal 2
+  Pset_SpaceCommon.IsExternal: equal 2
+  relation: differs (in nothing vs aggregated in IfcBuildingStorey) 2
+exit 0

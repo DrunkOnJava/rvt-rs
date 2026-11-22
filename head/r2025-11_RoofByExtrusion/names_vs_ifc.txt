@@ -1,0 +1,3 @@
+      7  system family | IfcWall | Name equal | ObjectType equal
+      1  system family | IfcRoof | Name equal | ObjectType equal
+exit 0

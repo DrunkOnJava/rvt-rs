@@ -1,0 +1,42 @@
+record-box bodies: 10799; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcMember                       9706    9665      41       0       0       0       0    1.000
+        41  Rectangular Mullion:50 x 50 mm alumiini maalattu
+IfcColumn                        290     269      18       1       1       0       1    1.000
+        18  Concrete-Square-Column:PI-1
+         2  Concrete-Square-Column:PI-2
+IfcPlate                         269     269       0       0       0       0       0    1.000
+IfcSanitaryTerminal              145      34       0       2     109       0       0    0.198
+        43  WC-istuin:WC-1
+        19  IDO Glow washbasin 11461_11561:PA-4
+        15  Sense_Public_allas:PA-3.LE
+IfcFurniture                      98      68       0       0      30       0       0    1.000
+        30  Stay_Wall_Mounted_:VAR-1
+IfcWasteTerminal                  78       0       0      78       0       0       0    0.784
+        62  Lattiakaivo:LK-1
+        16  Lattiakaivo:VK-1.Kattokaivo
+IfcElectricAppliance              50      50       0       0       0       0       0    1.000
+IfcLightFixture                   43       0       0       0      43       0       0    0.368
+        35  LEX Exit Sign - EURO - Wall Mounted:OPA-1
+         8  LEX Exit Sign - EURO - Ceiling Mounted:OPA-2
+IfcRailing                        41       0       0       0      41       0       0    0.001
+        22  Railing:KJO-1
+        10  Railing:KAI-4
+         3  Railing:KAI-5
+IfcFireSuppressionTerminal        40       0       0       0      40       0       0    0.099
+        40  Pikapaloposti:VAR-2.PPP
+IfcStair                          16       0       0       0       2       0      14    0.039
+         2  LADDER
+IfcBuildingElementProxy           12       2       0       0      10       0       0    0.020
+         6  Wall Sweep:JSV-5
+         3  Wall Sweep:JSV-4
+         1  Kohdistuskappale:3x2x1
+IfcRamp                            5       0       0       4       1       0       0    0.500
+         5  Ramp:AP-ulkoluiska
+IfcWall                            4       1       1       2       0       0       0    0.886
+         2  Basic Wall:VS-3
+         1  Basic Wall:VS-11
+IfcCurtainWall                     1       0       0       0       0       0       1      nan
+IfcAirTerminal                     1       1       0       0       0       0       0    1.000
+total                          10799   10359      60      87     277       0      16
+exit 0
