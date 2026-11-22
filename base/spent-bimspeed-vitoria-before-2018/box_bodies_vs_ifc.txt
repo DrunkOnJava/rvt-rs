@@ -1,0 +1,81 @@
+record-box bodies: 918; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcMember                        206     206       0       0       0       0       0    1.000
+IfcPipeFitting                   128       0       0      72      56       0       0    0.504
+        94  M_Codo - Genérico:Estándar 2
+        22  M_Transición - Genérica:Estándar 2
+        12  M_Te - Genérica:Estándar 2
+IfcColumn                        114      79      18      17       0       0       0    1.000
+        25  Hormigón-Rectangular-Pilar:EH 30x30
+         4  Hormigón-Rectangular-Pilar:EH 25x40
+         4  Hormigón-Rectangular-Pilar:EH 40x40
+IfcCableCarrierSegment           102       0       0      43      59       0       0    0.374
+       102  Tubo con uniones:Tubo
+IfcCableCarrierFitting            74       0       0      17      57       0       0    0.309
+        74  M_Codo de tubo - Aluminio:Estándar
+IfcWindow                         70       0       0       0      70       0       0    0.119
+         4  OB 2H:T13 117 X 144
+         4  OB 2H:T14 115 X 146
+         4  OB 2H:T13 115 X 146
+IfcDoor                           68       2       0       0      66       0       0    0.254
+        64  LKS_PUE_Puerta 1 Hoja:72 x 210 cm
+         1  Puerta 1 decorativa simple:117 x 212mm
+         1  Puerta 1 decorativa simple:90 x 285mm
+IfcPlate                          67      67       0       0       0       0       0    1.000
+IfcBuildingElementProxy           43      17       0      15      11       0       0    0.528
+        13  Rejilla de ventilacion:Rejilla de ventilacion
+         8  Tendedero lineal:Tipo 1
+         4  M_Calentador de agua - Sin depósito:2.3 L
+IfcRailing                        14       0       0       0      14       0       0    0.034
+         8  Barandilla:500
+         6  Barandilla:1100 mm
+IfcSlab                            9       2       0       7       0       0       0    0.646
+         4  Suelo:LKS_T10 33cm
+         1  Suelo:LKS_T6 32.7cm
+         1  Suelo:LKS_GEN_300
+IfcRoof                            8       2       0       2       4       0       0    0.453
+         2  Cubierta básica:LKS_CUB_T5 20cm
+         2  Cubierta básica:LKS-Cubierta Generica 30
+         2  Cubierta básica:LKS-Cubierta Generica 4
+IfcStair                           6       0       0       0       0       0       6      nan
+IfcStairFlight                     6       0       0       0       6       0       0    0.073
+         6  Tramo monolítico:LKS_GEN_Tramo in-situ
+IfcPipeSegment                     2       0       0       0       2       0       0    0.003
+         2  Canalón:Canalón
+IfcBeam                            1       0       1       0       0       0       0    0.972
+         1  Hormigón-Viga rectangular:22 x 62 mm
+total                            918     375      19     173     345       0       6
+box bodies by class and reason (SavedMeshRefusal, #1645): 918 of 918 have one
+IfcMember                        206
+       206  not_offered: release_outside_2023_to_2027
+IfcPipeFitting                   128
+       128  not_offered: release_outside_2023_to_2027
+IfcColumn                        114
+       114  not_offered: release_outside_2023_to_2027
+IfcCableCarrierSegment           102
+       102  not_offered: release_outside_2023_to_2027
+IfcCableCarrierFitting            74
+        74  not_offered: release_outside_2023_to_2027
+IfcWindow                         70
+        70  not_offered: release_outside_2023_to_2027
+IfcDoor                           68
+        68  not_offered: release_outside_2023_to_2027
+IfcPlate                          67
+        67  not_offered: release_outside_2023_to_2027
+IfcBuildingElementProxy           43
+        43  not_offered: release_outside_2023_to_2027
+IfcRailing                        14
+        14  not_offered: release_outside_2023_to_2027
+IfcSlab                            9
+         9  not_offered: release_outside_2023_to_2027
+IfcRoof                            8
+         8  not_offered: release_outside_2023_to_2027
+IfcStair                           6
+         6  not_offered: release_outside_2023_to_2027
+IfcStairFlight                     6
+         6  not_offered: release_outside_2023_to_2027
+IfcPipeSegment                     2
+         2  not_offered: release_outside_2023_to_2027
+IfcBeam                            1
+         1  not_offered: release_outside_2023_to_2027
+exit 0

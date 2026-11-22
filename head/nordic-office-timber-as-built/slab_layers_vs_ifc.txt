@@ -1,0 +1,13 @@
+114 floors, roofs and ceilings drawn in layers in the GLB
+     76  IFCCOVERING in both
+     31  IFCSLAB in both
+      5  Revit styles the whole body with one material
+    102  compared
+      7  not in the IFC
+  layer bottoms and tops within 0.001 ft: 101 of 102
+  layer bottoms and tops within 0.01 ft: 101 of 102
+  layer bottoms and tops within 0.1 ft: 101 of 102
+  max 0.4265 ft; worst [(np.float64(8.620884841548104e-06), 1384047, 'IFCSLAB'), (np.float64(9.868766369436344e-06), 3165182, 'IFCSLAB'), (np.float64(9.868961939218934e-06), 3721093, 'IFCCOVERING'), (np.float64(1.2868088731465832e-05), 3541993, 'IFCSLAB'), (np.float64(0.4265154903288533), 1498471, 'IFCSLAB')]
+compared layers' colours against Revit's surface styles:
+    205  same
+exit 0

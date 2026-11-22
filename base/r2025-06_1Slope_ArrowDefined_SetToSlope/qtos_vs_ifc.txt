@@ -1,0 +1,30 @@
+Revit quantities on objects rvt-rs writes: 37; equal: 34; different: 0; missing: 3; rvt-rs quantities Revit does not write: 0
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 3
+walls whose Length is rvt-rs's curve's: 2; Revit's Axis's: 3; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types, their other differing wall quantities counted apart (RE-253, RE-388): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+  Qto_WallBaseQuantities.GrossFootprintArea: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.GrossSideArea: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.GrossVolume: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.Height: 5, equal 5, different 0, missing 0
+  Qto_WallBaseQuantities.Length: 2, equal 2, different 0, missing 0
+  Qto_WallBaseQuantities.NetSideArea: 5, equal 5, different 0, missing 0
+  Qto_WallBaseQuantities.NetVolume: 5, equal 5, different 0, missing 0
+  Qto_WallBaseQuantities.Width: 5, equal 5, different 0, missing 0
+values on a key that more than one object of Revit's export holds, counted apart (#1576): 8 of Revit's on 1 such keys, and 0 of rvt-rs's with none in the object held
+  on a repeated key, Qto_RoofBaseQuantities.NetArea: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_RoofBaseQuantities.ProjectedArea: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.GrossArea: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.GrossVolume: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.Length: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.NetArea: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.NetVolume: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.Perimeter: 1; against the object held: equal 0, different 0, missing 1
+entities Revit writes each missing quantity on:
+  Qto_WallBaseQuantities.GrossFootprintArea: 1; on IfcWall x1
+  Qto_WallBaseQuantities.GrossSideArea: 1; on IfcWall x1
+  Qto_WallBaseQuantities.GrossVolume: 1; on IfcWall x1
+rvt-rs quantities Revit does not write:
+largest differences (rvt-rs, Revit; SI units):
+exit 0

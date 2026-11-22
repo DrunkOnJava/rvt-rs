@@ -1,0 +1,4 @@
+openings in Revit's export: 0; in rvt-rs's: 0; both: 0
+unfilled openings in Revit's export: 1; in rvt-rs's: 1; both: 1
+  IfcWall within 0.001 ft: 1
+exit 0

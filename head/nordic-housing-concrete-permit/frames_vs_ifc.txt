@@ -1,0 +1,10 @@
+rvt-rs coordinate reference: none in the header
+rvt-rs IfcMapConversion: none
+rvt-rs site placement: translation (0.000, 0.000, 0.000) rotation 0.0000 deg
+Revit coordinate reference: CoordinateReference [CoordinateBase: Project Base Point oriented in True North, ProjectSite: Internal]
+Revit IfcMapConversion: eastings 0.000 northings 0.000 height 0.000 x-axis (1.000000, 0.000000)
+Revit site placement: translation (0.000, 0.000, 0.000) rotation -60.6317 deg
+elements tagged in both: 416; centres compared: 139
+fitted rvt-rs -> Revit: translation (0.023, 0.002, -0.047) rotation -60.5942 deg; residual median 0.0471 max 4.0476
+Revit's site placement applied to rvt-rs: residual median 0.0000 max 4.0945
+exit 0

@@ -1,0 +1,8 @@
+IfcRoofType PredefinedType: rvt-rs {'NOTDEFINED': 1}, Revit {'NOTDEFINED': 1}
+IfcWallType PredefinedType: rvt-rs {'NOTDEFINED': 1}, Revit {'STANDARD': 1}
+other classes (every IfcElement class with a PredefinedType not read above):
+IfcRoof: 1 in both; same 0, differs 0, unset in rvt-rs 1, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 1}
+  3823: rvt-rs -, Revit NOTDEFINED
+IfcWall: 7 in both; same 7, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 7}
+  not paired by Tag: in Revit's only {}, in rvt-rs's only {}
+exit 0

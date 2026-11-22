@@ -1,0 +1,25 @@
+Revit's export: 306 IfcSpace, 44 named Family:Type:ElementId
+  Name: Family:Type:ElementId 44
+  LongName: None 44
+  ObjectType: Turning Free Space:Turning Free Space 15 42, VOLUME / OFFICE:VOLUME / OFFICE 1, VOLUME / GARAGE:VOLUME / GARAGE 1
+  PredefinedType: USERDEFINED 42, NOTDEFINED 1, PARKING 1
+  CompositionType: None 44
+  relation: in nothing 44
+  body: Body/MappedRepresentation:IfcMappedItem 44
+  type object: IfcSpaceType USERDEFINED 'Turning Free Space 1500 mm' 42, IfcSpaceType NOTDEFINED 'VOLUME / OFFICE' 1, IfcSpaceType PARKING 'VOLUME / GARAGE' 1
+  property set: Pset_SpaceCommon 44, Pset_SpaceHeaterTypeCommon 44, Qto_SpaceBaseQuantities 44
+  Pset_SpaceCommon.IsExternal: False 44
+  Pset_SpaceCommon.Reference: Turning Free Space 1500 mm 42, VOLUME / OFFICE 1, VOLUME / GARAGE 1
+  Pset_SpaceHeaterTypeCommon.Reference: Turning Free Space 1500 mm 42, VOLUME / OFFICE 1, VOLUME / GARAGE 1
+  Qto_SpaceBaseQuantities.GrossVolume: 3.5339878356621566 40, 3.533987835662156 2, 30986.274314940394 1, 1845.4331523321484 1
+  Qto_SpaceBaseQuantities.NetVolume: 3.5340023993498972 40, 3.534002399349898 2, 30986.27431494058 1, 1845.4331523321484 1
+rvt-rs writes the same Tags as: IfcSpace aggregated in IfcBuildingStorey 42, IfcSpace aggregated in IfcBuilding 2
+  Name: equal 44
+  LongName: equal 44
+  ObjectType: equal 44
+  PredefinedType: differs (USERDEFINED vs NOTDEFINED) 42, equal 2
+  type object: differs (('IfcSpaceType', 'Turning Free Space 150 vs ('IfcSpaceType', 'Turning Free Space 150) 42, equal 2
+  Pset_SpaceCommon.Reference: equal 44
+  Pset_SpaceCommon.IsExternal: equal 44
+  relation: differs (in nothing vs aggregated in IfcBuildingStorey) 42, differs (in nothing vs aggregated in IfcBuilding) 2
+exit 0

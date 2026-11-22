@@ -1,0 +1,5 @@
+      1  IfcDoor: neither aggregates
+      2  IfcRailing: same whole
+      1  IfcStairFlight: same whole
+      3  IfcWindow: neither aggregates
+exit 0

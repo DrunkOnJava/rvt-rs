@@ -1,0 +1,5 @@
+      4  IfcCurtainWall: neither aggregates
+    414  IfcMember: same whole
+      2  IfcRailing: only Revit aggregates
+      1  IfcStairFlight: same whole
+exit 0

@@ -1,0 +1,95 @@
+unfilled openings in Revit's export: 216; in rvt-rs's: 148; both: 144
+IfcCurtainWall in IfcWall:
+  revit: 72
+  written: 13
+  box compared: 13
+  box within 0.01 ft: 13
+  volume compared: 13
+  volume within 0.01 %: 13
+  GlobalId equal: 13
+  Name equal: 13
+  PredefinedType equal: 13
+  Pset_OpeningElementCommon.Reference equal: 13
+  Pset_EnvironmentalImpactIndicators.Reference equal: 13
+  Depth in Revit's: 13
+  Depth equal: 13
+IfcDoor in IfcDoor:
+  revit: 2
+IfcDoor in IfcWall:
+  revit: 43
+  written: 33
+  box compared: 33
+  box within 0.01 ft: 33
+  volume compared: 33
+  volume within 0.01 %: 33
+  GlobalId equal: 33
+  Name equal: 33
+  PredefinedType equal: 33
+  Pset_OpeningElementCommon.Reference equal: 33
+  Pset_EnvironmentalImpactIndicators.Reference equal: 33
+  Depth in Revit's: 33
+  Depth equal: 33
+IfcFireSuppressionTerminal in IfcWall:
+  revit: 38
+  written: 38
+  box compared: 38
+  box within 0.01 ft: 38
+  volume compared: 38
+  volume within 0.01 %: 38
+  GlobalId equal: 38
+  Name equal: 38
+  PredefinedType equal: 38
+  Pset_OpeningElementCommon.Reference equal: 38
+  Pset_EnvironmentalImpactIndicators.Reference equal: 38
+  Depth in Revit's: 38
+  Depth equal: 38
+IfcSlab in IfcSlab:
+  revit: 1
+  written: 1
+  box compared: 1
+  box within 0.01 ft: 1
+  volume compared: 1
+  volume within 0.01 %: 1
+  GlobalId equal: 1
+  Name equal: 1
+  PredefinedType equal: 1
+  Pset_OpeningElementCommon.Reference equal: 1
+  Pset_EnvironmentalImpactIndicators.Reference equal: 1
+  Depth in Revit's: 1
+IfcWall in IfcWall:
+  revit: 1
+none in IfcSlab:
+  revit: 35
+  written: 35
+  box compared: 35
+  box within 0.01 ft: 35
+  volume compared: 35
+  volume within 0.01 %: 35
+  Name equal: 35
+  PredefinedType equal: 35
+  Pset_OpeningElementCommon.Reference equal: 35
+  Pset_EnvironmentalImpactIndicators.Reference equal: 35
+none in IfcWall:
+  revit: 24
+  written: 24
+  box compared: 24
+  box within 0.01 ft: 24
+  volume compared: 24
+  volume within 0.01 %: 24
+  GlobalId equal: 24
+  Name equal: 24
+  PredefinedType equal: 24
+  Pset_OpeningElementCommon.Reference equal: 24
+  Pset_EnvironmentalImpactIndicators.Reference equal: 24
+  Depth in Revit's: 24
+  Depth equal: 24
+written that Revit's export does not: 4
+  IfcDoor in IfcWall: 1
+  IfcFireSuppressionTerminal in IfcWall: 2
+  none in IfcWall: 1
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+  extra: IfcDoor in IfcWall, Tag 1728679 in 1728013
+  extra: none in IfcWall, Tag 2793737 in 2114950
+  extra: IfcFireSuppressionTerminal in IfcWall, Tag 3387194 in 3363820
+  extra: IfcFireSuppressionTerminal in IfcWall, Tag 3390319 in 1728013
+exit 0

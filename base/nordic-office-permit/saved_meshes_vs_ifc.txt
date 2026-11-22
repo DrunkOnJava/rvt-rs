@@ -1,0 +1,22 @@
+frames: each file's site placement undone
+file-wide offset removed (ft): [-0.0, 0.0, 0.0]
+class                            n  <=0.01ft   <=0.1     <=1     >1  no ref
+IfcMember                    10029     10029       0       0      0       0
+IfcColumn                      289       289       0       0      0       0
+IfcDoor                        269       269       0       0      0       0
+IfcPlate                       269       269       0       0      0       0
+IfcWindow                      265       265       0       0      0       0
+IfcSanitaryTerminal             91        91       0       0      0       0
+IfcWasteTerminal                78        78       0       0      0       0
+IfcFurniture                    68        68       0       0      0       0
+IfcElectricAppliance            51        51       0       0      0       0
+IfcLightFixture                 43        43       0       0      0       0
+IfcFireSuppressionTerminal      40        40       0       0      0       0
+IfcRailing                      40        39       1       0      0       0
+IfcWall                         12         9       1       2      0       0
+IfcBuildingElementProxy         12        12       0       0      0       0
+IfcRamp                          5         5       0       0      0       0
+IfcStair                         2         2       0       0      0       0
+IfcAirTerminal                   1         1       0       0      0       0
+total                        11564     11560       2       2      0       0
+exit 0

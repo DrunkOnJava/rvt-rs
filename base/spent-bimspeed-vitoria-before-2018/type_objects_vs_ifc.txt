@@ -1,0 +1,13 @@
+Revit types 1284 elements; 1280 of them are in ours
+typed in ours: 1005 of 1280
+  entity agrees: 1005 of 1005
+  name agrees: 0 of 1005
+  tag agrees: 938 of 1005
+  global_id agrees: 414 of 1005
+typed in ours but not in Revit's export: 8
+untyped in ours, by class: {'IfcWall': 2, 'IfcWallStandardCase': 6, 'IfcWindow': 70, 'IfcCurtainWall': 9, 'IfcDoor': 2, 'IfcFlowSegment': 104, 'IfcFlowFitting': 74, 'IfcBuildingElementProxy': 8}
+disagreements: {('name', 'IfcWallStandardCase'): 229, ('name', 'IfcWall'): 10, ('name', 'IfcColumn'): 114, ('global_id', 'IfcColumn'): 114, ('name', 'IfcSlab'): 9, ('global_id', 'IfcSlab'): 5, ('name', 'IfcDoor'): 66, ('global_id', 'IfcDoor'): 66, ('name', 'IfcPlate'): 67, ('name', 'IfcMember'): 206, ('global_id', 'IfcMember'): 203, ('global_id', 'IfcPlate'): 66, ('name', 'IfcBeam'): 1, ('name', 'IfcBuildingElementProxy'): 35, ('name', 'IfcFlowSegment'): 140, ('name', 'IfcFlowFitting'): 128, ('global_id', 'IfcFlowFitting'): 121, ('global_id', 'IfcBuildingElementProxy'): 16}
+left out, Revit writes a value: {('tag', 'IfcPlate'): 67}
+TypeName carried: 1079 of 1280; equal to Revit's type: 1079
+type objects in ours: 112
+exit 0

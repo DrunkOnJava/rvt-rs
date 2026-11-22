@@ -1,0 +1,12 @@
+wall rules: base sources none
+wall rules: end sources none
+wall rules: ends order dependent 0
+wall rules: base refusals none
+wall rules: end refusals none
+wall rules: end reads unmarked none
+wall rules: profile sources wall_profile_sloped_and_level_past_both_ends=1 wall_profile_sloped_past_the_low_end=1
+wall rules: profile refusals profile_cut_not_read_at_the_wall_end=1 profile_level_cut_between_two_lines=1
+wall rules: profile height checks carried_level_high=1 carried_sloped_high_falling_below=1 carried_sloped_low_falling_below=2
+wall rules: top stubs cut none
+wall rules: profile top sources none
+wall rules: profile cuts wall_profile_cut_in_body=2

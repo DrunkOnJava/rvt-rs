@@ -1,0 +1,36 @@
+IfcBeamType PredefinedType: rvt-rs {'BEAM': 1}, Revit {'BEAM': 8}
+IfcBuildingElementProxyType PredefinedType: rvt-rs {'NOTDEFINED': 4}, Revit {'USERDEFINED': 1}
+IfcColumnType PredefinedType: rvt-rs {'COLUMN': 2}, Revit {'COLUMN': 5}
+IfcCurtainWallType PredefinedType: rvt-rs {'NOTDEFINED': 2}, Revit {'NOTDEFINED': 2}
+IfcGeographicElementType PredefinedType: rvt-rs {'NOTDEFINED': 1, 'USERDEFINED': 10}, Revit {'NOTDEFINED': 1, 'TERRAIN': 30, 'USERDEFINED': 11}
+IfcMemberType PredefinedType: rvt-rs {'MULLION': 7}, Revit {'MULLION': 7}
+IfcRailingType PredefinedType: rvt-rs {'GUARDRAIL': 1}, Revit {}
+IfcRampType PredefinedType: rvt-rs {'NOTDEFINED': 1}, Revit {}
+IfcSlabType PredefinedType: rvt-rs {'FLOOR': 2}, Revit {'FLOOR': 2}
+IfcStairFlightType PredefinedType: rvt-rs {'STRAIGHT': 1}, Revit {'STRAIGHT': 1}
+IfcStairType PredefinedType: rvt-rs {'STRAIGHT_RUN_STAIR': 1}, Revit {'STRAIGHT_RUN_STAIR': 1}
+IfcWallType PredefinedType: rvt-rs {'POLYGONAL': 1, 'SOLIDWALL': 2}, Revit {'POLYGONAL': 1, 'SOLIDWALL': 2}
+IfcWasteTerminalType PredefinedType: rvt-rs {'GULLYSUMP': 16, 'NOTDEFINED': 9}, Revit {'GULLYSUMP': 16, 'NOTDEFINED': 9, 'WASTEDISPOSALUNIT': 3}
+IfcSpace PredefinedType, all: rvt-rs {'SPACE': 8}, Revit {'SPACE': 8}
+IfcStair: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'STRAIGHT_RUN_STAIR': 1}
+IfcStairFlight: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'STRAIGHT': 1}
+IfcSlab: 2 in both; same 2, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'FLOOR': 2}
+IfcMember: 414 in both; same 414, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'MULLION': 414}
+IfcSpace: 8 in both; same 8, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'SPACE': 8}
+other classes (every IfcElement class with a PredefinedType not read above):
+IfcBeam: 8 in both; same 8, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'BEAM': 8}
+IfcBuildingElementProxy: 1 in both; same 0, differs 0, unset in rvt-rs 1, NOTDEFINED where Revit writes none 0; Revit's: {'USERDEFINED': 1}
+  1337778: rvt-rs -, Revit USERDEFINED
+IfcColumn: 5 in both; same 5, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'COLUMN': 5}
+IfcCurtainWall: 4 in both; same 4, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 4}
+IfcGeographicElement: 23 in both; same 20, differs 0, unset in rvt-rs 3, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 3, 'USERDEFINED': 20}
+  1414066: rvt-rs -, Revit NOTDEFINED
+  1414169: rvt-rs -, Revit NOTDEFINED
+  1414315: rvt-rs -, Revit NOTDEFINED
+IfcRailing: 2 in both; same 2, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'GUARDRAIL': 2}
+IfcRamp: 1 in both; same 0, differs 0, unset in rvt-rs 1, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 1}
+  1354425: rvt-rs -, Revit NOTDEFINED
+IfcWall: 14 in both; same 14, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'POLYGONAL': 2, 'SOLIDWALL': 12}
+IfcWasteTerminal: 25 in both; same 25, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'GULLYSUMP': 16, 'NOTDEFINED': 9}
+  not paired by Tag: in Revit's only {'IfcGeographicElement': 42, 'IfcRampFlight': 1, 'IfcWasteTerminal': 3}, in rvt-rs's only {'IfcBuildingElementProxy': 3}
+exit 0

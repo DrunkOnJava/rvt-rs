@@ -1,0 +1,11 @@
+    100  IfcCurtainWall: neither aggregates
+    198  IfcDoor: neither aggregates
+     68  IfcDoor: same whole
+      2  IfcMember: only Revit aggregates
+   7874  IfcMember: same whole
+    269  IfcPlate: same whole
+     16  IfcRailing: neither aggregates
+     25  IfcRailing: same whole
+     31  IfcStairFlight: same whole
+    265  IfcWindow: neither aggregates
+exit 0

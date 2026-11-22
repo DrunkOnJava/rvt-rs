@@ -1,0 +1,2 @@
+      1  IfcRailing: neither aggregates
+exit 0

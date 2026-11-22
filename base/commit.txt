@@ -1,0 +1,1 @@
+6ad5efa9ff25b920409e8e4661932cd486c2ab80 fix(ifc): a material's colour reaches IFC viewers through an IfcMaterialDefinitionRepresentation (#1940)

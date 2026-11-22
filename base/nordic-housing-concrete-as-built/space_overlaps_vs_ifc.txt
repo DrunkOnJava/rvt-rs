@@ -1,0 +1,13 @@
+space overlaps: stored solid: 81 rooms; walls: above 0.1% of the area on 11, above 1% on 10, above 5% on 1, largest 100.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
+space overlaps: upward faces, stored solid: 81 paired rooms, area within 0.1% of Revit's on 81
+space overlaps: downward faces, stored solid: 81 paired rooms, area within 0.1% of Revit's on 81
+space overlaps: every face, stored solid: 81 paired rooms, area within 0.1% of Revit's on 81
+  24TxGm999FbvRf4JKxLIka: stored_solid, up 0.48, floor 0.48, every face 0.48 ft2 (Revit up 0.48, floor 0.48, every face 0.48 ft2), inside walls 0.48 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  2uxBa8No59SPx_vyQ5L0Bw: stored_solid, up 22.72, floor 22.72, every face 22.72 ft2 (Revit up 22.72, floor 22.72, every face 22.72 ft2), inside walls 0.87 ft2 (3.81%), inside other rooms 0.00 ft2 (0.00%)
+  0oZmTuDBr4k807rNdrZMcw: stored_solid, up 22.72, floor 22.72, every face 22.72 ft2 (Revit up 22.72, floor 22.72, every face 22.72 ft2), inside walls 0.87 ft2 (3.81%), inside other rooms 0.00 ft2 (0.00%)
+  1bre7J1hn8KxwCbFTYwEps: stored_solid, up 22.72, floor 22.72, every face 22.72 ft2 (Revit up 22.72, floor 22.72, every face 22.72 ft2), inside walls 0.87 ft2 (3.81%), inside other rooms 0.00 ft2 (0.00%)
+  3QFdhgjZ16g8zXqCOuomaL: stored_solid, up 53.13, floor 53.13, every face 53.13 ft2 (Revit up 53.13, floor 53.13, every face 53.13 ft2), inside walls 1.15 ft2 (2.17%), inside other rooms 0.00 ft2 (0.00%)
+  2uxBa8No59SPx_vyQ5L0Bz: stored_solid, up 52.79, floor 52.79, every face 52.79 ft2 (Revit up 52.79, floor 52.79, every face 52.79 ft2), inside walls 1.10 ft2 (2.07%), inside other rooms 0.00 ft2 (0.00%)
+  0oZmTuDBr4k807rNdrZMcr: stored_solid, up 52.79, floor 52.79, every face 52.79 ft2 (Revit up 52.79, floor 52.79, every face 52.79 ft2), inside walls 1.10 ft2 (2.07%), inside other rooms 0.00 ft2 (0.00%)
+  1bre7J1hn8KxwCbFTYwEpe: stored_solid, up 52.79, floor 52.79, every face 52.79 ft2 (Revit up 52.79, floor 52.79, every face 52.79 ft2), inside walls 1.10 ft2 (2.07%), inside other rooms 0.00 ft2 (0.00%)
+exit 0

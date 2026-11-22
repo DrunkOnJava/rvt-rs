@@ -1,0 +1,183 @@
+Revit values on objects rvt-rs writes: 7321; equal: 6570; different: 1; missing: 750; rvt-rs values Revit does not write: 32
+values on a key that more than one object of Revit's export holds, scored against the object held, in the totals above (#1576): 24 on 9 such keys; equal 15, different 0, missing 9
+values on a key that more than one object of Revit's export holds, whose objects hold different values, counted apart (#1576): 10 on 5 such keys
+  on a repeated key, Pset_SpaceCommon.Reference: 5 counted apart
+  on a repeated key, Pset_SpaceHeaterTypeCommon.Reference: 5 counted apart
+  Pset_BeamCommon.IsExternal: 24, equal 22, different 0, missing 2
+  Pset_BeamCommon.LoadBearing: 24, equal 24, different 0, missing 0
+  Pset_BeamCommon.Reference: 22, equal 22, different 0, missing 0
+  Pset_BeamCommon.Roll: 22, equal 21, different 0, missing 1
+  Pset_BeamCommon.Slope: 22, equal 21, different 0, missing 1
+  Pset_BeamCommon.Span: 22, equal 21, different 0, missing 1
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.IsExternal: 6, equal 3, different 0, missing 3
+  Pset_BuildingElementProxyCommon.Reference: 4, equal 3, different 0, missing 1
+  Pset_BuildingStoreyCommon.AboveGround: 9, equal 8, different 0, missing 1
+  Pset_BuildingStoreyCommon.EntranceLevel: 1, equal 1, different 0, missing 0
+  Pset_BuildingStoreyCommon.Reference: 9, equal 8, different 0, missing 1
+  Pset_BuildingSystemCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_ColumnCommon.IsExternal: 10, equal 7, different 0, missing 3
+  Pset_ColumnCommon.LoadBearing: 6, equal 6, different 0, missing 0
+  Pset_ColumnCommon.Reference: 7, equal 7, different 0, missing 0
+  Pset_ColumnCommon.Slope: 3, equal 0, different 0, missing 3
+  Pset_CoveringCommon.Finish: 19, equal 19, different 0, missing 0
+  Pset_CoveringCommon.IsExternal: 111, equal 87, different 0, missing 24
+  Pset_CoveringCommon.Reference: 88, equal 87, different 0, missing 1
+  Pset_CurtainWallCommon.FireRating: 3, equal 3, different 0, missing 0
+  Pset_CurtainWallCommon.IsExternal: 23, equal 20, different 0, missing 3
+  Pset_CurtainWallCommon.Reference: 20, equal 20, different 0, missing 0
+  Pset_DoorCommon.AcousticRating: 15, equal 15, different 0, missing 0
+  Pset_DoorCommon.FireExit: 29, equal 29, different 0, missing 0
+  Pset_DoorCommon.FireRating: 17, equal 17, different 0, missing 0
+  Pset_DoorCommon.HandicapAccessible: 68, equal 68, different 0, missing 0
+  Pset_DoorCommon.IsExternal: 94, equal 69, different 0, missing 25
+  Pset_DoorCommon.Reference: 74, equal 74, different 0, missing 0
+  Pset_DoorCommon.ThermalTransmittance: 18, equal 16, different 0, missing 2
+  Pset_DoorWindowGlazingType.IsLaminated: 43, equal 43, different 0, missing 0
+  Pset_DoorWindowGlazingType.IsTempered: 29, equal 29, different 0, missing 0
+  Pset_ElectricApplianceTypeCommon.Reference: 41, equal 41, different 0, missing 0
+  Pset_EnvironmentalImpactIndicators.Reference: 1465, equal 1456, different 0, missing 9
+  Pset_FurnitureTypeCommon.IsBuiltIn: 41, equal 0, different 0, missing 41
+  Pset_FurnitureTypeCommon.Reference: 107, equal 107, different 0, missing 0
+  Pset_ManufacturerTypeInformation.Manufacturer: 9, equal 9, different 0, missing 0
+  Pset_MemberCommon.IsExternal: 2, equal 2, different 0, missing 0
+  Pset_MemberCommon.Reference: 356, equal 354, different 0, missing 2
+  Pset_MemberCommon.Slope: 2, equal 0, different 0, missing 2
+  Pset_MemberCommon.Span: 354, equal 354, different 0, missing 0
+  Pset_OpeningElementCommon.Reference: 35, equal 35, different 0, missing 0
+  Pset_PipeSegmentTypeCommon.Reference: 3, equal 0, different 0, missing 3
+  Pset_PlateCommon.Reference: 78, equal 78, different 0, missing 0
+  Pset_RailingCommon.Height: 43, equal 43, different 0, missing 0
+  Pset_RailingCommon.IsExternal: 43, equal 43, different 0, missing 0
+  Pset_RailingCommon.Reference: 43, equal 43, different 0, missing 0
+  Pset_RampCommon.IsExternal: 1, equal 1, different 0, missing 0
+  Pset_RampCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_RampFlightCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_ReinforcementBarPitchOfBeam.Reference: 22, equal 22, different 0, missing 0
+  Pset_ReinforcementBarPitchOfColumn.Description: 1, equal 0, different 0, missing 1
+  Pset_ReinforcementBarPitchOfColumn.Reference: 7, equal 7, different 0, missing 0
+  Pset_ReinforcementBarPitchOfSlab.Reference: 44, equal 42, different 0, missing 2
+  Pset_ReinforcementBarPitchOfWall.Reference: 369, equal 369, different 0, missing 0
+  Pset_RoofCommon.AcousticRating: 1, equal 1, different 0, missing 0
+  Pset_RoofCommon.IsExternal: 5, equal 4, different 0, missing 1
+  Pset_RoofCommon.LoadBearing: 2, equal 2, different 0, missing 0
+  Pset_RoofCommon.Reference: 4, equal 4, different 0, missing 0
+  Pset_SanitaryTerminalTypeCommon.Reference: 43, equal 43, different 0, missing 0
+  Pset_SlabCommon.AcousticRating: 11, equal 11, different 0, missing 0
+  Pset_SlabCommon.FireRating: 21, equal 21, different 0, missing 0
+  Pset_SlabCommon.IsExternal: 59, equal 42, different 0, missing 17
+  Pset_SlabCommon.LoadBearing: 35, equal 35, different 0, missing 0
+  Pset_SlabCommon.PitchAngle: 42, equal 36, different 0, missing 6
+  Pset_SlabCommon.Reference: 44, equal 42, different 0, missing 2
+  Pset_SlabCommon.ThermalTransmittance: 5, equal 5, different 0, missing 0
+  Pset_SolarDeviceTypeCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_SpaceCommon.CeilingCovering: 82, equal 0, different 0, missing 82
+  Pset_SpaceCommon.FloorCovering: 82, equal 0, different 0, missing 82
+  Pset_SpaceCommon.HandicapAccessible: 68, equal 68, different 0, missing 0
+  Pset_SpaceCommon.IsExternal: 179, equal 136, different 0, missing 43
+  Pset_SpaceCommon.Reference: 131, equal 131, different 0, missing 0
+  Pset_SpaceCommon.WallCovering: 82, equal 0, different 0, missing 82
+  Pset_SpaceHeaterTypeCommon.Reference: 131, equal 0, different 0, missing 131
+  Pset_StairCommon.IsExternal: 43, equal 37, different 1, missing 5
+  Pset_StairCommon.LoadBearing: 29, equal 29, different 0, missing 0
+  Pset_StairCommon.NosingLength: 9, equal 8, different 0, missing 1
+  Pset_StairCommon.NumberOfRiser: 9, equal 6, different 0, missing 3
+  Pset_StairCommon.NumberOfTreads: 9, equal 1, different 0, missing 8
+  Pset_StairCommon.Reference: 38, equal 34, different 0, missing 4
+  Pset_StairCommon.RiserHeight: 7, equal 5, different 0, missing 2
+  Pset_StairCommon.TreadLength: 7, equal 5, different 0, missing 2
+  Pset_StairCommon.TreadLengthAtInnerSide: 7, equal 5, different 0, missing 2
+  Pset_StairCommon.TreadLengthAtOffset: 7, equal 5, different 0, missing 2
+  Pset_StairFlightCommon.NosingLength: 23, equal 14, different 0, missing 9
+  Pset_StairFlightCommon.NumberOfRiser: 20, equal 9, different 0, missing 11
+  Pset_StairFlightCommon.NumberOfTreads: 20, equal 9, different 0, missing 11
+  Pset_StairFlightCommon.Reference: 49, equal 11, different 0, missing 38
+  Pset_StairFlightCommon.RiserHeight: 18, equal 9, different 0, missing 9
+  Pset_StairFlightCommon.TreadLength: 18, equal 9, different 0, missing 9
+  Pset_StairFlightCommon.TreadLengthAtInnerSide: 18, equal 9, different 0, missing 9
+  Pset_StairFlightCommon.TreadLengthAtOffset: 18, equal 9, different 0, missing 9
+  Pset_TransportElementCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_WallCommon.AcousticRating: 105, equal 104, different 0, missing 1
+  Pset_WallCommon.ExtendToStructure: 369, equal 369, different 0, missing 0
+  Pset_WallCommon.FireRating: 73, equal 73, different 0, missing 0
+  Pset_WallCommon.IsExternal: 390, equal 369, different 0, missing 21
+  Pset_WallCommon.LoadBearing: 369, equal 369, different 0, missing 0
+  Pset_WallCommon.Reference: 369, equal 369, different 0, missing 0
+  Pset_WallCommon.ThermalTransmittance: 85, equal 85, different 0, missing 0
+  Pset_WasteTerminalTypeCommon.Reference: 14, equal 14, different 0, missing 0
+  Pset_WindowCommon.AcousticRating: 52, equal 52, different 0, missing 0
+  Pset_WindowCommon.IsExternal: 75, equal 64, different 0, missing 11
+  Pset_WindowCommon.Reference: 64, equal 64, different 0, missing 0
+  Pset_WindowCommon.ThermalTransmittance: 64, equal 64, different 0, missing 0
+Revit values known to be wrong, left out (RE-235 §5): Pset_StairCommon.WalkingLineOffset 7
+Revit values known to be wrong, left out (RE-235 §5): Pset_StairFlightCommon.WalkingLineOffset 18
+Revit values known to be wrong, left out (RE-235 §5, RE-269): Pset_MemberCommon.IsExternal on curtain members 354
+Revit values known to be wrong, left out (RE-235 §5, RE-269): Pset_MemberCommon.IsExternal on types 3
+Revit values known to be wrong, left out (RE-235 §5, RE-269): Pset_PlateCommon.IsExternal on curtain members 78
+Revit values the project's own property set file places, out of scope (RE-239), not scored: 123
+  Pset_DoorWindowGlazingType.IsLaminated: 18
+  Pset_DoorWindowGlazingType.IsTempered: 18
+  Pset_SpaceOccupancyRequirements.OccupancyNumber: 3
+  Pset_SpaceOccupancyRequirements.OccupancyType: 82
+  Pset_SpaceOccupancyRequirements.ParkingUnits: 2
+Revit values on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut), not scored: 63
+  Pset_DoorWindowGlazingType.IsLaminated: 3
+  Pset_DoorWindowGlazingType.IsTempered: 9
+  Pset_EnvironmentalImpactIndicators.Reference: 20
+  Pset_OpeningElementCommon.FireExit: 11
+  Pset_OpeningElementCommon.Reference: 20
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+  Pset_CoveringCommon.IsExternal: 2, 0
+  Pset_EnvironmentalImpactIndicators.Reference: 0, 12
+  Pset_OpeningElementCommon.Reference: 0, 1
+  Pset_ReinforcementBarPitchOfWall.Reference: 1, 0
+  Pset_SanitaryTerminalTypeCommon.Reference: 0, 11
+  Pset_WallCommon.ExtendToStructure: 1, 0
+  Pset_WallCommon.FireRating: 1, 0
+  Pset_WallCommon.IsExternal: 1, 0
+  Pset_WallCommon.LoadBearing: 1, 0
+  Pset_WallCommon.Reference: 1, 0
+Revit's most common values where rvt-rs writes none:
+  Pset_SpaceHeaterTypeCommon.Reference: ('IfcIdentifier', 'Turning Free Space 1500') x33, ('IfcIdentifier', 'ROOM') x21, ('IfcIdentifier', 'CHASE') x10, ('IfcIdentifier', 'Turning Free Space 1300') x9; on IfcSpace x131
+  Pset_SpaceCommon.CeilingCovering: ('IfcText', 'KMP-1') x28, ('IfcText', 'APA-1') x16, ('IfcText', 'AKS-1') x13, ('IfcText', 'KXX-1') x11; on IfcSpace x82
+  Pset_SpaceCommon.FloorCovering: ('IfcText', 'LPA-1') x36, ('IfcText', 'LKL-3') x12, ('IfcText', 'LXX-1') x11, ('IfcText', 'LLI-1') x6; on IfcSpace x82
+  Pset_SpaceCommon.WallCovering: ('IfcText', 'SMP-1') x43, ('IfcText', 'SXX-1') x11, ('IfcText', 'SSL-3') x9, ('IfcText', 'SMP-1;SSL-4') x7; on IfcSpace x82
+  Pset_SpaceCommon.IsExternal: ('IfcBoolean', False) x43; on IfcSpaceType x43
+  Pset_FurnitureTypeCommon.IsBuiltIn: ('IfcBoolean', True) x41; on IfcFurnitureType x41
+  Pset_StairFlightCommon.Reference: ('IfcIdentifier', 'VKV-2.kattoporrasaskelma') x23, ('IfcIdentifier', 'VKV-2.kattoporras') x6, ('IfcIdentifier', 'POR-1') x4, ('IfcIdentifier', 'POR-3.ulkoporras') x2; on IfcStair x38
+  Pset_DoorCommon.IsExternal: ('IfcBoolean', False) x22, ('IfcBoolean', True) x3; on IfcDoorType x20, IfcDoor x5
+  Pset_CoveringCommon.IsExternal: ('IfcBoolean', False) x24; on IfcCoveringType x23, IfcCovering x1
+  Pset_WallCommon.IsExternal: ('IfcBoolean', False) x12, ('IfcBoolean', True) x9; on IfcWallType x21
+  Pset_SlabCommon.IsExternal: ('IfcBoolean', True) x15, ('IfcBoolean', False) x2; on IfcSlabType x15, IfcSlab x2
+  Pset_StairFlightCommon.NumberOfRiser: ('IfcCountMeasure', 8.0) x4, ('IfcCountMeasure', 18.0) x4, ('IfcCountMeasure', 0.0) x2, ('IfcCountMeasure', 7.0) x1; on IfcStair x7, IfcStairFlight x2, IfcStairType x2
+  Pset_StairFlightCommon.NumberOfTreads: ('IfcCountMeasure', 8.0) x4, ('IfcCountMeasure', 16.0) x4, ('IfcCountMeasure', 0.0) x2, ('IfcCountMeasure', 6.0) x1; on IfcStair x7, IfcStairFlight x2, IfcStairType x2
+  Pset_WindowCommon.IsExternal: ('IfcBoolean', False) x11; on IfcWindowType x11
+  Pset_StairFlightCommon.NosingLength: ('IfcLengthMeasure', 0.0) x9; on IfcStair x7, IfcStairType x2
+  Pset_StairFlightCommon.RiserHeight: ('IfcPositiveLengthMeasure', 0.1299999999999997) x4, ('IfcPositiveLengthMeasure', 0.16277777777777783) x2, ('IfcPositiveLengthMeasure', 0.1142857142857143) x1, ('IfcPositiveLengthMeasure', 0.17222222222223074) x1; on IfcStair x7, IfcStairFlight x2
+  Pset_StairFlightCommon.TreadLength: ('IfcPositiveLengthMeasure', 0.4) x4, ('IfcPositiveLengthMeasure', 0.27) x4, ('IfcPositiveLengthMeasure', 0.39) x1; on IfcStair x7, IfcStairFlight x2
+  Pset_StairFlightCommon.TreadLengthAtInnerSide: ('IfcPositiveLengthMeasure', 0.4) x4, ('IfcPositiveLengthMeasure', 0.27) x4, ('IfcPositiveLengthMeasure', 0.39) x1; on IfcStair x7, IfcStairFlight x2
+  Pset_StairFlightCommon.TreadLengthAtOffset: ('IfcPositiveLengthMeasure', 0.4) x4, ('IfcPositiveLengthMeasure', 0.27) x4, ('IfcPositiveLengthMeasure', 0.39) x1; on IfcStair x7, IfcStairFlight x2
+  Pset_EnvironmentalImpactIndicators.Reference: ('IfcIdentifier', 'POR-1') x4, ('IfcIdentifier', 'HLV-1.125') x3, ('IfcIdentifier', 'Stringer - YLEISMATERIAALIT - 50 mm Width x2; on IfcStair x4, IfcFlowSegment x3, IfcMember x2
+  Pset_StairCommon.NumberOfTreads: ('IfcCountMeasure', 16.0) x4, ('IfcCountMeasure', 8.0) x2, ('IfcCountMeasure', 6.0) x1, ('IfcCountMeasure', 0.0) x1; on IfcStair x7, IfcStairType x1
+  Pset_SlabCommon.PitchAngle: ('IfcPlaneAngleMeasure', 0.0) x5, ('IfcPlaneAngleMeasure', 0.06359238994724237) x1; on IfcSlab x6
+  Pset_StairCommon.IsExternal: ('IfcBoolean', True) x3, ('IfcBoolean', False) x2; on IfcStairType x5
+  Pset_StairCommon.Reference: ('IfcIdentifier', 'POR-1') x4; on IfcStair x4
+  Pset_BuildingElementProxyCommon.IsExternal: ('IfcBoolean', False) x3; on IfcBuildingElementProxyType x2, IfcBuilding x1
+  Pset_StairCommon.NumberOfRiser: ('IfcCountMeasure', 8.0) x2, ('IfcCountMeasure', 0.0) x1; on IfcStair x2, IfcStairType x1
+  Pset_PipeSegmentTypeCommon.Reference: ('IfcIdentifier', 'HLV-1.125') x3; on IfcFlowSegment x3
+  Pset_ColumnCommon.Slope: ('IfcPlaneAngleMeasure', 0.0) x3; on IfcColumn x3
+  Pset_CurtainWallCommon.IsExternal: ('IfcBoolean', True) x3; on IfcCurtainWallType x3
+  Pset_ColumnCommon.IsExternal: ('IfcBoolean', False) x3; on IfcColumnType x3
+  Pset_StairCommon.RiserHeight: ('IfcPositiveLengthMeasure', 0.1299999999999997) x2; on IfcStair x2
+  Pset_StairCommon.TreadLength: ('IfcPositiveLengthMeasure', 0.4) x2; on IfcStair x2
+  Pset_StairCommon.TreadLengthAtInnerSide: ('IfcPositiveLengthMeasure', 0.4) x2; on IfcStair x2
+  Pset_StairCommon.TreadLengthAtOffset: ('IfcPositiveLengthMeasure', 0.4) x2; on IfcStair x2
+  Pset_ReinforcementBarPitchOfSlab.Reference: ('IfcLabel', 'VK-2') x1, ('IfcLabel', 'KA-1') x1; on IfcSlab x2
+  Pset_SlabCommon.Reference: ('IfcIdentifier', 'VK-2') x1, ('IfcIdentifier', 'KA-1') x1; on IfcSlab x2
+  Pset_MemberCommon.Reference: ('IfcIdentifier', 'Stringer - YLEISMATERIAALIT - 50 mm Width x2; on IfcMember x2
+  Pset_MemberCommon.Slope: ('IfcPlaneAngleMeasure', 1.570796326794895) x2; on IfcMember x2
+  Pset_DoorCommon.ThermalTransmittance: ('IfcThermalTransmittanceMeasure', 1.0) x1, ('IfcThermalTransmittanceMeasure', 4.0) x1; on IfcDoorType x2
+  Pset_BeamCommon.IsExternal: ('IfcBoolean', False) x2; on IfcBeamType x2
+exit 0

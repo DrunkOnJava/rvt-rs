@@ -1,0 +1,26 @@
+Revit's export: 147 IfcSpace, 43 named Family:Type:ElementId
+  Name: Family:Type:ElementId 43
+  LongName: None 43
+  ObjectType: Pyörähdysympyrä 43:Turning Free Space 15 1, Pyörähdysympyrä 1:Turning Free Space 150 1, Pyörähdysympyrä 2:Turning Free Space 150 1, Pyörähdysympyrä 4:Turning Free Space 150 1, Pyörähdysympyrä 6:Turning Free Space 150 1, Pyörähdysympyrä 7:Turning Free Space 150 1, Pyörähdysympyrä 8:Turning Free Space 150 1, Pyörähdysympyrä 11:Turning Free Space 15 1, Pyörähdysympyrä 12:Turning Free Space 15 1, Pyörähdysympyrä 13:Turning Free Space 15 1, Pyörähdysympyrä 14:Turning Free Space 15 1, Pyörähdysympyrä 15:Turning Free Space 15 1, Pyörähdysympyrä 16:Turning Free Space 15 1, Pyörähdysympyrä 17:Turning Free Space 15 1, Pyörähdysympyrä 18:Turning Free Space 15 1, Pyörähdysympyrä 10:Turning Free Space 15 1, Pyörähdysympyrä 19:Turning Free Space 15 1, Pyörähdysympyrä 20:Turning Free Space 15 1, Pyörähdysympyrä 21:Turning Free Space 15 1, Pyörähdysympyrä 22:Turning Free Space 15 1, Pyörähdysympyrä 23:Turning Free Space 15 1, Pyörähdysympyrä 24:Turning Free Space 15 1, Pyörähdysympyrä 25:Turning Free Space 15 1, Pyörähdysympyrä 26:Turning Free Space 15 1, Pyörähdysympyrä 27:Turning Free Space 15 1, VOLUME:VOLUME 1, Pyörähdysympyrä 42:Turning Free Space 13 1, Pyörähdysympyrä 28:Turning Free Space 13 1, Pyörähdysympyrä 29:Turning Free Space 13 1, Pyörähdysympyrä 30:Turning Free Space 13 1, Pyörähdysympyrä 31:Turning Free Space 13 1, Pyörähdysympyrä 32:Turning Free Space 13 1, Pyörähdysympyrä 33:Turning Free Space 13 1, Pyörähdysympyrä 34:Turning Free Space 13 1, Pyörähdysympyrä 35:Turning Free Space 13 1, Pyörähdysympyrä 36:Turning Free Space 15 1, Pyörähdysympyrä 9:Turning Free Space 150 1, Pyörähdysympyrä 37:Turning Free Space 15 1, Pyörähdysympyrä 38:Turning Free Space 15 1, Pyörähdysympyrä 39:Turning Free Space 15 1, Pyörähdysympyrä 40:Turning Free Space 15 1, Pyörähdysympyrä 41:Turning Free Space 15 1, Pyörähdysympyrä 3:Turning Free Space 150 1
+  PredefinedType: INTERNAL 42, SPACE 1
+  CompositionType: None 43
+  relation: in nothing 43
+  body: Body/MappedRepresentation:IfcMappedItem 43
+  type object: IfcSpaceType INTERNAL 'Turning Free Space 1500' 33, IfcSpaceType INTERNAL 'Turning Free Space 1300' 9, IfcSpaceType SPACE 'VOLUME' 1
+  property set: Pset_SpaceCommon 43, Pset_SpaceHeaterTypeCommon 43, Qto_SpaceBaseQuantities 43
+  Pset_SpaceCommon.IsExternal: False 43
+  Pset_SpaceCommon.Reference: Turning Free Space 1500 33, Turning Free Space 1300 9, VOLUME 1
+  Pset_SpaceHeaterTypeCommon.Reference: Turning Free Space 1500 33, Turning Free Space 1300 9, VOLUME 1
+  Qto_SpaceBaseQuantities.GrossVolume: 3.5339878356621615 20, 2.6546789572144114 6, 3.533987835662161 4, 3.5505319933743285 4, 3.550531993374329 3, 2.6546789572144003 3
+  Qto_SpaceBaseQuantities.Height: 1820.0000221793603 1
+  Qto_SpaceBaseQuantities.NetVolume: 3.534002399349886 14, 3.5340023993498906 6, 2.6546289026847525 6, 3.5505466252411204 4, 3.534002399349907 3, 2.654628902684741 3
+rvt-rs writes the same Tags as: IfcSpace aggregated in IfcBuildingStorey 43
+  Name: equal 43
+  LongName: equal 43
+  ObjectType: equal 43
+  PredefinedType: equal 43
+  type object: equal 43
+  Pset_SpaceCommon.Reference: equal 43
+  Pset_SpaceCommon.IsExternal: equal 43
+  relation: differs (in nothing vs aggregated in IfcBuildingStorey) 43
+exit 0

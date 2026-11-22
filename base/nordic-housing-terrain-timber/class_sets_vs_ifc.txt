@@ -1,0 +1,70 @@
+Revit's export: 558 paired elements and spaces, 0 untagged and 7 repeated Tags left out
+rvt-rs's export: 513 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcBeam                               8      8      0      0  
+IfcBuildingElementProxy               1      1      0      0  
+IfcColumn                             5      5      0      0  
+IfcCurtainWall                        4      4      0      0  
+IfcFlowTerminal                       3      0      3      0  IfcBuildingElementProxy 3
+IfcGeographicElement                 65     23      0     42  
+IfcMember                           414    414      0      0  
+IfcRailing                            2      2      0      0  
+IfcRamp                               1      1      0      0  
+IfcRoof                               1      1      0      0  
+IfcSlab                               2      2      0      0  
+IfcSpace                              8      8      0      0  
+IfcStair                              1      1      0      0  
+IfcStairFlight                        1      1      0      0  
+IfcWall                              14     14      0      0  
+IfcWasteTerminal                     28     25      0      3  
+written as another class, by Revit's category and export value, and rvt-rs's:
+       3  IfcFlowTerminal -> IfcBuildingElementProxy  Revit '-' '-' PredefinedType - type IfcDistributionElementType -  rvt-rs 'Specialty Equipment' '-'  e.g. 1391837
+extra in rvt-rs's export, by class:
+missing IfcGeographicElement (42):
+  1346300  'Toposolid:maasto lähtötilanne:1346300'  'Toposolid:maasto lähtötilanne'  storey 'Sea level'  category '-'  export as '-'
+  1346420  'Toposolid:maasto muokattu:1346420'  'Toposolid:maasto muokattu'  storey 'Sea level'  category '-'  export as '-'
+  1352795  'Toposolid:maasto muokattu:1352795'  'Toposolid:maasto muokattu'  storey 'Sea level'  category '-'  export as '-'
+  1353755  'Toposolid:maasto muokattu:1353755'  'Toposolid:maasto muokattu'  storey 'Sea level'  category '-'  export as '-'
+  1390188  'Toposolid:maasto muokattu:1390188'  'Toposolid:maasto muokattu'  storey 'Sea level'  category '-'  export as '-'
+  1401118  'U2BicyclePost:PP-1:1401118'  'U2BicyclePost:PP-1'  storey 'Level_01'  category '-'  export as '-'
+  1401141  'U2BicyclePost:PP-1:1401141'  'U2BicyclePost:PP-1'  storey 'Level_01'  category '-'  export as '-'
+  1401149  'U2BicyclePost:PP-1:1401149'  'U2BicyclePost:PP-1'  storey 'Level_01'  category '-'  export as '-'
+  1401157  'U2BicyclePost:PP-1:1401157'  'U2BicyclePost:PP-1'  storey 'Level_01'  category '-'  export as '-'
+  1405348  'Sub-Division:1405348'  '-'  storey 'Level_01'  category '-'  export as '-'
+  1408083  'Sub-Division:1408083'  '-'  storey 'Basement'  category '-'  export as '-'
+  1410715  'Sub-Division:1410715'  '-'  storey 'Basement'  category '-'  export as '-'
+  1412422  'Sub-Division:1412422'  '-'  storey 'Basement'  category '-'  export as '-'
+  1413802  'Sub-Division:1413802'  '-'  storey 'Level_01'  category '-'  export as '-'
+  1413856  'Sub-Division:1413856'  '-'  storey 'Level_01'  category '-'  export as '-'
+  1435009  'U2BicyclePost:PP-1:1435009'  'U2BicyclePost:PP-1'  storey 'Level_01'  category '-'  export as '-'
+  1435010  'U2BicyclePost:PP-1:1435010'  'U2BicyclePost:PP-1'  storey 'Level_01'  category '-'  export as '-'
+  1435011  'U2BicyclePost:PP-1:1435011'  'U2BicyclePost:PP-1'  storey 'Level_01'  category '-'  export as '-'
+  1435178  'Sub-Division:1435178'  '-'  storey 'Basement'  category '-'  export as '-'
+  1437191  'Sub-Division:1437191'  '-'  storey 'Basement'  category '-'  export as '-'
+  1439124  'Sub-Division:1439124'  '-'  storey 'Basement'  category '-'  export as '-'
+  1440218  'Sub-Division:1440218'  '-'  storey 'Level_01'  category '-'  export as '-'
+  1440387  'Sub-Division:1440387'  '-'  storey 'Basement'  category '-'  export as '-'
+  1440938  'Sub-Division:1440938'  '-'  storey 'Basement'  category '-'  export as '-'
+  1442734  'Sub-Division:1442734'  '-'  storey 'Basement'  category '-'  export as '-'
+  1444164  'Sub-Division:1444164'  '-'  storey 'Level_01'  category '-'  export as '-'
+  1444345  'Sub-Division:1444345'  '-'  storey 'Level_01'  category '-'  export as '-'
+  1445971  'Sub-Division:1445971'  '-'  storey 'Basement'  category '-'  export as '-'
+  1446047  'Sub-Division:1446047'  '-'  storey 'Basement'  category '-'  export as '-'
+  1446315  'Sub-Division:1446315'  '-'  storey 'Basement'  category '-'  export as '-'
+  1446890  'Sub-Division:1446890'  '-'  storey 'Basement'  category '-'  export as '-'
+  1447153  'Sub-Division:1447153'  '-'  storey 'Basement'  category '-'  export as '-'
+  1448246  'Sub-Division:1448246'  '-'  storey 'Basement'  category '-'  export as '-'
+  1448464  'Sub-Division:1448464'  '-'  storey 'Basement'  category '-'  export as '-'
+  1448495  'Sub-Division:1448495'  '-'  storey 'Basement'  category '-'  export as '-'
+  1448772  'Sub-Division:1448772'  '-'  storey 'Basement'  category '-'  export as '-'
+  1450018  'Sub-Division:1450018'  '-'  storey 'Basement'  category '-'  export as '-'
+  1450372  'Sub-Division:1450372'  '-'  storey 'Basement'  category '-'  export as '-'
+  1450675  'Sub-Division:1450675'  '-'  storey 'Basement'  category '-'  export as '-'
+  1450911  'Sub-Division:1450911'  '-'  storey 'Basement'  category '-'  export as '-'
+  1456700  'Toposolid:maasto muokattu:1456700'  'Toposolid:maasto muokattu'  storey 'Sea level'  category '-'  export as '-'
+  1457309  'Toposolid:maasto muokattu:1457309'  'Toposolid:maasto muokattu'  storey 'Sea level'  category '-'  export as '-'
+missing IfcWasteTerminal (3):
+  1372207  'Molok_Domino 5m3_2x1_2:JÄ-2.syväkeräys:1372207'  'Molok_Domino 5m3_2x1_2:JÄ-2.syväkeräys'  storey 'Level_01'  category '-'  export as '-'
+  1378985  'Molok_Domino 5m3_3x1_3:JÄ-3.syväkeräys:1378985'  'Molok_Domino 5m3_3x1_3:JÄ-3.syväkeräys'  storey 'Level_01'  category '-'  export as '-'
+  1387854  'Molok_Domino 5m3_2_3_1_3:JÄ-1.syväkeräys:1387854'  'Molok_Domino 5m3_2_3_1_3:JÄ-1.syväkeräys'  storey 'Level_01'  category '-'  export as '-'
+exit 0

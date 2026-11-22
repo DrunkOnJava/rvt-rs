@@ -1,0 +1,5 @@
+elements Revit gives materials: 10412
+of those, rvt-rs gives materials: 10309, the same set: 9775
+different sets by Revit entity: {'IfcWindow': 265, 'IfcDoor': 167, 'IfcColumn': 55, 'IfcSanitaryTerminal': 27, 'IfcWall': 11, 'IfcBeam': 8, 'IfcSlab': 1}
+no materials from rvt-rs, by Revit entity: {'IfcRailing': 41, 'IfcStairFlight': 31, 'IfcSlab': 26, 'IfcRamp': 4, 'IfcBuildingElementProxy': 1}
+exit 0

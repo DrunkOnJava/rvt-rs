@@ -1,0 +1,32 @@
+IfcBuildingElementProxyType PredefinedType: rvt-rs {'NOTDEFINED': 3}, Revit {'NOTDEFINED': 3}
+IfcDoorType PredefinedType: rvt-rs {'DOOR': 1}, Revit {'DOOR': 1}
+IfcMemberType PredefinedType: rvt-rs {'STRINGER': 1}, Revit {'STRINGER': 1}
+IfcRailingType PredefinedType: rvt-rs {'NOTDEFINED': 1}, Revit {'NOTDEFINED': 1}
+IfcRoofType PredefinedType: rvt-rs {'NOTDEFINED': 1}, Revit {'NOTDEFINED': 1}
+IfcStairFlightType PredefinedType: rvt-rs {'STRAIGHT': 1}, Revit {'STRAIGHT': 1}
+IfcStairType PredefinedType: rvt-rs {'STRAIGHT_RUN_STAIR': 1}, Revit {'STRAIGHT_RUN_STAIR': 1}
+IfcWallType PredefinedType: rvt-rs {'NOTDEFINED': 1}, Revit {'STANDARD': 1}
+IfcWindowType PredefinedType: rvt-rs {'WINDOW': 1}, Revit {'WINDOW': 1}
+IfcSpace PredefinedType, all: rvt-rs {'SPACE': 2}, Revit {'NOTDEFINED': 2}
+IfcStair: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'STRAIGHT_RUN_STAIR': 1}
+IfcStairFlight: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'STRAIGHT': 1}
+IfcMember: 2 in both; same 2, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'STRINGER': 2}
+other classes (every IfcElement class with a PredefinedType not read above):
+IfcBuildingElementProxy: 9 in both; same 0, differs 0, unset in rvt-rs 9, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 9}
+  12540: rvt-rs -, Revit NOTDEFINED
+  12541: rvt-rs -, Revit NOTDEFINED
+  12542: rvt-rs -, Revit NOTDEFINED
+  12562: rvt-rs -, Revit NOTDEFINED
+  12563: rvt-rs -, Revit NOTDEFINED
+  12564: rvt-rs -, Revit NOTDEFINED
+IfcDoor: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'DOOR': 1}
+IfcOpeningElement: 4 in both; same 4, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'OPENING': 4}
+IfcRailing: 2 in both; same 0, differs 0, unset in rvt-rs 2, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 2}
+  12898: rvt-rs -, Revit NOTDEFINED
+  12902: rvt-rs -, Revit NOTDEFINED
+IfcRoof: 1 in both; same 0, differs 0, unset in rvt-rs 1, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 1}
+  2901: rvt-rs -, Revit NOTDEFINED
+IfcWall: 5 in both; same 5, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 5}
+IfcWindow: 3 in both; same 3, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'WINDOW': 3}
+  not paired by Tag: in Revit's only {}, in rvt-rs's only {}
+exit 0

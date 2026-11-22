@@ -1,0 +1,16 @@
+record-box bodies: 4; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcRailing                         2       0       0       0       2       0       0    0.019
+         2  Railing:Railing 1
+IfcStair                           1       0       0       0       0       0       1      nan
+IfcStairFlight                     1       0       0       0       1       0       0    0.087
+         1  Monolithic Run:Monolithic Run
+total                              4       0       0       0       3       0       1
+box bodies by class and reason (SavedMeshRefusal, #1645): 4 of 4 have one
+IfcRailing                         2
+         2  partial: unsupported surface HermiteSurf
+IfcStair                           1
+         1  not_a_candidate: whole_drawn_by_its_parts
+IfcStairFlight                     1
+         1  partial: unsupported parametric profile curve GCylindricalHelix
+exit 0

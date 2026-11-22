@@ -1,0 +1,15 @@
+592 walls drawn in layers in the GLB
+     96  of them one layer
+    592  drawn in layers in the GLB and present in the IFC
+    592  compared
+    496  compared, two or more layers
+     96  compared, one layer
+  layer centres within 0.001 ft: 591 of 592
+  layer centres within 0.01 ft: 591 of 592
+  layer centres within 0.05 ft: 591 of 592
+  layer centres within 0.25 ft: 591 of 592
+  median 1.80e-06 ft, max 0.2871 ft
+  worst [(np.float64(0.0), 3729754), (np.float64(0.0), 3729842), (np.float64(0.0), 3730126), (np.float64(0.0), 3730127), (np.float64(0.0), 3730128), (np.float64(0.2871), 1347200)]
+compared layers' colours against Revit's surface styles:
+    786  same
+exit 0

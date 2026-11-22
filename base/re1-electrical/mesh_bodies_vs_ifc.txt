@@ -1,0 +1,35 @@
+saved_graphics_mesh bodies scored: 47; in Revit's export 47
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcBuildingElementProxy          28      28       22       28       22          28  1.0000
+        6       6        6        6        6           6  262726-RECEPT:120V Duplex
+        6       6        6        6        6           6  260923-SWITCH:120V Single Pole
+        6       6        0        6        0           6  283513-OCC:Occupancy Sensor
+        3       3        3        3        3           3  262726-RECEPT:120V Duplex GFCI Above Counter
+        2       2        2        2        2           2  262726-JBOX:JBox
+        1       1        1        1        1           1  262416-PANEL:120/208V_1P_125A_42 Circuits
+IfcFlowTerminal                  14      14        4       14        4          14  1.0046
+       10      10        0       10        0          10  265100-LIGHT-CAN:6"
+        2       2        2        2        2           2  265100-LIGHT-LED:24"x24"
+        2       2        2        2        2           2  230913-Thermostat:230913-Thermostat
+IfcDistributionControlElement      5       5        5        5        5           5  1.0000
+        1       1        1        1        1           1  284641-Strobe:Strobe Ceiling
+        1       1        1        1        1           1  284641-Horn Fire:Horn Ceiling
+        1       1        1        1        1           1  284631-Smoke Detector:Smoke Detector
+        1       1        1        1        1           1  284631-CO:Carbon Monoxide Detector Ceiling
+        1       1        1        1        1           1  284911-CO2:CO2 Detector Ceiling
+  441154 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009329 ft, rvt-rs's to Revit's 0.001575 ft
+  441150 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009328 ft, rvt-rs's to Revit's 0.001575 ft
+  441151 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009327 ft, rvt-rs's to Revit's 0.001575 ft
+  441152 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009327 ft, rvt-rs's to Revit's 0.001575 ft
+  441153 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009327 ft, rvt-rs's to Revit's 0.001575 ft
+  441155 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009324 ft, rvt-rs's to Revit's 0.001575 ft
+  441156 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009326 ft, rvt-rs's to Revit's 0.001575 ft
+  443943 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009324 ft, rvt-rs's to Revit's 0.001575 ft
+  443942 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009324 ft, rvt-rs's to Revit's 0.001575 ft
+  441149 IfcFlowTerminal '265100-LIGHT-CAN:6"': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009322 ft, rvt-rs's to Revit's 0.001575 ft
+  806286 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009333 ft, rvt-rs's to Revit's 0.001574 ft
+  806248 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009341 ft, rvt-rs's to Revit's 0.001573 ft
+  799007 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009336 ft, rvt-rs's to Revit's 0.001573 ft
+  806296 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009335 ft, rvt-rs's to Revit's 0.001573 ft
+  806274 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009328 ft, rvt-rs's to Revit's 0.001573 ft
+exit 0

@@ -1,0 +1,2 @@
+      9  system family | IfcWall | Name equal | ObjectType equal
+exit 0

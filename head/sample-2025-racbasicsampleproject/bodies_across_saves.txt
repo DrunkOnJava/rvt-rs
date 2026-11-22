@@ -1,0 +1,13 @@
+bodies across saves: sample-2025-racbasicsampleproject, held to the 2024 saves
+named 947498, 2025 save: no product with a body
+named 947498, 2024 save: no product with a body
+beams and landings: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 1 (IfcSlab 1)
+stair runs: not applicable, the 2025 save is the reference of the later saves and this is the 2025 save (2 drawn here)
+sketch outlines: of the 1 elements whose sketch holds an arc, 0 are outlines compared equal here (none); the other 1 are boxes here or not outlines
+sketch outlines: compared 12 against the 2024 save (IfcCovering 2, IfcSlab 10); left as boxes here, drawn in the 2024 save, not scored: 0
+named elements: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+pipes: not applicable, the 2025 save is the reference of the later saves and this is the 2025 save (0 drawn here)
+doors and windows: compared 17 against the 2024 save (IfcDoor 10, IfcWindow 7); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 14
+cut openings, ports and properties: not applicable, the 2025 save is the reference of the later saves and this is the 2025 save
+bodies across saves: PASS
+exit 0

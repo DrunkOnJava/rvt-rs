@@ -1,0 +1,159 @@
+IfcMember: 452 bodies, every 2th scored
+saved_graphics_mesh bodies scored: 769; in Revit's export 769
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcMember                       226     226      226      226      226         226  1.0000
+       96      96       96       96       96          96  Rectangular Mullion:Rima 22 x 50 mm
+       78      78       78       78       78          78  Rectangular Mullion:Liukulasituksen yläprofiili
+       44      44       44       44       44          44  Rectangular Mullion:Verhous 22 x 95 mm 2
+        4       4        4        4        4           4  Rectangular Mullion:50 x 50 mm
+        3       3        3        3        3           3  Carriage:Carriage - Liimapuu
+        1       1        1        1        1           1  Stringer:Stringer - YLEISMATERIAALIT - 50 mm Width
+IfcFurniture                    106     106      103      106      103         106  1.0000
+       12      12       12       12       12          12  YK-1:YK-1.600
+        9       9        9        9        9           9  KK-1:KK-1.1200
+        6       6        6        6        6           6  KK-1:SK-1
+        6       6        6        6        6           6  PK-2:PK-2.400
+        5       5        5        5        5           5  PK-2:PK-2.600
+        4       4        4        4        4           4  KK-1:KK-1.1800
+IfcPlate                         78      78       78       78       78          78  1.0000
+       78      78       78       78       78          78  System Panel:Lasitettu
+IfcDoor                          65      64       56       65       57          65  1.0000
+       25      25       25       25       25          25  O-4:O-4.10x21
+       12      12       12       12       12          12  O-4:O-4.9x21
+        6       6        0        6        0           6  O-1:O-1.10x21
+        4       4        4        4        4           4  UO-2:UO-2.10+4x21
+        3       3        3        3        3           3  O-4:O-4.7x21
+        2       2        0        2        0           2  UO-4:UO-4.10x21
+IfcWindow                        65      65       65       65       65          65  1.0000
+       24      24       24       24       24          24  Puu-alumiini-ikkuna B tuuletusluukulla:IKK-1.14x18
+        9       9        9        9        9           9  Puu-alumiini-ikkuna A:IKK-2.11x18
+        7       7        7        7        7           7  Puu-alumiini-ikkuna A:IKK-4.8x7
+        6       6        6        6        6           6  Puu-alumiini-ikkuna A:IKK-3.10x13
+        5       5        5        5        5           5  Pihla Kiinteä A:IKK-8.10x21
+        4       4        4        4        4           4  Puu-alumiini-ikkuna B tuuletusluukulla:IKK-1.14x16
+IfcRailing                       56      40       40       56       40          40  1.0000
+       17      17       17       17       17          17  Railing:KAI-5
+       12      12       12       12       12          12  Railing:KAI-2
+        8       0        0        8        0           0  Railing:KJO-2
+        6       6        6        6        6           6  Railing:KAI-1
+        4       0        0        4        0           0  Railing:KJO-1
+        3       3        3        3        3           3  Railing:KAI-4
+IfcElectricAppliance             41      41       41       41       41          41  1.0000
+       14      14       14       14       14          14  Yleinen sähkölaite:JK-600
+        9       9        9        9        9           9  Yleinen sähkölaite:PPK-600
+        8       8        8        8        8           8  Yleinen sähkölaite:APK-600
+        6       6        6        6        6           6  Yleinen sähkölaite:L-600
+        3       3        3        3        3           3  Yleinen sähkölaite:LAI-1.KIUAS
+        1       1        1        1        1           1  Yleinen sähkölaite:LAI-2.KIUAS
+IfcBeam                          28      28       28       28       28          28  1.0000
+       19      19       19       19       19          19  Puupalkki:PA-1.50x200
+        9       9        9        9        9           9  Puupalkki:PA-2.160x360
+IfcStair                         25      25       25       25       25          25  1.0000
+       23      23       23       23       23          23  Floor:VKV-2.kattoporrasaskelma
+        2       2        2        2        2           2  Talotikkaat:JSV-1.tikas
+IfcCovering                      23      23       11       23       11          14  1.0000
+        7       7        0        7        0           0  Syöksytorvi:HLV-2.ST120
+        2       2        0        2        0           0  Syöksytorvi:HLV-3.ST70
+        1       1        1        1        1           1  Syöksytorven kotelo1:HLV-3.kotelo
+        1       1        1        1        1           1  Syöksytorven kotelo2:HLV-3.kotelo
+        1       1        1        1        1           1  Ilmanvaihtokoneet1:Läpivientikotelo
+        1       1        0        1        0           1  IV-venttiili1:Ilmanvaihto-osat
+IfcSanitaryTerminal              14      14        0        8        0           0  1.0002
+        8       8        0        8        0           0  Tiskipöytä:PA-3
+        6       6        0        0        0           0  WC-istuin:WC-1
+IfcWasteTerminal                 14      14        0       14        0          14  1.0035
+       14      14        0       14        0          14  Lattiakaivo:LK-1
+IfcStairFlight                    8       8        8        8        8           8  1.0000
+        6       6        6        6        6           6  Non-Monolithic Run:POR-1.askelma
+        2       2        2        2        2           2  Non-Monolithic Run:M41 LAATAT Steps with 50 mm Tread
+IfcColumn                         4       4        4        4        4           4  1.0000
+        2       2        2        2        2           2  Steel column:PI-7
+        1       1        1        1        1           1  Timber column:PI-6
+        1       1        1        1        1           1  Concrete column:PI-2
+IfcSlab                           4       3        3        4        4           4  1.0000
+        2       2        2        2        2           2  Non-Monolithic Landing:Non-Monolithic Landing
+        1       1        1        1        1           1  Monolithic Landing:VP-5.lepotasoBet
+        1       0        0        1        1           1  Basic Roof:KA-1
+IfcRoof                           4       4        4        4        4           4  1.0000
+        2       2        2        2        2           2  Basic Roof:VK-1
+        1       1        1        1        1           1  Basic Roof:VK-2
+        1       1        1        1        1           1  Basic Roof:YP-3
+IfcBuildingElementProxy           3       3        3        3        3           3  1.0000
+        2       2        2        2        2           2  Autopaikka:AP-LE
+        1       1        1        1        1           1  Kohdistuskappale:3x2x1
+IfcFlowSegment                    3       3        3        3        3           3  1.0000
+        3       3        3        3        3           3  Gutter:HLV-1.125
+IfcRampFlight                     1       0        0        0        0           0  0.4907
+        1       0        0        0        0           0  Ramp:AP-ulkoluiska
+IfcTransportElement               1       1        1        1        1           1  1.0000
+        1       1        1        1        1           1  HISSI-HEN-1:HISSI-HEN-1
+  1347699 IfcRampFlight 'Ramp:AP-ulkoluiska': volume ratio 0.4907, Revit's vertices to rvt-rs's surface 3.248 ft, rvt-rs's to Revit's 8.096e-07 ft
+  1714069 IfcSanitaryTerminal 'WC-istuin:WC-1': volume ratio 1.0060, Revit's vertices to rvt-rs's surface 0.005007 ft, rvt-rs's to Revit's 0.02142 ft
+  1983707 IfcSanitaryTerminal 'WC-istuin:WC-1': volume ratio 1.0060, Revit's vertices to rvt-rs's surface 0.005004 ft, rvt-rs's to Revit's 0.02109 ft
+  1567091 IfcSanitaryTerminal 'WC-istuin:WC-1': volume ratio 1.0060, Revit's vertices to rvt-rs's surface 0.005004 ft, rvt-rs's to Revit's 0.02109 ft
+  1983716 IfcSanitaryTerminal 'WC-istuin:WC-1': volume ratio 1.0060, Revit's vertices to rvt-rs's surface 0.004604 ft, rvt-rs's to Revit's 0.02109 ft
+  1692526 IfcSanitaryTerminal 'WC-istuin:WC-1': volume ratio 1.0060, Revit's vertices to rvt-rs's surface 0.005005 ft, rvt-rs's to Revit's 0.02049 ft
+  1715310 IfcSanitaryTerminal 'WC-istuin:WC-1': volume ratio 1.0060, Revit's vertices to rvt-rs's surface 0.005005 ft, rvt-rs's to Revit's 0.02049 ft
+  2222756 IfcRailing 'Railing:KJO-2': volume ratio 1.1985, Revit's vertices to rvt-rs's surface 0.007896 ft, rvt-rs's to Revit's 0.008339 ft
+  2123801 IfcRailing 'Railing:KJO-2': volume ratio 1.1984, Revit's vertices to rvt-rs's surface 0.007896 ft, rvt-rs's to Revit's 0.008339 ft
+  2222583 IfcRailing 'Railing:KJO-2': volume ratio 1.1985, Revit's vertices to rvt-rs's surface 0.007896 ft, rvt-rs's to Revit's 0.008339 ft
+  1498093 IfcRailing 'Railing:KJO-2': volume ratio 1.1985, Revit's vertices to rvt-rs's surface 0.007896 ft, rvt-rs's to Revit's 0.008339 ft
+  2222672 IfcRailing 'Railing:KJO-2': volume ratio 1.1984, Revit's vertices to rvt-rs's surface 0.007896 ft, rvt-rs's to Revit's 0.008339 ft
+  1765803 IfcCovering 'Syöksytorvi:HLV-2.ST120': volume ratio 1.0062, Revit's vertices to rvt-rs's surface 0.003104 ft, rvt-rs's to Revit's 0.007586 ft
+  1765495 IfcCovering 'Syöksytorvi:HLV-2.ST120': volume ratio 1.0060, Revit's vertices to rvt-rs's surface 0.003103 ft, rvt-rs's to Revit's 0.007585 ft
+  1766275 IfcCovering 'Syöksytorvi:HLV-2.ST120': volume ratio 1.0056, Revit's vertices to rvt-rs's surface 0.002712 ft, rvt-rs's to Revit's 0.007305 ft
+  volume 1555223 IfcDoor 'UO-1:UO-1.10x21': volume ratio 1.1422, farthest vertex 1.198e-06 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 3.0934 0.4398
+    Revit shells 1, signed volumes (cubic ft): 3.0934
+  volume 2123801 IfcRailing 'Railing:KJO-2': volume ratio 1.1984, farthest vertex 0.008339 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.2006
+    Revit shells 1, signed volumes (cubic ft): 0.1674
+  volume 2222672 IfcRailing 'Railing:KJO-2': volume ratio 1.1984, farthest vertex 0.008339 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.1995
+    Revit shells 1, signed volumes (cubic ft): 0.1665
+  volume 2222756 IfcRailing 'Railing:KJO-2': volume ratio 1.1985, farthest vertex 0.008339 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.2006
+    Revit shells 1, signed volumes (cubic ft): 0.1674
+  volume 1498093 IfcRailing 'Railing:KJO-2': volume ratio 1.1985, farthest vertex 0.008339 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.2814
+    Revit shells 1, signed volumes (cubic ft): 0.2348
+  volume 2222583 IfcRailing 'Railing:KJO-2': volume ratio 1.1985, farthest vertex 0.008339 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.2814
+    Revit shells 1, signed volumes (cubic ft): 0.2348
+  volume 2122861 IfcRailing 'Railing:KJO-2': volume ratio 1.1988, farthest vertex 0.006829 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0844
+    Revit shells 1, signed volumes (cubic ft): 0.0704
+  volume 2123455 IfcRailing 'Railing:KJO-2': volume ratio 1.1988, farthest vertex 0.006852 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0854
+    Revit shells 1, signed volumes (cubic ft): 0.0712
+  volume 2123797 IfcRailing 'Railing:KJO-2': volume ratio 1.1988, farthest vertex 0.006852 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0854
+    Revit shells 1, signed volumes (cubic ft): 0.0712
+  volume 1668202 IfcRailing 'Railing:KJO-1': volume ratio 1.1989, farthest vertex 0.006676 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 0.0976 0.0976
+    Revit shells 2, signed volumes (cubic ft): 0.0814 0.0814
+  volume 1668902 IfcRailing 'Railing:KJO-1': volume ratio 1.1989, farthest vertex 0.006676 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 0.0976 0.0976
+    Revit shells 2, signed volumes (cubic ft): 0.0814 0.0814
+  volume 1668089 IfcRailing 'Railing:KJO-1': volume ratio 1.1989, farthest vertex 0.006676 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 0.1154 0.1154
+    Revit shells 2, signed volumes (cubic ft): 0.0962 0.0962
+  volume 1668872 IfcRailing 'Railing:KJO-1': volume ratio 1.1989, farthest vertex 0.006676 ft
+    rvt-rs shells 2, signed volumes (cubic ft): 0.1154 0.1154
+    Revit shells 2, signed volumes (cubic ft): 0.0963 0.0963
+  volume 1627602 IfcSlab 'Basic Roof:KA-1': volume ratio 0.5010, farthest vertex 6.781e-05 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 33.6567
+    Revit shells 2, signed volumes (cubic ft): 47.4191 19.7580
+  volume 1347699 IfcRampFlight 'Ramp:AP-ulkoluiska': volume ratio 0.4907, farthest vertex 3.248 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 41.3487
+    Revit shells 27, signed volumes (cubic ft): 82.6974 0.1737 0.1737 0.1737 0.1737 0.1378 0.1378 0.1378
+shell readings: 19 volume outliers read shell by shell: 16 explained by inscribed end faces, 1 explained by faces Revit's export holds twice, 2 another reason, 0 unread
+  reading 1347699 IfcRampFlight 'Ramp:AP-ulkoluiska': volume ratio 0.4907, other: other 1 (volume ratio 1.0000..1.0000, 12 triangles of Revit's repeat another: equal once repeated faces count once, but a vertex lies 3.2480 ft from the other's surface), no partner: rvt-rs 0, Revit 26
+  reading 1347781 IfcRailing 'Railing:KAI-7': volume ratio 1.0886, explained: equal 11, explained 2 (volume ratio 1.1989..1.1989, end-face area ratio 1.1989..1.1989)
+  reading 1498093 IfcRailing 'Railing:KJO-2': volume ratio 1.1985, explained: explained 1 (volume ratio 1.1985..1.1985, end-face area ratio 1.1989..1.1989)
+  reading 1555223 IfcDoor 'UO-1:UO-1.10x21': volume ratio 1.1422, other: equal 1, no partner: rvt-rs 1, Revit 0
+  reading 1627602 IfcSlab 'Basic Roof:KA-1': volume ratio 0.5010, doubled: doubled 1 (volume ratio 1.0020..1.0020, 40 triangles of Revit's repeat another)
+  reading 1659998 IfcRailing 'Railing:KAI-6': volume ratio 1.0943, explained: equal 5, explained 2 (volume ratio 1.1989..1.1989, end-face area ratio 1.1989..1.1989)
+  reading 1660002 IfcRailing 'Railing:KAI-6': volume ratio 1.0943, explained: equal 5, explained 2 (volume ratio 1.1989..1.1989, end-face area ratio 1.1989..1.1989)
+  reading 1663091 IfcRailing 'Railing:KAI-7': volume ratio 1.0886, explained: equal 11, explained 2 (volume ratio 1.1989..1.1989, end-face area ratio 1.1989..1.1989)
+exit 0

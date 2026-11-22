@@ -1,0 +1,22 @@
+space profiles: matched by globalid
+space profiles: IfcSpace in rvt-rs 145, in Revit 145, with a body 145 and 145
+space profiles: in both 145, only in rvt-rs 0, only in Revit 0
+space profiles: only in Revit and in rvt-rs without a body 0, paired where the Revit top surface has no area 0
+space profiles: area within 0.1% 144, within 1% 144, off 1
+space profiles: outline within 0.01 ft 142, off 3
+space profiles: vertices within 0.01 ft 37, off 108
+space profiles: boundary within 0.01 ft 144, off 1
+space profiles: area within 0.1% and outline within 0.01 ft 142
+space profiles: lowest and highest vertex within 0.01 ft 145, off 0
+space profiles: rvt-rs area area plan topology: 20, area within 0.1% 20, outline within 0.01 ft 20, both 20, boundary within 0.01 ft 20
+space profiles: rvt-rs family instance saved mesh: 43, area within 0.1% 43, outline within 0.01 ft 42, both 42, boundary within 0.01 ft 43
+space profiles: rvt-rs room record box: 1, area within 0.1% 0, outline within 0.01 ft 0, both 0, boundary within 0.01 ft 0
+space profiles: rvt-rs room stored solid: 81, area within 0.1% 81, outline within 0.01 ft 80, both 80, boundary within 0.01 ft 81
+space profiles: rvt-rs area area plan topology height: 20, lowest and highest vertex within 0.01 ft 20
+space profiles: rvt-rs family instance saved mesh height: 43, lowest and highest vertex within 0.01 ft 43
+space profiles: rvt-rs room record box height: 1, lowest and highest vertex within 0.01 ft 1
+space profiles: rvt-rs room stored solid height: 81, lowest and highest vertex within 0.01 ft 81
+  1SJEvIPHXEr9ZFNzoyL4bE: area 118.01 vs 43.80 ft2 (169.45%), vertices 7.734 ft, outline 7.734 ft, boundary 7.734 ft, room, rvt-rs outline from record_box, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 2.676 ft apart
+  1Se7$8C6v5ZPm7gkvUaHRQ: area 241.19 vs 241.19 ft2 (0.00%), vertices 5.955 ft, outline 0.607 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  0fAOqxyjL4OAzn1chrvJtP: area 2860.52 vs 2860.52 ft2 (0.00%), vertices 0.000 ft, outline 17.226 ft, boundary 0.000 ft, family instance, rvt-rs outline from saved_mesh, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+exit 0

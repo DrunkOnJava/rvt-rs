@@ -1,0 +1,127 @@
+IfcStairFlight in Revit's export with a body: 31; rvt-rs writes one for 31 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 3 of 31
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 29 of 31
+    1440878: match, Revit 16 vertices, farthest 2.24e-06 ft, from rvt-rs's surface at most 1.88e-06 ft, volume rvt-rs 6.045260 ft3, Revit 6.045261 ft3, z rvt-rs 180.8727 to 181.6820, Revit 180.8727 to 181.6820
+    1503045: differs, Revit 40 vertices, farthest 0.513 ft, from rvt-rs's surface at most 1.7e-06 ft, volume rvt-rs 38.880709 ft3, Revit 38.880683 ft3, z rvt-rs 193.2415 to 195.4912, Revit 193.2415 to 195.4912
+      farthest Revit vertex (112.3612, 43.2902, 194.6034), nearest rvt-rs vertex (112.3612, 43.2902, 195.1162) of 30
+    2598348: match, Revit 59 vertices, farthest 1.41e-06 ft, from rvt-rs's surface at most 1.57e-06 ft, volume rvt-rs 32.089300 ft3, Revit 32.089298 ft3, z rvt-rs 169.6194 to 175.5249, Revit 169.6194 to 175.5249
+    2598357: match, Revit 51 vertices, farthest 1e-06 ft, from rvt-rs's surface at most 1.33e-06 ft, volume rvt-rs 28.536560 ft3, Revit 28.536558 ft3, z rvt-rs 175.5687 to 181.4304, Revit 175.5687 to 181.4304
+    2871734: differs, Revit 44 vertices, farthest 0.549 ft, from rvt-rs's surface at most 1.87e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 208.5057 to 212.4745, Revit 208.5057 to 212.4745
+      farthest Revit vertex (300.6355, 44.0547, 209.4827), nearest rvt-rs vertex (300.6355, 44.0547, 210.0321) of 34
+    2871736: differs, Revit 64 vertices, farthest 0.549 ft, from rvt-rs's surface at most 1.86e-06 ft, volume rvt-rs 34.341523 ft3, Revit 34.341583 ft3, z rvt-rs 212.4136 to 217.8478, Revit 212.4136 to 217.8478
+      farthest Revit vertex (307.1807, 49.5308, 213.3905), nearest rvt-rs vertex (307.1807, 49.5308, 213.9399) of 46
+    2871740: differs, Revit 46 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.34e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 217.7868 to 221.7556, Revit 217.7868 to 221.7556
+      farthest Revit vertex (315.2352, 45.0389, 219.7408), nearest rvt-rs vertex (315.2352, 45.0389, 220.2902) of 34
+    3057703: differs, Revit 444 vertices, farthest 0.0328 ft, from rvt-rs's surface at most 0.000747 ft, volume rvt-rs 4.540283 ft3, Revit 4.540287 ft3, z rvt-rs 237.8346 to 250.0361, Revit 237.8346 to 250.0361
+      farthest Revit vertex (307.9909, 57.1786, 247.8018), nearest rvt-rs vertex (307.9745, 57.1502, 247.8018) of 432
+    3401139: differs, Revit 44 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.11e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 208.5057 to 212.4745, Revit 208.5057 to 212.4745
+      farthest Revit vertex (157.7549, 44.0547, 209.4827), nearest rvt-rs vertex (157.7549, 44.0547, 210.0321) of 34
+    3401141: differs, Revit 64 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.05e-06 ft, volume rvt-rs 34.341523 ft3, Revit 34.341583 ft3, z rvt-rs 212.4136 to 217.8478, Revit 212.4136 to 217.8478
+      farthest Revit vertex (154.6217, 49.5308, 213.879), nearest rvt-rs vertex (154.6217, 49.5308, 214.4284) of 46
+    3401145: differs, Revit 46 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.08e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 217.7868 to 221.7556, Revit 217.7868 to 221.7556
+      farthest Revit vertex (143.1551, 45.0389, 219.7408), nearest rvt-rs vertex (143.1551, 45.0389, 220.2902) of 34
+    3455746: differs, Revit 44 vertices, farthest 0.549 ft, from rvt-rs's surface at most 1.99e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 195.3167 to 199.2855, Revit 195.3167 to 199.2855
+      farthest Revit vertex (300.6355, 46.0232, 197.2707), nearest rvt-rs vertex (300.6355, 46.0232, 197.8201) of 34
+    3455748: differs, Revit 64 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.2e-06 ft, volume rvt-rs 34.341523 ft3, Revit 34.341583 ft3, z rvt-rs 199.2246 to 204.6588, Revit 199.2246 to 204.6588
+      farthest Revit vertex (309.1492, 49.5308, 201.1785), nearest rvt-rs vertex (309.1492, 49.5308, 201.7279) of 46
+    3455752: differs, Revit 46 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.49e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 204.5979 to 208.5666, Revit 204.5979 to 208.5666
+      farthest Revit vertex (315.2352, 45.0389, 206.5518), nearest rvt-rs vertex (315.2352, 45.0389, 207.1012) of 34
+    3464837: differs, Revit 44 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.22e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 195.3167 to 199.2855, Revit 195.3167 to 199.2855
+      farthest Revit vertex (157.7549, 46.0232, 197.2707), nearest rvt-rs vertex (157.7549, 46.0232, 197.8201) of 34
+    3464839: differs, Revit 64 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.38e-06 ft, volume rvt-rs 34.341523 ft3, Revit 34.341583 ft3, z rvt-rs 199.2246 to 204.6588, Revit 199.2246 to 204.6588
+      farthest Revit vertex (153.6374, 49.5308, 201.1785), nearest rvt-rs vertex (153.6374, 49.5308, 201.7279) of 46
+    3464843: differs, Revit 46 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.24e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 204.5979 to 208.5666, Revit 204.5979 to 208.5666
+      farthest Revit vertex (143.1551, 45.0389, 206.5518), nearest rvt-rs vertex (143.1551, 45.0389, 207.1012) of 34
+    3521178: differs, Revit 44 vertices, farthest 0.549 ft, from rvt-rs's surface at most 1.92e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 181.5372 to 185.5060, Revit 181.5372 to 185.5060
+      farthest Revit vertex (300.6355, 45.0389, 183.0027), nearest rvt-rs vertex (300.6355, 45.0389, 183.5521) of 34
+    3521180: differs, Revit 64 vertices, farthest 0.549 ft, from rvt-rs's surface at most 1.83e-06 ft, volume rvt-rs 34.341523 ft3, Revit 34.341583 ft3, z rvt-rs 185.4451 to 190.8793, Revit 185.4451 to 190.8793
+      farthest Revit vertex (309.1492, 49.5308, 187.399), nearest rvt-rs vertex (309.1492, 49.5308, 187.9484) of 46
+    3521184: differs, Revit 46 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.39e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 190.8183 to 194.7871, Revit 190.8183 to 194.7871
+      farthest Revit vertex (315.2352, 45.0389, 192.7723), nearest rvt-rs vertex (315.2352, 45.0389, 193.3217) of 34
+    3521267: differs, Revit 44 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.16e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 181.5372 to 185.5060, Revit 181.5372 to 185.5060
+      farthest Revit vertex (157.7549, 45.0389, 183.0027), nearest rvt-rs vertex (157.7549, 45.0389, 183.5521) of 34
+    3521269: differs, Revit 64 vertices, farthest 0.549 ft, from rvt-rs's surface at most 1.99e-06 ft, volume rvt-rs 34.341523 ft3, Revit 34.341583 ft3, z rvt-rs 185.4451 to 190.8793, Revit 185.4451 to 190.8793
+      farthest Revit vertex (153.6374, 49.5308, 187.399), nearest rvt-rs vertex (153.6374, 49.5308, 187.9484) of 46
+    3521273: differs, Revit 46 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.13e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 190.8183 to 194.7871, Revit 190.8183 to 194.7871
+      farthest Revit vertex (143.1551, 45.0389, 192.7723), nearest rvt-rs vertex (143.1551, 45.0389, 193.3217) of 34
+    3521394: differs, Revit 44 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.13e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 169.0700 to 173.0388, Revit 169.0700 to 173.0388
+      farthest Revit vertex (300.6355, 43.0704, 169.5585), nearest rvt-rs vertex (300.6355, 43.0704, 170.1079) of 34
+    3521396: differs, Revit 64 vertices, farthest 0.549 ft, from rvt-rs's surface at most 1.88e-06 ft, volume rvt-rs 34.341523 ft3, Revit 34.341583 ft3, z rvt-rs 172.9779 to 178.4121, Revit 172.9779 to 178.4121
+      farthest Revit vertex (308.165, 49.5308, 174.4433), nearest rvt-rs vertex (308.165, 49.5308, 174.9927) of 46
+    3521400: differs, Revit 46 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.36e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 178.3512 to 182.3199, Revit 178.3512 to 182.3199
+      farthest Revit vertex (315.2352, 47.0074, 179.3281), nearest rvt-rs vertex (315.2352, 47.0074, 179.8775) of 34
+    3521483: differs, Revit 44 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.35e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 169.0700 to 173.0388, Revit 169.0700 to 173.0388
+      farthest Revit vertex (157.7549, 43.0704, 169.5585), nearest rvt-rs vertex (157.7549, 43.0704, 170.1079) of 34
+    3521485: differs, Revit 64 vertices, farthest 0.549 ft, from rvt-rs's surface at most 1.86e-06 ft, volume rvt-rs 34.341523 ft3, Revit 34.341583 ft3, z rvt-rs 172.9779 to 178.4121, Revit 172.9779 to 178.4121
+      farthest Revit vertex (153.6374, 49.5308, 174.9318), nearest rvt-rs vertex (153.6374, 49.5308, 175.4812) of 46
+    3521489: differs, Revit 46 vertices, farthest 0.549 ft, from rvt-rs's surface at most 2.09e-06 ft, volume rvt-rs 24.039083 ft3, Revit 24.039108 ft3, z rvt-rs 178.3512 to 182.3199, Revit 178.3512 to 182.3199
+      farthest Revit vertex (143.1551, 47.0074, 179.3281), nearest rvt-rs vertex (143.1551, 47.0074, 179.8775) of 34
+    3558983: differs, Revit 307 vertices, farthest 12.7 ft, from rvt-rs's surface at most 4.4 ft, volume rvt-rs 3376.543762 ft3, Revit 112.115028 ft3, z rvt-rs 222.2441 to 237.2554, Revit 222.2441 to 236.7047
+      farthest Revit vertex (310.1335, 49.5308, 229.9908), nearest rvt-rs vertex (319.6315, 53.9272, 237.2554) of 8
+    3561904: differs, Revit 310 vertices, farthest 12.7 ft, from rvt-rs's surface at most 4.4 ft, volume rvt-rs 3376.543762 ft3, Revit 112.116208 ft3, z rvt-rs 222.2441 to 237.2554, Revit 222.2441 to 236.7047
+      farthest Revit vertex (152.6532, 49.5308, 229.9908), nearest rvt-rs vertex (162.1512, 53.9272, 237.2554) of 8
+IfcStair in Revit's export with a body: 16; rvt-rs writes one for 16 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 1 of 16
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 4 of 16
+    1440837: match, Revit 16 vertices, farthest 2.24e-06 ft, from rvt-rs's surface at most 1.88e-06 ft, volume rvt-rs 6.045260 ft3, Revit 6.045261 ft3, z rvt-rs 180.8727 to 181.6820, Revit 180.8727 to 181.6820
+    1503002: differs, Revit 904 vertices, farthest 0.513 ft, from rvt-rs's surface at most 2.34e-06 ft, volume rvt-rs 41.107144 ft3, Revit 41.106516 ft3, z rvt-rs 193.2415 to 199.1470, Revit 193.2415 to 199.1470
+      farthest Revit vertex (112.3612, 43.2902, 194.6034), nearest rvt-rs vertex (112.3612, 43.2902, 195.1162) of 1382
+    2598347: differs, Revit 1185 vertices, farthest 0.0113 ft, from rvt-rs's surface at most 0.00418 ft, volume rvt-rs 102.487308 ft3, Revit 102.360758 ft3, z rvt-rs 169.6194 to 185.4495, Revit 169.6194 to 185.4495
+      farthest Revit vertex (123.2821, 66.1494, 184.4514), nearest rvt-rs vertex (123.2821, 66.1602, 184.4547) of 6747
+    2871733: differs, Revit 2576 vertices, farthest 0.876 ft, from rvt-rs's surface at most 0.00418 ft, volume rvt-rs 127.306703 ft3, Revit 126.386096 ft3, z rvt-rs 208.5057 to 225.1969, Revit 208.5057 to 225.1969
+      farthest Revit vertex (319.6315, 49.8521, 217.352), nearest rvt-rs vertex (319.6315, 48.9759, 217.352) of 7411
+    3057027: differs, Revit 2121 vertices, farthest 3.66 ft, from rvt-rs's surface at most 1.19 ft, volume rvt-rs 933.030595 ft3, Revit 7.244347 ft3, z rvt-rs 237.8346 to 254.6850, Revit 237.8346 to 254.6850
+      farthest Revit vertex (304.8391, 55.3987, 254.3932), nearest rvt-rs vertex (304.8281, 55.105, 250.748) of 466
+    3317210: differs, Revit 380 vertices, farthest 0.0034 ft, from rvt-rs's surface at most 0.000267 ft, volume rvt-rs 0.133249 ft3, Revit 0.133215 ft3, z rvt-rs 170.4396 to 173.3924, Revit 170.4396 to 173.3924
+      farthest Revit vertex (321.3254, 73.1299, 170.8992), nearest rvt-rs vertex (321.3221, 73.1299, 170.8998) of 628
+    3317486: differs, Revit 380 vertices, farthest 0.0034 ft, from rvt-rs's surface at most 0.000267 ft, volume rvt-rs 0.133249 ft3, Revit 0.133215 ft3, z rvt-rs 170.4396 to 173.3924, Revit 170.4396 to 173.3924
+      farthest Revit vertex (338.808, 16.3704, 170.8992), nearest rvt-rs vertex (338.808, 16.3738, 170.8998) of 628
+    3401138: differs, Revit 2576 vertices, farthest 0.549 ft, from rvt-rs's surface at most 0.00418 ft, volume rvt-rs 126.303120 ft3, Revit 126.386377 ft3, z rvt-rs 208.5057 to 225.1969, Revit 208.5057 to 225.1969
+      farthest Revit vertex (143.1551, 45.0389, 219.7408), nearest rvt-rs vertex (143.1551, 45.0389, 220.2902) of 7432
+    3455745: differs, Revit 2576 vertices, farthest 0.876 ft, from rvt-rs's surface at most 0.00418 ft, volume rvt-rs 127.296040 ft3, Revit 126.386096 ft3, z rvt-rs 195.3167 to 212.0079, Revit 195.3167 to 212.0079
+      farthest Revit vertex (319.6315, 49.8521, 204.163), nearest rvt-rs vertex (319.6315, 48.9759, 204.163) of 7411
+    3464836: differs, Revit 2576 vertices, farthest 0.549 ft, from rvt-rs's surface at most 0.00418 ft, volume rvt-rs 126.308232 ft3, Revit 126.386377 ft3, z rvt-rs 195.3167 to 212.0079, Revit 195.3167 to 212.0079
+      farthest Revit vertex (143.1551, 45.0389, 206.5518), nearest rvt-rs vertex (143.1551, 45.0389, 207.1012) of 7432
+    3521177: differs, Revit 2576 vertices, farthest 0.876 ft, from rvt-rs's surface at most 0.00418 ft, volume rvt-rs 127.296246 ft3, Revit 126.386096 ft3, z rvt-rs 181.5372 to 198.2283, Revit 181.5372 to 198.2283
+      farthest Revit vertex (319.6315, 49.8521, 190.3835), nearest rvt-rs vertex (319.6315, 48.9759, 190.3835) of 7411
+    3521266: differs, Revit 2576 vertices, farthest 0.549 ft, from rvt-rs's surface at most 0.00418 ft, volume rvt-rs 126.317582 ft3, Revit 126.386377 ft3, z rvt-rs 181.5372 to 198.2283, Revit 181.5372 to 198.2283
+      farthest Revit vertex (143.1551, 45.0389, 192.7723), nearest rvt-rs vertex (143.1551, 45.0389, 193.3217) of 7433
+    3521393: differs, Revit 2576 vertices, farthest 0.876 ft, from rvt-rs's surface at most 0.00418 ft, volume rvt-rs 127.291413 ft3, Revit 126.386096 ft3, z rvt-rs 169.0700 to 185.7612, Revit 169.0700 to 185.7612
+      farthest Revit vertex (319.6315, 49.8521, 177.9163), nearest rvt-rs vertex (319.6315, 48.9759, 177.9163) of 7411
+    3521482: differs, Revit 2576 vertices, farthest 0.549 ft, from rvt-rs's surface at most 0.00418 ft, volume rvt-rs 126.318542 ft3, Revit 126.386377 ft3, z rvt-rs 169.0700 to 185.7612, Revit 169.0700 to 185.7612
+      farthest Revit vertex (157.7549, 43.0704, 169.5585), nearest rvt-rs vertex (157.7549, 43.0704, 170.1079) of 7433
+    3558492: differs, Revit 2605 vertices, farthest 4.42 ft, from rvt-rs's surface at most 3.62 ft, volume rvt-rs 3377.849592 ft3, Revit 113.340843 ft3, z rvt-rs 222.2441 to 240.1739, Revit 222.2441 to 240.1739
+      farthest Revit vertex (317.4894, 50.2633, 232.0422), nearest rvt-rs vertex (315.4785, 49.7741, 235.9493) of 6984
+    3561901: differs, Revit 2608 vertices, farthest 4.42 ft, from rvt-rs's surface at most 3.62 ft, volume rvt-rs 3377.699661 ft3, Revit 113.342024 ft3, z rvt-rs 222.2441 to 240.1739, Revit 222.2441 to 240.1739
+      farthest Revit vertex (145.2973, 50.2633, 232.0422), nearest rvt-rs vertex (147.3082, 49.7741, 235.9493) of 6984
+IfcSlab .LANDING. in Revit's export with a body: 23; rvt-rs writes one for 23 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 19 of 23
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 19 of 23
+    1439250: match, Revit 8 vertices, farthest 1e-06 ft, from rvt-rs's surface at most 8.35e-07 ft, volume rvt-rs 135.375464 ft3, Revit 135.375464 ft3, z rvt-rs 181.2664 to 182.0866, Revit 181.2664 to 182.0866
+    1440353: match, Revit 8 vertices, farthest 1e-06 ft, from rvt-rs's surface at most 1.42e-06 ft, volume rvt-rs 38.934420 ft3, Revit 38.934420 ft3, z rvt-rs 181.2664 to 182.0866, Revit 181.2664 to 182.0866
+    1440748: match, Revit 8 vertices, farthest 2e-06 ft, from rvt-rs's surface at most 1.85e-06 ft, volume rvt-rs 111.903350 ft3, Revit 111.903350 ft3, z rvt-rs 181.2664 to 182.0866, Revit 181.2664 to 182.0866
+    1465817: match, Revit 8 vertices, farthest 2.24e-06 ft, from rvt-rs's surface at most 2.4e-06 ft, volume rvt-rs 135.410190 ft3, Revit 135.410222 ft3, z rvt-rs 181.2664 to 182.0866, Revit 181.2664 to 182.0866
+    1676104: match, Revit 8 vertices, farthest 1.41e-06 ft, from rvt-rs's surface at most 1.35e-06 ft, volume rvt-rs 53.082358 ft3, Revit 53.082358 ft3, z rvt-rs 195.0459 to 195.8661, Revit 195.0459 to 195.8661
+    2871738: match, Revit 22 vertices, farthest 3.32e-06 ft, from rvt-rs's surface at most 2.41e-06 ft, volume rvt-rs 21.380547 ft3, Revit 21.380533 ft3, z rvt-rs 211.9251 to 212.9630, Revit 211.9251 to 212.9630
+    2871742: differs, Revit 22 vertices, farthest 0.876 ft, from rvt-rs's surface at most 0.0536 ft, volume rvt-rs 22.205336 ft3, Revit 21.380533 ft3, z rvt-rs 217.3520 to 218.3363, Revit 217.2984 to 218.3363
+      farthest Revit vertex (319.6315, 49.8521, 217.352), nearest rvt-rs vertex (319.6315, 48.9759, 217.352) of 12
+    3058084: match, Revit 26 vertices, farthest 2e-06 ft, from rvt-rs's surface at most 1.79e-06 ft, volume rvt-rs 1.462462 ft3, Revit 1.462462 ft3, z rvt-rs 250.6496 to 250.7480, Revit 250.6496 to 250.7480
+    3202702: match, Revit 25 vertices, farthest 2.24e-06 ft, from rvt-rs's surface at most 1.47e-06 ft, volume rvt-rs 40.909526 ft3, Revit 40.909528 ft3, z rvt-rs 174.9125 to 176.1811, Revit 174.9125 to 176.1811
+    3401143: match, Revit 22 vertices, farthest 3.32e-06 ft, from rvt-rs's surface at most 2.6e-06 ft, volume rvt-rs 21.380545 ft3, Revit 21.380533 ft3, z rvt-rs 211.9251 to 212.9630, Revit 211.9251 to 212.9630
+    3401147: match, Revit 22 vertices, farthest 3.32e-06 ft, from rvt-rs's surface at most 2.22e-06 ft, volume rvt-rs 21.380542 ft3, Revit 21.380533 ft3, z rvt-rs 217.2984 to 218.3363, Revit 217.2984 to 218.3363
+    3455750: match, Revit 22 vertices, farthest 3.32e-06 ft, from rvt-rs's surface at most 2.1e-06 ft, volume rvt-rs 21.380547 ft3, Revit 21.380533 ft3, z rvt-rs 198.7361 to 199.7740, Revit 198.7361 to 199.7740
+    3455754: differs, Revit 22 vertices, farthest 0.876 ft, from rvt-rs's surface at most 0.0536 ft, volume rvt-rs 22.205336 ft3, Revit 21.380533 ft3, z rvt-rs 204.1630 to 205.1473, Revit 204.1094 to 205.1473
+      farthest Revit vertex (319.6315, 49.8521, 204.163), nearest rvt-rs vertex (319.6315, 48.9759, 204.163) of 12
+    3464841: match, Revit 22 vertices, farthest 3.32e-06 ft, from rvt-rs's surface at most 2.32e-06 ft, volume rvt-rs 21.380545 ft3, Revit 21.380533 ft3, z rvt-rs 198.7361 to 199.7740, Revit 198.7361 to 199.7740
+    3464845: match, Revit 22 vertices, farthest 3.74e-06 ft, from rvt-rs's surface at most 2e-06 ft, volume rvt-rs 21.380542 ft3, Revit 21.380533 ft3, z rvt-rs 204.1094 to 205.1473, Revit 204.1094 to 205.1473
+    3521182: match, Revit 22 vertices, farthest 3.16e-06 ft, from rvt-rs's surface at most 2.04e-06 ft, volume rvt-rs 21.380547 ft3, Revit 21.380533 ft3, z rvt-rs 184.9566 to 185.9945, Revit 184.9566 to 185.9945
+    3521186: differs, Revit 22 vertices, farthest 0.876 ft, from rvt-rs's surface at most 0.0536 ft, volume rvt-rs 22.205336 ft3, Revit 21.380533 ft3, z rvt-rs 190.3835 to 191.3677, Revit 190.3299 to 191.3677
+      farthest Revit vertex (319.6315, 49.8521, 190.3835), nearest rvt-rs vertex (319.6315, 48.9759, 190.3835) of 12
+    3521271: match, Revit 22 vertices, farthest 3.16e-06 ft, from rvt-rs's surface at most 1.94e-06 ft, volume rvt-rs 21.380545 ft3, Revit 21.380533 ft3, z rvt-rs 184.9566 to 185.9945, Revit 184.9566 to 185.9945
+    3521275: match, Revit 22 vertices, farthest 3.32e-06 ft, from rvt-rs's surface at most 2.26e-06 ft, volume rvt-rs 21.380542 ft3, Revit 21.380533 ft3, z rvt-rs 190.3299 to 191.3677, Revit 190.3299 to 191.3677
+    3521398: match, Revit 22 vertices, farthest 3.32e-06 ft, from rvt-rs's surface at most 1.97e-06 ft, volume rvt-rs 21.380547 ft3, Revit 21.380533 ft3, z rvt-rs 172.4894 to 173.5273, Revit 172.4894 to 173.5273
+    3521402: differs, Revit 22 vertices, farthest 0.876 ft, from rvt-rs's surface at most 0.0536 ft, volume rvt-rs 22.205336 ft3, Revit 21.380533 ft3, z rvt-rs 177.9163 to 178.9006, Revit 177.8627 to 178.9006
+      farthest Revit vertex (319.6315, 49.8521, 177.9163), nearest rvt-rs vertex (319.6315, 48.9759, 177.9163) of 12
+    3521487: match, Revit 22 vertices, farthest 3.32e-06 ft, from rvt-rs's surface at most 2.21e-06 ft, volume rvt-rs 21.380545 ft3, Revit 21.380533 ft3, z rvt-rs 172.4894 to 173.5273, Revit 172.4894 to 173.5273
+    3521491: match, Revit 22 vertices, farthest 3.74e-06 ft, from rvt-rs's surface at most 1.92e-06 ft, volume rvt-rs 21.380542 ft3, Revit 21.380533 ft3, z rvt-rs 177.8627 to 178.9006, Revit 177.8627 to 178.9006
+exit 0

@@ -1,0 +1,3 @@
+    132  IfcDoor: neither aggregates
+      6  IfcWindow: neither aggregates
+exit 0

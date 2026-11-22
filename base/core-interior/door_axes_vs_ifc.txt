@@ -1,0 +1,7 @@
+door axes: the rvt-rs export has 138 doors and windows, the Revit export 138; in both 138; only in the rvt-rs export 0; only in the Revit export 0
+door axes: doors paired 132; same 132; half turn 0; quarter turn 0; other 0
+door axes: doors placed by the rule 132; differ from Revit 0
+door axes: windows paired 6; same 6; half turn 0; quarter turn 0; other 0
+door axes: windows placed by the rule 6; differ from Revit 0
+door axes: placed by the rule that differ from Revit 0
+exit 0

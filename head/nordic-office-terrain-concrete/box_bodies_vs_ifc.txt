@@ -1,0 +1,13 @@
+record-box bodies: 3; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcRamp                            2       0       0       1       1       0       0    0.544
+         2  Ramp:AP-ajoramppi
+IfcGeographicElement               1       0       0       0       1       0       0    0.008
+         1  RPC Tree - Deciduous:Red Maple - 30'
+total                              3       0       0       1       2       0       0
+box bodies by class and reason (SavedMeshRefusal, #1645): 3 of 3 have one
+IfcRamp                            2
+         2  partial: unsupported parametric profile curve GHermiteSpline
+IfcGeographicElement               1
+         1  no_saved_mesh
+exit 0

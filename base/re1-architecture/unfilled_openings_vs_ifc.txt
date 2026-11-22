@@ -1,0 +1,17 @@
+unfilled openings in Revit's export: 3; in rvt-rs's: 1; both: 1
+IfcFlowTerminal in IfcFlowTerminal:
+  revit: 1
+IfcWallStandardCase in IfcWallStandardCase:
+  revit: 1
+none in IfcWallStandardCase:
+  revit: 1
+  written: 1
+  box compared: 1
+  volume compared: 1
+  Pset_OpeningElementCommon.Reference equal: 1
+  Pset_EnvironmentalImpactIndicators.Reference equal: 1
+written that Revit's export does not: 0
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+  box differs by 5.000 ft: none in IfcWallStandardCase, Tag 417199 in 415911
+  volume differs by 95.735 %: none in IfcWallStandardCase, Tag 417199 in 415911
+exit 0

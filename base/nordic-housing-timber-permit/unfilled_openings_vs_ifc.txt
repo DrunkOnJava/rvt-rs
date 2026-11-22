@@ -1,0 +1,53 @@
+unfilled openings in Revit's export: 48; in rvt-rs's: 20; both: 19
+IfcDoor in IfcDoor:
+  revit: 1
+IfcDoor in IfcWall:
+  revit: 18
+  written: 1
+  box compared: 1
+  box within 0.01 ft: 1
+  volume compared: 1
+  volume within 0.01 %: 1
+  GlobalId equal: 1
+  Name equal: 1
+  PredefinedType equal: 1
+  Pset_OpeningElementCommon.Reference equal: 1
+  Pset_EnvironmentalImpactIndicators.Reference equal: 1
+  Depth in Revit's: 1
+  Depth equal: 1
+IfcSlab in IfcSlab:
+  revit: 1
+IfcWindow in IfcWall:
+  revit: 3
+none in IfcCovering:
+  revit: 7
+none in IfcSlab:
+  revit: 11
+  written: 11
+  box compared: 11
+  box within 0.01 ft: 11
+  volume compared: 11
+  volume within 0.01 %: 11
+  Name equal: 11
+  PredefinedType equal: 11
+  Pset_OpeningElementCommon.Reference equal: 11
+  Pset_EnvironmentalImpactIndicators.Reference equal: 11
+none in IfcWall:
+  revit: 7
+  written: 7
+  box compared: 7
+  box within 0.01 ft: 7
+  volume compared: 7
+  volume within 0.01 %: 7
+  GlobalId equal: 7
+  Name equal: 7
+  PredefinedType equal: 7
+  Pset_OpeningElementCommon.Reference equal: 7
+  Pset_EnvironmentalImpactIndicators.Reference equal: 7
+  Depth in Revit's: 7
+  Depth equal: 7
+written that Revit's export does not: 1
+  none in IfcWall: 1
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+  extra: none in IfcWall, Tag 1732546 in 1427469
+exit 0
