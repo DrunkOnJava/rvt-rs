@@ -1,0 +1,1 @@
+b452f96708aa3564b5376c550b3bd32e198513f5 feat(ifc): a door or window set in a plain wall is placed on Revit's axes, its X the stored one reversed where the flips differ (#1447) (RE-347)

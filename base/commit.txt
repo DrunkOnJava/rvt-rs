@@ -1,0 +1,1 @@
+5c35e190ca9cca0b62bc444dbefe0f2eeeb2114e ci: Claude Code on a thread when the maintainer asks with /ask-claude, pinned and read-only (#1464)
