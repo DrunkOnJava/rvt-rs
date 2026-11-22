@@ -1,0 +1,6 @@
+family_extrusions bodies scored: 1; in Revit's export 1
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcBuildingElementProxy           1       1        1        1        1           1  1.0000
+        1       1        1        1        1           1  237313-AHU:7kw
+  427568 IfcBuildingElementProxy '237313-AHU:7kw': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.671e-06 ft, rvt-rs's to Revit's 1.671e-06 ft
+exit 0

@@ -1,0 +1,16 @@
+family_extrusions bodies scored: 11; in Revit's export 11
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcWasteTerminal                 11      11       11       11       11          11  1.0000
+       11      11       11       11       11          11  Hulevesikaivo:HVK-1
+  1395111 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.483e-06 ft, rvt-rs's to Revit's 1.729e-06 ft
+  1395257 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.167e-06 ft, rvt-rs's to Revit's 1.79e-06 ft
+  1395053 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.833e-06 ft, rvt-rs's to Revit's 1.13e-06 ft
+  1394993 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.822e-06 ft, rvt-rs's to Revit's 1.716e-06 ft
+  1395023 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.822e-06 ft, rvt-rs's to Revit's 1.716e-06 ft
+  1394736 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.789e-06 ft, rvt-rs's to Revit's 1.308e-06 ft
+  1395237 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.692e-06 ft, rvt-rs's to Revit's 1.171e-06 ft
+  1395137 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.649e-06 ft, rvt-rs's to Revit's 1.109e-06 ft
+  1395171 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.649e-06 ft, rvt-rs's to Revit's 1.109e-06 ft
+  1395083 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.636e-06 ft, rvt-rs's to Revit's 1.09e-06 ft
+  1395203 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.6e-06 ft, rvt-rs's to Revit's 1.034e-06 ft
+exit 0

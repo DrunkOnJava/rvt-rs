@@ -1,0 +1,50 @@
+saved_graphics_mesh bodies scored: 45; in Revit's export 45
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcFurnishingElement             16      16       14       16       13          16  1.0000
+        3       3        3        3        3           3  Cabinet, Upper Doors Double-NON-COLLECTUS:-
+        3       3        3        3        3           3  Cabinet, Base Doors and Drawers-NON-COLLECTUS:-
+        1       1        1        1        0           1  Chair, Lounge-NON-COLLECTUS:-
+        1       1        1        1        0           1  Sofa, 3-Seat-NON-COLLECTUS:-
+        1       1        1        1        1           1  Table, Coffee-NON-COLLECTUS:-
+        1       1        0        1        0           1  Table, Round-NON-COLLECTUS:-
+IfcMember                        10      10       10       10       10          10  1.0000
+       10      10       10       10       10          10  Rectangular Mullion:-
+IfcBuildingElementProxy           6       6        6        6        6           6  1.0000
+        2       2        2        2        2           2  Soap Dish - NON-COLLECTUS:-
+        1       1        1        1        1           1  TV - NON-COLLECTUS:-
+        1       1        1        1        1           1  Microwave, Under Cabinet - NON-COLLECTUS:-
+        1       1        1        1        1           1  Refrigerator, Mini - NON-COLLECTUS:-
+        1       1        1        1        1           1  Towel Bar - NON-COLLECTUS:-
+IfcFlowTerminal                   6       5        3        3        2           3  1.0012
+        1       1        0        0        0           0  Toilet, Two Piece - NON-COLLECTUS:-
+        1       1        0        0        0           0  Sink, Kitchen, Small - NON-COLLECTUS:-
+        1       1        1        1        1           1  Shower Stall - NON-COLLECTUS:-
+        1       1        1        1        1           1  Japanese Soaking Tub-NON-COLLECTUS:-
+        1       0        0        0        0           0  Sink, Lavatory, Countertop - NON-COLLECTUS:-
+        1       1        1        1        0           1  Washing Machine - NON-COLLECTUS:-
+IfcDoor                           5       5        5        5        5           5  1.0000
+        2       2        2        2        2           2  Single-Flush:Single-Flush
+        1       1        1        1        1           1  Door-Double-Sliding:84" x 94"
+        1       1        1        1        1           1  Door-Double-Sliding:60" x 94"
+        1       1        1        1        1           1  Door-Curtain-Wall-Double-Glas:69" x 72"
+IfcPlate                          2       2        2        2        2           2  1.0000
+        2       2        2        2        2           2  System Panel:-
+  359466 IfcFlowTerminal 'Toilet, Two Piece - NON-COLLECTUS:-': volume ratio 1.0024, Revit's vertices to rvt-rs's surface 0.00403 ft, rvt-rs's to Revit's 0.01257 ft
+  361394 IfcFlowTerminal 'Sink, Kitchen, Small - NON-COLLECTUS:-': volume ratio 1.0094, Revit's vertices to rvt-rs's surface 0.003946 ft, rvt-rs's to Revit's 0.01062 ft
+  374128 IfcFlowTerminal 'Sink, Lavatory, Countertop - NON-COLLECTUS:-': volume ratio 1.0105, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01062 ft
+  355849 IfcFurnishingElement 'Table, Round-NON-COLLECTUS:-': volume ratio 1.0033, Revit's vertices to rvt-rs's surface 0.0006431 ft, rvt-rs's to Revit's 0.005089 ft
+  351456 IfcFurnishingElement 'Chair, Lounge-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 0.0009802 ft, rvt-rs's to Revit's 0.002038 ft
+  377331 IfcFlowTerminal 'Washing Machine - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 0.0008648 ft, rvt-rs's to Revit's 0.00158 ft
+  352342 IfcFurnishingElement 'Sofa, 3-Seat-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 0.0008459 ft, rvt-rs's to Revit's 0.001478 ft
+  379016 IfcFurnishingElement 'Table, Low-NON-COLLECTUS:-': volume ratio 0.9999, Revit's vertices to rvt-rs's surface 0.0008866 ft, rvt-rs's to Revit's 0.0007615 ft
+  371363 IfcBuildingElementProxy 'Towel Bar - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.396e-06 ft, rvt-rs's to Revit's 3.419e-06 ft
+  364890 IfcBuildingElementProxy 'Microwave, Under Cabinet - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.309e-06 ft, rvt-rs's to Revit's 2.974e-06 ft
+  363470 IfcFurnishingElement 'Cabinet, Base Doors and Drawers-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.136e-06 ft, rvt-rs's to Revit's 2.662e-06 ft
+  364891 IfcFurnishingElement 'Cabinet, Upper Doors Double-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.064e-06 ft, rvt-rs's to Revit's 1.439e-06 ft
+  353210 IfcFurnishingElement 'Table, Coffee-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.773e-06 ft, rvt-rs's to Revit's 2.952e-06 ft
+  445975 IfcDoor 'Door-Curtain-Wall-Double-Glas:69" x 72"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.95e-06 ft, rvt-rs's to Revit's 2.361e-06 ft
+  366924 IfcFurnishingElement 'Cabinet, Base Integrated Trash Single-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.91e-06 ft, rvt-rs's to Revit's 1.882e-06 ft
+  volume 374128 IfcFlowTerminal 'Sink, Lavatory, Countertop - NON-COLLECTUS:-': volume ratio 1.0105, farthest vertex 0.01062 ft
+    rvt-rs shells 5, signed volumes (cubic ft): 0.0314 0.0045 0.0045 0.0045 0.0032
+    Revit shells 5, signed volumes (cubic ft): 0.0315 0.0044 0.0044 0.0042 0.0032
+exit 0

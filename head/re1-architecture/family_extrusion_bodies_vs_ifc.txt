@@ -1,0 +1,18 @@
+family_extrusions bodies scored: 8; in Revit's export 8
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcFurnishingElement              5       5        5        5        5           5  1.0000
+        4       4        4        4        4           4  Tatatami Kantoma-NON-COLLECTUS:-
+        1       1        1        1        1           1  End Table-NON-COLLECTUS:-
+IfcBuildingElementProxy           3       3        2        3        2           2  1.0000
+        1       1        0        1        0           0  Dispenser, Toilet Paper - NON-COLLECTUS:-
+        1       1        1        1        1           1  Hook, Garment and Towel - NON-COLLECTUS:-
+        1       1        1        1        1           1  Mirror, Vanity - NON-COLLECTUS:-
+  360331 IfcBuildingElementProxy 'Dispenser, Toilet Paper - NON-COLLECTUS:-': volume ratio 1.0006, Revit's vertices to rvt-rs's surface 0.001439 ft, rvt-rs's to Revit's 0.001545 ft
+  376255 IfcBuildingElementProxy 'Mirror, Vanity - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.966e-06 ft, rvt-rs's to Revit's 1.01e-05 ft
+  370475 IfcBuildingElementProxy 'Hook, Garment and Towel - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.279e-06 ft, rvt-rs's to Revit's 3.033e-06 ft
+  378158 IfcFurnishingElement 'Tatatami Kantoma-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.032e-06 ft, rvt-rs's to Revit's 1.696e-06 ft
+  378159 IfcFurnishingElement 'Tatatami Kantoma-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.639e-06 ft, rvt-rs's to Revit's 1.296e-06 ft
+  378160 IfcFurnishingElement 'Tatatami Kantoma-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.091e-06 ft, rvt-rs's to Revit's 1.332e-06 ft
+  354140 IfcFurnishingElement 'End Table-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.803e-06 ft, rvt-rs's to Revit's 1.797e-06 ft
+  378157 IfcFurnishingElement 'Tatatami Kantoma-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.428e-06 ft, rvt-rs's to Revit's 9.426e-07 ft
+exit 0

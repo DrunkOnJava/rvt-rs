@@ -1,0 +1,15 @@
+family_extrusions bodies scored: 8; in Revit's export 8
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcBuildingElementProxy           6       6        6        6        6           6  1.0000
+        6       6        6        6        6           6  283513-OCC:Occupancy Sensor
+IfcFlowTerminal                   2       2        2        2        2           2  1.0000
+        2       2        2        2        2           2  230913-Thermostat:230913-Thermostat
+  806264 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.339e-06 ft, rvt-rs's to Revit's 2.339e-06 ft
+  806248 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.962e-06 ft, rvt-rs's to Revit's 1.962e-06 ft
+  799007 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.758e-06 ft, rvt-rs's to Revit's 1.758e-06 ft
+  928765 IfcFlowTerminal '230913-Thermostat:230913-Thermostat': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.73e-06 ft, rvt-rs's to Revit's 1.73e-06 ft
+  806296 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.601e-06 ft, rvt-rs's to Revit's 1.601e-06 ft
+  806274 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.527e-06 ft, rvt-rs's to Revit's 1.527e-06 ft
+  928758 IfcFlowTerminal '230913-Thermostat:230913-Thermostat': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 7.511e-07 ft, rvt-rs's to Revit's 7.511e-07 ft
+  806286 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 5.932e-07 ft, rvt-rs's to Revit's 5.932e-07 ft
+exit 0

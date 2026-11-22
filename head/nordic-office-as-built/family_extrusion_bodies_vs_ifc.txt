@@ -1,0 +1,27 @@
+family_extrusions bodies scored: 87; in Revit's export 87
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcWasteTerminal                 78      78       78       78       78          78  1.0000
+       62      62       62       62       62          62  Lattiakaivo:LK-1
+       16      16       16       16       16          16  Lattiakaivo:VK-1.Kattokaivo
+IfcDoor                           4       4        4        4        4           4  1.0000
+        4       4        4        4        4           4  LU-2:LU-2
+IfcFurniture                      3       3        3        3        3           3  1.0000
+        3       3        3        3        3           3  PK-1:PK-1.3600
+IfcBuildingElementProxy           2       2        2        2        2           2  1.0000
+        2       2        2        2        2           2  HISSI-HEN-1:HISSI-HEN-1
+  3269270 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.4e-05 ft, rvt-rs's to Revit's 1.686e-06 ft
+  3270669 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.267e-05 ft, rvt-rs's to Revit's 2.192e-06 ft
+  3270703 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.267e-05 ft, rvt-rs's to Revit's 2.192e-06 ft
+  3270587 IfcDoor 'LU-2:LU-2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.205e-05 ft, rvt-rs's to Revit's 1.601e-06 ft
+  2586760 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.99e-06 ft, rvt-rs's to Revit's 1.99e-06 ft
+  3098148 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.94e-06 ft, rvt-rs's to Revit's 1.94e-06 ft
+  2983892 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.937e-06 ft, rvt-rs's to Revit's 1.937e-06 ft
+  2607912 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.81e-06 ft, rvt-rs's to Revit's 1.81e-06 ft
+  2633698 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.804e-06 ft, rvt-rs's to Revit's 1.804e-06 ft
+  3031711 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft
+  2613760 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft
+  3031701 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft
+  3031691 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft
+  3031679 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.793e-06 ft, rvt-rs's to Revit's 1.793e-06 ft
+  2637086 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.634e-06 ft, rvt-rs's to Revit's 1.634e-06 ft
+exit 0
