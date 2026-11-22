@@ -1,0 +1,958 @@
+release saved 2018 layout 2018
+records 1166
+record -2000170 423100 written Partitions/6 88074 container none kind 0xffffef7f option none extents 4.7244 0.0833 9.7113 enclosing false
+record -2000023 423107 written Partitions/6 88472 container none kind 0xffffef7f option none extents 4.7244 4.7244 8.7270 enclosing false
+record -2000171 423134 written Partitions/6 88693 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 423136 written Partitions/6 88906 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 423138 written Partitions/6 89119 container none kind 0xffffef7f option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 423139 written Partitions/6 89332 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 423148 written Partitions/6 89545 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 423149 written Partitions/6 89750 container none kind 0xffffef7f option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000170 424758 written Partitions/6 90136 container none kind 0xffffef7f option none extents 4.7244 0.0833 9.6457 enclosing false
+record -2000170 424759 written Partitions/6 90361 container none kind 0xffffef7f option none extents 4.7244 0.0833 8.6614 enclosing false
+record -2000171 424777 written Partitions/6 90586 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 424778 written Partitions/6 90799 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 424779 written Partitions/6 91012 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 424786 written Partitions/6 91233 container none kind 0xffffef7f option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 424787 written Partitions/6 91454 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000023 430997 written Partitions/6 94284 container none kind 0xffffef7f option none extents 3.1496 3.1172 7.1522 enclosing false
+record -2000023 431064 written Partitions/6 94473 container none kind 0xffffef7f option none extents 3.1496 3.1172 7.1522 enclosing false
+record -2000023 431144 written Partitions/6 94662 container none kind 0xffffef7f option none extents 3.1172 3.1496 7.1522 enclosing false
+record -2000023 431198 written Partitions/6 94851 container none kind 0xffffef7f option none extents 3.1172 3.1496 7.1522 enclosing false
+record -2000023 485452 written Partitions/6 96233 container none kind 0xffffef7f option none extents 2.8270 4.7244 6.8302 enclosing false
+record -2000171 485456 written Partitions/6 96454 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 485458 written Partitions/6 96667 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.6694 enclosing false
+record -2000170 485460 written Partitions/6 97057 container none kind 0xffffef7f option none extents 0.0833 4.7900 6.6929 enclosing false
+record -2000170 485462 written Partitions/6 97463 container none kind 0xffffef7f option none extents 0.0833 4.7900 6.6929 enclosing false
+record -2000170 485464 written Partitions/6 97869 container none kind 0xffffef7f option none extents 0.0833 4.7244 6.6929 enclosing false
+record -2000170 485466 written Partitions/6 98271 container none kind 0xffffef7f option none extents 0.0833 4.3378 4.5090 enclosing false
+record -2000170 485467 written Partitions/6 98492 container none kind 0xffffef7f option none extents 0.0833 4.7900 9.3061 enclosing false
+record -2000170 485468 written Partitions/6 98725 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.8851 enclosing false
+record -2000170 485469 written Partitions/6 98954 container none kind 0xffffef7f option none extents 0.0833 4.3146 4.1508 enclosing false
+record -2000171 485492 written Partitions/6 99175 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 485493 written Partitions/6 99392 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 485494 written Partitions/6 99613 container none kind 0xffffef7f option none extents 0.3281 4.7244 0.1312 enclosing false
+record -2000171 485500 written Partitions/6 99826 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 485501 written Partitions/6 100059 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 485505 written Partitions/6 100292 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 485506 written Partitions/6 100513 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 485507 written Partitions/6 100738 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 485508 written Partitions/6 100963 container none kind 0xffffef7f option none extents 0.3281 0.1312 4.7111 enclosing false
+record -2000171 485509 written Partitions/6 101188 container none kind 0xffffef7f option none extents 0.3281 0.1312 9.0770 enclosing false
+record -2000023 485679 written Partitions/6 101413 container none kind 0xffffef7f option none extents 3.1172 3.1496 7.1522 enclosing false
+record -2000023 505854 symbol Partitions/6 111012 container none kind 0xffff8000 option none extents 6.2008 1.1446 6.6503 enclosing false
+record -2000023 505974 written Partitions/6 111285 container none kind 0xffffef7f option none extents 1.0915 6.2008 6.6503 enclosing false
+record -2000171 525603 written Partitions/6 121213 container none kind 0xffffef7f option none extents 0.3281 0.3745 0.3673 enclosing false
+record -2000171 687033 written Partitions/6 180889 container none kind 0xffffef7f option none extents 0.3281 4.6403 4.8161 enclosing false
+record -2000171 687035 written Partitions/6 181102 container none kind 0xffffef7f option none extents 0.3281 0.3672 0.3744 enclosing false
+record -2000171 687037 written Partitions/6 181315 container none kind 0xffffef7f option none extents 0.3281 4.7287 4.5562 enclosing false
+record -2001100 697575 symbol Partitions/6 201624 container none kind 0xffff8000 option none extents 3.6155 1.3189 2.4606 enclosing false
+record -2001100 697577 written Partitions/6 201924 container none kind 0xffffef7f option none extents 3.6155 1.3189 2.4606 enclosing false
+record -2000023 704276 written Partitions/6 207915 container none kind 0xffffef7f option none extents 4.7244 2.8270 6.8302 enclosing false
+record -2000170 704282 written Partitions/6 208313 container none kind 0xffffef7f option none extents 4.7900 0.0833 6.6929 enclosing false
+record -2000170 704284 written Partitions/6 208719 container none kind 0xffffef7f option none extents 4.7900 0.0833 6.6929 enclosing false
+record -2000023 704286 written Partitions/6 209125 container none kind 0xffffef7f option none extents 4.7244 2.8270 6.8302 enclosing false
+record -2000171 704288 written Partitions/6 209346 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 704289 written Partitions/6 209559 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 704290 written Partitions/6 209772 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 704291 written Partitions/6 209993 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 704293 written Partitions/6 210214 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 704294 written Partitions/6 210431 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 704296 written Partitions/6 210648 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 704297 written Partitions/6 210857 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 704298 written Partitions/6 211070 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 704299 written Partitions/6 211291 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 704300 written Partitions/6 211516 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000023 709246 written Partitions/6 217062 container none kind 0xffffef7f option none extents 4.7244 4.7244 8.7270 enclosing false
+record -2000171 709249 written Partitions/6 217279 container none kind 0xffffef7f option none extents 4.4259 0.3281 0.1312 enclosing false
+record -2000171 709251 written Partitions/6 217492 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 709253 written Partitions/6 217697 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 709256 written Partitions/6 218075 container none kind 0xffffef7f option none extents 4.4259 0.0833 8.5958 enclosing false
+record -2000171 709258 written Partitions/6 218296 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 709259 written Partitions/6 218509 container none kind 0xffffef7f option none extents 4.4259 0.3281 0.1312 enclosing false
+record -2000171 709261 written Partitions/6 218718 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 745035 written Partitions/6 228159 container none kind 0xffffef7f option none extents 0.3281 0.4665 0.4559 enclosing false
+record -2000023 769882 symbol Partitions/6 242831 container none kind 0xffff8000 option none extents 6.2008 1.0915 6.6503 enclosing false
+record -2000171 846332 written Partitions/6 269263 container none kind 0xffffef7f option none extents 0.3281 5.0122 4.8289 enclosing false
+record -2000171 846333 written Partitions/6 269484 container none kind 0xffffef7f option none extents 0.3281 4.7432 4.9231 enclosing false
+record -2000171 846334 written Partitions/6 269705 container none kind 0xffffef7f option none extents 0.3281 4.4510 0.1312 enclosing false
+record -2000171 846335 written Partitions/6 269930 container none kind 0xffffef7f option none extents 0.3281 0.1312 4.3426 enclosing false
+record -2000171 846351 written Partitions/6 270155 container none kind 0xffffef7f option none extents 0.3281 4.4640 0.1312 enclosing false
+record -2000023 866105 symbol Partitions/6 294208 container none kind 0xffff8000 option none extents 6.0000 6.0000 7.0000 enclosing false
+record -2000023 906937 written Partitions/6 294578 container none kind 0xffffef7f option none extents 3.5827 6.1745 7.2507 enclosing false
+record -2000023 907609 symbol Partitions/6 296934 container none kind 0xffff8000 option none extents 6.1745 3.4199 7.2507 enclosing false
+record -2000023 907638 symbol Partitions/6 297171 container none kind 0xffff8000 option none extents 6.1745 3.5827 7.2507 enclosing false
+record -2000170 909735 written Partitions/6 299321 container none kind 0xffffef7f option none extents 4.7244 0.0833 1.7717 enclosing false
+record -2000170 909736 written Partitions/6 299546 container none kind 0xffffef7f option none extents 4.7900 0.0833 1.7717 enclosing false
+record -2000170 909737 written Partitions/6 299775 container none kind 0xffffef7f option none extents 4.7900 0.0833 1.7717 enclosing false
+record -2000170 909738 written Partitions/6 300004 container none kind 0xffffef7f option none extents 4.7244 0.0833 1.7717 enclosing false
+record -2000171 909751 written Partitions/6 300229 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 909752 written Partitions/6 300442 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 909753 written Partitions/6 300651 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 909754 written Partitions/6 300876 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 909755 written Partitions/6 301109 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 909756 written Partitions/6 301342 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 909757 written Partitions/6 301567 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 909758 written Partitions/6 301792 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 909759 written Partitions/6 302017 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000023 910850 symbol Partitions/6 304167 container none kind 0xffff8000 option none extents 6.0000 3.2292 7.0061 enclosing false
+record -2000023 910875 symbol Partitions/6 304380 container none kind 0xffff8000 option none extents 4.7244 2.8270 6.8302 enclosing false
+record -2000170 931858 written Partitions/6 318533 container none kind 0xffffef7f option none extents 0.0833 4.7244 2.8215 enclosing false
+record -2000170 931859 written Partitions/6 318766 container none kind 0xffffef7f option none extents 0.0833 4.7900 2.8215 enclosing false
+record -2000170 931860 written Partitions/6 318999 container none kind 0xffffef7f option none extents 0.0833 4.7900 2.8215 enclosing false
+record -2000170 931861 written Partitions/6 319232 container none kind 0xffffef7f option none extents 0.0833 4.7244 2.8215 enclosing false
+record -2000171 931877 written Partitions/6 319465 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.6800 enclosing false
+record -2000171 931878 written Partitions/6 319678 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 931879 written Partitions/6 319887 container none kind 0xffffef7f option none extents 0.3281 4.7244 0.1312 enclosing false
+record -2000171 931880 written Partitions/6 320112 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 931881 written Partitions/6 320345 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 931882 written Partitions/6 320578 container none kind 0xffffef7f option none extents 0.3281 4.7244 0.1312 enclosing false
+record -2000171 931883 written Partitions/6 320803 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.9528 enclosing false
+record -2000171 931884 written Partitions/6 321036 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.9528 enclosing false
+record -2000171 931885 written Partitions/6 321269 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.9528 enclosing false
+record -2000023 939962 written Partitions/6 331872 container none kind 0xffffef7f option none extents 6.2008 1.0915 6.6503 enclosing false
+record -2000023 940117 symbol Partitions/6 332061 container none kind 0xffff8000 option none extents 6.2008 1.0915 6.6503 enclosing false
+record -2000023 940221 written Partitions/6 332338 container none kind 0xffffef7f option none extents 6.2008 1.0915 6.6503 enclosing false
+record -2000023 978895 symbol Partitions/6 362673 container none kind 0xffff8000 option none extents 4.7244 4.7244 8.7270 enclosing false
+record -2000023 978910 symbol Partitions/6 362858 container none kind 0xffff8000 option none extents 4.7244 4.7244 8.7270 enclosing false
+record -2000023 232780 symbol Partitions/6 455192 container none kind 0xffff8000 option none extents 3.1496 3.2235 7.1522 enclosing false
+record -2000023 235155 symbol Partitions/6 455528 container none kind 0xffff8000 option none extents 3.1496 3.1172 7.1522 enclosing false
+record -2000023 422466 written Partitions/6 460233 container none kind 0xffffef7f option none extents 3.1496 3.3863 7.1522 enclosing false
+record -2000023 425292 written Partitions/6 460623 container none kind 0xffffef7f option none extents 3.1496 3.2652 7.1522 enclosing false
+record -2000023 425293 symbol Partitions/6 460812 container none kind 0xffff8000 option none extents 3.1496 3.2652 7.1522 enclosing false
+record -2000023 431054 symbol Partitions/6 461567 container none kind 0xffff8000 option none extents 3.1496 3.1172 7.1522 enclosing false
+record -2000171 459090 symbol Partitions/6 461792 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 459666 symbol Partitions/6 461957 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 462990 symbol Partitions/6 462122 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 462991 symbol Partitions/6 462287 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 462995 symbol Partitions/6 462452 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 485513 symbol Partitions/6 462617 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 485517 symbol Partitions/6 462782 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2000171 485521 symbol Partitions/6 462947 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2000023 490150 symbol Partitions/6 463490 container none kind 0xffff8000 option none extents 3.1496 3.3863 7.1522 enclosing false
+record -2001100 506166 symbol Partitions/6 470392 container none kind 0xffff8000 option none extents 1.9685 3.9370 8.8583 enclosing false
+record -2001100 506168 written Partitions/6 470672 container none kind 0xffffef7f option none extents 1.9685 3.9370 8.8583 enclosing false
+record -2001100 523529 symbol Partitions/6 475671 container none kind 0xffff8000 option none extents 1.9685 3.9370 8.8583 enclosing false
+record -2001100 523531 written Partitions/6 475951 container none kind 0xffffef7f option none extents 1.9685 3.9370 8.8583 enclosing false
+record -2000171 526917 symbol Partitions/6 476120 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 526918 symbol Partitions/6 476285 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 527056 symbol Partitions/6 476450 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 707723 written Partitions/6 509500 container none kind 0xffffef7f option none extents 0.0833 4.2651 9.6457 enclosing false
+record -2000171 707726 written Partitions/6 509721 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 707727 written Partitions/6 509926 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 707728 written Partitions/6 510131 container none kind 0xffffef7f option none extents 0.3281 0.1312 9.8425 enclosing false
+record -2000171 707729 written Partitions/6 510344 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000170 707847 written Partitions/6 510734 container none kind 0xffffef7f option none extents 0.0833 4.2651 8.6614 enclosing false
+record -2000171 707857 written Partitions/6 510955 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 707859 written Partitions/6 511168 container none kind 0xffffef7f option none extents 0.3281 0.1312 9.8425 enclosing false
+record -2000171 707861 written Partitions/6 511381 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 708062 symbol Partitions/6 511598 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000171 708063 symbol Partitions/6 511763 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000171 708064 symbol Partitions/6 511928 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000170 708065 symbol Partitions/6 512093 container none kind 0xffff8000 option none extents 4.2651 0.0833 9.6457 enclosing false
+record -2000170 708066 symbol Partitions/6 512258 container none kind 0xffff8000 option none extents 4.2651 0.0833 8.6614 enclosing false
+record -2000170 708089 written Partitions/6 512640 container none kind 0xffffef7f option none extents 0.0833 4.2651 8.5958 enclosing false
+record -2000171 708090 written Partitions/6 512857 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 708091 written Partitions/6 513062 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 708092 written Partitions/6 513267 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 708093 written Partitions/6 513472 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 709264 symbol Partitions/6 515348 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 709616 symbol Partitions/6 515513 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 709618 symbol Partitions/6 515678 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 709619 symbol Partitions/6 515843 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 846315 symbol Partitions/6 534988 container none kind 0xffff8000 option none extents 4.7900 0.0833 9.3061 enclosing false
+record -2000170 846325 symbol Partitions/6 535153 container none kind 0xffff8000 option none extents 4.2651 0.0833 8.5958 enclosing false
+record -2000171 846326 symbol Partitions/6 535318 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000171 846327 symbol Partitions/6 535483 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000170 846339 symbol Partitions/6 535648 container none kind 0xffff8000 option none extents 4.7900 0.0833 8.8851 enclosing false
+record -2000170 846340 symbol Partitions/6 535813 container none kind 0xffff8000 option none extents 4.3146 0.0833 4.1508 enclosing false
+record -2000171 846341 symbol Partitions/6 535978 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7111 enclosing false
+record -2000171 846342 symbol Partitions/6 536143 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.0770 enclosing false
+record -2000171 846343 symbol Partitions/6 536308 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.5567 enclosing false
+record -2000171 846345 symbol Partitions/6 536473 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.4354 enclosing false
+record -2000171 846346 symbol Partitions/6 536638 container none kind 0xffff8000 option none extents 0.1312 0.3281 0.5211 enclosing false
+record -2000171 846347 symbol Partitions/6 536803 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8288 enclosing false
+record -2000171 846348 symbol Partitions/6 536968 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.7052 enclosing false
+record -2000171 846349 symbol Partitions/6 537133 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.4510 enclosing false
+record -2000171 846350 symbol Partitions/6 537298 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3426 enclosing false
+record -2000171 846352 symbol Partitions/6 537463 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.4640 enclosing false
+record -2000170 846353 symbol Partitions/6 537628 container none kind 0xffff8000 option none extents 4.3378 0.0833 4.5090 enclosing false
+record -2000171 909206 symbol Partitions/6 541480 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 909207 symbol Partitions/6 541645 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2000171 909760 symbol Partitions/6 541810 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 909761 symbol Partitions/6 541975 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 909762 symbol Partitions/6 542140 container none kind 0xffff8000 option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000170 909763 symbol Partitions/6 542305 container none kind 0xffff8000 option none extents 4.7244 0.0833 6.6929 enclosing false
+record -2000170 909764 symbol Partitions/6 542470 container none kind 0xffff8000 option none extents 4.7900 0.0833 6.6929 enclosing false
+record -2000171 909766 symbol Partitions/6 542635 container none kind 0xffff8000 option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000170 909767 symbol Partitions/6 542800 container none kind 0xffff8000 option none extents 4.7244 0.0833 1.7717 enclosing false
+record -2000170 909768 symbol Partitions/6 542965 container none kind 0xffff8000 option none extents 4.7900 0.0833 1.7717 enclosing false
+record -2000171 909769 symbol Partitions/6 543130 container none kind 0xffff8000 option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 910876 symbol Partitions/6 543295 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 910882 symbol Partitions/6 543460 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 931872 symbol Partitions/6 545124 container none kind 0xffff8000 option none extents 0.1312 0.3281 0.3932 enclosing false
+record -2000171 931886 symbol Partitions/6 545289 container none kind 0xffff8000 option none extents 0.1312 0.3281 0.3934 enclosing false
+record -2000171 931887 symbol Partitions/6 545454 container none kind 0xffff8000 option none extents 0.1312 0.3281 2.9528 enclosing false
+record -2000171 931888 symbol Partitions/6 545619 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 931889 symbol Partitions/6 545784 container none kind 0xffff8000 option none extents 0.1312 0.3281 2.6694 enclosing false
+record -2000170 931890 symbol Partitions/6 545949 container none kind 0xffff8000 option none extents 4.7244 0.0833 2.8215 enclosing false
+record -2000170 931891 symbol Partitions/6 546114 container none kind 0xffff8000 option none extents 4.7900 0.0833 2.8215 enclosing false
+record -2000170 931892 symbol Partitions/6 546279 container none kind 0xffff8000 option none extents 4.7244 0.0833 2.8215 enclosing false
+record -2000171 931893 symbol Partitions/6 546444 container none kind 0xffff8000 option none extents 0.1312 0.3281 2.6800 enclosing false
+record -2000171 976939 written Partitions/6 575707 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 976940 written Partitions/6 575912 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000170 976942 written Partitions/6 576294 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.5958 enclosing false
+record -2000170 976944 written Partitions/6 576696 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.5958 enclosing false
+record -2000170 976946 written Partitions/6 577098 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.5958 enclosing false
+record -2000171 976954 written Partitions/6 577486 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976955 written Partitions/6 577707 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976956 written Partitions/6 577928 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976957 written Partitions/6 578149 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976958 written Partitions/6 578370 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976959 written Partitions/6 578591 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 976960 written Partitions/6 578808 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 976961 written Partitions/6 579025 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 976962 symbol Partitions/6 579242 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 976964 symbol Partitions/6 579407 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 976965 symbol Partitions/6 579572 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 976966 symbol Partitions/6 579737 container none kind 0xffff8000 option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977182 written Partitions/6 581816 container none kind 0xffffef7f option none extents 4.3930 0.0833 8.5958 enclosing false
+record -2000170 977191 written Partitions/6 582214 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977193 written Partitions/6 582616 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977195 written Partitions/6 583018 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977197 written Partitions/6 583420 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977199 written Partitions/6 583822 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977201 written Partitions/6 584224 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977203 written Partitions/6 584626 container none kind 0xffffef7f option none extents 4.3930 0.0833 8.5958 enclosing false
+record -2000171 977247 written Partitions/6 584847 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977248 written Partitions/6 585064 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977249 written Partitions/6 585281 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977250 written Partitions/6 585498 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977251 written Partitions/6 585715 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977252 written Partitions/6 585932 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977253 written Partitions/6 586149 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 977406 written Partitions/6 586723 container none kind 0xffffef7f option none extents 4.3963 0.0833 8.5958 enclosing false
+record -2000171 977408 written Partitions/6 586944 container none kind 0xffffef7f option none extents 4.3963 0.3281 0.1312 enclosing false
+record -2000171 977409 written Partitions/6 587157 container none kind 0xffffef7f option none extents 4.3963 0.3281 0.1312 enclosing false
+record -2000171 977410 written Partitions/6 587370 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977411 written Partitions/6 587575 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 977413 written Partitions/6 587957 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977415 written Partitions/6 588359 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977417 written Partitions/6 588761 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977419 written Partitions/6 589163 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977421 written Partitions/6 589565 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977423 written Partitions/6 589967 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977425 written Partitions/6 590369 container none kind 0xffffef7f option none extents 4.3963 0.0833 8.5958 enclosing false
+record -2000171 977433 written Partitions/6 590590 container none kind 0xffffef7f option none extents 4.3963 0.3281 0.1312 enclosing false
+record -2000171 977434 written Partitions/6 590803 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977435 written Partitions/6 591024 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977436 written Partitions/6 591245 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977437 written Partitions/6 591466 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977438 written Partitions/6 591687 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977439 written Partitions/6 591908 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977440 written Partitions/6 592129 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977441 written Partitions/6 592350 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977442 written Partitions/6 592571 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977443 written Partitions/6 592792 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977444 written Partitions/6 593013 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977445 written Partitions/6 593234 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977446 written Partitions/6 593455 container none kind 0xffffef7f option none extents 4.3963 0.3281 0.1312 enclosing false
+record -2000171 977447 written Partitions/6 593668 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977448 written Partitions/6 593885 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977449 written Partitions/6 594102 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977450 written Partitions/6 594319 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977451 written Partitions/6 594536 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977452 written Partitions/6 594753 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977453 written Partitions/6 594970 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977489 symbol Partitions/6 595187 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2000171 977490 symbol Partitions/6 595352 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2000171 977491 symbol Partitions/6 595517 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977493 symbol Partitions/6 595682 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977494 symbol Partitions/6 595847 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 977495 symbol Partitions/6 596012 container none kind 0xffff8000 option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977507 written Partitions/6 596354 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.5958 enclosing false
+record -2000171 977513 written Partitions/6 596579 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 977514 written Partitions/6 596800 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 977515 written Partitions/6 597021 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 977594 written Partitions/6 597238 container none kind 0xffffef7f option none extents 4.3930 0.3281 0.1312 enclosing false
+record -2000171 977595 written Partitions/6 597451 container none kind 0xffffef7f option none extents 4.3930 0.3281 0.1312 enclosing false
+record -2000171 977596 written Partitions/6 597664 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977597 written Partitions/6 597885 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977598 written Partitions/6 598106 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977599 written Partitions/6 598327 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977600 written Partitions/6 598548 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977601 written Partitions/6 598769 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977602 written Partitions/6 598990 container none kind 0xffffef7f option none extents 4.3930 0.3281 0.1312 enclosing false
+record -2000171 977603 written Partitions/6 599203 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977604 written Partitions/6 599424 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977605 written Partitions/6 599645 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977606 written Partitions/6 599866 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977607 written Partitions/6 600087 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977608 written Partitions/6 600308 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977609 written Partitions/6 600529 container none kind 0xffffef7f option none extents 4.3930 0.3281 0.1312 enclosing false
+record -2000171 977610 written Partitions/6 600742 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977611 written Partitions/6 600947 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 978500 symbol Partitions/6 601152 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3963 enclosing false
+record -2000171 978501 symbol Partitions/6 601317 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3963 enclosing false
+record -2000170 978502 symbol Partitions/6 601482 container none kind 0xffff8000 option none extents 4.3963 0.0833 8.5958 enclosing false
+record -2000171 978557 written Partitions/6 601995 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 978559 written Partitions/6 602379 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 978870 symbol Partitions/6 602596 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.4259 enclosing false
+record -2000171 978871 symbol Partitions/6 602761 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.4259 enclosing false
+record -2000170 978872 symbol Partitions/6 602926 container none kind 0xffff8000 option none extents 4.4259 0.0833 8.5958 enclosing false
+record -2000171 978896 symbol Partitions/6 603091 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 978909 symbol Partitions/6 603256 container none kind 0xffff8000 option none extents 4.7244 0.0833 9.7113 enclosing false
+record -2000171 978911 symbol Partitions/6 603421 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 978912 symbol Partitions/6 603586 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 1073252 symbol Partitions/6 611906 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3930 enclosing false
+record -2000171 1073253 symbol Partitions/6 612071 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3930 enclosing false
+record -2000170 1073254 symbol Partitions/6 612236 container none kind 0xffff8000 option none extents 4.3930 0.0833 8.5958 enclosing false
+record -2000171 1073508 symbol Partitions/6 612746 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000170 1073509 symbol Partitions/6 612911 container none kind 0xffff8000 option none extents 4.7244 0.0833 9.6457 enclosing false
+record -2000170 1073510 symbol Partitions/6 613076 container none kind 0xffff8000 option none extents 4.7244 0.0833 8.6614 enclosing false
+any -2009645 unnamed 122 414562,414563,414564,414565,493712,493713,493714,493715,493803,493804,493805,493806,493892,493893,493894,493895,495392,495393,495394,495395,495396,495397,495398,495399,584230,584231,599917,599918,599919,599920,599962,599963,599964,599965,627082,627083,627084,627085,628114,628115,628116,628117,628537,628538,628539,628540,628541,628542,650048,650049,650097,650098,650139,650140,650141,650142,708766,708767,708768,708769,709734,709735,709736,709737,764749,764750,764751,764752,764753,764754,764755,764756,765534,765535,765536,765537,765538,765539,765540,765541,765635,765636,765637,765638,765639,765640,765641,765642,766630,766631,766632,766633,766634,766635,766638,766639,766640,766641,766642,766643,766644,766645,768151,768152,849718,849719,849720,849721,931367,931368,931369,931370,931371,931372,931373,931374,955665,955666,1000017,1000018,1000019,1000020
+rule -2009645 unnamed 61 414563,414565,493713,493715,493804,493806,493893,493895,495393,495395,495397,495399,584231,599918,599920,599963,599965,627083,627085,628115,628117,628538,628540,628542,650049,650098,650140,650142,708767,708769,709735,709737,764750,764752,764754,764756,765535,765537,765539,765541,765636,765638,765640,765642,766631,766633,766635,766639,766641,766643,766645,768152,849719,849721,931368,931370,931372,931374,955666,1000018,1000020
+category -2009645 unnamed 0 
+any -2009643 unnamed 1 766599
+rule -2009643 unnamed 1 766599
+category -2009643 unnamed 0 
+any -2009641 unnamed 11 512278,512298,512320,512395,512446,512450,512470,512474,512523,512527,767154
+rule -2009641 unnamed 11 512278,512298,512320,512395,512446,512450,512470,512474,512523,512527,767154
+category -2009641 unnamed 0 
+any -2009640 unnamed 11 493613,493698,493791,493880,599842,599907,599952,627065,628524,765524,765621
+rule -2009640 unnamed 11 493613,493698,493791,493880,599842,599907,599952,627065,628524,765524,765621
+category -2009640 unnamed 1 493791
+any -2009639 unnamed 2 495353,764692
+rule -2009639 unnamed 2 495353,764692
+category -2009639 unnamed 0 
+any -2009636 unnamed 3 414483,708716,709726
+rule -2009636 unnamed 3 414483,708716,709726
+category -2009636 unnamed 0 
+any -2006045 unnamed 5 125028,125290,128303,128304,128305
+rule -2006045 unnamed 0 
+category -2006045 unnamed 0 
+any -2006040 unnamed 1 24584
+rule -2006040 unnamed 0 
+category -2006040 unnamed 0 
+any -2006020 unnamed 1 24867
+rule -2006020 unnamed 0 
+category -2006020 unnamed 0 
+any -2005100 unnamed 1 23738
+rule -2005100 unnamed 0 
+category -2005100 unnamed 0 
+any -2005021 unnamed 1 959386
+rule -2005021 unnamed 0 
+category -2005021 unnamed 0 
+any -2003400 Mass 2 628357,628359
+rule -2003400 Mass 1 628359
+category -2003400 Mass 1 628359
+any -2003000 unnamed 6 16216,16332,20074,20380,598493,951795
+rule -2003000 unnamed 0 
+category -2003000 unnamed 0 
+any -2002000 unnamed 5 29292,929137,929460,971577,972350
+rule -2002000 unnamed 0 
+category -2002000 unnamed 0 
+any -2001370 Entourage 8 950216,950367,954137,954582,954641,954779,954992,955125
+rule -2001370 Entourage 5 950367,954641,954779,954992,955125
+category -2001370 Entourage 5 950367,954641,954779,954992,955125
+any -2001360 Planting 23 945990,946004,946006,946014,946016,946018,946020,946164,946385,946484,946631,946708,946759,946816,946835,946912,946949,947002,947057,947108,947273,947330,947379
+rule -2001360 Planting 16 946164,946385,946484,946631,946708,946759,946816,946835,946912,946949,947002,947057,947108,947273,947330,947379
+category -2001360 Planting 16 946164,946385,946484,946631,946708,946759,946816,946835,946912,946949,947002,947057,947108,947273,947330,947379
+any -2001350 Specialty_Equipment 14 677680,677695,678974,679009,684776,684791,686169,686184,696969,696998,986973,986988,993076,993091
+rule -2001350 Specialty_Equipment 7 677695,679009,684791,686184,696998,986988,993091
+category -2001350 Specialty_Equipment 7 677695,679009,684791,686184,696998,986988,993091
+any -2001340 unnamed 4 411452,490318,523063,800334
+rule -2001340 unnamed 3 411452,490318,523063
+category -2001340 unnamed 3 411452,490318,523063
+any -2001330 Structural_Columns 8 414482,420952,469411,708715,708904,709206,709725,709940
+rule -2001330 Structural_Columns 3 414482,708715,709725
+category -2001330 Structural_Columns 3 414482,708715,709725
+any -2001300 Structural_Foundations 27 509468,512173,512277,512279,512297,512299,512319,512321,512394,512396,512399,512445,512447,512449,512451,512469,512471,512473,512475,512522,512524,512526,512528,564479,766598,767153,767156
+rule -2001300 Structural_Foundations 23 512277,512279,512297,512299,512319,512321,512394,512396,512445,512447,512449,512451,512469,512471,512473,512475,512522,512524,512526,512528,766598,767153,767156
+category -2001300 Structural_Foundations 23 512277,512279,512297,512299,512319,512321,512394,512396,512445,512447,512449,512451,512469,512471,512473,512475,512522,512524,512526,512528,766598,767153,767156
+any -2001272 unnamed 1 111426
+rule -2001272 unnamed 1 111426
+category -2001272 unnamed 0 
+any -2001271 unnamed 1 111429
+rule -2001271 unnamed 1 111429
+category -2001271 unnamed 0 
+any -2001269 unnamed 1 948584
+rule -2001269 unnamed 0 
+category -2001269 unnamed 0 
+any -2001268 unnamed 6 948077,948078,948079,948080,948081,948082
+rule -2001268 unnamed 6 948077,948078,948079,948080,948081,948082
+category -2001268 unnamed 0 
+any -2001265 unnamed 1 947498
+rule -2001265 unnamed 0 
+category -2001265 unnamed 0 
+any -2001263 Site:_Pads 2 490319,523064
+rule -2001263 Site:_Pads 2 490319,523064
+category -2001263 Site:_Pads 2 490319,523064
+any -2001260 unnamed 4 397393,418977,418985,554644
+rule -2001260 unnamed 3 418977,418985,554644
+category -2001260 unnamed 3 418977,418985,554644
+any -2001160 Plumbing_Fixtures 21 211807,211850,213558,213811,288367,420270,496586,698708,698859,778223,778420,778575,936387,936823,937021,937138,937371,937572,937573,938762,938763
+rule -2001160 Plumbing_Fixtures 12 211850,213811,420270,698859,778420,778575,936823,937138,937572,937573,938762,938763
+category -2001160 Plumbing_Fixtures 9 211850,213811,420270,698859,778420,778575,936823,937573,938763
+any -2001120 Lighting_Fixtures 17 754016,757198,767797,767856,767857,767870,767871,767916,767917,802440,802782,812954,856591,856593,856595,856597,856599
+rule -2001120 Lighting_Fixtures 10 757198,767797,767856,767857,767870,767871,767916,767917,802782,812954
+category -2001120 Lighting_Fixtures 10 757198,767797,767856,767857,767870,767871,767916,767917,802782,812954
+any -2001100 Furniture_Systems 6 506166,506168,523529,523531,697575,697577
+rule -2001100 Furniture_Systems 3 506168,523531,697577
+category -2001100 Furniture_Systems 3 506168,523531,697577
+any -2001040 Electrical_Equipment 14 776839,778316,800280,800325,800329,800336,800340,800342,800348,800350,800381,800383,800389,800391
+rule -2001040 Electrical_Equipment 12 778316,800280,800325,800329,800340,800342,800348,800350,800381,800383,800389,800391
+category -2001040 Electrical_Equipment 12 778316,800280,800325,800329,800340,800342,800348,800350,800381,800383,800389,800391
+any -2001000 Casework 5 690047,690080,690286,690287,692863
+rule -2001000 Casework 2 690080,690286
+category -2001000 Casework 2 690080,690286
+any -2000997 Walls:_Rectangular_Straight_Wall_Opening 2 504396,699571
+rule -2000997 Walls:_Rectangular_Straight_Wall_Opening 2 504396,699571
+category -2000997 Walls:_Rectangular_Straight_Wall_Opening 2 504396,699571
+any -2000954 unnamed 24 566609,568023,931547,931583,931643,932552,932875,933797,933824,933831,934471,934472,934473,934937,935253,976232,976233,976234,976235,976236,976237,976238,976239,976240
+rule -2000954 unnamed 24 566609,568023,931547,931583,931643,932552,932875,933797,933824,933831,934471,934472,934473,934937,935253,976232,976233,976234,976235,976236,976237,976238,976239,976240
+category -2000954 unnamed 0 
+any -2000948 unnamed 1 147064
+rule -2000948 unnamed 0 
+category -2000948 unnamed 0 
+any -2000946 unnamed 10 566600,568014,665842,931538,931574,931634,932543,932866,933815,934462
+rule -2000946 unnamed 10 566600,568014,665842,931538,931574,931634,932543,932866,933815,934462
+category -2000946 unnamed 10 566600,568014,665842,931538,931574,931634,932543,932866,933815,934462
+any -2000945 unnamed 3 668651,668652,668653
+rule -2000945 unnamed 3 668651,668652,668653
+category -2000945 unnamed 0 
+any -2000921 unnamed 1 665561
+rule -2000921 unnamed 0 
+category -2000921 unnamed 0 
+any -2000920 Stairs:_Landings 1 725396
+rule -2000920 Stairs:_Landings 1 725396
+category -2000920 Stairs:_Landings 1 725396
+any -2000919 Stairs:_Runs 3 513309,665560,725046
+rule -2000919 Stairs:_Runs 3 513309,665560,725046
+category -2000919 Stairs:_Runs 3 513309,665560,725046
+any -2000538 unnamed 1 1141
+rule -2000538 unnamed 0 
+category -2000538 unnamed 0 
+any -2000530 unnamed 10 566610,568024,665860,931548,931584,931644,932553,932876,933825,934474
+rule -2000530 unnamed 10 566610,568024,665860,931548,931584,931644,932553,932876,933825,934474
+category -2000530 unnamed 0 
+any -2000515 unnamed 1 4169
+rule -2000515 unnamed 0 
+category -2000515 unnamed 0 
+any -2000500 unnamed 7 699849,736510,744827,950797,950804,959069,960619
+rule -2000500 unnamed 0 
+category -2000500 unnamed 0 
+any -2000480 unnamed 1 857186
+rule -2000480 unnamed 0 
+category -2000480 unnamed 0 
+any -2000460 unnamed 1 862910
+rule -2000460 unnamed 0 
+category -2000460 unnamed 0 
+any -2000450 unnamed 1 859086
+rule -2000450 unnamed 0 
+category -2000450 unnamed 0 
+any -2000400 unnamed 4 1049,28045,28776,28929
+rule -2000400 unnamed 0 
+category -2000400 unnamed 0 
+any -2000350 unnamed 2 626581,626630
+rule -2000350 unnamed 2 626581,626630
+category -2000350 unnamed 2 626581,626630
+any -2000321 unnamed 32 423106,424757,485459,485461,485463,485465,704281,704283,704285,707846,709255,909609,931732,976941,976943,976945,977190,977192,977194,977196,977198,977200,977202,977412,977414,977416,977418,977420,977422,977424,977506,978550
+rule -2000321 unnamed 32 423106,424757,485459,485461,485463,485465,704281,704283,704285,707846,709255,909609,931732,976941,976943,976945,977190,977192,977194,977196,977198,977200,977202,977412,977414,977416,977418,977420,977422,977424,977506,978550
+category -2000321 unnamed 0 
+any -2000280 unnamed 1 382615
+rule -2000280 unnamed 0 
+category -2000280 unnamed 0 
+any -2000197 unnamed 1 100162
+rule -2000197 unnamed 0 
+category -2000197 unnamed 0 
+any -2000192 unnamed 2 957750,957856
+rule -2000192 unnamed 2 957750,957856
+category -2000192 unnamed 0 
+any -2000171 Curtain_Wall_Mullions 207 423134,423136,423138,423139,423148,423149,424777,424778,424779,424786,424787,459090,459666,462990,462991,462995,485456,485458,485492,485493,485494,485500,485501,485505,485506,485507,485508,485509,485513,485517,485521,525603,526917,526918,527056,687033,687035,687037,704288,704289,704290,704291,704293,704294,704296,704297,704298,704299,704300,707726,707727,707728,707729,707857,707859,707861,708062,708063,708064,708090,708091,708092,708093,709249,709251,709253,709258,709259,709261,709264,709616,709618,709619,745035,846326,846327,846332,846333,846334,846335,846341,846342,846343,846345,846346,846347,846348,846349,846350,846351,846352,909206,909207,909751,909752,909753,909754,909755,909756,909757,909758,909759,909760,909761,909762,909766,909769,910876,910882,931872,931877,931878,931879,931880,931881,931882,931883,931884,931885,931886,931887,931888,931889,931893,976939,976940,976954,976955,976956,976957,976958,976959,976960,976961,976962,976964,976965,977247,977248,977249,977250,977251,977252,977253,977408,977409,977410,977411,977433,977434,977435,977436,977437,977438,977439,977440,977441,977442,977443,977444,977445,977446,977447,977448,977449,977450,977451,977452,977453,977489,977490,977491,977493,977494,977513,977514,977515,977594,977595,977596,977597,977598,977599,977600,977601,977602,977603,977604,977605,977606,977607,977608,977609,977610,977611,978500,978501,978557,978559,978870,978871,978896,978911,978912,1073252,1073253,1073508
+rule -2000171 Curtain_Wall_Mullions 144 423134,423136,423138,423139,423148,423149,424777,424778,424779,424786,424787,485456,485458,485492,485493,485494,485500,485501,485505,485506,485507,485508,485509,525603,687033,687035,687037,704288,704289,704290,704291,704293,704294,704296,704297,704298,704299,704300,707726,707727,707728,707729,707857,707859,707861,708090,708091,708092,708093,709249,709251,709253,709258,709259,709261,745035,846332,846333,846334,846335,846351,909751,909752,909753,909754,909755,909756,909757,909758,909759,931877,931878,931879,931880,931881,931882,931883,931884,931885,976939,976940,976954,976955,976956,976957,976958,976959,976960,976961,977247,977248,977249,977250,977251,977252,977253,977408,977409,977410,977411,977433,977434,977435,977436,977437,977438,977439,977440,977441,977442,977443,977444,977445,977446,977447,977448,977449,977450,977451,977452,977453,977513,977514,977515,977594,977595,977596,977597,977598,977599,977600,977601,977602,977603,977604,977605,977606,977607,977608,977609,977610,977611,978557,978559
+category -2000171 Curtain_Wall_Mullions 144 423134,423136,423138,423139,423148,423149,424777,424778,424779,424786,424787,485456,485458,485492,485493,485494,485500,485501,485505,485506,485507,485508,485509,525603,687033,687035,687037,704288,704289,704290,704291,704293,704294,704296,704297,704298,704299,704300,707726,707727,707728,707729,707857,707859,707861,708090,708091,708092,708093,709249,709251,709253,709258,709259,709261,745035,846332,846333,846334,846335,846351,909751,909752,909753,909754,909755,909756,909757,909758,909759,931877,931878,931879,931880,931881,931882,931883,931884,931885,976939,976940,976954,976955,976956,976957,976958,976959,976960,976961,977247,977248,977249,977250,977251,977252,977253,977408,977409,977410,977411,977433,977434,977435,977436,977437,977438,977439,977440,977441,977442,977443,977444,977445,977446,977447,977448,977449,977450,977451,977452,977453,977513,977514,977515,977594,977595,977596,977597,977598,977599,977600,977601,977602,977603,977604,977605,977606,977607,977608,977609,977610,977611,978557,978559
+any -2000170 Curtain_Panels 66 423100,424758,424759,485460,485462,485464,485466,485467,485468,485469,704282,704284,707723,707847,708065,708066,708089,709256,846315,846325,846339,846340,846353,909735,909736,909737,909738,909763,909764,909767,909768,931858,931859,931860,931861,931890,931891,931892,976942,976944,976946,976966,977182,977191,977193,977195,977197,977199,977201,977203,977406,977413,977415,977417,977419,977421,977423,977425,977495,977507,978502,978872,978909,1073254,1073509,1073510
+rule -2000170 Curtain_Panels 44 423100,424758,424759,485460,485462,485464,485466,485467,485468,485469,704282,704284,707723,707847,708089,709256,909735,909736,909737,909738,931858,931859,931860,931861,976942,976944,976946,977182,977191,977193,977195,977197,977199,977201,977203,977406,977413,977415,977417,977419,977421,977423,977425,977507
+category -2000170 Curtain_Panels 44 423100,424758,424759,485460,485462,485464,485466,485467,485468,485469,704282,704284,707723,707847,708089,709256,909735,909736,909737,909738,931858,931859,931860,931861,976942,976944,976946,977182,977191,977193,977195,977197,977199,977201,977203,977406,977413,977415,977417,977419,977421,977423,977425,977507
+any -2000160 unnamed 14 857191,857194,857197,857200,857203,857206,857209,857279,857292,857346,857545,857552,906922,940325
+rule -2000160 unnamed 14 857191,857194,857197,857200,857203,857206,857209,857279,857292,857346,857545,857552,906922,940325
+category -2000160 unnamed 14 857191,857194,857197,857200,857203,857206,857209,857279,857292,857346,857545,857552,906922,940325
+any -2000151 Generic_Models 35 287141,499496,674355,674370,680524,680539,694781,694796,701300,785282,935747,937571,938761,993873,993980,994767,994782,996866,996881,997032,997033,997050,997051,997068,997069,997114,997115,997116,997117,997118,997119,997120,997121,997122,997123
+rule -2000151 Generic_Models 25 499496,674370,680539,694796,701300,935747,937571,938761,993980,994782,996881,997032,997033,997050,997051,997068,997069,997114,997115,997116,997117,997118,997119,997120,997121
+category -2000151 Generic_Models 25 499496,674370,680539,694796,701300,935747,937571,938761,993980,994782,996881,997032,997033,997050,997051,997068,997069,997114,997115,997116,997117,997118,997119,997120,997121
+any -2000150 unnamed 2 941864,961908
+rule -2000150 unnamed 0 
+category -2000150 unnamed 0 
+any -2000127 unnamed 35 12344,489599,490134,566599,568013,669450,669451,669452,669453,669454,669455,669456,669457,669458,931537,931585,931646,932878,934461,951303,951430,951431,951432,951433,951434,951435,975083,975084,975087,975088,975089,975091,976241,976242,976243
+rule -2000127 unnamed 0 
+category -2000127 unnamed 0 
+any -2000126 Railings 10 566588,567887,665711,931377,931569,931630,932401,932862,933811,933840
+rule -2000126 Railings 10 566588,567887,665711,931377,931569,931630,932401,932862,933811,933840
+category -2000126 Railings 10 566588,567887,665711,931377,931569,931630,932401,932862,933811,933840
+any -2000120 Stairs 3 513254,665557,725045
+rule -2000120 Stairs 3 513254,665557,725045
+category -2000120 Stairs 3 513254,665557,725045
+any -2000095 unnamed 22 800213,800281,800326,800330,800331,800337,800341,800343,800349,800351,800352,800382,800384,800390,800392,800393,988384,988397,988460,988591,988604,988641
+rule -2000095 unnamed 21 800213,800281,800326,800330,800331,800341,800343,800349,800351,800352,800382,800384,800390,800392,800393,988384,988397,988460,988591,988604,988641
+category -2000095 unnamed 21 800213,800281,800326,800330,800331,800341,800343,800349,800351,800352,800382,800384,800390,800392,800393,988384,988397,988460,988591,988604,988641
+any -2000080 Furniture 42 735724,735739,736435,981609,981963,982743,982762,983030,983156,983164,983236,983306,983388,983517,983518,984471,984486,985723,985756,987054,987167,988018,988128,988396,988459,988462,988603,988640,989329,989344,989521,990191,990317,990596,990620,990621,990622,990645,990646,990647,990648,997883
+rule -2000080 Furniture 30 735739,736435,981963,982762,983030,983156,983164,983236,983306,983388,984486,985756,987054,987167,988128,988396,988459,988462,988603,988640,989344,989521,990317,990596,990620,990621,990645,990646,990647,990648
+category -2000080 Furniture 30 735739,736435,981963,982762,983030,983156,983164,983236,983306,983388,984486,985756,987054,987167,988128,988396,988459,988462,988603,988640,989344,989521,990317,990596,990620,990621,990645,990646,990647,990648
+any -2000079 unnamed 5 857234,857235,857236,857237,857238
+rule -2000079 unnamed 5 857234,857235,857236,857237,857238
+category -2000079 unnamed 0 
+any -2000077 unnamed 2 970620,970773
+rule -2000077 unnamed 2 970620,970773
+category -2000077 unnamed 0 
+any -2000068 unnamed 17 668634,668635,668636,668637,668638,668639,668640,668641,668643,668644,668645,668646,668647,668648,668649,668650,669205
+rule -2000068 unnamed 17 668634,668635,668636,668637,668638,668639,668640,668641,668643,668644,668645,668646,668647,668648,668649,668650,669205
+category -2000068 unnamed 0 
+any -2000067 unnamed 10 668628,668629,668630,668631,668632,668633,725402,725403,725404,725405
+rule -2000067 unnamed 10 668628,668629,668630,668631,668632,668633,725402,725403,725404,725405
+category -2000067 unnamed 0 
+any -2000066 unnamed 3 857393,857525,1000807
+rule -2000066 unnamed 3 857393,857525,1000807
+category -2000066 unnamed 0 
+any -2000051 Lines 2 941493,970942
+rule -2000051 Lines 2 941493,970942
+category -2000051 Lines 0 
+any -2000045 Lines:_<Sketch> 123 415653,415660,415667,415674,415681,415742,418186,418197,418203,490322,490323,490324,490325,512686,512688,512689,523068,523071,523074,523077,525474,526422,529519,529520,529521,529528,529533,529716,534692,534693,534694,534701,534706,534786,534793,534801,549038,549039,549040,549041,550258,550259,550260,550261,566592,567916,580809,580865,580930,580991,626060,650190,650230,650257,650389,650531,650532,650533,650534,697615,697616,697617,697618,700284,700285,700286,700287,700293,700295,704057,704058,704059,704060,704906,704907,704908,704909,704958,709800,709879,709913,724433,724434,724435,724436,764703,764704,764705,764706,766603,766606,766609,766612,766615,766618,766621,766625,768193,768194,768196,768254,931195,931201,931280,931498,931632,932482,933766,934138,934276,934417,947593,947661,947750,947884,947963,948045,976338,976365,976683,1001886,1001888,1001889
+rule -2000045 Lines:_<Sketch> 123 415653,415660,415667,415674,415681,415742,418186,418197,418203,490322,490323,490324,490325,512686,512688,512689,523068,523071,523074,523077,525474,526422,529519,529520,529521,529528,529533,529716,534692,534693,534694,534701,534706,534786,534793,534801,549038,549039,549040,549041,550258,550259,550260,550261,566592,567916,580809,580865,580930,580991,626060,650190,650230,650257,650389,650531,650532,650533,650534,697615,697616,697617,697618,700284,700285,700286,700287,700293,700295,704057,704058,704059,704060,704906,704907,704908,704909,704958,709800,709879,709913,724433,724434,724435,724436,764703,764704,764705,764706,766603,766606,766609,766612,766615,766618,766621,766625,768193,768194,768196,768254,931195,931201,931280,931498,931632,932482,933766,934138,934276,934417,947593,947661,947750,947884,947963,948045,976338,976365,976683,1001886,1001888,1001889
+category -2000045 Lines:_<Sketch> 0 
+any -2000038 Ceilings 2 697612,704053
+rule -2000038 Ceilings 2 697612,704053
+category -2000038 Ceilings 2 697612,704053
+any -2000035 Roofs 2 243274,724430
+rule -2000035 Roofs 2 243274,724430
+category -2000035 Roofs 2 243274,724430
+any -2000032 Floors 8 176804,418183,495352,512683,549031,550255,647908,764691
+rule -2000032 Floors 8 176804,418183,495352,512683,549031,550255,647908,764691
+category -2000032 Floors 8 176804,418183,495352,512683,549031,550255,647908,764691
+any -2000023 Doors 31 232780,235155,422466,423107,425292,425293,430997,431054,431064,431144,431198,485452,485679,490150,505854,505974,704276,704286,709246,769882,866105,906937,907609,907638,910850,910875,939962,940117,940221,978895,978910
+rule -2000023 Doors 16 422466,423107,425292,430997,431064,431144,431198,485452,485679,505974,704276,704286,709246,906937,939962,940221
+category -2000023 Doors 16 422466,423107,425292,430997,431064,431144,431198,485452,485679,505974,704276,704286,709246,906937,939962,940221
+any -2000014 Windows 25 198366,457479,457534,457542,485432,488864,488881,489062,498006,507058,554383,706288,735853,736152,736223,736330,744522,744523,744524,744525,818872,818873,818874,818875,850328
+rule -2000014 Windows 17 457479,457534,457542,485432,488881,489062,498006,554383,706288,735853,736152,736223,736330,744522,744523,744524,744525
+category -2000014 Windows 17 457479,457534,457542,485432,488881,489062,498006,554383,706288,735853,736152,736223,736330,744522,744523,744524,744525
+any -2000011 Walls 56 198694,198749,234869,418079,422243,423099,424922,425745,427092,428588,428745,428797,429964,430064,430318,430361,430412,430859,493612,493697,493790,493879,497540,506386,506797,530178,599841,599906,599951,627064,627729,628523,655533,704275,707722,708088,709245,745997,746235,746589,746634,746766,765523,765620,768442,845266,846939,847436,849032,906885,937935,938974,939084,976752,977133,977377
+rule -2000011 Walls 56 198694,198749,234869,418079,422243,423099,424922,425745,427092,428588,428745,428797,429964,430064,430318,430361,430412,430859,493612,493697,493790,493879,497540,506386,506797,530178,599841,599906,599951,627064,627729,628523,655533,704275,707722,708088,709245,745997,746235,746589,746634,746766,765523,765620,768442,845266,846939,847436,849032,906885,937935,938974,939084,976752,977133,977377
+category -2000011 Walls 56 198694,198749,234869,418079,422243,423099,424922,425745,427092,428588,428745,428797,429964,430064,430318,430361,430412,430859,493612,493697,493790,493879,497540,506386,506797,530178,599841,599906,599951,627064,627729,628523,655533,704275,707722,708088,709245,745997,746235,746589,746634,746766,765523,765620,768442,845266,846939,847436,849032,906885,937935,938974,939084,976752,977133,977377
+unplaced -2009645 unnamed symbol 61 414562,414564,493712,493714,493803,493805,493892,493894,495392,495394,495396,495398,584230,599917,599919,599962,599964,627082,627084,628114,628116,628537,628539,628541,650048,650097,650139,650141,708766,708768,709734,709736,764749,764751,764753,764755,765534,765536,765538,765540,765635,765637,765639,765641,766630,766632,766634,766638,766640,766642,766644,768151,849718,849720,931367,931369,931371,931373,955665,1000017,1000019
+unplaced -2006045 unnamed symbol 5 125028,125290,128303,128304,128305
+unplaced -2006040 unnamed symbol 1 24584
+unplaced -2006020 unnamed symbol 1 24867
+unplaced -2005100 unnamed symbol 1 23738
+unplaced -2005021 unnamed symbol 1 959386
+unplaced -2003400 Mass symbol 1 628357
+unplaced -2003000 unnamed symbol 6 16216,16332,20074,20380,598493,951795
+unplaced -2002000 unnamed symbol 5 29292,929137,929460,971577,972350
+unplaced -2001370 Entourage symbol 3 950216,954137,954582
+unplaced -2001360 Planting symbol 7 945990,946004,946006,946014,946016,946018,946020
+unplaced -2001350 Specialty_Equipment symbol 7 677680,678974,684776,686169,696969,986973,993076
+unplaced -2001340 unnamed container 1 800334
+unplaced -2001330 Structural_Columns symbol 5 420952,469411,708904,709206,709940
+unplaced -2001300 Structural_Foundations symbol 4 509468,512173,512399,564479
+unplaced -2001269 unnamed symbol 1 948584
+unplaced -2001265 unnamed other_kind 1 947498
+unplaced -2001260 unnamed symbol 1 397393
+unplaced -2001160 Plumbing_Fixtures symbol 9 211807,213558,288367,496586,698708,778223,936387,937021,937371
+unplaced -2001120 Lighting_Fixtures symbol 7 754016,802440,856591,856593,856595,856597,856599
+unplaced -2001100 Furniture_Systems symbol 3 506166,523529,697575
+unplaced -2001040 Electrical_Equipment container 1 800336
+unplaced -2001040 Electrical_Equipment symbol 1 776839
+unplaced -2001000 Casework symbol 3 690047,690287,692863
+unplaced -2000948 unnamed symbol 1 147064
+unplaced -2000921 unnamed symbol 1 665561
+unplaced -2000538 unnamed symbol 1 1141
+unplaced -2000515 unnamed symbol 1 4169
+unplaced -2000500 unnamed other_kind 7 699849,736510,744827,950797,950804,959069,960619
+unplaced -2000480 unnamed symbol 1 857186
+unplaced -2000460 unnamed symbol 1 862910
+unplaced -2000450 unnamed symbol 1 859086
+unplaced -2000400 unnamed symbol 4 1049,28045,28776,28929
+unplaced -2000280 unnamed symbol 1 382615
+unplaced -2000197 unnamed symbol 1 100162
+unplaced -2000171 Curtain_Wall_Mullions symbol 63 459090,459666,462990,462991,462995,485513,485517,485521,526917,526918,527056,708062,708063,708064,709264,709616,709618,709619,846326,846327,846341,846342,846343,846345,846346,846347,846348,846349,846350,846352,909206,909207,909760,909761,909762,909766,909769,910876,910882,931872,931886,931887,931888,931889,931893,976962,976964,976965,977489,977490,977491,977493,977494,978500,978501,978870,978871,978896,978911,978912,1073252,1073253,1073508
+unplaced -2000170 Curtain_Panels symbol 22 708065,708066,846315,846325,846339,846340,846353,909763,909764,909767,909768,931890,931891,931892,976966,977495,978502,978872,978909,1073254,1073509,1073510
+unplaced -2000151 Generic_Models symbol 10 287141,674355,680524,694781,785282,993873,994767,996866,997122,997123
+unplaced -2000150 unnamed symbol 2 941864,961908
+unplaced -2000127 unnamed symbol 35 12344,489599,490134,566599,568013,669450,669451,669452,669453,669454,669455,669456,669457,669458,931537,931585,931646,932878,934461,951303,951430,951431,951432,951433,951434,951435,975083,975084,975087,975088,975089,975091,976241,976242,976243
+unplaced -2000095 unnamed container 1 800337
+unplaced -2000080 Furniture symbol 12 735724,981609,982743,983517,983518,984471,985723,988018,989329,990191,990622,997883
+unplaced -2000023 Doors symbol 15 232780,235155,425293,431054,490150,505854,769882,866105,907609,907638,910850,910875,940117,978895,978910
+unplaced -2000014 Windows symbol 8 198366,488864,507058,818872,818873,818874,818875,850328
+refused -2009645 unnamed no_body_point 61 414563,414565,493713,493715,493804,493806,493893,493895,495393,495395,495397,495399,584231,599918,599920,599963,599965,627083,627085,628115,628117,628538,628540,628542,650049,650098,650140,650142,708767,708769,709735,709737,764750,764752,764754,764756,765535,765537,765539,765541,765636,765638,765640,765642,766631,766633,766635,766639,766641,766643,766645,768152,849719,849721,931368,931370,931372,931374,955666,1000018,1000020
+refused -2009643 unnamed no_body_flat 1 766599
+refused -2009641 unnamed no_body_flat 11 512278,512298,512320,512395,512446,512450,512470,512474,512523,512527,767154
+refused -2009640 unnamed no_body_flat 10 493613,493698,493880,599842,599907,599952,627065,628524,765524,765621
+refused -2009639 unnamed no_body_flat 2 495353,764692
+refused -2009636 unnamed no_body_line 3 414483,708716,709726
+refused -2001272 unnamed no_body_point 1 111426
+refused -2001271 unnamed no_body_point 1 111429
+refused -2001268 unnamed no_body_flat 3 948078,948080,948081
+refused -2001268 unnamed no_body_line 3 948077,948079,948082
+refused -2001160 Plumbing_Fixtures no_body_flat 3 937138,937572,938762
+refused -2000954 unnamed no_body_flat 5 933797,933831,934937,935253,976236
+refused -2000954 unnamed no_body_line 19 566609,568023,931547,931583,931643,932552,932875,933824,934471,934472,934473,976232,976233,976234,976235,976237,976238,976239,976240
+refused -2000945 unnamed no_body_line 3 668651,668652,668653
+refused -2000530 unnamed no_body_flat 10 566610,568024,665860,931548,931584,931644,932553,932876,933825,934474
+refused -2000321 unnamed no_body_line 32 423106,424757,485459,485461,485463,485465,704281,704283,704285,707846,709255,909609,931732,976941,976943,976945,977190,977192,977194,977196,977198,977200,977202,977412,977414,977416,977418,977420,977422,977424,977506,978550
+refused -2000192 unnamed no_body_line 2 957750,957856
+refused -2000079 unnamed no_body_flat 2 857235,857236
+refused -2000079 unnamed no_body_line 3 857234,857237,857238
+refused -2000077 unnamed no_body_flat 2 970620,970773
+refused -2000068 unnamed no_body_flat 2 668636,668648
+refused -2000068 unnamed no_body_line 15 668634,668635,668637,668638,668639,668640,668641,668643,668644,668645,668646,668647,668649,668650,669205
+refused -2000067 unnamed no_body_line 10 668628,668629,668630,668631,668632,668633,725402,725403,725404,725405
+refused -2000066 unnamed no_body_line 3 857393,857525,1000807
+refused -2000051 Lines no_body_flat 1 941493
+refused -2000051 Lines no_body_line 1 970942
+refused -2000045 Lines:_<Sketch> no_body_flat 29 415742,418186,512686,523074,525474,526422,529528,529533,534701,534706,534786,534793,549038,550258,650230,650257,650389,650534,724433,724434,724435,724436,764703,766612,766615,766625,947661,947884,947963
+refused -2000045 Lines:_<Sketch> no_body_line 94 415653,415660,415667,415674,415681,418197,418203,490322,490323,490324,490325,512688,512689,523068,523071,523077,529519,529520,529521,529716,534692,534693,534694,534801,549039,549040,549041,550259,550260,550261,566592,567916,580809,580865,580930,580991,626060,650190,650531,650532,650533,697615,697616,697617,697618,700284,700285,700286,700287,700293,700295,704057,704058,704059,704060,704906,704907,704908,704909,704958,709800,709879,709913,764704,764705,764706,766603,766606,766609,766618,766621,768193,768194,768196,768254,931195,931201,931280,931498,931632,932482,933766,934138,934276,934417,947593,947750,948045,976338,976365,976683,1001886,1001888,1001889
+census stages: -2009645 unnamed any 122 placed 61 written 0; unplaced symbol 61; refused no_body_point 61
+census stages: -2009643 unnamed any 1 placed 1 written 0; refused no_body_flat 1
+census stages: -2009641 unnamed any 11 placed 11 written 0; refused no_body_flat 11
+census stages: -2009640 unnamed any 11 placed 11 written 1; refused no_body_flat 10
+census stages: -2009639 unnamed any 2 placed 2 written 0; refused no_body_flat 2
+census stages: -2009636 unnamed any 3 placed 3 written 0; refused no_body_line 3
+census stages: -2006045 unnamed any 5 placed 0 written 0; unplaced symbol 5
+census stages: -2006040 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2006020 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2005100 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2005021 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2003400 Mass any 2 placed 1 written 1; unplaced symbol 1
+census stages: -2003000 unnamed any 6 placed 0 written 0; unplaced symbol 6
+census stages: -2002000 unnamed any 5 placed 0 written 0; unplaced symbol 5
+census stages: -2001370 Entourage any 8 placed 5 written 5; unplaced symbol 3
+census stages: -2001360 Planting any 23 placed 16 written 16; unplaced symbol 7
+census stages: -2001350 Specialty_Equipment any 14 placed 7 written 7; unplaced symbol 7
+census stages: -2001340 unnamed any 4 placed 3 written 3; unplaced container 1
+census stages: -2001330 Structural_Columns any 8 placed 3 written 3; unplaced symbol 5
+census stages: -2001300 Structural_Foundations any 27 placed 23 written 23; unplaced symbol 4
+census stages: -2001272 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2001271 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2001269 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2001268 unnamed any 6 placed 6 written 0; refused no_body_flat 3; refused no_body_line 3
+census stages: -2001265 unnamed any 1 placed 0 written 0; unplaced other_kind 1
+census stages: -2001263 Site:_Pads any 2 placed 2 written 2
+census stages: -2001260 unnamed any 4 placed 3 written 3; unplaced symbol 1
+census stages: -2001160 Plumbing_Fixtures any 21 placed 12 written 9; unplaced symbol 9; refused no_body_flat 3
+census stages: -2001120 Lighting_Fixtures any 17 placed 10 written 10; unplaced symbol 7
+census stages: -2001100 Furniture_Systems any 6 placed 3 written 3; unplaced symbol 3
+census stages: -2001040 Electrical_Equipment any 14 placed 12 written 12; unplaced container 1; unplaced symbol 1
+census stages: -2001000 Casework any 5 placed 2 written 2; unplaced symbol 3
+census stages: -2000997 Walls:_Rectangular_Straight_Wall_Opening any 2 placed 2 written 2
+census stages: -2000954 unnamed any 24 placed 24 written 0; refused no_body_flat 5; refused no_body_line 19
+census stages: -2000948 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000946 unnamed any 10 placed 10 written 10
+census stages: -2000945 unnamed any 3 placed 3 written 0; refused no_body_line 3
+census stages: -2000921 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000920 Stairs:_Landings any 1 placed 1 written 1
+census stages: -2000919 Stairs:_Runs any 3 placed 3 written 3
+census stages: -2000538 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000530 unnamed any 10 placed 10 written 0; refused no_body_flat 10
+census stages: -2000515 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000500 unnamed any 7 placed 0 written 0; unplaced other_kind 7
+census stages: -2000480 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000460 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000450 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000400 unnamed any 4 placed 0 written 0; unplaced symbol 4
+census stages: -2000350 unnamed any 2 placed 2 written 2
+census stages: -2000321 unnamed any 32 placed 32 written 0; refused no_body_line 32
+census stages: -2000280 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000197 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000192 unnamed any 2 placed 2 written 0; refused no_body_line 2
+census stages: -2000171 Curtain_Wall_Mullions any 207 placed 144 written 144; unplaced symbol 63
+census stages: -2000170 Curtain_Panels any 66 placed 44 written 44; unplaced symbol 22
+census stages: -2000160 unnamed any 14 placed 14 written 14
+census stages: -2000151 Generic_Models any 35 placed 25 written 25; unplaced symbol 10
+census stages: -2000150 unnamed any 2 placed 0 written 0; unplaced symbol 2
+census stages: -2000127 unnamed any 35 placed 0 written 0; unplaced symbol 35
+census stages: -2000126 Railings any 10 placed 10 written 10
+census stages: -2000120 Stairs any 3 placed 3 written 3
+census stages: -2000095 unnamed any 22 placed 21 written 21; unplaced container 1
+census stages: -2000080 Furniture any 42 placed 30 written 30; unplaced symbol 12
+census stages: -2000079 unnamed any 5 placed 5 written 0; refused no_body_flat 2; refused no_body_line 3
+census stages: -2000077 unnamed any 2 placed 2 written 0; refused no_body_flat 2
+census stages: -2000068 unnamed any 17 placed 17 written 0; refused no_body_flat 2; refused no_body_line 15
+census stages: -2000067 unnamed any 10 placed 10 written 0; refused no_body_line 10
+census stages: -2000066 unnamed any 3 placed 3 written 0; refused no_body_line 3
+census stages: -2000051 Lines any 2 placed 2 written 0; refused no_body_flat 1; refused no_body_line 1
+census stages: -2000045 Lines:_<Sketch> any 123 placed 123 written 0; refused no_body_flat 29; refused no_body_line 94
+census stages: -2000038 Ceilings any 2 placed 2 written 2
+census stages: -2000035 Roofs any 2 placed 2 written 2
+census stages: -2000032 Floors any 8 placed 8 written 8
+census stages: -2000023 Doors any 31 placed 16 written 16; unplaced symbol 15
+census stages: -2000014 Windows any 25 placed 17 written 17; unplaced symbol 8
+census stages: -2000011 Walls any 56 placed 56 written 56
+declared 8010 framed 1166 unframed 6844 1-26,29-66,68-82,87-91,93,95,97,99,101-132,134-213,230-242,258-260,277-282,285-293,296-299,305-315,324,338-339,341-348,350,357-368,371-375,397,414-419,421,423,425-429,442-461,519,523,694,757-758,792,865,942,1647,1662,1951-1952,2028-2029,2090-2091,2466-2467,2489,2496-2498,2685-2687,3325,3443-3444,3621,3644,3652,6473,6553,6876-6878,6911-6913,7000,7007,7175,7230,7233-7234,7236-7237,7239-7245,7566-7569,7842-7846,7848-7852,8140-8142,8152,8157-8159,8174-8178,8208,8231,8237-8239,8251-8254,8482-8485,8494-8498,8561-8562,8564,8566,8573-8574,8612-8613,8616-8619,8798,8949-8955,8991,9195-9200,9481,9485-9486,9488-9490,9492-9494,9496-9503,9599,9603,9605,9608,9610,9613,9676-9677,9744-9745,10164-10168,11799-11804,12099-12101,12589-12590,12609-12610,12613-12614,12632,12799,16209-16210,16321,16556,17530-17533,18134,18403-18404,18428-18429,18432-18433,18436-18437,18440-18441,18451-18454,18459,18470,18811-18813,19236,19788-19790,19858-19860,19877-19887,19895,19902-19905,20055-20056,20184-20185,20361-20362,20448,21116-21122,21208,21274-21276,21308-21309,21435,21437-21442,21445-21449,21747-21749,21874-21876,23211,23447,23471-23474,23479-23485,23741-23742,23763-23768,23771-23775,23795-23796,24561-24562,24822,24824,24826,24909-24922,24925,24927-24928,24932-24933,24935-24947,25978,26009-26020,26029-26032,28017-28018,28598,28744-28745,29088-29091,29109,29200-29202,32420,32425-32428,32438-32443,34701-34706,36084-36085,36228-36238,41944-41945,45567-45568,46015-46017,46554-46559,49024-49034,49504-49508,49552-49557,49559-49564,49579-49722,50291-50295,50297,51422-51457,52139-52140,52145-52165,53277-53278,54520,54523,54525-54529,54537-54539,54654-54664,55150-55154,55156-55158,55169,55171-55172,55355-55361,56404-56407,56768-56776,69638-69656,69661-69721,69748,69823-69855,85092-85107,85112-85115,86143-86146,86187-86202,86204-86243,86245-86257,86273-86292,86299-86336,86338-86341,86961-86962,88900-88901,98746,98977,98984-98988,99780-99788,99790-99799,99829-99839,99859-99861,99864-99869,99878-99892,99908-99915,99923-99928,99930-99941,99943-99944,100173-100177,100415-100421,100424-100426,101146-101147,102105,102124,102126-102133,102348-102352,102355-102453,102461-102467,102521-102526,102842,102856,102861-102862,102879-102880,102898-102900,103627-103635,103647-103649,103653-103657,103662-103691,105006-105007,105499-105500,105523-105718,105720-105730,105763-105765,105779-105785,111427-111428,111430-111433,111599-111600,112333,112390-112417,113108-113174,113178,113943-113946,114978-114979,115987-115994,116082-116085,116096-116099,116101-116107,116111,116114-116120,121586-121590,121652-121664,121706-121707,121711-121762,121765-121767,121776-121778,123301,123307,123310-123315,125009,125016-125017,125021,127547-127582,128294,128301-128302,130492,130494,130496,130498,130500,130502,130504,130506,130508,130510,130733,130735,130737,130739,130741,130743,130749-130750,130753-130754,130757-130758,130769-130770,130773-130774,130781-130782,130785-130786,130813-130816,132326-132330,132395-132397,132466-132469,132471-132481,132484-132490,133294-133300,133303,133589,133878-133887,134609-134610,135866,137213-137235,137277-137297,137299-137300,137302-137335,137424-137436,139192-139197,139202,141422,141429,141440,141450,141477,141538,141548,141723,141725-141734,141746-141749,144211,144255-144256,144267-144269,147271,147289-147292,147309-147311,147315-147316,147319-147320,147324-147327,147352-147355,147513-147514,148318,148322-148325,148335-148337,148339-148340,148344-148349,148447-148450,148518-148519,148901,148907-148910,148923-148925,148928-148929,148932-148933,148936-148939,148968-148971,149095,149098,149695,149699-149702,149715-149717,149720-149721,149727-149728,149730-149733,149920-149922,149926-149929,149942-149944,149947-149948,149954-149955,149957-149960,150123-150124,150328,150334-150337,150350-150352,150355-150356,150359-150360,150363-150366,150395-150398,150438-150441,150540-150542,150548-150551,150564-150566,150569-150570,150573-150574,150577-150580,150609-150612,150652-150655,150754-150755,150954,150958-150961,150975-150977,150980-150981,150985-150986,150988-150991,151155-151157,151161-151164,151174-151178,151180-151182,151186-151192,151349-151350,152185,152194-152196,152251-152258,152406-152407,152409,152419-152421,152476-152483,152630-152631,152859,152869-152871,152926-152933,153082,153085,153574,153584-153586,153641-153648,153800,153802,153804,153808-153811,153824-153826,153829-153830,153833-153834,153837-153840,153869-153872,153912-153915,154007-154014,154020-154021,157312,157318-157321,157358-157360,157364-157365,157368-157369,157779-157780,160569,160576-160579,160592-160594,160597-160598,160601-160602,160605-160608,160637-160640,160680-160683,160825,160829,161597,161604-161607,161620-161622,161625-161626,161629-161630,161633-161636,161665-161668,161708-161711,161842-161845,161849,161858-161861,161874-161876,161879-161880,161883-161884,161887-161890,162574,162579,163067,163074-163077,163090-163092,163095-163096,163099-163100,163103-163106,163135-163138,163284,163286,169424,169433-169436,169477-169478,169480,169484-169485,169489-169490,170257,170259,171476,171478-171496,171671-171672,171877,171880,171886,171890,171895,171911,171938,171941,171944,171947,172385,172388,172397,172415,172453,172485,172497,174475-174476,174478-174479,174481-174482,174484,174486-174488,174490-174491,174493,174498,174501,174503-174504,174509-174510,174515-174516,174537,174548,174566,174577-174578,174580-174581,174586,174589-174590,174592-174593,174595-174596,174598-174600,176802-176803,177433,182525,182551-182558,182563,182567,182779-182781,182867,184409,185144,185148,185150,194585,194609,195169,195239,195253,195255,195257,195259,195261,195338,195411,195418,196629,196639,196658,197319-197334,198347-198365,198367,198369-198370,198372-198375,198377-198380,198382-198385,199598-199600,200610,211148,211150,211179,211299-211306,211321-211322,211401-211403,211783-211784,211804,211860,211972,211976-211979,212016-212018,212022-212023,212026-212027,212905,212920-212933,213226,213548-213552,213559,213622,213821,218100,218358,218370-218372,218389-218393,218942,218946-218949,219048-219049,219051-219053,219106-219107,219437,232682-232683,232709,232735-232737,232754,232758,232761-232765,232768-232771,232775-232776,232789,232827,232856-232859,232862-232864,232866-232868,235367-235374,236025,236096,237138-237140,241548-241551,243253-243261,243272-243273,243275,244070-244071,245423-245433,245452,247013-247021,249224-249231,249234-249260,269499,285361-285368,285372-285375,285412-285414,285418-285419,285422-285423,286091-286092,287137-287139,287142,287257,287261-287264,287301-287303,287307-287308,287311-287312,287955-287964,288294-288296,288304,288362-288365,288368,292930-292931,293026,297704,297964-297967,297978,297988-297990,297996-298005,298794-298817,300931,301084,302304,302626-302627,305802,307163,314531-314532,314569-314571,314585-314586,314605,314609-314611,314628,314640-314645,314675-314683,314702-314704,314706-314707,314709-314723,314762-314767,314934-314936,314938-314939,314946-314954,315704,315706-315726,315735-315737,315756-315766,315768-315771,315895-315897,315899-315905,315944-315946,315949,319637-319639,319644-319645,371551,371865,372504-372505,376178,376313,382617-382621,382629,386106-386109,395161,397091,397101,408188,411864,412015,412093,412500-412512,412516-412519,412567-412568,412570-412572,412574-412575,412976-412979,413016-413018,413022-413023,413026-413027,413686-413689,413726-413728,413732-413733,413736-413737,414456,414737,415791,417285,417304,417494,418181-418182,419784,419786,420266,420953,423812,428955,429028,430959,430961,458927,469350,470740-470743,471250,471344,473030-473032,473778-473780,488274,488278-488281,488334-488335,488338,488342-488343,488345,488358-488359,488722-488724,488849,488856,488865,490129,490316-490317,490603,493518,494351-494352,494356-494359,494400-494401,494403,494407-494408,494411-494412,495323,495325,495350-495351,495354,498286,503701-503705,503760,504316,504432-504444,506157-506165,506167,507024,509194-509196,509456-509457,509461-509463,509465-509467,511122,511132,511151,511675,511701,511746,511750-511753,511790-511792,511796-511797,511800-511801,512166,512172,512373,512681-512682,513310,513460-513461,513463,515270,515280,515299,518091,518093,518153,523061-523062,523419,523520-523528,523530,528415,528417,529513-529518,529523-529525,529721,531093,533717,534686-534691,534696-534698,534702,534707,534787,534794,534802,534837,534900,549029-549030,549045-549047,549060,550253-550254,550264,554066,554069,563585,563592-563595,563632-563634,563638-563639,563642-563643,564473,564476,566586-566587,566589,566593,566597-566598,566601-566608,567885-567886,567888,568015-568022,569514,580358,581286,581298,581321-581330,581332-581343,581346,581348,581352-581353,581367,581371,581374-581376,581381,581391,581401-581406,581415-581421,581437-581438,581444,581500,581529-581530,598214,598222-598224,598279-598286,598397-598398,598444-598448,598492,598494,600634,600660-600662,600684-600685,626057-626059,626063-626064,626111,628298-628302,628305-628306,628317,628327-628328,628333-628334,628339-628340,628358,628366-628388,628403-628406,628450,628452,628454,628456,647906-647907,647912-647913,647917-647918,647923,647930-647931,647938-647939,647992,650525-650530,650535-650537,650552-650553,653904,657587-657589,665704,665708,665712-665714,665843-665850,668626-668627,669213,669257-669267,669552-669553,670007-670009,670283,671013,672517,672519,672521-672522,672524,672526,672675,673012-673018,673141,673145-673148,673192-673193,673195-673197,673201-673202,673811-673812,673815,673826-673831,673843,674353,674356,674527,674531-674534,674575-674576,674578,674582-674583,674587-674588,675244-675246,675468-675471,675508-675510,675514-675515,675518-675519,676245-676248,676285-676287,676291-676292,676295-676296,677180-677184,677197-677198,677431-677438,677450-677451,677676-677678,677681,677832,677836-677839,677880-677881,677883,677887-677888,677892-677893,678539-678555,678557,678559-678561,678950,678967-678968,678971-678972,678975,679176,679180-679183,679224-679225,679227,679231-679232,679236-679237,680021-680024,680097-680101,680167-680178,680518-680519,680521-680522,680525,680671,680675-680678,680719-680720,680722,680726-680727,680731-680732,681500-681503,681507,681654-681662,681667-681670,681711-681712,681714,681718-681719,681723-681724,682652-682655,682696-682697,682699,682703-682704,682708-682709,683560-683563,683604-683605,683607,683611-683612,683616-683617,684483,684487,684545-684546,684754,684770,684772-684774,684777,684846,684850-684853,684894-684895,684897,684901-684902,684906-684907,685668-685669,685695,685721,685752,685768-685770,685802-685810,685901-685907,686167,686170,687633,687637-687640,687684-687685,687687-687689,687701-687702,688385-688386,688410-688413,688457-688458,688460-688462,688474-688475,689198-689201,689245-689246,689248-689250,689262-689263,690038-690040,690045,690048,690210,690464,690468-690471,690515-690516,690518-690520,690532-690533,691239-691242,691286-691287,691289-691291,691303-691304,692027-692030,692074-692075,692077-692079,692091-692092,692861,692864,693257,693445,693729,693733-693736,693780-693781,693783-693785,693789-693790,694399-694400,694403-694408,694422,694427,694452,694485,694712,694779,694782,695005,695793,695797-695800,695841-695842,695844,695848-695849,695853-695854,696541,696700-696712,696731-696734,696740,696966-696967,696970,697447-697449,697451-697453,697457-697460,697463-697466,697477-697480,697547-697550,697576,697610-697611,697635,697684,697688-697691,697728-697730,697734-697735,697737,697739-697740,698369,698503-698510,698609,698704-698706,698709,698924,699790,699850-699855,700278-700283,700294,700296,701421,704014-704016,704051-704052,704065,704612,704900-704905,704910,704912-704913,705020,706063,706118,706650,708139-708140,708144-708147,708190-708191,708193-708195,708197-708198,708237,708530,708543-708546,708628,708864,708905,708998,709801,709918-709924,711361-711362,711694-711695,711728,711741,711746,711781,711813-711814,711906,711934-711935,712652-712653,712681-712689,713027,713035-713037,713043-713046,713052-713054,713080-713082,713090,713142-713143,713777-713778,713786,713799,713804,713834,713837,713906,713916,724428-724429,724439-724442,725047,725159,725394-725395,725397,725543-725544,725616,725635,726573-726575,726583-726619,726621-726622,726629-726632,726637-726642,726645,726687,726704-726711,726775-726780,726910,726913,727068,727074,727092-727093,727812,727980,727983,728138,728823-728824,728839-728840,728905,729137-729138,730519,730522-730523,730678,730910,730930,731691,731758-731759,731764-731765,731786-731788,731790,731794-731795,731798-731799,732439,732592,732643-732648,732652-732655,732699-732700,732702-732704,732708-732709,733748-733751,733795-733796,733798-733800,733804-733805,734735-734738,734782-734783,734785-734787,734791-734792,735722,735725,736511-736516,737388-737389,737535,737538,737693,738653,738656,738811,739888,739891,740046,740930,740933,741088,741094-741095,741791-741792,741885-741886,742275,742278-742281,742436,742668,743305,743461,744828-744833,745010,745012,749031-749033,749042,749044-749048,753908-753934,753937-753940,754003-754005,754181,754388,754403,755625,755644,755902,756103,756106,756459,757947-757948,757966-757977,760717,760918,761103,761937-761939,761980,764689-764690,764693,764710,766485,766487,766489,766491,766493,766495,766497,766596-766597,766600,766626,768269,768271,768273,768490,768507-768510,768566-768568,768572-768573,768605-768606,769118-769121,769162-769163,769165,769169-769170,769174-769175,769879,769881,771512-771520,771571,772394,772431-772433,772435-772436,772440-772443,772479-772481,772485-772486,772494-772495,773097-773099,773139,773750-773753,773789-773791,773795-773796,773804-773805,776053-776054,776787,776805,776825-776826,776828-776831,776840,776857,776861-776864,776905-776906,776908,776912-776913,776917-776918,777552-777553,777558,777567-777568,777573,777598-777600,777655-777662,777973,777985,778053,778061-778062,778084-778087,778209,778217,778224,779722-779723,779725-779726,779772-779773,780500-780501,780505-780506,780508-780509,781994,781997-781999,782154,783564,783721,785599,785603-785606,785647-785648,785650,785654-785655,785659-785660,786498,786500,800214,800282-800285,800332-800333,800344-800347,800353-800356,800385-800388,800493,800513-800516,800577-800578,800580-800582,800596-800597,801548-801550,801552,802308-802309,802316,802337-802339,802433-802435,802552,802735,802930,802954,802964,803614-803616,803763,803765-803768,804116,804119,804274,805387-805388,805414-805415,805576,805610-805611,805613-805614,805841-805843,806786,806789-806791,806946,807804,807961,808068,808701,808743,808808-808809,808825,808828-808834,808989,809693,809850,810547,810704,811484,811641,811672-811673,812025,812035-812038,812075-812077,812081-812082,812085-812086,812899,812901,845480,846402,849033-849038,849047-849060,850095-850096,850223,850274,850938,850977-850980,851017-851019,851023-851024,851027-851028,851714-851717,851754-851756,851760-851761,851764-851765,852444-852447,852484-852486,852490-852491,852494-852495,853233-853236,853273-853275,853279-853280,853283-853284,854098-854101,854138-854140,854144-854145,854148-854149,854826-854829,854866-854868,854872-854873,854876-854877,855618-855621,855658-855660,855664-855665,855668-855669,856588,856590,856950,856954-856957,856975-856977,856980-856981,856985-856986,856988-856991,857119-857120,857148,857183-857185,857187,857192,857195,857198,857201,857204,857207,857210,857222,857232,857293,857330-857331,857347,857426,857546,857553,858857,858861-858864,858884-858886,858889-858890,858894-858895,858897-858900,859085,859087,862683,862687-862690,862708-862710,862713-862714,862718-862719,862721-862724,862909,862911,867810,869760,906923,907033,907037-907040,907156-907158,907162-907163,907188-907190,907224-907225,907263-907264,907603,907610,907804,907808-907811,907848-907850,907854-907855,907858-907859,909165,909167,910123,910127-910130,910180-910181,910183,910187-910188,910192-910193,910379,910644-910645,910848,910851,928865,928869-928872,928889-928891,928895-928896,928904,928917,928919,928923-928924,928952-928953,929136,929138-929139,930303,930307-930310,930360-930361,930363,930367-930368,930372-930373,931088,931090,931291,931339,931345,931351,931357,931363-931366,931375-931376,931378,931536,931539-931546,931567-931568,931570-931571,931575-931582,931586,931628-931629,931631,931635-931642,931729,931978-931979,932399-932400,932402,932544-932551,932860-932861,932863-932864,932867-932874,932879,933792-933794,933809-933810,933812-933813,933816-933823,933827,933835-933839,933841,934463-934470,935484-935486,935902,935906-935909,935948-935949,935953-935954,935956-935958,935960-935961,936385,936388,937372,940326,940773,940775-940778,940801,940871,940907,940913,940917,940919,940931,940933,940956,940961,940964,940969,940981,940988,940996,941002,941009,941015,941135,941201,941203-941204,941206,941210-941213,941252,941262,941265,941271,941275,941324,941334,941338,941365,941384-941385,941440,941502,941537,941623,941627-941630,941651-941661,941665-941666,941669-941670,941674-941677,941863,941865-941866,947496-947497,948095-948102,948520-948521,948595,948601,948606,948608,948610,948616-948617,948621-948624,948637-948639,948642-948643,948646-948647,948650-948653,948682-948685,948725-948728,948857-948858,950193-950194,950798-950803,950805-950810,951436,951442-951444,951499-951506,951794,951796,952046,956057,956218-956219,957640-957641,957747-957749,957796,957851-957855,957860,957922-957924,958041,958045,958184-958188,958196,958212,958225,958251-958255,958263,958265,958267-958269,958271-958277,958300-958304,958306-958312,958315-958317,958319-958325,958328-958330,958332-958338,958341,958386-958387,958460-958462,958464-958470,958475,958988,959070-959078,959084,959135-959139,959147,959149,959151,959155-959158,959176-959178,959181-959182,959184,959186-959187,959190-959193,959315,959385,959387,959432,959437,959440,959450,959452,959455,959459,959464,959469,959474,959479-959480,959482,959484,959486,959488,959490-959494,959497,959510-959514,959526,960008-960010,960043,960046,960048-960051,960060,960063-960073,960075-960084,960086,960362,960489,960620-960628,960812-960813,960887-960890,961104-961105,961260-961263,961284,961369,961405,961453,961491-961492,961502,961512,961604-961606,963493-963494,964238-964242,964512,964525,964539,964794-964795,970087-970090,970093,970354-970355,970378,970380,970384,970388,970472,970476,970480,970482,970484,970492,970494,970496,970498,970500,970504,970506,970508,970510,970518,970526,970530,970834,971509,971595,971597,971895,972369-972372,972381,972385,972389,972393,972397-972398,972402,972406-972407,972417,972682,972950,972953,973780,974323,974333,974342-974345,974358-974360,974363-974364,974367-974368,974371-974374,974403-974406,974446-974449,974574-974585,974592-974593,974605-974606,974658-974727,974904-974924,974926-974934,974936,974938-974943,974956-974957,974959-974989,974991,974993-975018,975021,975025-975029,975032-975036,975038-975039,975044,975068-975071,975076-975082,976731-976733,976935,976937-976938,976953,977134-977139,977149,977151,977155-977158,977160,977284,978551,978558,978894,980625,980886,980890-980893,980937-980938,980940-980942,980944,980946,980948-980949,981448-981449,981528,981573-981574,981603-981608,981610,982208,982212-982215,982259-982260,982262-982264,982267-982272,982274-982275,982508-982513,982522-982524,982717,982737-982742,982744,983519-983520,983524-983527,983571-983572,983574-983576,983578,983580-983581,983583-983584,984118,984122,984170,984184,984234-984239,984397-984398,984435-984437,984465-984470,984472,984988,984992-984995,985036-985037,985039,985043-985044,985048-985049,985497-985501,985523,985568,985577-985578,985649,985687-985689,985717-985722,985724,986177,986181-986184,986225-986226,986228,986232-986233,986236-986237,986691,986695-986696,986741-986743,986780-986787,986928-986931,986967-986972,986974,987233,987237-987240,987284-987285,987287-987289,987293-987294,987687-987706,987835-987838,988012-988017,988019,988385,988398-988401,988592,988605-988608,988926-988930,989737,989741-989744,989785-989786,989788,989792-989793,989796-989797,989832-989833,990122-990123,990185-990190,990192,990657,990664-990667,990707-990708,990710-990712,990715-990716,991335-991338,991361-991363,992605,992609-992612,992643,992654,992658-992659,992661-992663,992667-992668,992917-992918,992927,993070-993075,993077,993158-993164,993168,993172-993175,993212-993214,993218-993219,993222-993223,993832-993835,993871-993872,993874,994145-994147,994154-994157,994194-994196,994200-994201,994204-994205,994765-994766,994768,995304-995305,996188,996195-996198,996235-996237,996241-996242,996245-996246,996807,996819,996847-996850,996864-996865,996867,997194,997198-997201,997245-997246,997248-997250,997254-997255,997774-997775,997780-997783,997802,997838,997877-997882,997884,998188-998198,998201-998211,998213-998223,998262-998273,998280-998283,998304-998307,998310-998313,998315-998317,998322-998330,998333-998335,998356-998370,998379-998381,998384-998385,998387-998402,998416,998441,998517-998518,998552-998559,998565-998566,998568-998569,1000072-1000074,1001880-1001885,1001887,1001890-1001893,1001895,1001900,1001905,1001911-1001913,1002130-1002145,1002443-1002463,1073372-1073374,1073519-1073523,1073710-1073712,1073814,1076952-1076954,1077107-1077128,1077327-1077345,1077496-1077501,1080651,1081964-1081977,1081990,1082366-1082379,1082392,1082770-1082783,1082796,1083604-1083634,1085200,1086591-1086654,1088448,1088548-1088601
+chained without a frame 6844 1-26,29-66,68-82,87-91,93,95,97,99,101-132,134-213,230-242,258-260,277-282,285-293,296-299,305-315,324,338-339,341-348,350,357-368,371-375,397,414-419,421,423,425-429,442-461,519,523,694,757-758,792,865,942,1647,1662,1951-1952,2028-2029,2090-2091,2466-2467,2489,2496-2498,2685-2687,3325,3443-3444,3621,3644,3652,6473,6553,6876-6878,6911-6913,7000,7007,7175,7230,7233-7234,7236-7237,7239-7245,7566-7569,7842-7846,7848-7852,8140-8142,8152,8157-8159,8174-8178,8208,8231,8237-8239,8251-8254,8482-8485,8494-8498,8561-8562,8564,8566,8573-8574,8612-8613,8616-8619,8798,8949-8955,8991,9195-9200,9481,9485-9486,9488-9490,9492-9494,9496-9503,9599,9603,9605,9608,9610,9613,9676-9677,9744-9745,10164-10168,11799-11804,12099-12101,12589-12590,12609-12610,12613-12614,12632,12799,16209-16210,16321,16556,17530-17533,18134,18403-18404,18428-18429,18432-18433,18436-18437,18440-18441,18451-18454,18459,18470,18811-18813,19236,19788-19790,19858-19860,19877-19887,19895,19902-19905,20055-20056,20184-20185,20361-20362,20448,21116-21122,21208,21274-21276,21308-21309,21435,21437-21442,21445-21449,21747-21749,21874-21876,23211,23447,23471-23474,23479-23485,23741-23742,23763-23768,23771-23775,23795-23796,24561-24562,24822,24824,24826,24909-24922,24925,24927-24928,24932-24933,24935-24947,25978,26009-26020,26029-26032,28017-28018,28598,28744-28745,29088-29091,29109,29200-29202,32420,32425-32428,32438-32443,34701-34706,36084-36085,36228-36238,41944-41945,45567-45568,46015-46017,46554-46559,49024-49034,49504-49508,49552-49557,49559-49564,49579-49722,50291-50295,50297,51422-51457,52139-52140,52145-52165,53277-53278,54520,54523,54525-54529,54537-54539,54654-54664,55150-55154,55156-55158,55169,55171-55172,55355-55361,56404-56407,56768-56776,69638-69656,69661-69721,69748,69823-69855,85092-85107,85112-85115,86143-86146,86187-86202,86204-86243,86245-86257,86273-86292,86299-86336,86338-86341,86961-86962,88900-88901,98746,98977,98984-98988,99780-99788,99790-99799,99829-99839,99859-99861,99864-99869,99878-99892,99908-99915,99923-99928,99930-99941,99943-99944,100173-100177,100415-100421,100424-100426,101146-101147,102105,102124,102126-102133,102348-102352,102355-102453,102461-102467,102521-102526,102842,102856,102861-102862,102879-102880,102898-102900,103627-103635,103647-103649,103653-103657,103662-103691,105006-105007,105499-105500,105523-105718,105720-105730,105763-105765,105779-105785,111427-111428,111430-111433,111599-111600,112333,112390-112417,113108-113174,113178,113943-113946,114978-114979,115987-115994,116082-116085,116096-116099,116101-116107,116111,116114-116120,121586-121590,121652-121664,121706-121707,121711-121762,121765-121767,121776-121778,123301,123307,123310-123315,125009,125016-125017,125021,127547-127582,128294,128301-128302,130492,130494,130496,130498,130500,130502,130504,130506,130508,130510,130733,130735,130737,130739,130741,130743,130749-130750,130753-130754,130757-130758,130769-130770,130773-130774,130781-130782,130785-130786,130813-130816,132326-132330,132395-132397,132466-132469,132471-132481,132484-132490,133294-133300,133303,133589,133878-133887,134609-134610,135866,137213-137235,137277-137297,137299-137300,137302-137335,137424-137436,139192-139197,139202,141422,141429,141440,141450,141477,141538,141548,141723,141725-141734,141746-141749,144211,144255-144256,144267-144269,147271,147289-147292,147309-147311,147315-147316,147319-147320,147324-147327,147352-147355,147513-147514,148318,148322-148325,148335-148337,148339-148340,148344-148349,148447-148450,148518-148519,148901,148907-148910,148923-148925,148928-148929,148932-148933,148936-148939,148968-148971,149095,149098,149695,149699-149702,149715-149717,149720-149721,149727-149728,149730-149733,149920-149922,149926-149929,149942-149944,149947-149948,149954-149955,149957-149960,150123-150124,150328,150334-150337,150350-150352,150355-150356,150359-150360,150363-150366,150395-150398,150438-150441,150540-150542,150548-150551,150564-150566,150569-150570,150573-150574,150577-150580,150609-150612,150652-150655,150754-150755,150954,150958-150961,150975-150977,150980-150981,150985-150986,150988-150991,151155-151157,151161-151164,151174-151178,151180-151182,151186-151192,151349-151350,152185,152194-152196,152251-152258,152406-152407,152409,152419-152421,152476-152483,152630-152631,152859,152869-152871,152926-152933,153082,153085,153574,153584-153586,153641-153648,153800,153802,153804,153808-153811,153824-153826,153829-153830,153833-153834,153837-153840,153869-153872,153912-153915,154007-154014,154020-154021,157312,157318-157321,157358-157360,157364-157365,157368-157369,157779-157780,160569,160576-160579,160592-160594,160597-160598,160601-160602,160605-160608,160637-160640,160680-160683,160825,160829,161597,161604-161607,161620-161622,161625-161626,161629-161630,161633-161636,161665-161668,161708-161711,161842-161845,161849,161858-161861,161874-161876,161879-161880,161883-161884,161887-161890,162574,162579,163067,163074-163077,163090-163092,163095-163096,163099-163100,163103-163106,163135-163138,163284,163286,169424,169433-169436,169477-169478,169480,169484-169485,169489-169490,170257,170259,171476,171478-171496,171671-171672,171877,171880,171886,171890,171895,171911,171938,171941,171944,171947,172385,172388,172397,172415,172453,172485,172497,174475-174476,174478-174479,174481-174482,174484,174486-174488,174490-174491,174493,174498,174501,174503-174504,174509-174510,174515-174516,174537,174548,174566,174577-174578,174580-174581,174586,174589-174590,174592-174593,174595-174596,174598-174600,176802-176803,177433,182525,182551-182558,182563,182567,182779-182781,182867,184409,185144,185148,185150,194585,194609,195169,195239,195253,195255,195257,195259,195261,195338,195411,195418,196629,196639,196658,197319-197334,198347-198365,198367,198369-198370,198372-198375,198377-198380,198382-198385,199598-199600,200610,211148,211150,211179,211299-211306,211321-211322,211401-211403,211783-211784,211804,211860,211972,211976-211979,212016-212018,212022-212023,212026-212027,212905,212920-212933,213226,213548-213552,213559,213622,213821,218100,218358,218370-218372,218389-218393,218942,218946-218949,219048-219049,219051-219053,219106-219107,219437,232682-232683,232709,232735-232737,232754,232758,232761-232765,232768-232771,232775-232776,232789,232827,232856-232859,232862-232864,232866-232868,235367-235374,236025,236096,237138-237140,241548-241551,243253-243261,243272-243273,243275,244070-244071,245423-245433,245452,247013-247021,249224-249231,249234-249260,269499,285361-285368,285372-285375,285412-285414,285418-285419,285422-285423,286091-286092,287137-287139,287142,287257,287261-287264,287301-287303,287307-287308,287311-287312,287955-287964,288294-288296,288304,288362-288365,288368,292930-292931,293026,297704,297964-297967,297978,297988-297990,297996-298005,298794-298817,300931,301084,302304,302626-302627,305802,307163,314531-314532,314569-314571,314585-314586,314605,314609-314611,314628,314640-314645,314675-314683,314702-314704,314706-314707,314709-314723,314762-314767,314934-314936,314938-314939,314946-314954,315704,315706-315726,315735-315737,315756-315766,315768-315771,315895-315897,315899-315905,315944-315946,315949,319637-319639,319644-319645,371551,371865,372504-372505,376178,376313,382617-382621,382629,386106-386109,395161,397091,397101,408188,411864,412015,412093,412500-412512,412516-412519,412567-412568,412570-412572,412574-412575,412976-412979,413016-413018,413022-413023,413026-413027,413686-413689,413726-413728,413732-413733,413736-413737,414456,414737,415791,417285,417304,417494,418181-418182,419784,419786,420266,420953,423812,428955,429028,430959,430961,458927,469350,470740-470743,471250,471344,473030-473032,473778-473780,488274,488278-488281,488334-488335,488338,488342-488343,488345,488358-488359,488722-488724,488849,488856,488865,490129,490316-490317,490603,493518,494351-494352,494356-494359,494400-494401,494403,494407-494408,494411-494412,495323,495325,495350-495351,495354,498286,503701-503705,503760,504316,504432-504444,506157-506165,506167,507024,509194-509196,509456-509457,509461-509463,509465-509467,511122,511132,511151,511675,511701,511746,511750-511753,511790-511792,511796-511797,511800-511801,512166,512172,512373,512681-512682,513310,513460-513461,513463,515270,515280,515299,518091,518093,518153,523061-523062,523419,523520-523528,523530,528415,528417,529513-529518,529523-529525,529721,531093,533717,534686-534691,534696-534698,534702,534707,534787,534794,534802,534837,534900,549029-549030,549045-549047,549060,550253-550254,550264,554066,554069,563585,563592-563595,563632-563634,563638-563639,563642-563643,564473,564476,566586-566587,566589,566593,566597-566598,566601-566608,567885-567886,567888,568015-568022,569514,580358,581286,581298,581321-581330,581332-581343,581346,581348,581352-581353,581367,581371,581374-581376,581381,581391,581401-581406,581415-581421,581437-581438,581444,581500,581529-581530,598214,598222-598224,598279-598286,598397-598398,598444-598448,598492,598494,600634,600660-600662,600684-600685,626057-626059,626063-626064,626111,628298-628302,628305-628306,628317,628327-628328,628333-628334,628339-628340,628358,628366-628388,628403-628406,628450,628452,628454,628456,647906-647907,647912-647913,647917-647918,647923,647930-647931,647938-647939,647992,650525-650530,650535-650537,650552-650553,653904,657587-657589,665704,665708,665712-665714,665843-665850,668626-668627,669213,669257-669267,669552-669553,670007-670009,670283,671013,672517,672519,672521-672522,672524,672526,672675,673012-673018,673141,673145-673148,673192-673193,673195-673197,673201-673202,673811-673812,673815,673826-673831,673843,674353,674356,674527,674531-674534,674575-674576,674578,674582-674583,674587-674588,675244-675246,675468-675471,675508-675510,675514-675515,675518-675519,676245-676248,676285-676287,676291-676292,676295-676296,677180-677184,677197-677198,677431-677438,677450-677451,677676-677678,677681,677832,677836-677839,677880-677881,677883,677887-677888,677892-677893,678539-678555,678557,678559-678561,678950,678967-678968,678971-678972,678975,679176,679180-679183,679224-679225,679227,679231-679232,679236-679237,680021-680024,680097-680101,680167-680178,680518-680519,680521-680522,680525,680671,680675-680678,680719-680720,680722,680726-680727,680731-680732,681500-681503,681507,681654-681662,681667-681670,681711-681712,681714,681718-681719,681723-681724,682652-682655,682696-682697,682699,682703-682704,682708-682709,683560-683563,683604-683605,683607,683611-683612,683616-683617,684483,684487,684545-684546,684754,684770,684772-684774,684777,684846,684850-684853,684894-684895,684897,684901-684902,684906-684907,685668-685669,685695,685721,685752,685768-685770,685802-685810,685901-685907,686167,686170,687633,687637-687640,687684-687685,687687-687689,687701-687702,688385-688386,688410-688413,688457-688458,688460-688462,688474-688475,689198-689201,689245-689246,689248-689250,689262-689263,690038-690040,690045,690048,690210,690464,690468-690471,690515-690516,690518-690520,690532-690533,691239-691242,691286-691287,691289-691291,691303-691304,692027-692030,692074-692075,692077-692079,692091-692092,692861,692864,693257,693445,693729,693733-693736,693780-693781,693783-693785,693789-693790,694399-694400,694403-694408,694422,694427,694452,694485,694712,694779,694782,695005,695793,695797-695800,695841-695842,695844,695848-695849,695853-695854,696541,696700-696712,696731-696734,696740,696966-696967,696970,697447-697449,697451-697453,697457-697460,697463-697466,697477-697480,697547-697550,697576,697610-697611,697635,697684,697688-697691,697728-697730,697734-697735,697737,697739-697740,698369,698503-698510,698609,698704-698706,698709,698924,699790,699850-699855,700278-700283,700294,700296,701421,704014-704016,704051-704052,704065,704612,704900-704905,704910,704912-704913,705020,706063,706118,706650,708139-708140,708144-708147,708190-708191,708193-708195,708197-708198,708237,708530,708543-708546,708628,708864,708905,708998,709801,709918-709924,711361-711362,711694-711695,711728,711741,711746,711781,711813-711814,711906,711934-711935,712652-712653,712681-712689,713027,713035-713037,713043-713046,713052-713054,713080-713082,713090,713142-713143,713777-713778,713786,713799,713804,713834,713837,713906,713916,724428-724429,724439-724442,725047,725159,725394-725395,725397,725543-725544,725616,725635,726573-726575,726583-726619,726621-726622,726629-726632,726637-726642,726645,726687,726704-726711,726775-726780,726910,726913,727068,727074,727092-727093,727812,727980,727983,728138,728823-728824,728839-728840,728905,729137-729138,730519,730522-730523,730678,730910,730930,731691,731758-731759,731764-731765,731786-731788,731790,731794-731795,731798-731799,732439,732592,732643-732648,732652-732655,732699-732700,732702-732704,732708-732709,733748-733751,733795-733796,733798-733800,733804-733805,734735-734738,734782-734783,734785-734787,734791-734792,735722,735725,736511-736516,737388-737389,737535,737538,737693,738653,738656,738811,739888,739891,740046,740930,740933,741088,741094-741095,741791-741792,741885-741886,742275,742278-742281,742436,742668,743305,743461,744828-744833,745010,745012,749031-749033,749042,749044-749048,753908-753934,753937-753940,754003-754005,754181,754388,754403,755625,755644,755902,756103,756106,756459,757947-757948,757966-757977,760717,760918,761103,761937-761939,761980,764689-764690,764693,764710,766485,766487,766489,766491,766493,766495,766497,766596-766597,766600,766626,768269,768271,768273,768490,768507-768510,768566-768568,768572-768573,768605-768606,769118-769121,769162-769163,769165,769169-769170,769174-769175,769879,769881,771512-771520,771571,772394,772431-772433,772435-772436,772440-772443,772479-772481,772485-772486,772494-772495,773097-773099,773139,773750-773753,773789-773791,773795-773796,773804-773805,776053-776054,776787,776805,776825-776826,776828-776831,776840,776857,776861-776864,776905-776906,776908,776912-776913,776917-776918,777552-777553,777558,777567-777568,777573,777598-777600,777655-777662,777973,777985,778053,778061-778062,778084-778087,778209,778217,778224,779722-779723,779725-779726,779772-779773,780500-780501,780505-780506,780508-780509,781994,781997-781999,782154,783564,783721,785599,785603-785606,785647-785648,785650,785654-785655,785659-785660,786498,786500,800214,800282-800285,800332-800333,800344-800347,800353-800356,800385-800388,800493,800513-800516,800577-800578,800580-800582,800596-800597,801548-801550,801552,802308-802309,802316,802337-802339,802433-802435,802552,802735,802930,802954,802964,803614-803616,803763,803765-803768,804116,804119,804274,805387-805388,805414-805415,805576,805610-805611,805613-805614,805841-805843,806786,806789-806791,806946,807804,807961,808068,808701,808743,808808-808809,808825,808828-808834,808989,809693,809850,810547,810704,811484,811641,811672-811673,812025,812035-812038,812075-812077,812081-812082,812085-812086,812899,812901,845480,846402,849033-849038,849047-849060,850095-850096,850223,850274,850938,850977-850980,851017-851019,851023-851024,851027-851028,851714-851717,851754-851756,851760-851761,851764-851765,852444-852447,852484-852486,852490-852491,852494-852495,853233-853236,853273-853275,853279-853280,853283-853284,854098-854101,854138-854140,854144-854145,854148-854149,854826-854829,854866-854868,854872-854873,854876-854877,855618-855621,855658-855660,855664-855665,855668-855669,856588,856590,856950,856954-856957,856975-856977,856980-856981,856985-856986,856988-856991,857119-857120,857148,857183-857185,857187,857192,857195,857198,857201,857204,857207,857210,857222,857232,857293,857330-857331,857347,857426,857546,857553,858857,858861-858864,858884-858886,858889-858890,858894-858895,858897-858900,859085,859087,862683,862687-862690,862708-862710,862713-862714,862718-862719,862721-862724,862909,862911,867810,869760,906923,907033,907037-907040,907156-907158,907162-907163,907188-907190,907224-907225,907263-907264,907603,907610,907804,907808-907811,907848-907850,907854-907855,907858-907859,909165,909167,910123,910127-910130,910180-910181,910183,910187-910188,910192-910193,910379,910644-910645,910848,910851,928865,928869-928872,928889-928891,928895-928896,928904,928917,928919,928923-928924,928952-928953,929136,929138-929139,930303,930307-930310,930360-930361,930363,930367-930368,930372-930373,931088,931090,931291,931339,931345,931351,931357,931363-931366,931375-931376,931378,931536,931539-931546,931567-931568,931570-931571,931575-931582,931586,931628-931629,931631,931635-931642,931729,931978-931979,932399-932400,932402,932544-932551,932860-932861,932863-932864,932867-932874,932879,933792-933794,933809-933810,933812-933813,933816-933823,933827,933835-933839,933841,934463-934470,935484-935486,935902,935906-935909,935948-935949,935953-935954,935956-935958,935960-935961,936385,936388,937372,940326,940773,940775-940778,940801,940871,940907,940913,940917,940919,940931,940933,940956,940961,940964,940969,940981,940988,940996,941002,941009,941015,941135,941201,941203-941204,941206,941210-941213,941252,941262,941265,941271,941275,941324,941334,941338,941365,941384-941385,941440,941502,941537,941623,941627-941630,941651-941661,941665-941666,941669-941670,941674-941677,941863,941865-941866,947496-947497,948095-948102,948520-948521,948595,948601,948606,948608,948610,948616-948617,948621-948624,948637-948639,948642-948643,948646-948647,948650-948653,948682-948685,948725-948728,948857-948858,950193-950194,950798-950803,950805-950810,951436,951442-951444,951499-951506,951794,951796,952046,956057,956218-956219,957640-957641,957747-957749,957796,957851-957855,957860,957922-957924,958041,958045,958184-958188,958196,958212,958225,958251-958255,958263,958265,958267-958269,958271-958277,958300-958304,958306-958312,958315-958317,958319-958325,958328-958330,958332-958338,958341,958386-958387,958460-958462,958464-958470,958475,958988,959070-959078,959084,959135-959139,959147,959149,959151,959155-959158,959176-959178,959181-959182,959184,959186-959187,959190-959193,959315,959385,959387,959432,959437,959440,959450,959452,959455,959459,959464,959469,959474,959479-959480,959482,959484,959486,959488,959490-959494,959497,959510-959514,959526,960008-960010,960043,960046,960048-960051,960060,960063-960073,960075-960084,960086,960362,960489,960620-960628,960812-960813,960887-960890,961104-961105,961260-961263,961284,961369,961405,961453,961491-961492,961502,961512,961604-961606,963493-963494,964238-964242,964512,964525,964539,964794-964795,970087-970090,970093,970354-970355,970378,970380,970384,970388,970472,970476,970480,970482,970484,970492,970494,970496,970498,970500,970504,970506,970508,970510,970518,970526,970530,970834,971509,971595,971597,971895,972369-972372,972381,972385,972389,972393,972397-972398,972402,972406-972407,972417,972682,972950,972953,973780,974323,974333,974342-974345,974358-974360,974363-974364,974367-974368,974371-974374,974403-974406,974446-974449,974574-974585,974592-974593,974605-974606,974658-974727,974904-974924,974926-974934,974936,974938-974943,974956-974957,974959-974989,974991,974993-975018,975021,975025-975029,975032-975036,975038-975039,975044,975068-975071,975076-975082,976731-976733,976935,976937-976938,976953,977134-977139,977149,977151,977155-977158,977160,977284,978551,978558,978894,980625,980886,980890-980893,980937-980938,980940-980942,980944,980946,980948-980949,981448-981449,981528,981573-981574,981603-981608,981610,982208,982212-982215,982259-982260,982262-982264,982267-982272,982274-982275,982508-982513,982522-982524,982717,982737-982742,982744,983519-983520,983524-983527,983571-983572,983574-983576,983578,983580-983581,983583-983584,984118,984122,984170,984184,984234-984239,984397-984398,984435-984437,984465-984470,984472,984988,984992-984995,985036-985037,985039,985043-985044,985048-985049,985497-985501,985523,985568,985577-985578,985649,985687-985689,985717-985722,985724,986177,986181-986184,986225-986226,986228,986232-986233,986236-986237,986691,986695-986696,986741-986743,986780-986787,986928-986931,986967-986972,986974,987233,987237-987240,987284-987285,987287-987289,987293-987294,987687-987706,987835-987838,988012-988017,988019,988385,988398-988401,988592,988605-988608,988926-988930,989737,989741-989744,989785-989786,989788,989792-989793,989796-989797,989832-989833,990122-990123,990185-990190,990192,990657,990664-990667,990707-990708,990710-990712,990715-990716,991335-991338,991361-991363,992605,992609-992612,992643,992654,992658-992659,992661-992663,992667-992668,992917-992918,992927,993070-993075,993077,993158-993164,993168,993172-993175,993212-993214,993218-993219,993222-993223,993832-993835,993871-993872,993874,994145-994147,994154-994157,994194-994196,994200-994201,994204-994205,994765-994766,994768,995304-995305,996188,996195-996198,996235-996237,996241-996242,996245-996246,996807,996819,996847-996850,996864-996865,996867,997194,997198-997201,997245-997246,997248-997250,997254-997255,997774-997775,997780-997783,997802,997838,997877-997882,997884,998188-998198,998201-998211,998213-998223,998262-998273,998280-998283,998304-998307,998310-998313,998315-998317,998322-998330,998333-998335,998356-998370,998379-998381,998384-998385,998387-998402,998416,998441,998517-998518,998552-998559,998565-998566,998568-998569,1000072-1000074,1001880-1001885,1001887,1001890-1001893,1001895,1001900,1001905,1001911-1001913,1002130-1002145,1002443-1002463,1073372-1073374,1073519-1073523,1073710-1073712,1073814,1076952-1076954,1077107-1077128,1077327-1077345,1077496-1077501,1080651,1081964-1081977,1081990,1082366-1082379,1082392,1082770-1082783,1082796,1083604-1083634,1085200,1086591-1086654,1088448,1088548-1088601
+native records without a record 0 absent from the index 0
+native frame-2000023 class=FamilyInstance moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=86961 16 422466,423107,425292,430997,431064,431144,431198,485452,485679,505974,704276,704286,709246,906937,939962,940221
+native frame-2000023 class=FamilySymbol moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 15 232780,235155,425293,431054,490150,505854,769882,866105,907609,907638,910850,910875,940117,978895,978910
+native frame-2000170 class=FamilyInstance moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=86961 44 423100,424758-424759,485460,485462,485464,485466-485469,704282,704284,707723,707847,708089,709256,909735-909738,931858-931861,976942,976944,976946,977182,977191,977193,977195,977197,977199,977201,977203,977406,977413,977415,977417,977419,977421,977423,977425,977507
+native frame-2000170 class=SysPanelFamSym moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 22 708065-708066,846315,846325,846339-846340,846353,909763-909764,909767-909768,931890-931892,976966,977495,978502,978872,978909,1073254,1073509-1073510
+native frame-2000171 class=FamilyInstance moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=86961 144 423134,423136,423138-423139,423148-423149,424777-424779,424786-424787,485456,485458,485492-485494,485500-485501,485505-485509,525603,687033,687035,687037,704288-704291,704293-704294,704296-704300,707726-707729,707857,707859,707861,708090-708093,709249,709251,709253,709258-709259,709261,745035,846332-846335,846351,909751-909759,931877-931885,976939-976940,976954-976961,977247-977253,977408-977411,977433-977453,977513-977515,977594-977611,978557,978559
+native frame-2000171 class=SysMullionFamSym moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 63 459090,459666,462990-462991,462995,485513,485517,485521,526917-526918,527056,708062-708064,709264,709616,709618-709619,846326-846327,846341-846343,846345-846350,846352,909206-909207,909760-909762,909766,909769,910876,910882,931872,931886-931889,931893,976962,976964-976965,977489-977491,977493-977494,978500-978501,978870-978871,978896,978911-978912,1073252-1073253,1073508
+native frame-2001100 class=FamilyInstance moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=86961 3 506168,523531,697577
+native frame-2001100 class=FamilySymbol moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 506166,523529,697575
+native unframed class=AbsDuctType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 974927-974929
+native unframed class=AbsFlexDuctType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 974930-974931
+native unframed class=ActiveGeoLocationTrackingElement moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 113109
+native unframed class=Alignment moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 93 429028,493518,504316,512373,518091,518093,523419,529523-529525,534696-534698,534702,534707,534787,534794,534802,549045-549047,550264,554066,554069,566593,580358,626063-626064,626111,628306,628328,628334,628340,647913,647918,647931,647939,647992,650535-650537,690210,695005,697463-697466,697635,698924,699790,704065,704910,704912-704913,708864,708998,724439-724442,725616,725635,745010,745012,755902,764710,766485,766487,766489,766491,766493,766495,766497,766626,768269,768271,771571,849051-849058,977155-977158,1001890-1001893
+native unframed class=AllPlanTopologies moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 6 26009,86962,102524-102525,961605-961606
+native unframed class=AllProjectPhases moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 1
+native unframed class=AllProjectRevisions moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 49031
+native unframed class=AnalyticalAutofixTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102522
+native unframed class=AnalyticalLinkType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 137322
+native unframed class=AnalyticalOctreeTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102523
+native unframed class=AnalyticalSetTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102521
+native unframed class=AnalyticalSupportTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 86306
+native unframed class=AppearanceAssetElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 138 144211,144255-144256,144267-144269,171877,171880,171886,171890,171895,171911,171938,171941,171944,171947,172385,172388,172397,172415,172453,172485,172497,174486,174600,182525,185150,194609,198364-198365,198379-198380,198382-198384,200610,211804,213548-213551,232709,232864,232866-232868,287137-287138,288362-288363,386107,471344,488849,533717,581298,628404,673012-673018,677676-677677,678967-678968,678971,680518-680519,680521,684770,684772-684773,690039,696966,698704-698705,713777-713778,713786,713799,713804,713834,713837,713906,713916,727092-727093,730930,732644,732647,754003-754005,776805,776825-776826,776828-776830,778209,802434,808068,811672-811673,869760,956057,956218-956219,981573-981574,982717,984435-984437,985687-985689,986928-986931,993158,993160,993164,993834-993835,994147,995305,996819,997838,1077496-1077501
+native unframed class=AreaMeasureElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 9490,9494
+native unframed class=AreaReportSettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 69707
+native unframed class=AreaSchemePlanTopologies moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 6 9744-9745,581529-581530,711934-711935
+native unframed class=AreaSettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 85092
+native unframed class=AreaTypeElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 8 9492-9493,9496-9501
+native unframed class=AssemblyCodeTable moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 1002459
+native unframed class=AssemblyTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 132328
+native unframed class=AutoCamSettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102842
+native unframed class=AutoJoinTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102467
+native unframed class=BaseRailingSym moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 10 566589,567888,665712,931378,931570,931631,932402,932863,933812,933841
+native unframed class=BasicWallType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 10 397,54538,198367,232754,232827,428955,581500,600634,711906,845480
+native unframed class=BrowserOrganization moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 10 24945-24947,26012-26017,1088448
+native unframed class=BuildingPadType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 414737
+native unframed class=CableTraySettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 113173
+native unframed class=CableTraySizesElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 113169
+native unframed class=CalloutTag moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 9 49508,49583,49601,49619,49637,49655,49673,49691,49709
+native unframed class=CategoryElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 625 235,238,241,259,278,281,286,289,292,297,306,309,342,345,347,358,362,366,1647,1951-1952,2466-2467,2489,3443,3621,6876,7000,8612,8616,8618,9195,9197,9199,9676,11799,11802,12099,18403,18451,18453,18811,19788,19858,19903,20184,21117,21120,21274,21438,21441,21445,21874,23764,23767,23771,23774,26030,29089,32426,32438,32441,41944,49580,49590,49598,49608,49616,49626,49634,49644,49652,49662,49670,49680,49688,49698,49706,49716,56769,56772,56774,69710,69712,69714,69716,69718,69720,86144,88900,99890,100416,100418,100420,102463,102465,105721,105724,105727,105729,137226,137229,137231,141726,147290,147292,147310,147325,147353,148323,148325,148336,148347,148448,148908,148910,148924,148937,148969,149700,149702,149716,149731,149927,149929,149943,149958,150335,150337,150351,150364,150396,150439,150549,150551,150565,150578,150610,150653,150959,150961,150976,150989,151162,151164,151175,151177,151190,152195,152252,152256,152420,152477,152481,152870,152927,152931,153585,153642,153646,153809,153811,153825,153838,153870,153913,154008,154012,157319,157321,157359,160577,160579,160593,160606,160638,160681,161605,161607,161621,161634,161666,161709,161859,161861,161875,161888,163075,163077,163091,163104,163136,169434,169436,169478,182552,182555,182557,182780,198347-198348,198353,198356,198359,199598,211321,211977,211979,212017,212927,218947,218949,219052,232735,232762,232764,232775,244070,249226,249229,285373,285375,285413,287262,287264,287302,292930,302626,314569,314609,314675,314678,314681,314702,314709,314712,314715,314718,314721,314762,314765,314934,314946,314949,314952,315895,315899,315902,319637,319644,412517,412519,412571,412977,412979,413017,413687,413689,413727,470740,473030,473778,488279,488281,488335,494357,494359,494401,509194,511751,511753,511791,563593,563595,563633,581415,581419,581438,598223,598280,598284,670007,673146,673148,673196,674532,674534,674576,675469,675471,675509,676246,676248,676286,677837,677839,677881,679181,679183,679225,680676,680678,680720,681668,681670,681712,682653,682655,682697,683561,683563,683605,684851,684853,684895,687638,687640,687688,688411,688413,688461,689199,689201,689249,690469,690471,690519,691240,691242,691290,692028,692030,692078,693734,693736,693784,695798,695800,695842,697689,697691,697729,708145,708147,708194,713035,713043,713052,726583,726586,726597,726600,726603,726606,726612,726631,726775,726777,726779,728823,728839,729137,731794,731798,732653,732655,732703,733749,733751,733799,734736,734738,734786,737388,741094,741791,741885,768508,768510,768567,769119,769121,769163,772441,772443,772480,773751,773753,773790,776862,776864,776906,777599,777656,777660,779722,779725,779772,780500,780505,785604,785606,785648,800514,800516,800581,803765,803767,805387,805414,805610,805613,812036,812038,812076,850978,850980,851018,851715,851717,851755,852445,852447,852485,853234,853236,853274,854099,854101,854139,854827,854829,854867,855619,855621,855659,856955,856957,856976,856989,858862,858864,858885,858898,862688,862690,862709,862722,907038,907040,907157,907809,907811,907849,910128,910130,910181,928870,928872,928890,930308,930310,930361,935907,935909,935957,940776,941628,941630,941652-941656,941675,948622,948624,948638,948651,948683,948726,950193,951443,951500,951504,959156,959158,959177,959191,960009,960049,963493,964794,972370,974343,974345,974359,974372,974404,974447,974575,974579,974583,974665,974668,974670,974673,974676,974678,974681,974684,974686,974689,974692,974694,974697,974700,974702,974705,974708,974710,974713,974716,974718,974721,974724,974726,974941,975069,975077,980891,980893,980941,981604,982213,982215,982263,982510-982511,982738,983525,983527,983575,984466,984993,984995,985037,985718,986182,986184,986226,986742,986781,986785,986968,987238,987240,987288,988013,989742,989744,989786,989832,990186,990665,990667,990711,991336,992610,992612,992643,992662,993071,993173,993175,993213,994155,994157,994195,996196,996198,996236,996848,997199,997201,997249,997878,998272,998281,998283,998305,998307,998316,998323,998326,998329,998334,998357,998360,998363,998366,998369,998380,998400,998553,998557,1081967,1081969,1081971,1082369,1082371,1082373,1082773,1082775,1082777,1083607,1083609,1083613,1083618,1083620,1083624,1086645,1086648,1086650,1086653
+native unframed class=CategoryElem moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 6 1088579,1088583,1088587,1088591,1088595,1088599
+native unframed class=ColorFillLegend moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 2 941324,941334
+native unframed class=ColorFillSchema moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 9 99859-99861,99864,102898-102899,103627,103635,713027
+native unframed class=ColorFillSymbol moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 299
+native unframed class=ComponentRepeaterSlotSpecialType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 137223-137224
+native unframed class=CompoundCeilingType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 757,371865
+native unframed class=ConceptualConstructionType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 36 121716-121751
+native unframed class=ConceptualSurfaceType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 10 121752-121761
+native unframed class=ConduitSettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 113174
+native unframed class=ConduitSizesElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 113168
+native unframed class=ConduitStandardType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 6 113164-113167,121660-121661
+native unframed class=ConstructionSetProject moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 99928
+native unframed class=ContFootingType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 85113
+native unframed class=ContinuousRailSymbol moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 10 566601,568015,665843,931539,931575,931635,932544,932867,933816,934463
+native unframed class=ContourLabelingAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 19902
+native unframed class=ContourSpacingElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 8953,8991
+native unframed class=CoordinateSystemDisplayElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 86204
+native unframed class=CorniceAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 7844
+native unframed class=CoverType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 99880
+native unframed class=CurtaSystemAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 49034
+native unframed class=CurtaSystemFaceManager moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 423812
+native unframed class=CurtainRoofAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 338
+native unframed class=CurveElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 67 506162-506165,523525-523528,529721,534837,534900,626057-626059,628305,628317,628327,628333,628339,628375-628379,647912,647917,647923,647930,647938,697457-697460,697547-697550,700294,700296,705020,709801,849047-849050,850095-850096,850223,850274,931339,931345,931351,931357,931571,932864,933813,933827,957796,957860,975080-975082,977149,977151,1001887,1001895,1001900
+native unframed class=CutMarkType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 141723
+native unframed class=DBDrawing moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 37 233,315,8159,8178,8239,8254,69854,98987,243259,245430,247019,382620,503704,699854,736515,744832,771518,950802,950809,958187,958254,958274,958309,958322,958335,958467,959075,959138,959494,959513,960068,960080,960625,970090,998193,998206,998218
+native unframed class=DBDrawing moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 6 1088551,1088556,1088561,1088566,1088571,1088576
+native unframed class=DBView3d moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 9 699851,736512,744829,950799,950806,959071,960621,961260,961262
+native unframed class=DBViewDrafting moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 6 382617,503701,958184,958251,959135,959510
+native unframed class=DBViewPlan moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 7 312,8251,9599,245424,960887,960889,961104
+native unframed class=DBViewProject moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 230
+native unframed class=DBViewRendering moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 5 960064,960076,998189,998202,998214
+native unframed class=DBViewSchedule moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 959491,970087
+native unframed class=DBViewSchedule moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 6 1088548,1088553,1088558,1088563,1088568,1088573
+native unframed class=DBViewSection moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 15 8157,8176,8237,9605,9610,98984,243254,247014,771513,958268,958303,958316,958329,958461,960812
+native unframed class=DBViewType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 91 49552-49557,49559-49564,49584-49588,49593-49596,49602-49606,49611-49614,49620-49624,49629-49632,49638-49642,49647-49650,49656-49660,49665-49668,49674-49678,49683-49686,49692-49696,49701-49704,49710-49714,49719-49722,54529,56404-56406,69693,69847,958300
+native unframed class=DBViewTypeAreaPlan moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 857222
+native unframed class=DaylightSourceIdSet moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 12799
+native unframed class=DefaultDivideSettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 974663
+native unframed class=DimensionStyle moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 16 277,288,23763,32425,137225,182551,232761,974664,974672,974680,974688,974696,974704,974712,974720,1086644
+native unframed class=DivisionRule moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 17 974907-974923
+native unframed class=Dwg2dExportUserSettingsData moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102444
+native unframed class=EdgeSlabAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 19887
+native unframed class=ElectricalDemandFactorDefinition moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 12 113159,113161,113943,121663,135866,237138-237140,297988,298001,301084,372505
+native unframed class=ElectricalLoadClassification moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 12 113160,113162,113944-113946,121664,297989,298002-298005,372504
+native unframed class=ElectricalSetting moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 121706
+native unframed class=ElementGroupType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 4 800214,800332,988385,988592
+native unframed class=EnergyDataSettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 115988
+native unframed class=ExtentElem moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 23 9481,9485-9486,9488-9489,9603,9608,9613,98985,243255,245425,247015,771514,958269,958304,958317,958330,958462,960065,960077,998190,998203,998215
+native unframed class=ExternalParamLock moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 46017
+native unframed class=ExtrusionElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 506161,523524
+native unframed class=FabricationSettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 1002460
+native unframed class=FabricationSettingsElement moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 1077107
+native unframed class=FamSymSurrogate moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 99 147514,148519,149098,149921,150124,150541,150755,151156,151350,152407,152631,153085,153802,154021,157780,160829,161843-161845,162579,163286,170259,213559,232769,232771,232789,287142,288368,420953,488865,495325,506167,512172,523530,564476,598494,628358,674356,677681,678975,680525,684777,686170,690048,692864,694782,696970,697576,698709,708905,735725,769881,776840,778224,786500,801552,812901,856590,857185,857187,859087,862911,907610,909167,910851,929138,931090,936388,937372,941865,948858,951796,959387,974606,981610,982744,983519,984472,985724,986974,988019,990192,991363,993077,993874,994768,996867,997884,998569,1081977,1082379,1082783,1083628-1083634
+native unframed class=Family moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 94 8482-8483,12609,12613,18428,18432,18436,18440,147271,148318,148901,149695,149922,150328,150542,150954,151157,152185,152409,152859,153574,153804,157312,160569,161597,161849,163067,169424,211972,218942,285361,287257,412500,488274,494351,506157,511746,523520,563585,598214,628298,673141,674527,677832,679176,680671,684846,687633,690464,693729,695793,697447,697684,708139,732643,768490,772394,776857,785599,800493,812025,850938,856950,858857,862683,907033,907804,910123,928865,930303,935902,941623,948617,951436,959151,974333,980886,982208,983520,984988,986177,987233,989737,990657,992605,993162,994145,996188,997194,998264,1080651,1081990,1082392,1082796
+native unframed class=FamilyInstance moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=86961 6 976935,976937-976938,976953,978551,978558
+native unframed class=FamilyInstance moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 51 382621,503705,929139,941866,958188,958255,959139,959514,964238-964242,964525,964539,970378,970380,970384,970388,970472,970476,970480,970482,970484,970492,970494,970496,970498,970500,970504,970506,970508,970510,970518,970526,970530,970834,971509,971595,971597,971895,972381,972385,972389,972393,972398,972402,972407,972417,972953,973780
+native unframed class=FamilySurrogate moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 94 8484-8485,12610,12614,18429,18433,18437,18441,147513,148518,149095,149920,150123,150540,150754,151155,151349,152406,152630,153082,153800,154020,157779,160825,161842,162574,163284,170257,213552,219437,287139,288365,414456,488856,495323,506158,512166,523521,564473,598492,628299,674353,677678,678972,680522,684774,686167,690045,692861,694779,696967,697448,698706,708628,735722,769879,776831,778217,786498,801550,812899,856588,857183,859085,862909,907603,909165,910848,929136,931088,936385,941863,948857,951794,959385,974605,981607,982741,984469,985721,986971,988016,990189,991361,993074,993871,994765,996864,997881,998568,1081964,1082366,1082770,1083604
+native unframed class=FamilySymbol moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 857184
+native unframed class=FasciaAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 19885
+native unframed class=FillPatternElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 97 3-9,425-429,442-461,6473,6911-6913,7230,8573-8574,21435,46554-46559,100173-100177,177433,182563,184409,198375,218370-218372,232862-232863,297964-297967,307163,518153,528415,528417,600661-600662,713080-713082,749042,749044,987687-987706,987837-987838
+native unframed class=FilledRegionAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 36 86143,147324,147352,148346,148936,148968,149730,149957,150363,150395,150577,150609,150988,151189,153837,153869,160605,160637,161633,161665,161887,163103,163135,856988,858897,862721,941674,948650,948682,959190,974371,974403,974574,974578,974582,998399
+native unframed class=FloorAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 6 339,86313,185144,469350,581371,581405
+native unframed class=FontElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 347 280,291,308,344,360,364,368,7849,19905,21440,23766,26032,29091,32428,32440,32443,49582,49592,49600,49610,49618,49628,49636,49646,49654,49664,49672,49682,49690,49700,49708,49718,56771,69708-69709,86146,99892,100415,105726,137228,147319-147320,147327,147355,148344-148345,148349,148450,148932-148933,148939,148971,149727-149728,149733,149954-149955,149960,150359-150360,150366,150398,150441,150573-150574,150580,150612,150655,150985-150986,150991,151186-151188,151192,152254,152258,152479,152483,152929,152933,153644,153648,153833-153834,153840,153872,153915,154010,154014,157368-157369,160601-160602,160608,160640,160683,161629-161630,161636,161668,161711,161883-161884,161890,163099-163100,163106,163138,169489-169490,182554,212026-212027,219106-219107,232768,285422-285423,287311-287312,412574-412575,413026-413027,413736-413737,488358-488359,494411-494412,511800-511801,563642-563643,581286,581417,581421,598282,598286,673201-673202,674587-674588,675518-675519,676295-676296,677892-677893,679236-679237,680731-680732,681723-681724,682708-682709,683616-683617,684906-684907,687701-687702,688474-688475,689262-689263,690532-690533,691303-691304,692091-692092,693789-693790,695853-695854,697739-697740,708197-708198,732708-732709,733804-733805,734791-734792,768605-768606,769174-769175,772494-772495,773804-773805,776917-776918,777658,777662,785659-785660,800596-800597,812085-812086,851027-851028,851764-851765,852494-852495,853283-853284,854148-854149,854876-854877,855668-855669,856985-856986,856991,858894-858895,858900,862718-862719,862724,907224-907225,907858-907859,910192-910193,928923-928924,930372-930373,935960-935961,940778,941669-941670,941677,948646-948647,948653,948685,948728,951502,951506,959186-959187,959193,960051,972372,974367-974368,974374,974406,974449,974577,974581,974585,974667,974675,974683,974691,974699,974707,974715,974723,974943,975068,975071,975076,975079,980948-980949,981606,982274-982275,982740,983583-983584,984468,985048-985049,985720,986236-986237,986783,986787,986970,987293-987294,988015,989796-989797,990188,990715-990716,991338,992667-992668,993073,993222-993223,994204-994205,996245-996246,996850,997254-997255,997880,998262-998263,998384-998385,998387-998398,998402,998555,998559,1081975-1081976,1082377-1082378,1082781-1082782,1083615-1083616,1083626-1083627,1086647
+native unframed class=FontElem moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 12 1088578,1088581-1088582,1088585-1088586,1088589-1088590,1088593-1088594,1088597-1088598,1088601
+native unframed class=FormElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 628366
+native unframed class=GCSTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 103632
+native unframed class=GStyleElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1828 30-66,68-82,87-91,93,95,97,99,101-132,134-213,236,239,242,260,279,282,287,290,293,298,307,310,343,346,348,359,363,367,1662,2028-2029,2090-2091,2496-2498,2685-2687,3444,3644,3652,6877-6878,7007,7175,7233-7234,7236-7237,7239-7245,7566-7569,7842,7845-7846,7851-7852,8140-8141,8494-8498,8561-8562,8564,8566,8613,8617,8619,8949-8952,8954-8955,9196,9198,9200,9502-9503,9677,10164-10168,11800-11801,11803-11804,12100-12101,12590,12632,16556,17530-17533,18404,18452,18454,18470,18812-18813,19789-19790,19859-19860,19877,19879-19884,19904,20185,20448,21118-21119,21121-21122,21275-21276,21439,21442,21446-21449,21749,21875-21876,23447,23471-23474,23479-23485,23765,23768,23772,23775,23795-23796,24909-24922,24925,24938-24944,26018-26020,26031,29090,32420,32427,32439,32442,34701-34706,36084-36085,36228-36238,41945,45567-45568,49024-49025,49027-49028,49032-49033,49505-49507,49581,49591,49599,49609,49617,49627,49635,49645,49653,49663,49671,49681,49689,49699,49707,49717,50291-50295,50297,51422-51437,51454,51456-51457,52140,52145-52165,53277-53278,54526-54528,54654-54662,54664,55150-55152,55169,55172,55355-55358,55361,56407,56770,56773,56775-56776,69638-69656,69661-69692,69694-69706,69711,69713,69715,69717,69719,69721,69748,69823-69846,69848-69850,69855,85093-85103,85105-85107,85112,85114-85115,86145,86187-86202,86205-86243,86245-86257,86273-86290,86292,86299-86305,86307-86312,86314,86316-86333,86336,86338-86341,88901,99780-99788,99790-99799,99838-99839,99865-99869,99878-99879,99881-99889,99891,99908-99909,99911-99915,99923-99927,99930-99941,99943-99944,100417,100419,100421,100424-100426,101146-101147,102124,102130-102133,102348-102352,102355,102399-102409,102445-102453,102464,102466,102526,102861-102862,102879-102880,102900,103628-103631,103633-103634,103648,103691,105499-105500,105523-105531,105715-105718,105722,105725,105728,105730,105763-105765,105780-105785,111430-111433,111599,112333,112405-112417,113108,113110-113120,113127-113133,113135-113158,113163,113170-113172,113178,115989-115994,116085,116096-116098,116101-116106,116116-116119,121586-121590,121652-121659,121662,121776-121778,130492,130494,130496,130498,130500,130502,130504,130506,130508,130733,130735,130737,130739,130741,130743,130749-130750,130753-130754,130757-130758,130769-130770,130773-130774,130781-130782,130785-130786,130814-130816,132326-132327,132329-132330,132395-132397,132485-132490,133294-133299,133878-133887,134609-134610,137213-137222,137227,137230,137232-137235,137277-137297,137299-137300,137302-137321,137335,137424-137425,137427-137432,139192-139197,141727,147311,147315-147316,147326,147354,148337,148339-148340,148348,148449,148925,148928-148929,148938,148970,149717,149720-149721,149732,149944,149947-149948,149959,150352,150355-150356,150365,150397,150440,150566,150569-150570,150579,150611,150654,150977,150980-150981,150990,151178,151180-151182,151191,152196,152253,152257,152421,152478,152482,152871,152928,152932,153586,153643,153647,153826,153829-153830,153839,153871,153914,154009,154013,157360,157364-157365,160594,160597-160598,160607,160639,160682,161622,161625-161626,161635,161667,161710,161876,161879-161880,161889,163092,163095-163096,163105,163137,169480,169484-169485,171478-171496,182553,182556,182558,182781,198349-198352,198354-198355,198357-198358,198360-198361,199599-199600,211322,212018,212022-212023,212928,219048-219049,219053,232736-232737,232763,232765,232776,244071,249227-249228,249230-249231,285414,285418-285419,287303,287307-287308,292931,302627,314570-314571,314610-314611,314676-314677,314679-314680,314682-314683,314703-314704,314710-314711,314713-314714,314716-314717,314719-314720,314722-314723,314763-314764,314766-314767,314935-314936,314947-314948,314950-314951,314953-314954,315896-315897,315900-315901,315903-315904,319638-319639,319645,412567-412568,412572,413018,413022-413023,413728,413732-413733,470741-470742,473031-473032,473779-473780,488338,488342-488343,494403,494407-494408,509195-509196,511792,511796-511797,563634,563638-563639,581416,581420,581444,598224,598281,598285,670008-670009,673192-673193,673197,674578,674582-674583,675510,675514-675515,676287,676291-676292,677883,677887-677888,679227,679231-679232,680722,680726-680727,681714,681718-681719,682699,682703-682704,683607,683611-683612,684897,684901-684902,687684-687685,687689,688457-688458,688462,689245-689246,689250,690515-690516,690520,691286-691287,691291,692074-692075,692079,693780-693781,693785,695844,695848-695849,697730,697734-697735,708190-708191,708195,713036-713037,713044-713045,713053-713054,726584-726585,726587-726588,726598-726599,726601-726602,726604-726605,726607-726608,726613-726614,726632,726776,726778,726780,728824,728840,729138,731795,731799,732699-732700,732704,733795-733796,733800,734782-734783,734787,737389,741095,741792,741886,768568,768572-768573,769165,769169-769170,772481,772485-772486,773791,773795-773796,776908,776912-776913,777600,777657,777661,779723,779726,779773,780501,780506,785650,785654-785655,800577-800578,800582,803766,803768,805388,805415,805611,805614,812077,812081-812082,851019,851023-851024,851756,851760-851761,852486,852490-852491,853275,853279-853280,854140,854144-854145,854868,854872-854873,855660,855664-855665,856977,856980-856981,856990,858886,858889-858890,858899,862710,862713-862714,862723,907158,907162-907163,907850,907854-907855,910183,910187-910188,928891,928895-928896,930363,930367-930368,935953-935954,935958,940777,941657-941661,941665-941666,941676,948639,948642-948643,948652,948684,948727,950194,951444,951501,951505,959178,959181-959182,959192,960010,960050,963494,964795,972371,974360,974363-974364,974373,974405,974448,974576,974580,974584,974658-974662,974666,974669,974671,974674,974677,974679,974682,974685,974687,974690,974693,974695,974698,974701,974703,974706,974709,974711,974714,974717,974719,974722,974725,974727,974904-974906,974926,974942,974957,975070,975078,980937-980938,980942,981605,982259-982260,982264,982509,982512-982513,982739,983571-983572,983576,984467,985039,985043-985044,985719,986228,986232-986233,986743,986782,986786,986969,987284-987285,987289,988014,989788,989792-989793,989833,990187,990707-990708,990712,991337,992654,992658-992659,992663,993072,993214,993218-993219,994196,994200-994201,996237,996241-996242,996849,997245-997246,997250,997879,998273,998310-998313,998317,998324,998327,998330,998335,998358,998361,998364,998367,998370,998381,998401,998554,998558,1001911-1001913,1002130,1002132-1002137,1002443-1002452,1002461,1073519-1073523,1073814,1076952-1076954,1077108-1077128,1077327-1077344,1081972-1081974,1082374-1082376,1082778-1082780,1083610-1083611,1083614,1083621-1083622,1083625,1086591-1086640,1086643,1086646,1086649,1086651,1086654
+native unframed class=GStyleElem moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 6 1088580,1088584,1088588,1088592,1088596,1088600
+native unframed class=GeoLocation moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 21748,111428
+native unframed class=GeoSite moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 21747,111427
+native unframed class=Grid moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 14 195169,195239,195253,195255,195257,195259,195261,195338,195411,195418,411864,412015,412093,415791
+native unframed class=GridAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 341
+native unframed class=GutterAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 19886
+native unframed class=HVACLoadBuildingTypeElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 33 105557-105589
+native unframed class=HVACLoadScheduleElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 27 105532-105556,713142-713143
+native unframed class=HVACLoadSpaceTypeElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 125 105590-105714
+native unframed class=HalftoneUnderlaySettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 105779
+native unframed class=HandRailType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 139202
+native unframed class=HubsTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 132466
+native unframed class=ImageHolder moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 12 286091,678539,685668,960063,960075,974592,998188,998201,998213,998517-998518,998565
+native unframed class=ImageInstance moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 5 960072,960084,998197,998210,998222
+native unframed class=ImageSymbol moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 7 286092,678540,685669,974593,998416,998441,998566
+native unframed class=ImageSymbol moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 5 960071,960083,998196,998209,998221
+native unframed class=IndependentTag moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 54 940871,940907,940913,940917,940919,940931,940933,940956,940961,940964,940969,940981,940988,940996,941002,941009,941015,941135,941201,941203-941204,941206,941210-941213,941252,941262,941265,941271,941275,948595,948601,948606,948608,948610,948616,959432,959437,959440,959450,959452,959455,959459,959464,959469,959474,959479-959480,959482,959484,959486,959488,959490
+native unframed class=InitialViewSettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 133303
+native unframed class=InteriorElev moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 8 8142,8174,8208,98746,961284,961492,961502,961512
+native unframed class=InteriorElevArrow moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 4 8152,8175,8231,98977
+native unframed class=InteriorElevAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 9 357,49589,49607,49625,49643,49661,49679,49697,49715
+native unframed class=JoistSystemAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 49026
+native unframed class=KeynoteTable moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 86291
+native unframed class=KeynoteTagsOnSheetsTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 974956
+native unframed class=KeynotingSystem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 86315
+native unframed class=LayoutNodesTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 1002131
+native unframed class=LeaderStyle moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 118 234,237,240,258,285,296,23773,105720,141725,147309,148335,148923,149715,149942,150350,150564,150975,151176,152194,152419,152869,153584,153824,157358,160592,161620,161874,163090,169477,182779,212016,219051,285412,287301,412570,413016,413726,488334,494400,511790,563632,598222,673195,674575,675508,676285,677880,679224,680719,681711,682696,683604,684894,687687,688460,689248,690518,691289,692077,693783,695841,697728,708193,732702,733798,734785,768566,769162,772479,773789,776905,777598,785647,800580,812075,851017,851754,852484,853273,854138,854866,855658,856975,858884,862708,907156,907848,910180,928889,930360,935956,941651,948637,951442,959176,974358,980940,982262,983574,985036,986225,986741,987287,989785,990710,992661,993212,994194,996235,997248,998271,998315,1081970,1082372,1082776,1083612,1083623,1086652
+native unframed class=LegendComponent moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 88 974959-974989,974991,974993-975018,975021,975025-975029,975032-975036,975038-975039,981608,982742,984470,985722,986972,988017,990190,991362,993075,993872,994766,996865,997882,1081965,1082367,1082771,1083605
+native unframed class=Level moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 6 311,694,196629,245423,511122,515270
+native unframed class=Level moribund=0 dummy=0 unplaced_owner=1 view=0 option=0 demolished=0 created=-1 1 800333
+native unframed class=LevelAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 305
+native unframed class=LevelRoomPlan moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 857330-857331
+native unframed class=LightSchemeElement moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 7 699855,736516,744833,950803,950810,959076,960626
+native unframed class=LinePatternElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 33 10-22,942,6553,46015-46016,113121,182567,285362,297978,498286,708140,959184,980946,982267-982272,983580-983581
+native unframed class=LinearDimString moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 107 549060,566597-566598,628383-628388,650552-650553,653904,657587-657589,669213,669257-669267,669552-669553,706650,709918-709924,711361-711362,725543-725544,768273,800283-800285,800345-800347,800354-800356,800386-800388,849059-849060,931291,931363-931366,931536,931586,931729,931978-931979,932879,933792-933794,933835-933837,935484-935486,948095-948102,957640-957641,957851-957853,957922-957924,976731-976733,977160,978894,988399-988401,988606-988608,1000072-1000074,1001905
+native unframed class=LinearDimString moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 5 670283,725159,846402,941385,941440
+native unframed class=ListConceptualSurfaceTypes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 121762
+native unframed class=LoadCaseElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 8 51439,51441,51443,51445,51447,51449,51451,51453
+native unframed class=LoadNatureElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 8 51438,51440,51442,51444,51446,51448,51450,51452
+native unframed class=MEPAnalyticalConnectionElementType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 1086641
+native unframed class=MEPComponentTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 974924
+native unframed class=MEPNetworkTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 1086642
+native unframed class=MEPSystemTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 130510
+native unframed class=MaterialElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 157 23-26,29,414-419,421,423,519,523,758,792,865,8798,21116,21208,51455,52139,102856,103647,105006-105007,111600,123301,123307,123310-123311,137433-137436,141538,185148,198362-198363,198369-198370,198372-198374,211306,212929-212932,218358,232682-232683,232856-232859,269499,285363-285364,288294-288295,386106,395161,470743,488345,490603,494352,509467,531093,581327,581329,581376,581406,600660,628403,672517,672519,672521-672522,672524,672526,672675,677432,677451,678541-678542,678560,680098,680100-680101,684483,684487,684546,688385,690038,696740,697737,698369,704014,711694-711695,711728,711741,711746,711781,711814,713046,713090,726637-726638,727812,728905,732645-732646,749031-749033,772431-772433,772435-772436,776787,778053,801548,802433,805576,808701,808743,980944,981528,982508,983578,984397-984398,985568,985577-985578,986691,986695-986696,993159,993161,993163,993832-993833,994146,995304,996807,997802,998265-998270
+native unframed class=ModelClipBox moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 7 699850,736511,744828,950798,950805,959070,960620
+native unframed class=ModelGraphicsStyle moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 54523,54525
+native unframed class=NewCurtainWallType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 458927
+native unframed class=NonPlanarSketch moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 628369,628380
+native unframed class=NumberingSchema moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 1002462-1002463,1077345
+native unframed class=PanelScheduleTemplate moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 5 116082-116084,123314-123315
+native unframed class=ParamBinding moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 26011,198378
+native unframed class=ParamElemElectricalLoadClassification moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 72 127547-127582,297990,297996-298000,298794-298817,1002453-1002458
+native unframed class=ParamElemExternal moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 290 21308-21309,114978-114979,198377,198385,211148,211150,211179,211300-211301,211303,211401,211783-211784,235367-235374,236025,236096,241548-241551,249224-249225,249234-249260,285365-285366,287955-287962,287964,288296,314531-314532,314585-314586,314605,314628,314640-314645,314706-314707,314938-314939,315704,315706-315726,315735-315737,315756-315766,315768-315771,315905,315944-315946,315949,471250,509456-509457,509461-509463,698506-698508,698510,726573-726575,726589-726596,726609-726611,726615-726619,726621-726622,726629-726630,726639-726642,726645,726687,726704-726711,726910,726913,727068,727074,727980,727983,728138,730519,730522-730523,730678,730910,731691,731758-731759,731764-731765,731786-731788,731790,732439,732592,737535,737538,737693,738653,738656,738811,739888,739891,740046,740930,740933,741088,742275,742278-742281,742436,742668,743305,743461,749045-749048,753909,753939,757947-757948,757966-757977,761937-761939,761980,780508-780509,781994,781997-781999,782154,783564,783721,803614-803616,803763,804116,804119,804274,805841-805843,806786,806789-806791,806946,807804,807961,808808-808809,808825,808828-808834,808989,809693,809850,810547,810704,811484,811641,960489
+native unframed class=ParamElemFamily moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 411 16209-16210,16321,18134,20055-20056,20361-20362,24561-24562,24822,24824,24826,25978,28017-28018,28744-28745,29200-29202,125009,125016-125017,125021,128294,128301-128302,141422,141429,141440,141450,141477,197319-197334,211299,211302,211304-211305,211402-211403,212905,212920-212926,212933,213226,218389-218393,285367-285368,287963,288304,397091,397101,412501-412512,488722-488724,504432-504444,509465-509466,511675,511701,581321-581326,581328,581330,581332-581336,581339,581341-581343,581346,581348,581352-581353,581367,581374-581375,581381,581391,581401-581403,598397-598398,598444-598448,673811-673812,673815,673826-673831,673843,675244-675246,677180-677184,677197-677198,677431,677433-677438,677450,678543-678555,678557,678559,678561,678950,680021-680024,680097,680099,680167-680178,681500-681503,681507,681654-681662,684545,684754,685695,685721,685752,685768-685770,685802-685810,685901-685907,694399-694400,694403-694408,694422,694427,694452,694485,694712,696541,696700-696712,696731-696734,698503-698505,698509,698609,708237,708530,708543-708546,732648,753908,753910-753934,753937-753938,753940,773097-773099,773139,776053-776054,777552-777553,777558,777567-777568,777573,777973,777985,778061-778062,778084-778087,802308-802309,802316,802337-802339,857119-857120,857148,907188-907190,907263-907264,910379,910644-910645,928904,928917,928919,928952-928953,935948-935949,948520-948521,959315,964512,970354-970355,972682,972950,974323,981448-981449,982522-982524,984118,984122,984170,984184,984234-984239,985497-985501,985523,985649,987835-987836,988926-988930,990122-990123,992917-992918,992927,993168,997774-997775,997780-997783
+native unframed class=ParamElemProject moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 26010
+native unframed class=ParameterFilterElement moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 116099,960362
+native unframed class=Path3d moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 10 566602,568016,665844,931540,931576,931636,932545,932868,933817,934464
+native unframed class=Pattern moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 6 800282,800344,800353,800385,988398,988605
+native unframed class=PenWidthTableElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 9 2,1002138-1002145
+native unframed class=PhaseFilterElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 7 371-375,23211,24937
+native unframed class=PipeSegment moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 12 137323-137334
+native unframed class=PostedWarningElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 957747,977284,980625
+native unframed class=PrintSettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 19895,408188
+native unframed class=ProfileRefPlane moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 697453,697479-697480
+native unframed class=ProjectCopySettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 115987
+native unframed class=ProjectInfo moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 49504
+native unframed class=ProjectPhase moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 12589,86961,961604
+native unframed class=ProjectRevision moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 49030
+native unframed class=PropertyAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 23742
+native unframed class=PropertySetElement moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 53 174475-174476,174478-174479,174481-174482,174484,174487-174488,174490-174491,174493,174498,174501,174503-174504,174509-174510,174515-174516,174537,174548,174566,174577-174578,174580-174581,174586,174589-174590,174592-174593,174595-174596,174598-174599,194585,288364,386108-386109,581337-581338,581340,600684-600685,628405-628406,688386,690040,704015-704016,801549,802435
+native unframed class=PropertySetLibrary moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 133589
+native unframed class=RampAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 350
+native unframed class=RbsCableTrayType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 974934,974936
+native unframed class=RbsConduitType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 974938-974939
+native unframed class=RbsDbViewSystemNavigator moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 69851
+native unframed class=RbsDistributionSysType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 55360
+native unframed class=RbsDuctSettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102127
+native unframed class=RbsDuctSizesElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102126
+native unframed class=RbsElectricalSystem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 693257
+native unframed class=RbsFlexPipeType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 974933
+native unframed class=RbsFluidType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 19 102380-102398
+native unframed class=RbsHvacSystemType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 132467-132469
+native unframed class=RbsPipeConnectionType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 8 102357-102359,102366-102367,102373,102375-102376
+native unframed class=RbsPipeMaterialType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 5 102356,102362,102365,102372,102374
+native unframed class=RbsPipeScheduleType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 10 102360-102361,102363-102364,102368-102371,102377-102378
+native unframed class=RbsPipeSettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102128
+native unframed class=RbsPipeSizesElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102379
+native unframed class=RbsPipeType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 974932
+native unframed class=RbsPipingSystemType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 11 132471-132480,133300
+native unframed class=RbsVoltageType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 55359
+native unframed class=RbsWireInsulationType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 52 102415-102440,103662-103687
+native unframed class=RbsWireMaterialType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 4 102411-102414
+native unframed class=RbsWireSettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102129
+native unframed class=RbsWireSizesElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102410
+native unframed class=RbsWireTemperatureRatingType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 6 102441-102443,103688-103690
+native unframed class=RbsWireType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 55171
+native unframed class=ReactionsUpToDateElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 85104
+native unframed class=ReconcileBrowserSettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 116120
+native unframed class=RefPlane moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 56 243275,417494,529515-529518,534688-534691,566603,566606,568017,568020,650527-650530,665845,665848,700280-700283,704902-704905,706063,706118,849035-849038,931541,931544,931577,931580,931637,931640,932546,932549,932869,932872,933818,933821,934465,934468,977136-977139,1001882-1001885
+native unframed class=ReferencePoint moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 628367-628368,628372
+native unframed class=ReferenceViewerAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 99910
+native unframed class=RegenSplitterElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 495354,764693,766600
+native unframed class=ReinforcementSettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 137426
+native unframed class=RepeatingDetailAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 29109
+native unframed class=RevealAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 7843
+native unframed class=RevisionCloudAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 49029
+native unframed class=RevisionCloudsOnSheetsTracker moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 975044
+native unframed class=RoofAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 507024,711813
+native unframed class=RoofSoffitType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 19878
+native unframed class=RoomTag moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 14 857192,857195,857198,857201,857204,857207,857210,857293,857347,857426,857546,857553,906923,940326
+native unframed class=RvtLinkInstanceAppearanceParentElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 132481
+native unframed class=SWall moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=86961 4 628450,628452,628454,628456
+native unframed class=ScheduleInstance moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 8 959497,970093,1088552,1088557,1088562,1088567,1088572,1088577
+native unframed class=Section moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 8 243253,247013,771512,958267,958302,958315,958328,958460
+native unframed class=SectionAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 10 26029,29088,49579,49597,49615,49633,49651,49669,49687,49705
+native unframed class=SketchGrid moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 18 24927-24928,24932-24933,24935-24936,98988,243260,245431,247020,771519,958275,958310,958323,958336,958468,959077,960627
+native unframed class=SketchGrid moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 5 960069,960081,998194,998207,998219
+native unframed class=SketchGridAppearanceParentElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 132484
+native unframed class=SketchPlane moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 146 3325,18459,176802,182867,196639,196658,211860,213622,213821,218100,243272,245433,245452,293026,297704,300931,302304,305802,371551,376178,376313,417285,417304,418181,419784,419786,420266,430959,430961,490316,495350,506159,511132,511151,512681,515280,515299,523061,523522,529513,534686,549029,550253,566586,566604-566605,566607-566608,567885,568018-568019,568021-568022,569514,628300-628301,628370,628373,628381,647906,650525,665713,665846-665847,665849-665850,668626,671013,693445,697451,697477,697610,700278,704051,704612,704900,724428,725394,754181,754388,754403,755625,755644,756103,756106,756459,760717,760918,761103,764689,766596,802552,802735,802930,802954,802964,849033,857232,867810,931375,931542-931543,931545-931546,931567,931578-931579,931581-931582,931628,931638-931639,931641-931642,932399,932547-932548,932550-932551,932860,932870-932871,932873-932874,933809,933819-933820,933822-933823,933838,934466-934467,934469-934470,947496,952046,957748,957854,959078,960628,961369,961405,961453,961491,977134,1001880
+native unframed class=SketchPlane moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 26 103649,103653-103657,243261,245432,247021,771520,958276,958311,958324,958337,958469,959526,960070,960082,972397,972406,998195,998208,998220,1073710-1073712
+native unframed class=SpotElevationStyle moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 21437,56768,105723
+native unframed class=StackedWallType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 54537
+native unframed class=StairsAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 28598
+native unframed class=StairsLandingType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 141731,141747,171671
+native unframed class=StairsPathElement moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 5 513460-513461,513463,665704,665708
+native unframed class=StairsPathType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 141728-141729
+native unframed class=StairsRailingAttr moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 490129
+native unframed class=StairsRunType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 141730,141746,171672
+native unframed class=StairsSupportType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 141732-141733
+native unframed class=StairsTriserSymbol moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 513310,725047,725397
+native unframed class=StairsType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 141734,141748-141749
+native unframed class=StructConnectionType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 5 113122-113126
+native unframed class=StructSettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 54663
+native unframed class=StructuralConnectionSettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 1085200
+native unframed class=SunAndShadowSettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 29 54520,55153-55154,55156-55158,86334-86335,99829-99837,712652-712653,712681-712689,959084
+native unframed class=SunAndShadowSettings moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 30 116107,116111,116114-116115,121765-121767,243256,245427,247016,699852,736513,744830,771515,950800,950807,958271,958306,958319,958332,958464,958988,959072,960622,960813,960888,960890,961105,961261,961263
+native unframed class=SunAnnotationElem moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 22 121707,121711-121715,243257,245428,247017,771516,958272,958277,958307,958312,958320,958325,958333,958338,958465,958470,959073,960623
+native unframed class=SweepElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 697449
+native unframed class=SysMullionFamSym moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 232770,1073373-1073374
+native unframed class=SysPanelFamSym moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 3 54539,232758,1073372
+native unframed class=TagNoteAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 118 365,147291,148324,148447,148909,149701,149928,150336,150550,150960,151163,151174,152255,152480,152930,153645,153810,154007,157320,160578,161606,161860,163076,169435,211978,218948,285374,287263,412518,412978,413688,488280,494358,511752,563594,581404,581418,581437,598283,673147,674533,675470,676247,677838,679182,680677,681669,682654,683562,684852,687639,688412,689200,690470,691241,692029,693735,695799,697690,708146,732654,733750,734737,768509,769120,772442,773752,776863,777659,785605,800515,812037,850979,851716,852446,853235,854100,854828,855620,856956,858863,862689,907039,907810,910129,928871,930309,935908,941629,948623,951503,959157,974344,980892,982214,983526,984994,986183,986784,987239,989743,990666,992611,993174,994156,996197,997200,998282,998306,998359,998362,998365,998368,1081968,1082370,1082774,1083608,1083619
+native unframed class=Text3dAttrSymbol moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 7848
+native unframed class=TextNote moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 10 940773,940801,941338,941365,941384,941502,941537,960043,960046,960060
+native unframed class=TextNoteAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 139 361,147289,148322,148907,149699,149926,150334,150438,150548,150652,150958,151161,152251,152476,152926,153641,153808,153912,154011,157318,160576,160680,161604,161708,161858,163074,169433,211976,218946,285372,287261,412516,412976,413686,488278,494356,511750,563592,598279,673145,674531,675468,676245,677836,679180,680675,681667,682652,683560,684850,687637,688410,689198,690468,691239,692027,693733,695797,697688,708144,732652,733748,734735,768507,769118,772440,773750,776861,777655,785603,800513,812035,850977,851714,852444,853233,854098,854826,855618,856954,858861,862687,907037,907808,910127,928869,930307,935906,940775,941627,948621,948725,951499,959155,960048,972369,974342,974446,974940,980890,981603,982212,982737,983524,984465,984992,985717,986181,986780,986967,987237,988012,989741,990185,990664,991335,992609,993070,993172,994154,996195,996847,997198,997877,998280,998304,998322,998325,998328,998333,998356,998379,998552,998556,1081966,1082368,1082772,1083606,1083617
+native unframed class=TilePatternType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 17 112390-112404,123312-123313
+native unframed class=TopRailType moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 141548
+native unframed class=TrueNorth moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 7850
+native unframed class=UnitsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 19236
+native unframed class=VarSketch moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 46 176803,243273,418182,490317,495351,506160,512682,523062,523523,529514,534687,549030,550254,566587,567886,628302,628371,628374,628382,647907,650526,665714,668627,697452,697478,697611,700279,704052,704901,724429,725395,764690,766597,849034,931376,931568,931629,932400,932861,933810,933839,947497,957749,957855,977135,1001881
+native unframed class=ViewReferencing moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 23741
+native unframed class=ViewSheetSet moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 503760,701421
+native unframed class=Viewer moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 18 231,313,8252,69852,245426,382618,503702,958185,958252,959136,959492,959511,960066,960078,970088,998191,998204,998216
+native unframed class=Viewer moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 6 1088549,1088554,1088559,1088564,1088569,1088574
+native unframed class=Viewport moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 37 232,314,8158,8177,8238,8253,69853,98986,243258,245429,247018,382619,503703,699853,736514,744831,771517,950801,950808,958186,958253,958273,958308,958321,958334,958466,959074,959137,959493,959512,960067,960079,960624,970089,998192,998205,998217
+native unframed class=Viewport moribund=0 dummy=0 unplaced_owner=0 view=1 option=0 demolished=0 created=-1 26 382629,958041,958045,958196,958212,958225,958263,958265,958301,958341,958386-958387,958475,959147,959149,960073,960086,998198,998211,998223,1088550,1088555,1088560,1088565,1088570,1088575
+native unframed class=ViewportAttributes moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 324,960008
+native unframed class=WallJoinDefaultSetting moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102105
+native unframed class=WorksetVisibilitySettingsElem moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 113134
+native unframed class=WorksharingViewModeSettings moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 2 130813,171476
+native unframed class=ZoneElement moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102462
+native unframed class=ZoneScheme moribund=0 dummy=0 unplaced_owner=0 view=0 option=0 demolished=0 created=-1 1 102461
+exit 0
