@@ -85,12 +85,18 @@ def drop_held_out_rows(path, held, notes):
         notes.add(f"the {len(lines) - len(kept)} rows of `{os.path.basename(path)}` for held-out models")
 
 
-def drop_left_out_sections(path, notes):
+def left_out_names(held):
+    """The folder prefixes and names left out: the three kinds of model kept to summary counts, and
+    a `spent-` pair a held-out list names."""
+    return list(LEFT_OUT_PREFIXES) + [f"spent-{name}" for name in sorted(held)]
+
+
+def drop_left_out_sections(path, held, notes):
     """Drop, from a `diff -r` listing, the sections whose paths are a left-out model's folder."""
     with open(path, encoding="utf-8", errors="replace") as handle:
         lines = handle.read().splitlines(keepends=True)
     out, keep, dropped = [], True, 0
-    folder = re.compile(r"(^|[\s/])(" + "|".join(re.escape(p) for p in LEFT_OUT_PREFIXES) + r")")
+    folder = re.compile(r"(^|[\s/])(" + "|".join(re.escape(p) for p in left_out_names(held)) + r")")
     for line in lines:
         if line.startswith(("diff ", "Only in ")):
             keep = not folder.search(line)
@@ -100,7 +106,7 @@ def drop_left_out_sections(path, notes):
     if dropped:
         with open(path, "w", encoding="utf-8") as handle:
             handle.writelines(out)
-        notes.add(f"the {dropped} sections of `{os.path.basename(path)}` that diff a left-out folder")
+        notes.add(f"the {dropped} section{'' if dropped == 1 else 's'} of `{os.path.basename(path)}` that diff a left-out folder")
 
 
 def kept_file(name):
@@ -177,7 +183,7 @@ def main():
             for directory, _, names in os.walk(os.path.join(args.out, side)):
                 for name in names:
                     if name.endswith(".txt"):
-                        drop_left_out_sections(os.path.join(directory, name), notes)
+                        drop_left_out_sections(os.path.join(directory, name), held, notes)
                     if name.endswith(".md"):
                         drop_held_out_rows(os.path.join(directory, name), held, notes)
             count = sum(len(f) for _, _, f in os.walk(os.path.join(args.out, side)))
@@ -202,6 +208,7 @@ def main():
         )
     patterns = [re.compile(p) for p in PII]
     patterns.append(re.compile(r"(^|[^A-Za-z0-9])(" + "|".join(re.escape(p) for p in LEFT_OUT_PREFIXES) + r")[A-Za-z0-9]"))
+    patterns += [re.compile(r"(^|[^A-Za-z0-9])" + re.escape(f"spent-{name}") + r"($|[^A-Za-z0-9_.-])") for name in sorted(held)]
     hits = []
     for directory, _, names in os.walk(args.out):
         for name in names:
