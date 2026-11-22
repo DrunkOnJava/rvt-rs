@@ -297,9 +297,16 @@ score() { # name args...
   # A run that names its scorers is run for their answer, and a crash left in
   # the output file reads as a green run (#1541). In the default set a scorer
   # may exit 1 for a finding, so only the named ones are raised, and a probe's
-  # scorer, which is always asked for by name.
+  # scorer, which is always asked for by name. The annotation alone left the
+  # run green (run 45072403351), so each one is also listed in
+  # scorer-failures-<shard>.txt, which the compare job fails the run on, after
+  # its uploads. A model whose results leave the runner only as counts is not
+  # named there, as its folder is not.
   if [ "$status" != 0 ] && { [[ "$step" == probe_score* ]] || { [ "${#STEPS[@]}" -gt 0 ] && wanted "$step"; }; }; then
     echo "::error::$(basename "$dir"): the scorer $step, named in this run, exited $status (see its $step.txt)"
+    local model; model=$(basename "$dir")
+    case "$model" in holdout-*|racadv-*|bimcollab-*|spent-*) model="a model kept to counts" ;; esac
+    printf '%s\t%s\texit %s\n' "$model" "$step" "$status" >> "$OUT/scorer-failures-${SHARD:-all}.txt"
   fi
 }
 
