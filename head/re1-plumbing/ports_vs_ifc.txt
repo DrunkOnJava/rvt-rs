@@ -1,0 +1,15 @@
+Revit's export: 260 ports, 126 port-to-port connections, 118 involving a duct or pipe
+rvt-rs: 264 ports, 128 port-to-port connections, 120 involving a duct or pipe
+118 of Revit's 118 connections involving a duct or pipe are written (100.0%), 0 are not
+126 of all 126 of Revit's connections are written (100.0%), 0 are not
+2 connections written are not in Revit's export
+0 of rvt-rs's 264 ports are not tied to the element their name gives
+schema validation of rvt-rs's file: 0 findings, 0 about the port entities
+ports in both exports: 260
+  FlowDirection: 260 equal of 260
+    Revit SOURCE, rvt-rs SOURCE: 122
+    Revit SINK, rvt-rs SINK: 116
+    Revit SOURCEANDSINK, rvt-rs SOURCEANDSINK: 22
+  PredefinedType: not compared, the schema of Revit's export gives a port none
+  SystemType: not compared, the schema of Revit's export gives a port none
+exit 0

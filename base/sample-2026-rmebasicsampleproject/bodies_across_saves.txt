@@ -1,0 +1,148 @@
+bodies across saves: sample-2026-rmebasicsampleproject, held to the 2024, 2025 saves
+beams and landings: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+stair runs: compared 0 against the 2025 save (none); left as boxes here, drawn in the 2025 save, not scored: 0
+sketch outlines: compared 78 against the 2024 save (IfcCovering 42, IfcSlab 36); left as boxes here, drawn in the 2024 save, not scored: 0
+sketch outlines against the 2025 save, not scored: 47 equal, 6 differ, 0 drawn otherwise there
+  sketch outlines against the 2025 save: 577552 IfcSlab GlobalId: 2skzYSBWE7ngd7dDY4n3tq here, 38quJ8iQYCpAyILNnM39hX there; IfcSlab GlobalId: 2QrRYRbBQ3HgoxMdbuxS5M here, 1UK9lEGaU8igasacdv4qdS there; IfcSlab GlobalId: 1QL9otMRk2guKddHmxBxuG here, 1ZHM2aJKsACv8wAFjH6udX there; IfcSlab GlobalId: 2QSVWhU4gEBh_pyO1pRAhV here, 2iDGFO6S6FNAU4ZzUp5oGT there; IfcSlab GlobalId: 2bd3qlU6k8qOzvqV_IfVa4 here, 0uiusu1Z2CdvsFSq1Wmk3$ there
+  sketch outlines against the 2025 save: 577724 IfcSlab GlobalId: 1O9R$KDJoCk85iDWTo2Tzj here, 26WELJ1zg0mvFkAerBvZYj there; IfcSlab GlobalId: 2CoV1VSH61GRuHIrRABRkM here, 2aUZx70RoCuO8d6m6$aZaS there; IfcSlab GlobalId: 3jQAlZRT25C9sAbLX_1HBg here, 126h3cnNw6Nwy9Q2lmE1cK there; IfcSlab GlobalId: 0nLhuGZnkE2fhiQnS_GLoI here, 2i735s02s0rf208MA$cAap there; IfcSlab GlobalId: 1JdiIbplABEQGdxWPndt_E here, 3vOPTD6e_DyxlrfPPncoAJ there
+  sketch outlines against the 2025 save: 577773 IfcSlab GlobalId: 2N4C9HX9c76ABn_t3saajD here, 2czhWsfSA6i99WNStlt5iY there; IfcSlab GlobalId: 24XPHY2hI29OGuIp1jQp3K here, 1XnRlykTcFtwmEvmLr3_bp there; IfcSlab GlobalId: 3b8MYF18U4XRgWP6BPu4uN here, 1lsH2nhYE2weLWiLRLfmH$ there; IfcSlab GlobalId: 3aJVuyOz6EcODBPfaNaVs1 here, 1VRCczLCs11usvLezYfRY8 there; IfcSlab GlobalId: 1y4$ALQ1g5nfa5pj2Z2Auj here, 0uCb48CPoBy8aiuY1XgK6H there
+  sketch outlines against the 2025 save: 577947 IfcSlab GlobalId: 20fM6wUVgCM9PCsgI7UqhO here, 3LcY6uk_Q4Te0KxSRLosIp there; IfcSlab GlobalId: 1uO2oy2hA0JBgXs1zBdkiE here, 2pQYXgGwQA4B5bMK4Cv8dw there; IfcSlab GlobalId: 1CQMeFGDY2DOASh7JEuU$c here, 1vzCOIFNo6q9re$DaS8HO2 there
+  sketch outlines against the 2025 save: 578586 IfcSlab GlobalId: 0BOdImhHY00vkjNp4kZtwn here, 1R_7dz7PU5lANPeJF_L6Xm there; IfcSlab GlobalId: 2FioXeU_UBkRJio4gXKuGx here, 0Wv8Ogizs2LxocZn0A89fK there; IfcSlab GlobalId: 13_ftx2i65Qg9$xj7llTbl here, 2RMc_4LT62teKObWTsr2az there; IfcSlab GlobalId: 1Jm9OCIzY9sOv05bO$jfxo here, 1OOd2QtcM0$fejBj7K89an there
+  sketch outlines against the 2025 save: 579067 IfcSlab GlobalId: 1Dvp2BbJkCRA3S3hC1PusT here, 3lebfJlsg8PBRf_6SuYdId there; IfcSlab GlobalId: 1fzfE3Th_9rx6WTtMg$G6R here, 3rTyN3yc_7_RI59KLT5ndE there; IfcSlab GlobalId: 2Z4UbiE1gB4e5PjErBr1a9 here, 03W6i8HzQ5Hh_8lg_7zfgT there
+named elements: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+pipes: compared 491 against the 2025 save (IfcPipeSegment 491); left as boxes here, drawn in the 2025 save, not scored: 0
+pipes: 491 compared as cylinders (axis ends in either order, radius and length to 0.001 ft), 0 by vertices
+doors and windows: compared 107 against the 2024 save (IfcDoor 107); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 75
+ports: compared 1956 against the 2025 save (same 1956, differ 0, only here 0, only there 5098; not placed here 5118, there 20)
+cut openings: compared 0 against the 2025 save, and 0 openings beside them; their hosts 0: equal with the openings 0, differ by the openings alone 0, differ without them too 0, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 107
+door and window sizes: compared 124 against the 2025 save (same 107, differ 17; only in the 2025 save 0)
+properties: compared 3278 values (not counting Areas) the release lists add on 6757 paired elements against the 2025 save (equal 3278, differ 0, only here 0, only there 4218; doors' and windows' Areas, counted apart, equal: 0; Tags shared by more than one product, not paired: 6 here, 6 there)
+properties not added by the lists, not scored: IfcAirTerminal RvtElementRecordGeometry.SourceStream: equal 0, differ 309, only here 0, only there 0
+properties added by the lists: IfcBuildingElementProxy Pset_BuildingElementProxyCommon.IsExternal: equal 0, differ 0, only here 0, only there 648
+properties not added by the lists, not scored: IfcBuildingElementProxy RvtElementRecordGeometry.SourceStream: equal 0, differ 648, only here 0, only there 0
+properties not added by the lists, not scored: IfcCableCarrierFitting RvtElementRecordGeometry.SourceStream: equal 0, differ 14, only here 0, only there 0
+properties not added by the lists, not scored: IfcCableCarrierSegment RvtElementRecordGeometry.SourceStream: equal 0, differ 20, only here 0, only there 0
+properties added by the lists: IfcColumn Pset_ColumnCommon.IsExternal: equal 0, differ 0, only here 0, only there 135
+properties not added by the lists, not scored: IfcColumn RvtElementRecordGeometry.SourceStream: equal 0, differ 135, only here 0, only there 0
+properties added by the lists: IfcCovering Pset_CoveringCommon.IsExternal: equal 0, differ 0, only here 0, only there 43
+properties not added by the lists, not scored: IfcCovering RvtElementRecordGeometry.SourceStream: equal 0, differ 43, only here 0, only there 0
+properties added by the lists: IfcCurtainWall Pset_CurtainWallCommon.IsExternal: equal 0, differ 0, only here 0, only there 31
+properties not added by the lists, not scored: IfcCurtainWall RvtElementRecordGeometry.SourceStream: equal 0, differ 31, only here 0, only there 0
+properties added by the lists: IfcDoor Pset_DoorCommon.IsExternal: equal 124, differ 0, only here 0, only there 0
+properties added by the lists: IfcDoor Qto_DoorBaseQuantities.Area: equal 0, differ 0, only here 0, only there 107
+properties added by the lists: IfcDoor Qto_DoorBaseQuantities.Height: equal 0, differ 0, only here 0, only there 107
+properties added by the lists: IfcDoor Qto_DoorBaseQuantities.Width: equal 0, differ 0, only here 0, only there 107
+properties not added by the lists, not scored: IfcDoor RvtElementRecordGeometry.SourceStream: equal 0, differ 124, only here 0, only there 0
+properties not added by the lists, not scored: IfcDuctFitting RvtElementRecordGeometry.SourceStream: equal 0, differ 935, only here 0, only there 0
+properties added by the lists: IfcDuctSegment Qto_DuctSegmentBaseQuantities.Length: equal 0, differ 0, only here 0, only there 706
+properties not added by the lists, not scored: IfcDuctSegment RvtElementRecordGeometry.SourceStream: equal 0, differ 724, only here 0, only there 0
+properties not added by the lists, not scored: IfcLightFixture RvtElementRecordGeometry.SourceStream: equal 0, differ 410, only here 0, only there 0
+properties added by the lists: IfcMember .Name: equal 1450, differ 0, only here 0, only there 0
+properties added by the lists: IfcMember Pset_MemberCommon.IsExternal: equal 0, differ 0, only here 0, only there 1450
+properties not added by the lists, not scored: IfcMember RvtElementRecordGeometry.SourceStream: equal 0, differ 1450, only here 0, only there 0
+properties not added by the lists, not scored: IfcPipeFitting RvtElementRecordGeometry.SourceStream: equal 0, differ 535, only here 0, only there 0
+properties added by the lists: IfcPipeSegment Pset_PipeSegmentOccurrence.InvertElevation: equal 124, differ 0, only here 0, only there 0
+properties added by the lists: IfcPipeSegment Qto_PipeSegmentBaseQuantities.GrossCrossSectionArea: equal 491, differ 0, only here 0, only there 0
+properties added by the lists: IfcPipeSegment Qto_PipeSegmentBaseQuantities.Length: equal 491, differ 0, only here 0, only there 0
+properties added by the lists: IfcPipeSegment Qto_PipeSegmentBaseQuantities.OuterSurfaceArea: equal 491, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcPipeSegment RvtElementRecordGeometry.SourceStream: equal 0, differ 491, only here 0, only there 0
+properties added by the lists: IfcPlate Pset_PlateCommon.IsExternal: equal 0, differ 0, only here 0, only there 628
+properties not added by the lists, not scored: IfcPlate RvtElementRecordGeometry.SourceStream: equal 0, differ 629, only here 0, only there 0
+properties added by the lists: IfcRailing Pset_RailingCommon.Height: equal 0, differ 0, only here 0, only there 14
+properties added by the lists: IfcRailing Pset_RailingCommon.IsExternal: equal 0, differ 0, only here 0, only there 14
+properties not added by the lists, not scored: IfcRailing RvtElementRecordGeometry.SourceStream: equal 0, differ 14, only here 0, only there 0
+properties not added by the lists, not scored: IfcSanitaryTerminal RvtElementRecordGeometry.SourceStream: equal 0, differ 11, only here 0, only there 0
+properties added by the lists: IfcSlab Pset_SlabCommon.IsExternal: equal 15, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcSlab RvtElementRecordGeometry.SourceStream: equal 0, differ 15, only here 0, only there 0
+properties added by the lists: IfcSpace Pset_SpaceCommon.IsExternal: equal 0, differ 0, only here 0, only there 76
+properties added by the lists: IfcSpace Qto_SpaceBaseQuantities.Height: equal 76, differ 0, only here 0, only there 0
+properties added by the lists: IfcSpace Qto_SpaceBaseQuantities.NetVolume: equal 0, differ 0, only here 0, only there 9
+properties not added by the lists, not scored: IfcSpace RvtElementRecordGeometry.SourceStream: equal 0, differ 76, only here 0, only there 0
+properties added by the lists: IfcStair .Name: equal 8, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Other.Category: equal 8, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.IsExternal: equal 0, differ 0, only here 0, only there 8
+properties not added by the lists, not scored: IfcStair RvtElementRecordGeometry.SourceStream: equal 0, differ 8, only here 0, only there 0
+properties added by the lists: IfcWall Pset_WallCommon.IsExternal: equal 0, differ 0, only here 0, only there 135
+properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.SourceStream: equal 0, differ 135, only here 0, only there 0
+census: 6650 bodies paired by Tag with the 2025 save's: same 6614, differ 36 (pinned walls as pinned, source, volume and box, 0 of 0; roofs left as record boxes 0 of 0 expected), not in the 2025 save 0; did not mesh here 6, there 6
+census by kind: IfcWall: 35 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save)
+census by kind: IfcWall: 1 (partition_wall_centreline here, partition_wall_centreline in the 2025 save)
+census differing  IfcWall 573380 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 4.734899 here, 4.761580 there
+census differing  IfcWall 573381 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 10.770911 here, 10.957678 there
+census differing  IfcWall 573574 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 4.877385 here, 4.970769 there
+census differing  IfcWall 573575 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 2.644013 here, 2.690704 there
+census differing  IfcWall 573581 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.520666 here, 0.544012 there
+census differing  IfcWall 573588 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 2.927176 here, 2.942517 there
+census differing  IfcWall 573595 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 13.717559 here, 13.855634 there
+census differing  IfcWall 573602 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 7.518465 here, 7.635194 there
+census differing  IfcWall 573604 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 1.997318 here, 2.028001 there
+census differing  IfcWall 573607 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 4.146313 here, 4.176996 there
+census differing  IfcWall 573609 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.907820 here, 0.923162 there
+census differing  IfcWall 573689 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 4.492370 here, 4.585753 there
+census differing  IfcWall 573690 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 2.439096 here, 2.485788 there
+census differing  IfcWall 573696 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.466637 here, 0.489983 there
+census differing  IfcWall 573704 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 5.052790 here, 5.122828 there
+census differing  IfcWall 573706 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.492887 here, 0.516232 there
+census differing  IfcWall 573715 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 1.737019 here, 1.760365 there
+census differing  IfcWall 573717 partition_wall_centreline here, partition_wall_centreline in the 2025 save: box off 0.0000 m, volume 0.989175 here, 1.058143 there
+census differing  IfcWall 573719 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.402981 here, 0.432961 there
+census differing  IfcWall 573745 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.631094 here, 0.646435 there
+census differing  IfcWall 573746 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 2.722567 here, 2.737908 there
+census differing  IfcWall 573752 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 1.535373 here, 1.596739 there
+census differing  IfcWall 573781 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.243460 here, 0.269529 there
+census differing  IfcWall 575086 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 7.312205 here, 7.373571 there
+census differing  IfcWall 575419 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 13.000456 here, 13.123188 there
+census differing  IfcWall 575883 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 7.400604 here, 7.477312 there
+census differing  IfcWall 576022 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 14.204117 here, 14.280825 there
+census differing  IfcWall 576036 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.529637 here, 0.552983 there
+census differing  IfcWall 576038 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.580268 here, 0.603614 there
+census differing  IfcWall 576040 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.550637 here, 0.573982 there
+census differing  IfcWall 576044 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 11.445152 here, 11.583226 there
+census differing  IfcWall 576054 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 7.049785 here, 7.126493 there
+census differing  IfcWall 578639 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.084130 here, 0.097165 there
+census differing  IfcWall 578640 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.084130 here, 0.097165 there
+census differing  IfcWall 578649 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.749480 here, 0.764822 there
+census differing  IfcWall 580917 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 0.289397 here, 0.304739 there
+  ports: 5098 are placed in the 2025 save and not here
+  ports: 1956 compared equal, fewer than the 7046 the sample holds
+  cut openings: 107 door or window cuts are cut in the 2025 save and not here
+  cut openings: 0 compared, fewer than the 107 the sample holds
+  door and window sizes: 573615 IfcDoor differs: size (None, None) and type ('3Y9iLT6nJ26$vkSAEzsE0B', 'IfcDoorType', 'Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas') here, size (2.49, 2.495) and type ('3Y9iLT6nJ26$vkSAEzsE0B', 'IfcDoorType', 'Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas') in the 2025 save
+  door and window sizes: 573637 IfcDoor differs: size (None, None) and type ('3Y9iLT6nJ26$vkSAEzsE0B', 'IfcDoorType', 'Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas') here, size (2.49, 2.495) and type ('3Y9iLT6nJ26$vkSAEzsE0B', 'IfcDoorType', 'Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas') in the 2025 save
+  door and window sizes: 573681 IfcDoor differs: size (None, None) and type ('3Yva3z3l8ezdOfWZDFgNvO', 'IfcDoorType', 'Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas') here, size (2.062243, 3.02) and type ('3Yva3z3l8ezdOfWZDFgNvO', 'IfcDoorType', 'Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas') in the 2025 save
+  door and window sizes: 575891 IfcDoor differs: size (None, None) and type ('2LExK_96Syr9LhQiRRpN8L', 'IfcDoorType', 'Türelement 1-flg - Drehflügel - Glas:Türelement 1-flg - Drehflügel - Glas') here, size (0.91, 2.41) and type ('2LExK_96Syr9LhQiRRpN8L', 'IfcDoorType', 'Türelement 1-flg - Drehflügel - Glas:Türelement 1-flg - Drehflügel - Glas') in the 2025 save
+  door and window sizes: 575897 IfcDoor differs: size (None, None) and type ('1wlhppko4NBlBZoIPbZjGw', 'IfcDoorType', 'Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas') here, size (2.14, 2.47) and type ('1wlhppko4NBlBZoIPbZjGw', 'IfcDoorType', 'Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas') in the 2025 save
+  door and window sizes: 17 differ from the 2025 save's
+  door and window sizes: 107 compared equal, fewer than the 124 the sample holds
+  properties: 3278 values equal, fewer than the 5028 the sample holds
+  properties: 0 doors' and windows' Areas equal, fewer than the 107 the sample holds
+  census: IfcWall 573380 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573381 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573574 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573575 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573581 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573588 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573595 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573602 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573604 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573607 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573609 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573689 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573690 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573696 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573704 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573706 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573715 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573717 (partition_wall_centreline here, partition_wall_centreline in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573719 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573745 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573746 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573752 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 573781 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 575086 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 575419 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 575883 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  census: IfcWall 576022 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+  ... and 9 more
+bodies across saves: FAIL (49 differences)
+exit 1

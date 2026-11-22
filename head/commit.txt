@@ -1,0 +1,1 @@
+ea21dfc6542216e566e15d1cd5d02664d04e87d5 feat(ifc): Revit 2026 and 2027 pipes, ports, door and window cuts and the 2025 properties are read as on 2025 (#1190) (RE-346)

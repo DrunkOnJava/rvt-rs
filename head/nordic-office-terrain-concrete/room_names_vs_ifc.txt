@@ -1,0 +1,5 @@
+  Parking Space:AP:1387614: storey ours 01_Kerros Revit None
+  Parking Space:AP:1387660: storey ours 01_Kerros Revit None
+spaces in both: storey equal 7, different 2
+rooms: 9; Revit's number and name 9, different 0, not in the reference 0
+exit 0

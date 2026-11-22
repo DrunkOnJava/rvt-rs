@@ -1,0 +1,3 @@
+IfcStairFlightType PredefinedType: rvt-rs {}, Revit {}
+IfcSlab: 80 in both; same 80, differs 0, unset in rvt-rs 0; Revit's: {'FLOOR': 78, 'ROOF': 2}
+exit 0

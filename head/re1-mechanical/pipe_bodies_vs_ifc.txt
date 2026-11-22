@@ -1,0 +1,9 @@
+pipes in Revit's export with an extruded body: 6; rvt-rs writes one for 6 of them
+rvt-rs profiles on those: {'IfcCircleProfileDef': 6}
+Revit's profiles on those: {'IfcCircleProfileDef': 6}
+circle profile: 6 of 6
+radius within 0.001 ft of Revit's: 6 of 6 (worst 0.00000 ft)
+axis ends within 0.01 ft of Revit's: 6 of 6 (worst 0.00000 ft)
+length within 0.01 ft of Revit's: 6 of 6
+all four: 6 of 6
+exit 0

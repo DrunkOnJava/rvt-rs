@@ -1,0 +1,6 @@
+wall rules: base sources wall_base_cut_at_covering_floor=4 wall_base_sloped_at_covering_floor=10 wall_base_sloped_at_floor_covering_in_part=2
+wall rules: end sources wall_end_stepped_to_joined_walls=4
+wall rules: ends order dependent 4
+wall rules: base refusals none
+wall rules: end refusals none
+wall rules: end reads unmarked end_join_curve_not_at_the_box_end=2
