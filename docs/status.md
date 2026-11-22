@@ -1773,7 +1773,7 @@ reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions
 
 **RE-350 (2026-11-05)** measures why three categories stay unread, on 59
 models with a Revit export and Autodesk's samples (Measure runs [42097940515](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42097940515) (kept: [Snowdon Towers Structural][kept-32]),
-[42108271073](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42108271073) (kept: [`rst_basic`][kept-33], [`rac_basic`][kept-34], each the 2023 save); `probe_re350_category_stages`, under its earlier name
+[42108271073](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42108271073) (kept: [`rst_basic`][kept-33], [`rac_basic`][kept-34], [`rac_advanced`][kept-39], each the 2023 save); `probe_re350_category_stages`, under its earlier name
 `probe_re348_category_stages` at `32586847`; #1444, #1445, Discussion #1241).
 The files hold them as frames, the same on every save of 2020 to 2027: 346
 `Rebar` on `rst_basic` (14 on Snowdon Towers Structural), 16 Structural Beam
@@ -2300,3 +2300,4 @@ acceptance limits are 0.3048 mm sampled distance and 0.01% volume error.
 [kept-36]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/b979b8cfce303b87ac1e356bc1a36ca3922b4660/base/holdout-AA-SingleDwellingHouse-RVT-CIADD/counts.txt
 [kept-37]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/320903807c665d39e4acf7a83adcbce96d81a26e?recursive=1
 [kept-38]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/68a42783041c94c1b73b6e4a4872075a2c85397d?recursive=1
+[kept-39]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/c636faa7a6694b94234e05b79aeee5f155f57afd/head/sample-2023-racadvancedsampleproject/probe.txt
