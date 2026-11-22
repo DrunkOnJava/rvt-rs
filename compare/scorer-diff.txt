@@ -1,0 +1,135 @@
+Only in measure-head: areas_across_saves.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-racbasicsampleproject/schema.txt measure-head/sample-2024-racbasicsampleproject/schema.txt
+--- measure-base/sample-2024-racbasicsampleproject/schema.txt	2026-11-09 04:02:19.688410902 +0000
++++ measure-head/sample-2024-racbasicsampleproject/schema.txt	2026-11-09 04:02:18.782404462 +0000
+@@ -4 +4 @@
+-  placement composition: 458 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 457 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racbasicsampleproject/bodies_across_saves.txt measure-head/sample-2026-racbasicsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2026-racbasicsampleproject/bodies_across_saves.txt	2026-11-09 04:02:19.692410931 +0000
++++ measure-head/sample-2026-racbasicsampleproject/bodies_across_saves.txt	2026-11-09 04:02:18.765404341 +0000
+@@ -15 +15 @@
+-cut openings: compared 25 against the 2025 save, and 1 openings beside them; their hosts 11: equal with the openings 5, differ by the openings alone 0, differ without them too 6, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
++cut openings: compared 25 against the 2025 save, and 1 openings beside them; their hosts 11: equal with the openings 11, differ by the openings alone 0, differ without them too 0, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
+@@ -101,6 +100,0 @@
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.GrossSideArea: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.GrossVolume: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.Height: equal 18, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.NetSideArea: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.NetVolume: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.BodyHeightSource: equal 0, differ 0, only here 16, only there 0
+@@ -108 +101,0 @@
+-properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.TopCoverElementId: equal 0, differ 0, only here 16, only there 0
+@@ -113,3 +106 @@
+-census: 441 bodies paired by Tag with the 2025 save's: same 424, differ 17 (pinned walls as pinned, source, volume and box, 0 of 0; roofs left as record boxes 1 of 1 expected), not in the 2025 save 0; did not mesh here 0, there 0
+-census by kind: IfcWall: 12 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save)
+-census by kind: IfcWall: 4 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save)
++census: 441 bodies paired by Tag with the 2025 save's: same 440, differ 1 (pinned walls as pinned, source, volume and box, 0 of 0; roofs left as record boxes 1 of 1 expected), not in the 2025 save 0; did not mesh here 0, there 0
+@@ -117 +107,0 @@
+-census differing  IfcWall 234869 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 2.549528 here, 5.529220 there
+@@ -119,33 +109,2 @@
+-census differing  IfcWall 428588 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 9.584475 here, 10.544400 there
+-census differing  IfcWall 428745 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 10.735875 here, 11.695800 there
+-census differing  IfcWall 429964 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 1.768581 here, 4.071177 there
+-census differing  IfcWall 430064 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 1.7463 m, volume 2.055400 here, 4.406434 there
+-census differing  IfcWall 430318 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 0.725089 here, 1.808131 there
+-census differing  IfcWall 430361 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 1.9181 m, volume 0.905749 here, 1.542956 there
+-census differing  IfcWall 430412 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 2.2260 m, volume 0.488536 here, 1.051978 there
+-census differing  IfcWall 430859 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 1.055402 here, 2.826164 there
+-census differing  IfcWall 497540 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1184 m, volume 0.764515 here, 1.638923 there
+-census differing  IfcWall 506386 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 2.3838 m, volume 0.392618 here, 0.735880 there
+-census differing  IfcWall 506797 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 0.299917 here, 0.650437 there
+-census differing  IfcWall 768442 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 2.2260 m, volume 0.911475 here, 1.655623 there
+-census differing  IfcWall 937935 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 1.8027 m, volume 0.554628 here, 0.921333 there
+-census differing  IfcWall 938974 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 0.785455 here, 1.703434 there
+-census differing  IfcWall 939084 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 2.4823 m, volume 0.782478 here, 1.494859 there
+-  census: IfcWall 234869 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 428588 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 428745 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 429964 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430064 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430318 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430361 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430412 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430859 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 497540 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 506386 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 506797 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 768442 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 937935 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 938974 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 939084 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-bodies across saves: FAIL (16 differences)
+-exit 1
++bodies across saves: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racbasicsampleproject/schema.txt measure-head/sample-2026-racbasicsampleproject/schema.txt
+--- measure-base/sample-2026-racbasicsampleproject/schema.txt	2026-11-09 04:02:19.692410931 +0000
++++ measure-head/sample-2026-racbasicsampleproject/schema.txt	2026-11-09 04:02:18.786404490 +0000
+@@ -4 +4 @@
+-  placement composition: 453 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 451 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racbasicsampleproject/bodies_across_saves.txt measure-head/sample-2027-racbasicsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2027-racbasicsampleproject/bodies_across_saves.txt	2026-11-09 04:02:19.694410945 +0000
++++ measure-head/sample-2027-racbasicsampleproject/bodies_across_saves.txt	2026-11-09 04:02:18.769404369 +0000
+@@ -15 +15 @@
+-cut openings: compared 25 against the 2025 save, and 1 openings beside them; their hosts 11: equal with the openings 5, differ by the openings alone 0, differ without them too 6, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
++cut openings: compared 25 against the 2025 save, and 1 openings beside them; their hosts 11: equal with the openings 11, differ by the openings alone 0, differ without them too 0, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
+@@ -102,6 +101,0 @@
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.GrossSideArea: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.GrossVolume: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.Height: equal 18, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.NetSideArea: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall Qto_WallBaseQuantities.NetVolume: equal 6, differ 0, only here 1, only there 0
+-properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.BodyHeightSource: equal 0, differ 0, only here 16, only there 0
+@@ -109 +102,0 @@
+-properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.TopCoverElementId: equal 0, differ 0, only here 16, only there 0
+@@ -114,3 +107 @@
+-census: 441 bodies paired by Tag with the 2025 save's: same 424, differ 17 (pinned walls as pinned, source, volume and box, 0 of 0; roofs left as record boxes 1 of 1 expected), not in the 2025 save 0; did not mesh here 0, there 0
+-census by kind: IfcWall: 12 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save)
+-census by kind: IfcWall: 4 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save)
++census: 441 bodies paired by Tag with the 2025 save's: same 440, differ 1 (pinned walls as pinned, source, volume and box, 0 of 0; roofs left as record boxes 1 of 1 expected), not in the 2025 save 0; did not mesh here 0, there 0
+@@ -118 +108,0 @@
+-census differing  IfcWall 234869 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 2.549528 here, 5.529220 there
+@@ -120,33 +110,2 @@
+-census differing  IfcWall 428588 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 9.584475 here, 10.544400 there
+-census differing  IfcWall 428745 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 0.0000 m, volume 10.735875 here, 11.695800 there
+-census differing  IfcWall 429964 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 1.768581 here, 4.071177 there
+-census differing  IfcWall 430064 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 1.7463 m, volume 2.055400 here, 4.406434 there
+-census differing  IfcWall 430318 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 0.725089 here, 1.808131 there
+-census differing  IfcWall 430361 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 1.9181 m, volume 0.905749 here, 1.542956 there
+-census differing  IfcWall 430412 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 2.2260 m, volume 0.488536 here, 1.051978 there
+-census differing  IfcWall 430859 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 1.055402 here, 2.826164 there
+-census differing  IfcWall 497540 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1184 m, volume 0.764515 here, 1.638923 there
+-census differing  IfcWall 506386 partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save: box off 2.3838 m, volume 0.392618 here, 0.735880 there
+-census differing  IfcWall 506797 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 0.299917 here, 0.650437 there
+-census differing  IfcWall 768442 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 2.2260 m, volume 0.911475 here, 1.655623 there
+-census differing  IfcWall 937935 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 1.8027 m, volume 0.554628 here, 0.921333 there
+-census differing  IfcWall 938974 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 3.1865 m, volume 0.785455 here, 1.703434 there
+-census differing  IfcWall 939084 partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save: box off 2.4823 m, volume 0.782478 here, 1.494859 there
+-  census: IfcWall 234869 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 428588 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 428745 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 429964 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430064 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430318 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430361 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430412 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 430859 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 497540 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 506386 (partition_element_record_join_trimmed here, partition_element_record_join_trimmed in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 506797 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 768442 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 937935 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 938974 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-  census: IfcWall 939084 (partition_wall_centreline_layer_joins here, partition_wall_centreline_layer_joins in the 2025 save) differs from the 2025 save's and is not a pinned wall
+-bodies across saves: FAIL (16 differences)
+-exit 1
++bodies across saves: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racbasicsampleproject/schema.txt measure-head/sample-2027-racbasicsampleproject/schema.txt
+--- measure-base/sample-2027-racbasicsampleproject/schema.txt	2026-11-09 04:02:19.694410945 +0000
++++ measure-head/sample-2027-racbasicsampleproject/schema.txt	2026-11-09 04:02:18.788404504 +0000
+@@ -4 +4 @@
+-  placement composition: 453 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 451 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched

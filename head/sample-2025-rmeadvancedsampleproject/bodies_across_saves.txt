@@ -1,0 +1,10 @@
+bodies across saves: sample-2025-rmeadvancedsampleproject, held to the 2024 saves
+beams and landings: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+stair runs: not applicable, the 2025 save is the reference of the later saves and this is the 2025 save (0 drawn here)
+sketch outlines: compared 78 against the 2024 save (IfcCovering 42, IfcSlab 36); left as boxes here, drawn in the 2024 save, not scored: 0
+named elements: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+pipes: not applicable, the 2025 save is the reference of the later saves and this is the 2025 save (488 drawn here)
+doors and windows: compared 107 against the 2024 save (IfcDoor 107); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 75
+cut openings, ports and properties: not applicable, the 2025 save is the reference of the later saves and this is the 2025 save
+bodies across saves: PASS
+exit 0

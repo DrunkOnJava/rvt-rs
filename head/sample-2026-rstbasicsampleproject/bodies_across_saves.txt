@@ -1,0 +1,75 @@
+bodies across saves: sample-2026-rstbasicsampleproject, held to the 2024, 2025 saves
+beams and landings: compared 354 against the 2024 save (IfcBeam 354); left as boxes here, drawn in the 2024 save, not scored: 0
+stair runs: compared 1 against the 2025 save (IfcStairFlight 1); left as boxes here, drawn in the 2025 save, not scored: 0
+sketch outlines: compared 5 against the 2024 save (IfcSlab 5); left as boxes here, drawn in the 2024 save, not scored: 0
+sketch outlines against the 2025 save, not scored: 5 equal, 0 differ, 0 drawn otherwise there
+named elements: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+pipes: compared 0 against the 2025 save (none); left as boxes here, drawn in the 2025 save, not scored: 0
+pipes: 0 compared as cylinders (axis ends in either order, radius and length to 0.001 ft), 0 by vertices
+doors and windows: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 0
+ports: compared 0 against the 2025 save (same 0, differ 0, only here 0, only there 0; not placed here 0, there 0)
+cut openings: compared 0 against the 2025 save, and 0 openings beside them; their hosts 0: equal with the openings 0, differ by the openings alone 0, differ without them too 0, of which the openings cut another volume than the 2025 save's 0; cut in the 2025 save and not here: 0
+door and window sizes: compared 0 against the 2025 save (same 0, differ 0; only in the 2025 save 0)
+properties: compared 451 values (not counting Areas) the release lists add on 455 paired elements against the 2025 save (equal 451, differ 0, only here 0, only there 9; doors' and windows' Areas, counted apart, equal: 0; Tags shared by more than one product, not paired: 0 here, 0 there)
+properties added by the lists: IfcBeam Pset_BeamCommon.IsExternal: equal 370, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcBeam RvtElementRecordGeometry.LevelBindResolved: equal 368, differ 2, only here 0, only there 0
+properties not added by the lists, not scored: IfcBeam RvtElementRecordGeometry.LevelBindSource: equal 354, differ 10, only here 0, only there 2
+properties not added by the lists, not scored: IfcBeam RvtElementRecordGeometry.LevelElementId: equal 364, differ 0, only here 0, only there 2
+properties not added by the lists, not scored: IfcBeam RvtElementRecordGeometry.SourceStream: equal 0, differ 370, only here 0, only there 0
+properties added by the lists: IfcColumn Pset_ColumnCommon.IsExternal: equal 30, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcColumn RvtElementRecordGeometry.SourceStream: equal 0, differ 30, only here 0, only there 0
+properties not added by the lists, not scored: IfcFooting RvtElementRecordGeometry.SourceStream: equal 0, differ 36, only here 0, only there 0
+properties added by the lists: IfcMember .Name: equal 2, differ 0, only here 0, only there 0
+properties added by the lists: IfcMember Pset_MemberCommon.IsExternal: equal 2, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcMember RvtElementRecordGeometry.SourceStream: equal 0, differ 2, only here 0, only there 0
+properties added by the lists: IfcSlab Pset_SlabCommon.IsExternal: equal 5, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcSlab RvtElementRecordGeometry.SourceStream: equal 0, differ 5, only here 0, only there 0
+properties added by the lists: IfcSpace Pset_SpaceCommon.IsExternal: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair .Name: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Identity Data.Type Name: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Other.Category: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Other.Family: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Other.Family Name: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Other.Family and Type: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Other.Type: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Other.Type Id: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_EnvironmentalImpactIndicators.Reference: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.IsExternal: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.NosingLength: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.NumberOfRiser: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.NumberOfTreads: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.Reference: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.RiserHeight: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.TreadLength: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.TreadLengthAtInnerSide: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair Pset_StairCommon.TreadLengthAtOffset: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair RvtElementRecordGeometry.FamilyName: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStair RvtElementRecordGeometry.FamilyNameSource: equal 1, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcStair RvtElementRecordGeometry.SourceStream: equal 0, differ 1, only here 0, only there 0
+properties added by the lists: IfcStair RvtElementRecordGeometry.TypeName: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight .Name: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Identity Data.Type Name: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Other.Category: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Other.Family: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Other.Family Name: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Other.Family and Type: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Other.Type: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Other.Type Id: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Pset_EnvironmentalImpactIndicators.Reference: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Pset_StairFlightCommon.NosingLength: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Pset_StairFlightCommon.NumberOfRiser: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Pset_StairFlightCommon.NumberOfTreads: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Pset_StairFlightCommon.Reference: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Pset_StairFlightCommon.RiserHeight: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Pset_StairFlightCommon.TreadLength: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Pset_StairFlightCommon.TreadLengthAtInnerSide: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight Pset_StairFlightCommon.TreadLengthAtOffset: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight RvtElementRecordGeometry.FamilyName: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcStairFlight RvtElementRecordGeometry.FamilyNameSource: equal 1, differ 0, only here 0, only there 0
+properties not added by the lists, not scored: IfcStairFlight RvtElementRecordGeometry.SourceStream: equal 0, differ 1, only here 0, only there 0
+properties added by the lists: IfcStairFlight RvtElementRecordGeometry.TypeName: equal 1, differ 0, only here 0, only there 0
+properties added by the lists: IfcWall Pset_WallCommon.IsExternal: equal 0, differ 0, only here 0, only there 9
+properties not added by the lists, not scored: IfcWall RvtElementRecordGeometry.SourceStream: equal 0, differ 9, only here 0, only there 0
+census: 453 bodies paired by Tag with the 2025 save's: same 453, differ 0 (pinned walls as pinned, source, volume and box, 0 of 0; roofs left as record boxes 0 of 0 expected), not in the 2025 save 0; did not mesh here 0, there 0
+bodies across saves: PASS
+exit 0

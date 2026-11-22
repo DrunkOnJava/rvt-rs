@@ -1,0 +1,190 @@
+Revit's export: 1394 paired elements and spaces, 0 untagged and 6 repeated Tags left out
+rvt-rs's export: 1387 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcBeam                               1      1      0      0  
+IfcBuildingElementProxy              43     43      0      0  
+IfcColumn                           114    114      0      0  
+IfcCurtainWall                        9      0      9      0  IfcWall 9
+IfcDoor                              68     68      0      0  
+IfcElementAssembly                    3      0      0      3  
+IfcFlowFitting                      202      0    202      0  IfcCableCarrierFitting 74, IfcPipeFitting 128
+IfcFlowSegment                      244      0    244      0  IfcCableCarrierSegment 102, IfcPipeSegment 142
+IfcMember                           206    206      0      0  
+IfcPlate                             67     67      0      0  
+IfcRailing                           14     14      0      0  
+IfcRoof                               8      8      0      0  
+IfcSlab                               9      9      0      0  
+IfcSpace                             73      0      0     73  
+IfcStair                              6      6      0      0  
+IfcStairFlight                        6      6      0      0  
+IfcWall                              12     12      0      0  
+IfcWallStandardCase                 239      0    235      4  IfcWall 235
+IfcWindow                            70     70      0      0  
+written as another class, by Revit's category and export value, and rvt-rs's:
+       9  IfcCurtainWall -> IfcWall  Revit '-' '-' PredefinedType - type IfcCurtainWallType NOTDEFINED  rvt-rs 'Walls' '-'  e.g. 643672
+     128  IfcFlowFitting -> IfcPipeFitting  Revit '-' '-' PredefinedType - type IfcPipeFittingType NOTDEFINED  rvt-rs 'Pipe Fittings' '-'  e.g. 726078
+      74  IfcFlowFitting -> IfcCableCarrierFitting  Revit '-' '-' PredefinedType - type IfcCableCarrierFittingType NOTDEFINED  rvt-rs 'Conduit Fittings' '-'  e.g. 745566
+     140  IfcFlowSegment -> IfcPipeSegment  Revit '-' '-' PredefinedType - type IfcPipeSegmentType NOTDEFINED  rvt-rs 'Pipes' '-'  e.g. 725899
+     102  IfcFlowSegment -> IfcCableCarrierSegment  Revit '-' '-' PredefinedType - type IfcCableCarrierSegmentType NOTDEFINED  rvt-rs 'Conduits' '-'  e.g. 745533
+       2  IfcFlowSegment -> IfcPipeSegment  Revit '-' '-' PredefinedType - type IfcPipeSegmentType GUTTER  rvt-rs '-' '-'  e.g. 716074
+     235  IfcWallStandardCase -> IfcWall  Revit '-' '-' PredefinedType - type IfcWallType STANDARD  rvt-rs 'Walls' '-'  e.g. 529332
+extra in rvt-rs's export, by class:
+IfcSpace                             73
+missing IfcElementAssembly (3):
+  737286  'Montaje Pilares estructurales:Pilares estructurales 001:737286'  'Montaje Pilares estructurales:Pilares estructurales 001'  storey 'P0'  category '-'  export as '-'
+  737381  'Montaje Pilares estructurales:Pilares estructurales 002:737381'  'Montaje Pilares estructurales:Pilares estructurales 002'  storey 'P0'  category '-'  export as '-'
+  770542  'Montaje Tuberías:Tuberías 001:770542'  'Montaje Tuberías:Tuberías 001'  storey 'P0'  category '-'  export as '-'
+missing IfcSpace (73):
+  05wgfhjsv9D89ksCy8ZrAS  '01.31'  '1 RELLANO'  storey 'P1'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsm1  '01.32'  '2IZQ-HAB3'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsm8  '01.39'  '2IZQ-SAL'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsm9  '01.40'  '2DER-HAB3'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmA  '01.37'  '2IZQ-COC'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmB  '01.38'  '2IZQ-DES'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmC  '01.35'  '2IZQ-HAB1'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmD  '01.36'  '2IZQ-BAÑ'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmE  '01.33'  '2IZQ-DIST'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmF  '01.34'  '2IZQ-HAB2'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmG  '01.47'  '2DER-DES'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmH  '01.48'  '2 RELLANO'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmI  '01.45'  '1DER-BAÑ'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmJ  '01.46'  '2DER-COC'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmK  '01.43'  '2DER-SAL'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmL  '01.44'  '2DER-HAB1'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmM  '01.41'  '2DER-HAB2'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmN  '01.42'  '2DER-DIST'  storey 'P2'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmO  '01.53'  '3IZQ-BAÑ'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmP  '01.54'  '3IZQ-COC'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmQ  '01.51'  '3IZQ-HAB2'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmR  '01.52'  '3IZQ-HAB1'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmS  '01.49'  '3IZQ-HAB3'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsmT  '01.50'  '3IZQ-DIST'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsn$  '01.78'  '4DER-HAB1'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsn6  '01.83'  '5BAJO CUBIERTA'  storey 'P5'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsnM  '01.99'  '5RELLANO'  storey 'P5'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsnW  '01.61'  '3DER-HAB1'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsnX  '01.62'  '3DER-BAÑ'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsnY  '01.59'  '3DER-DIST'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8ZsnZ  '01.60'  '3DER-HAB2'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsn_  '01.77'  '4DER-HAB2'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsna  '01.57'  '3DER-SAL'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnb  '01.58'  '3DER-HAB3'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnc  '01.55'  '3IZQ-DES'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnd  '01.56'  '3IZQ-SAL'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsne  '01.67'  '4IZQ-DIST'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnf  '01.68'  '4IZQ-HAB2'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnh  '01.66'  '4IZQ-HAB3'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsni  '01.65'  '3 RELLANO'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnk  '01.63'  '3DER-COC'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnl  '01.64'  '3DER-DES'  storey 'P3'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnm  '01.75'  '4DER-HAB3'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnn  '01.76'  '4DER-DIST'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsno  '01.73'  '4IZQ-SAL'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnp  '01.74'  '4DER-SAL'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnq  '01.71'  '4IZQ-COC'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnr  '01.72'  '4IZQ-DES'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsns  '01.69'  '4IZQ-HAB1'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnt  '01.70'  '4IZQ-BAÑ'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnw  '01.81'  '4DER-DES'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnx  '01.82'  '4 RELLANO'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsny  '01.79'  '4DER-BAÑ'  storey 'P4'  category '-'  export as '-'
+  05wgfhjsv9D89ksCy8Zsnz  '01.80'  '4DER-COC'  storey 'P4'  category '-'  export as '-'
+  1ggYzaQJD6Oxk2VnXaC8z5  '01.101'  '0PORTAL'  storey 'P0'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJcT  '01.13'  '0LOCAL'  storey 'P0'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJcb  '01.11'  '0GARAJE'  storey 'P0'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJd0  '01.17'  '1IZQ-HAB2'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJd5  '01.18'  '1IZQ-HAB1'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJd6  '01.19'  '1IZQ-BAÑ'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJdA  '01.15'  '1IZQ-HAB3'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJdF  '01.16'  '1IZQ-DIST'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJeP  '01.30'  '1DER-DES'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJeZ  '01.28'  '1DER-BAÑ'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJea  '01.29'  '1DER-COC'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJee  '01.25'  '1DER-DIST'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJej  '01.26'  '1DER-HAB2'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJek  '01.27'  '1DER-HAB1'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJen  '01.22'  '1IZQ-SAL'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJeo  '01.23'  '1DER-SAL'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJet  '01.24'  '1DER-HAB3'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJex  '01.20'  '1IZQ-COC'  storey 'P1'  category '-'  export as '-'
+  38S41RSWL4DRSmkNPZeJey  '01.21'  '1IZQ-DES'  storey 'P1'  category '-'  export as '-'
+missing IfcWallStandardCase (4):
+  643779  'Muro básico:LKS_T4B 15.8cm:643779'  'Muro básico:LKS_T4B 15.8cm'  storey 'P1'  category '-'  export as '-'
+  647385  'Muro básico:LKS_T4B 15.8cm:647385'  'Muro básico:LKS_T4B 15.8cm'  storey 'P2'  category '-'  export as '-'
+  647580  'Muro básico:LKS_T4B 15.8cm:647580'  'Muro básico:LKS_T4B 15.8cm'  storey 'P4'  category '-'  export as '-'
+  1823393  'Muro básico:LKS_T4B 15.8cm:1823393'  'Muro básico:LKS_T4B 15.8cm'  storey 'P1'  category '-'  export as '-'
+extra IfcSpace (73):
+  03OuxbOXE7sfBQMbcULoty  '01.66'  '4IZQ-HAB3'  storey 'P4'  category '-'  export as '-'
+  08SKyH$_6EMvVHlJDz_1iW  '01.29'  '1DER-COC'  storey 'P1'  category '-'  export as '-'
+  09KG0s0McB0RFZMNBBG785  '01.42'  '2DER-DIST'  storey 'P2'  category '-'  export as '-'
+  09bksLAfQ76OZMqtpmb0dT  '01.47'  '2DER-DES'  storey 'P2'  category '-'  export as '-'
+  09shiYfyUF$BLlStVBQURV  '01.27'  '1DER-HAB1'  storey 'P1'  category '-'  export as '-'
+  0DBVn8ui67BRpLNOAJ$MWK  '01.35'  '2IZQ-HAB1'  storey 'P2'  category '-'  export as '-'
+  0G2T54XVg0Pw5Ag4yA9r28  '01.59'  '3DER-DIST'  storey 'P3'  category '-'  export as '-'
+  0SZji2hqU77fG0qrV8egGy  '01.79'  '4DER-BAÑ'  storey 'P4'  category '-'  export as '-'
+  0SaFWldi_3T8AM9Z4mvSXs  '01.46'  '2DER-COC'  storey 'P2'  category '-'  export as '-'
+  0UYjC$UwY74QHFjTzLzHwg  '01.78'  '4DER-HAB1'  storey 'P4'  category '-'  export as '-'
+  0YZMiOJ3g2mPbQ4RGweYtd  '01.57'  '3DER-SAL'  storey 'P3'  category '-'  export as '-'
+  0hc_nbCRgDJwECv2sVo9en  '01.25'  '1DER-DIST'  storey 'P1'  category '-'  export as '-'
+  0jpiQser_5MAt$qMsjKQd1  '01.68'  '4IZQ-HAB2'  storey 'P4'  category '-'  export as '-'
+  0jrXVL$Dw1vRUbypskHGTR  '01.82'  '4 RELLANO'  storey 'P4'  category '-'  export as '-'
+  0lEpYGoiU6LeHFSoBxSyZ1  '01.76'  '4DER-DIST'  storey 'P4'  category '-'  export as '-'
+  0nukNgE9Q0t8MR8rphA6pp  '01.30'  '1DER-DES'  storey 'P1'  category '-'  export as '-'
+  0oreqxMtM9HOHb9zIpJh36  '01.53'  '3IZQ-BAÑ'  storey 'P3'  category '-'  export as '-'
+  0owZFdwd_4IO72eRyCe563  '01.45'  '1DER-BAÑ'  storey 'P2'  category '-'  export as '-'
+  0phYdLclk8t9$Fbw50pQOD  '01.74'  '4DER-SAL'  storey 'P4'  category '-'  export as '-'
+  0rs3hNqNU9EOubG56Yu64c  '01.83'  '5BAJO CUBIERTA'  storey 'P5'  category '-'  export as '-'
+  0ubxn2TyY4ZBy_E$CMfcgs  '01.58'  '3DER-HAB3'  storey 'P3'  category '-'  export as '-'
+  0w6$fxu0oFXvrsb7npU6Jp  '01.75'  '4DER-HAB3'  storey 'P4'  category '-'  export as '-'
+  0zENuwUScEew3uoIqCSUoY  '01.77'  '4DER-HAB2'  storey 'P4'  category '-'  export as '-'
+  12D0WTmOUAXuDJpXQSn5Il  '01.11'  '0GARAJE'  storey 'P0'  category '-'  export as '-'
+  15EdmMYXE3EfnODeK_iVw_  '01.20'  '1IZQ-COC'  storey 'P1'  category '-'  export as '-'
+  15JeIJZW_Cnu4K2JWmfmIK  '01.72'  '4IZQ-DES'  storey 'P4'  category '-'  export as '-'
+  17g0IvRUc9URY8g3V0tfzj  '01.41'  '2DER-HAB2'  storey 'P2'  category '-'  export as '-'
+  1EGMmJ85696w2z_WhRMBqo  '01.101'  '0PORTAL'  storey 'P0'  category '-'  export as '-'
+  1KooreJaM9igiKNWs93QVI  '01.36'  '2IZQ-BAÑ'  storey 'P2'  category '-'  export as '-'
+  1MPzjbcA_7Q8ZgZcewIvuP  '01.80'  '4DER-COC'  storey 'P4'  category '-'  export as '-'
+  1OFg3rQzQ379ltR8d5e4aC  '01.62'  '3DER-BAÑ'  storey 'P3'  category '-'  export as '-'
+  1PbwcZ56g7$RfFGX9pNyFY  '01.40'  '2DER-HAB3'  storey 'P2'  category '-'  export as '-'
+  1PiZRM9mk32fDkdqdE1bGf  '01.52'  '3IZQ-HAB1'  storey 'P3'  category '-'  export as '-'
+  1U3ONrmyQ0l9gQrXQiIiLs  '01.24'  '1DER-HAB3'  storey 'P1'  category '-'  export as '-'
+  1USLd7fGYCuRofS36bXwbA  '01.26'  '1DER-HAB2'  storey 'P1'  category '-'  export as '-'
+  1W2knMcF_5SuVJQCrCF6HS  '01.33'  '2IZQ-DIST'  storey 'P2'  category '-'  export as '-'
+  1WkWZSbuw2Dg1L1LoPiTF4  '01.56'  '3IZQ-SAL'  storey 'P3'  category '-'  export as '-'
+  1ZivvXOPw3GPgApHf7dB3j  '01.71'  '4IZQ-COC'  storey 'P4'  category '-'  export as '-'
+  1ZjYMQ7_E9oRFXXS$2xSch  '01.28'  '1DER-BAÑ'  storey 'P1'  category '-'  export as '-'
+  1dSrDqZDQ2lA3aNCvAUf$J  '01.48'  '2 RELLANO'  storey 'P2'  category '-'  export as '-'
+  1dxgwXxMU76gpkihEnH8HI  '01.54'  '3IZQ-COC'  storey 'P3'  category '-'  export as '-'
+  1fKTuFat6FQhs$jfdlTPmO  '01.63'  '3DER-COC'  storey 'P3'  category '-'  export as '-'
+  1hnHxVqggA6v_vjf_SyvwW  '01.39'  '2IZQ-SAL'  storey 'P2'  category '-'  export as '-'
+  1hxRwFvtY6OBQQCnCMyKyk  '01.19'  '1IZQ-BAÑ'  storey 'P1'  category '-'  export as '-'
+  1m4BzoycoEfuPJkD9WKKqm  '01.50'  '3IZQ-DIST'  storey 'P3'  category '-'  export as '-'
+  1pHAedFwc1dP4soD4AR78j  '01.44'  '2DER-HAB1'  storey 'P2'  category '-'  export as '-'
+  1pegCn3KM9MQgJ5vtSkIQC  '01.51'  '3IZQ-HAB2'  storey 'P3'  category '-'  export as '-'
+  1rx1NKZ$k1U8oJqU_jiIJj  '01.31'  '1 RELLANO'  storey 'P1'  category '-'  export as '-'
+  1xnZ89$cU3AvGNhpOiJ1DS  '01.22'  '1IZQ-SAL'  storey 'P1'  category '-'  export as '-'
+  1xsC8ZfG6EVulBs5OmaCa9  '01.38'  '2IZQ-DES'  storey 'P2'  category '-'  export as '-'
+  2$K_YIVuQ3VOSKaL0R99DS  '01.49'  '3IZQ-HAB3'  storey 'P3'  category '-'  export as '-'
+  2DlLXeluM03BMeujHVaDid  '01.81'  '4DER-DES'  storey 'P4'  category '-'  export as '-'
+  2OlhQvlI27K8TboLJrRy8$  '01.60'  '3DER-HAB2'  storey 'P3'  category '-'  export as '-'
+  2Pxi3Cs0EAq8MZvBvJLeFE  '01.13'  '0LOCAL'  storey 'P0'  category '-'  export as '-'
+  2S0A7AT0UCNOeRWMDglsbx  '01.37'  '2IZQ-COC'  storey 'P2'  category '-'  export as '-'
+  2VGTz$5YAFWuzlx7xizStN  '01.67'  '4IZQ-DIST'  storey 'P4'  category '-'  export as '-'
+  2ZnxqItGQFX8MXhNBON3Uk  '01.61'  '3DER-HAB1'  storey 'P3'  category '-'  export as '-'
+  2lohVzzso57PZMx$MBfj1N  '01.32'  '2IZQ-HAB3'  storey 'P2'  category '-'  export as '-'
+  2vQCGZEOo3DgG8Rid3dLYO  '01.21'  '1IZQ-DES'  storey 'P1'  category '-'  export as '-'
+  2y22CnYbM2Rvx2EKKlZVz9  '01.70'  '4IZQ-BAÑ'  storey 'P4'  category '-'  export as '-'
+  35iGImbUI8pAcvggNPbqNo  '01.64'  '3DER-DES'  storey 'P3'  category '-'  export as '-'
+  3AOSnCWS_5dAf2YmF7PiXg  '01.73'  '4IZQ-SAL'  storey 'P4'  category '-'  export as '-'
+  3AaQLn7TUEXuN$PCIJ_sCF  '01.17'  '1IZQ-HAB2'  storey 'P1'  category '-'  export as '-'
+  3H9X7wLSk0IOERhD0yYMa4  '01.18'  '1IZQ-HAB1'  storey 'P1'  category '-'  export as '-'
+  3P3JnnYdEFafz6b4PaaOi6  '01.23'  '1DER-SAL'  storey 'P1'  category '-'  export as '-'
+  3Xmh_Xb7k3mu7EJGbdRDq1  '01.99'  '5RELLANO'  storey 'P5'  category '-'  export as '-'
+  3eDt7rFkICb8M9yVUY9L6$  '01.34'  '2IZQ-HAB2'  storey 'P2'  category '-'  export as '-'
+  3eyOzMUoQBdBfqJ03hFP3Y  '01.16'  '1IZQ-DIST'  storey 'P1'  category '-'  export as '-'
+  3hYpBmdlUBr8Al0_P3Hz5E  '01.69'  '4IZQ-HAB1'  storey 'P4'  category '-'  export as '-'
+  3j9Fh4ycUBz98xxmuKxrBz  '01.43'  '2DER-SAL'  storey 'P2'  category '-'  export as '-'
+  3kPrJjJ4E7pBOyzmQMES5m  '01.15'  '1IZQ-HAB3'  storey 'P1'  category '-'  export as '-'
+  3m1MHi1_MEcfvEeaVLGH$U  '01.55'  '3IZQ-DES'  storey 'P3'  category '-'  export as '-'
+  3qnDD1GTUAZRGOUJ2JEETv  '01.65'  '3 RELLANO'  storey 'P3'  category '-'  export as '-'
+exit 0

@@ -1,0 +1,1 @@
+9c66e9bd02ed496fd92ca204f7f013327ff60a62 feat(ifc): Revit 2015 to 2023 beams are drawn along their location line (#1190) (RE-362) (#1509)
