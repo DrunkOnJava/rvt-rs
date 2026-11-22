@@ -1,0 +1,1 @@
+c1a2a7399d4ee71bb9a10e3cdc4e6927884ca45c feat(ifc): the placement rule requires the stored X along its wall within 0.999, a default scorer holds rvt-rs's door and window axes to Revit's, and the gate's floors are per year (#1447) (RE-347)

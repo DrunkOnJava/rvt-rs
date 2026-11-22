@@ -1,0 +1,15 @@
+IfcDoor: 68 matched by Tag, OverallWidth and OverallHeight equal 0  differ 0  $ 68
+IfcWindow: 70 matched by Tag, OverallWidth and OverallHeight equal 0  differ 0  $ 70
+  IfcDoor 579796: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 579976: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 579979: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 579982: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 580085: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 580384: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 580472: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 580572: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 580694: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 580802: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 580895: Revit 2.3622 x 6.8898 ft, rvt-rs $
+  IfcDoor 581027: Revit 2.3622 x 6.8898 ft, rvt-rs $
+exit 0

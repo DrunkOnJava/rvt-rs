@@ -1,0 +1,3 @@
+spaces in both: storey equal 0, different 0
+rooms: 73; Revit's number and name 0, different 0, not in the reference 73
+exit 0

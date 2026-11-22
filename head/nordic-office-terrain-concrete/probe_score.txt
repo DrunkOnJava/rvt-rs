@@ -1,0 +1,23 @@
+door flips: placements: release 2024 probe doors 0 windows 0; the Revit export has 0 doors and windows, the rvt-rs export 0
+door flips: placements: rvt-rs site placement rotation is the identity: yes
+door flips: placements: probe elements 0; in the Revit export 0; not in the Revit export 0; not in the rvt-rs export 0; compared 0
+door flips: placements: IFC class equal to the Revit export 0 of 0
+door flips: placements doors bound to a plain wall: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements doors bound to a plain wall rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements doors bound to none: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements doors bound to none rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements doors no stored transform: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements doors no stored transform rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements doors origin in plan against Revit: within 0.01 ft 0, within 0.5 ft 0, within 3 ft 0, farther 0
+door flips: placements doors rvt-rs Z axis is up: 0 of 0
+door flips: placements windows bound to a plain wall: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements windows bound to a plain wall rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements windows bound to none: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements windows bound to none rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements windows no stored transform: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements windows no stored transform rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements windows origin in plan against Revit: within 0.01 ft 0, within 0.5 ft 0, within 3 ft 0, farther 0
+door flips: placements windows rvt-rs Z axis is up: 0 of 0
+door flips: placements all: checked 0; same 0; half turn 0; quarter turn 0; other 0
+door flips: placements rule: written for 0; differ from Revit 0
+exit 0

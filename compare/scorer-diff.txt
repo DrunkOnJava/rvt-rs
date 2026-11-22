@@ -1,0 +1,235 @@
+Only in measure-head: areas_across_saves.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/core-interior/door_axes_vs_ifc.txt measure-head/core-interior/door_axes_vs_ifc.txt
+--- measure-base/core-interior/door_axes_vs_ifc.txt	2026-11-05 21:27:47.700812830 +0000
++++ measure-head/core-interior/door_axes_vs_ifc.txt	2026-11-05 21:27:43.382808319 +0000
+@@ -2,4 +2,4 @@
+-door axes: doors paired 132; same 40; half turn 39; quarter turn 53; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
+-door axes: windows paired 6; same 0; half turn 0; quarter turn 6; other 0
+-door axes: windows placed by the rule 0; differ from Revit 0
++door axes: doors paired 132; same 132; half turn 0; quarter turn 0; other 0
++door axes: doors placed by the rule 132; differ from Revit 0
++door axes: windows paired 6; same 6; half turn 0; quarter turn 0; other 0
++door axes: windows placed by the rule 6; differ from Revit 0
+Only in measure-head/core-interior: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/core-interior/witness-magnetar-2024-core-interior-slim.json measure-head/core-interior/witness-magnetar-2024-core-interior-slim.json
+--- measure-base/core-interior/witness-magnetar-2024-core-interior-slim.json	2026-11-05 21:27:47.774812904 +0000
++++ measure-head/core-interior/witness-magnetar-2024-core-interior-slim.json	2026-11-05 21:27:43.440808389 +0000
+@@ -22 +22 @@
+-      "IFCDIRECTION": 1037,
++      "IFCDIRECTION": 1135,
+@@ -45 +45 @@
+-      "IFCPROPERTYSINGLEVALUE": 27824,
++      "IFCPROPERTYSINGLEVALUE": 27962,
+@@ -708 +708 @@
+-  "observation_hash_sha256": "d689cbb994395b86162986b88bf2f350adc82b11b9e053251d91c07dea9e1f62",
++  "observation_hash_sha256": "c2b549f4b6b36216e0de00378c0b226fb703e9c35e751be31f91b3d8f2b8628c",
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/core-interior/witness-magnetar-2024-core-interior.json measure-head/core-interior/witness-magnetar-2024-core-interior.json
+--- measure-base/core-interior/witness-magnetar-2024-core-interior.json	2026-11-05 21:27:47.774812904 +0000
++++ measure-head/core-interior/witness-magnetar-2024-core-interior.json	2026-11-05 21:27:43.440808389 +0000
+@@ -22 +22 @@
+-      "IFCDIRECTION": 1037,
++      "IFCDIRECTION": 1135,
+@@ -45 +45 @@
+-      "IFCPROPERTYSINGLEVALUE": 27824,
++      "IFCPROPERTYSINGLEVALUE": 27962,
+@@ -708 +708 @@
+-  "observation_hash_sha256": "d689cbb994395b86162986b88bf2f350adc82b11b9e053251d91c07dea9e1f62",
++  "observation_hash_sha256": "c2b549f4b6b36216e0de00378c0b226fb703e9c35e751be31f91b3d8f2b8628c",
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/door_axes_vs_ifc.txt measure-head/nordic-office-as-built/door_axes_vs_ifc.txt
+--- measure-base/nordic-office-as-built/door_axes_vs_ifc.txt	2026-11-05 21:27:47.790812919 +0000
++++ measure-head/nordic-office-as-built/door_axes_vs_ifc.txt	2026-11-05 21:27:43.457808410 +0000
+@@ -2,4 +2,4 @@
+-door axes: doors paired 269; same 55; half turn 110; quarter turn 104; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
+-door axes: windows paired 269; same 113; half turn 103; quarter turn 53; other 0
+-door axes: windows placed by the rule 0; differ from Revit 0
++door axes: doors paired 269; same 211; half turn 34; quarter turn 24; other 0
++door axes: doors placed by the rule 193; differ from Revit 0
++door axes: windows paired 269; same 269; half turn 0; quarter turn 0; other 0
++door axes: windows placed by the rule 269; differ from Revit 0
+Only in measure-head/nordic-office-as-built: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/door_axes_vs_ifc.txt measure-head/nordic-office-permit/door_axes_vs_ifc.txt
+--- measure-base/nordic-office-permit/door_axes_vs_ifc.txt	2026-11-05 21:27:48.218813346 +0000
++++ measure-head/nordic-office-permit/door_axes_vs_ifc.txt	2026-11-05 21:27:43.901808946 +0000
+@@ -2,4 +2,4 @@
+-door axes: doors paired 269; same 55; half turn 110; quarter turn 104; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
+-door axes: windows paired 265; same 113; half turn 99; quarter turn 53; other 0
+-door axes: windows placed by the rule 0; differ from Revit 0
++door axes: doors paired 269; same 210; half turn 36; quarter turn 23; other 0
++door axes: doors placed by the rule 192; differ from Revit 0
++door axes: windows paired 265; same 265; half turn 0; quarter turn 0; other 0
++door axes: windows placed by the rule 265; differ from Revit 0
+Only in measure-head/nordic-office-permit: probe_score.txt
+Only in measure-head/nordic-office-terrain-concrete: probe_score.txt
+Only in measure-head/nordic-office-terrain-timber: probe_score.txt
+Only in measure-head/r2025-00_Blank: probe_score.txt
+Only in measure-head/r2025-01_Walls: probe_score.txt
+Only in measure-head/r2025-02_1Slope: probe_score.txt
+Only in measure-head/r2025-02_1Slope_Rafter2PlumbCut: probe_score.txt
+Only in measure-head/r2025-02_1Slope_Rafter2SquareCut: probe_score.txt
+Only in measure-head/r2025-02_1Slope_Rafter2SquareCut_Overhang: probe_score.txt
+Only in measure-head/r2025-03_2Slope_Rafter2SquareCut: probe_score.txt
+Only in measure-head/r2025-04_Gable: probe_score.txt
+Only in measure-head/r2025-04_Gable_Swapped_Slopes: probe_score.txt
+Only in measure-head/r2025-05_1Slope_ArrowDefined: probe_score.txt
+Only in measure-head/r2025-06_1Slope_ArrowDefined_SetToSlope: probe_score.txt
+Only in measure-head/r2025-07_1Slope_ArrowDefined_2Cut50mmFascia: probe_score.txt
+Only in measure-head/r2025-08_LShapedHipRoof: probe_score.txt
+Only in measure-head/r2025-09_LShapedHipRoof_1Edge300Offset: probe_score.txt
+Only in measure-head/r2025-10_LShapedHipRoof_1Edge300Offset_Hole: probe_score.txt
+Only in measure-head/r2025-11_RoofByExtrusion: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-12_Rooms_Door_Windows/door_axes_vs_ifc.txt measure-head/r2025-12_Rooms_Door_Windows/door_axes_vs_ifc.txt
+--- measure-base/r2025-12_Rooms_Door_Windows/door_axes_vs_ifc.txt	2026-11-05 21:27:49.022814147 +0000
++++ measure-head/r2025-12_Rooms_Door_Windows/door_axes_vs_ifc.txt	2026-11-05 21:27:44.681809822 +0000
+@@ -2,4 +2,4 @@
+-door axes: doors paired 1; same 0; half turn 0; quarter turn 1; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
+-door axes: windows paired 3; same 1; half turn 0; quarter turn 2; other 0
+-door axes: windows placed by the rule 0; differ from Revit 0
++door axes: doors paired 1; same 1; half turn 0; quarter turn 0; other 0
++door axes: doors placed by the rule 1; differ from Revit 0
++door axes: windows paired 3; same 3; half turn 0; quarter turn 0; other 0
++door axes: windows placed by the rule 3; differ from Revit 0
+Only in measure-head/r2025-12_Rooms_Door_Windows: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-13_Rooms_Stairs/door_axes_vs_ifc.txt measure-head/r2025-13_Rooms_Stairs/door_axes_vs_ifc.txt
+--- measure-base/r2025-13_Rooms_Stairs/door_axes_vs_ifc.txt	2026-11-05 21:27:49.022814147 +0000
++++ measure-head/r2025-13_Rooms_Stairs/door_axes_vs_ifc.txt	2026-11-05 21:27:44.682809823 +0000
+@@ -2,4 +2,4 @@
+-door axes: doors paired 1; same 0; half turn 0; quarter turn 1; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
+-door axes: windows paired 3; same 1; half turn 0; quarter turn 2; other 0
+-door axes: windows placed by the rule 0; differ from Revit 0
++door axes: doors paired 1; same 1; half turn 0; quarter turn 0; other 0
++door axes: doors placed by the rule 1; differ from Revit 0
++door axes: windows paired 3; same 3; half turn 0; quarter turn 0; other 0
++door axes: windows placed by the rule 3; differ from Revit 0
+Only in measure-head/r2025-13_Rooms_Stairs: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-14_Rooms_Stairs_endwithriserOFF/door_axes_vs_ifc.txt measure-head/r2025-14_Rooms_Stairs_endwithriserOFF/door_axes_vs_ifc.txt
+--- measure-base/r2025-14_Rooms_Stairs_endwithriserOFF/door_axes_vs_ifc.txt	2026-11-05 21:27:49.022814147 +0000
++++ measure-head/r2025-14_Rooms_Stairs_endwithriserOFF/door_axes_vs_ifc.txt	2026-11-05 21:27:44.683809824 +0000
+@@ -2,4 +2,4 @@
+-door axes: doors paired 1; same 0; half turn 0; quarter turn 1; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
+-door axes: windows paired 3; same 1; half turn 0; quarter turn 2; other 0
+-door axes: windows placed by the rule 0; differ from Revit 0
++door axes: doors paired 1; same 1; half turn 0; quarter turn 0; other 0
++door axes: doors placed by the rule 1; differ from Revit 0
++door axes: windows paired 3; same 3; half turn 0; quarter turn 0; other 0
++door axes: windows placed by the rule 3; differ from Revit 0
+Only in measure-head/r2025-14_Rooms_Stairs_endwithriserOFF: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-15_Rooms_Stairs_NoRisers/door_axes_vs_ifc.txt measure-head/r2025-15_Rooms_Stairs_NoRisers/door_axes_vs_ifc.txt
+--- measure-base/r2025-15_Rooms_Stairs_NoRisers/door_axes_vs_ifc.txt	2026-11-05 21:27:49.022814147 +0000
++++ measure-head/r2025-15_Rooms_Stairs_NoRisers/door_axes_vs_ifc.txt	2026-11-05 21:27:44.684809825 +0000
+@@ -2,4 +2,4 @@
+-door axes: doors paired 1; same 0; half turn 0; quarter turn 1; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
+-door axes: windows paired 3; same 1; half turn 0; quarter turn 2; other 0
+-door axes: windows placed by the rule 0; differ from Revit 0
++door axes: doors paired 1; same 1; half turn 0; quarter turn 0; other 0
++door axes: doors placed by the rule 1; differ from Revit 0
++door axes: windows paired 3; same 3; half turn 0; quarter turn 0; other 0
++door axes: windows placed by the rule 3; differ from Revit 0
+Only in measure-head/r2025-15_Rooms_Stairs_NoRisers: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-16_Rooms_Stairs_Monolithic/door_axes_vs_ifc.txt measure-head/r2025-16_Rooms_Stairs_Monolithic/door_axes_vs_ifc.txt
+--- measure-base/r2025-16_Rooms_Stairs_Monolithic/door_axes_vs_ifc.txt	2026-11-05 21:27:49.054814179 +0000
++++ measure-head/r2025-16_Rooms_Stairs_Monolithic/door_axes_vs_ifc.txt	2026-11-05 21:27:44.705809846 +0000
+@@ -2,4 +2,4 @@
+-door axes: doors paired 1; same 0; half turn 0; quarter turn 1; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
+-door axes: windows paired 3; same 1; half turn 0; quarter turn 2; other 0
+-door axes: windows placed by the rule 0; differ from Revit 0
++door axes: doors paired 1; same 1; half turn 0; quarter turn 0; other 0
++door axes: doors placed by the rule 1; differ from Revit 0
++door axes: windows paired 3; same 3; half turn 0; quarter turn 0; other 0
++door axes: windows placed by the rule 3; differ from Revit 0
+Only in measure-head/r2025-16_Rooms_Stairs_Monolithic: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-17_Rooms_Stairs_Spiral/door_axes_vs_ifc.txt measure-head/r2025-17_Rooms_Stairs_Spiral/door_axes_vs_ifc.txt
+--- measure-base/r2025-17_Rooms_Stairs_Spiral/door_axes_vs_ifc.txt	2026-11-05 21:27:49.055814180 +0000
++++ measure-head/r2025-17_Rooms_Stairs_Spiral/door_axes_vs_ifc.txt	2026-11-05 21:27:44.706809847 +0000
+@@ -2,4 +2,4 @@
+-door axes: doors paired 1; same 0; half turn 0; quarter turn 1; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
+-door axes: windows paired 3; same 1; half turn 0; quarter turn 2; other 0
+-door axes: windows placed by the rule 0; differ from Revit 0
++door axes: doors paired 1; same 1; half turn 0; quarter turn 0; other 0
++door axes: doors placed by the rule 1; differ from Revit 0
++door axes: windows paired 3; same 3; half turn 0; quarter turn 0; other 0
++door axes: windows placed by the rule 3; differ from Revit 0
+Only in measure-head/r2025-17_Rooms_Stairs_Spiral: probe_score.txt
+Only in measure-head/r2025-18_WallJoins: probe_score.txt
+Only in measure-head/r2025-20_T_U_Roof: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/re1-architecture/door_axes_vs_ifc.txt measure-head/re1-architecture/door_axes_vs_ifc.txt
+--- measure-base/re1-architecture/door_axes_vs_ifc.txt	2026-11-05 21:27:49.058814183 +0000
++++ measure-head/re1-architecture/door_axes_vs_ifc.txt	2026-11-05 21:27:44.709809850 +0000
+@@ -2,2 +2,2 @@
+-door axes: doors paired 5; same 1; half turn 1; quarter turn 3; other 0
+-door axes: doors placed by the rule 0; differ from Revit 0
++door axes: doors paired 5; same 4; half turn 1; quarter turn 0; other 0
++door axes: doors placed by the rule 4; differ from Revit 0
+Only in measure-head/re1-architecture: probe_score.txt
+Only in measure-head/re1-electrical: probe_score.txt
+Only in measure-head/re1-mechanical: probe_score.txt
+Only in measure-head/re1-plumbing: probe_score.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racadvancedsampleproject/bodies_across_saves.txt measure-head/sample-2025-racadvancedsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2025-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 21:27:50.010815131 +0000
++++ measure-head/sample-2025-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 21:27:45.706810843 +0000
+@@ -19 +19 @@
+-doors and windows: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 0
++doors and windows: compared 107 against the 2024 save (IfcDoor 83, IfcWindow 24); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 66
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racbasicsampleproject/bodies_across_saves.txt measure-head/sample-2025-racbasicsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2025-racbasicsampleproject/bodies_across_saves.txt	2026-11-05 21:27:50.115815236 +0000
++++ measure-head/sample-2025-racbasicsampleproject/bodies_across_saves.txt	2026-11-05 21:27:45.809810946 +0000
+@@ -9 +9 @@
+-doors and windows: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 0
++doors and windows: compared 17 against the 2024 save (IfcDoor 10, IfcWindow 7); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 14
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racadvancedsampleproject/bodies_across_saves.txt measure-head/sample-2026-racadvancedsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2026-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 21:27:50.451815570 +0000
++++ measure-head/sample-2026-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 21:27:46.183811318 +0000
+@@ -26,5 +26,3 @@
+-doors and windows: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 0
+-  doors and windows: 0 IfcDoor placed by the rule, fewer than the 61 it holds in the 2026 save
+-  doors and windows: 0 IfcWindow placed by the rule, fewer than the 18 it holds in the 2026 save
+-bodies across saves: FAIL (2 differences)
+-exit 1
++doors and windows: compared 79 against the 2024 save (IfcDoor 61, IfcWindow 18); left as boxes here, drawn in the 2024 save, not scored: 28 (IfcDoor 22, IfcWindow 6); of those compared, placed on axes other than the default: 44
++bodies across saves: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2026-racbasicsampleproject/bodies_across_saves.txt measure-head/sample-2026-racbasicsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2026-racbasicsampleproject/bodies_across_saves.txt	2026-11-05 21:27:50.555815674 +0000
++++ measure-head/sample-2026-racbasicsampleproject/bodies_across_saves.txt	2026-11-05 21:27:46.289811424 +0000
+@@ -11,5 +11,3 @@
+-doors and windows: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 0
+-  doors and windows: 0 IfcDoor placed by the rule, fewer than the 10 it holds in the 2026 save
+-  doors and windows: 0 IfcWindow placed by the rule, fewer than the 7 it holds in the 2026 save
+-bodies across saves: FAIL (2 differences)
+-exit 1
++doors and windows: compared 17 against the 2024 save (IfcDoor 10, IfcWindow 7); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 14
++bodies across saves: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racadvancedsampleproject/bodies_across_saves.txt measure-head/sample-2027-racadvancedsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2027-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 21:27:50.866815984 +0000
++++ measure-head/sample-2027-racadvancedsampleproject/bodies_across_saves.txt	2026-11-05 21:27:46.608811742 +0000
+@@ -26,5 +26,3 @@
+-doors and windows: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 0
+-  doors and windows: 0 IfcDoor placed by the rule, fewer than the 47 it holds in the 2027 save
+-  doors and windows: 0 IfcWindow placed by the rule, fewer than the 18 it holds in the 2027 save
+-bodies across saves: FAIL (2 differences)
+-exit 1
++doors and windows: compared 65 against the 2024 save (IfcDoor 47, IfcWindow 18); left as boxes here, drawn in the 2024 save, not scored: 42 (IfcDoor 36, IfcWindow 6); of those compared, placed on axes other than the default: 31
++bodies across saves: PASS
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2027-racbasicsampleproject/bodies_across_saves.txt measure-head/sample-2027-racbasicsampleproject/bodies_across_saves.txt
+--- measure-base/sample-2027-racbasicsampleproject/bodies_across_saves.txt	2026-11-05 21:27:50.965816082 +0000
++++ measure-head/sample-2027-racbasicsampleproject/bodies_across_saves.txt	2026-11-05 21:27:46.713811847 +0000
+@@ -11,5 +11,3 @@
+-doors and windows: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 0
+-  doors and windows: 0 IfcDoor placed by the rule, fewer than the 10 it holds in the 2027 save
+-  doors and windows: 0 IfcWindow placed by the rule, fewer than the 7 it holds in the 2027 save
+-bodies across saves: FAIL (2 differences)
+-exit 1
++doors and windows: compared 17 against the 2024 save (IfcDoor 10, IfcWindow 7); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 14
++bodies across saves: PASS
++exit 0
+Only in measure-head/spent-bimspeed-vitoria-before-2018: probe_score.txt
