@@ -2,7 +2,7 @@
 
 The measured figures behind the [README](../README.md), moved here verbatim so the README can stay a short landing page: what each Revit release gives by input, what works today layer by layer, what rvt-rs reads from real projects against Revit's own exports, and what does not work yet. [`support-matrix.json`](support-matrix.json) is the machine-readable ceiling for every claim, and `rvt-capabilities --matrix -f text` prints it.
 
-A Measure run cited on this page keeps its artifacts for 90 days. Its scored outputs are kept for good: [`research/kept-runs.tsv`](../research/kept-runs.tsv) gives each cited run's kept commit, whose files read as plain text at `https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/<commit>/<path>`, with `KEPT.md` there saying what was kept (#2124).
+GitHub keeps a workflow run's artifacts for 90 days. The scored outputs of the Measure runs this page, the README, the supported profile, the status page and the reference models cite are kept past that: [`research/kept-runs.tsv`](../research/kept-runs.tsv) gives each kept run's commit, whose files read as plain text at `https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/<commit>/<path>`, with `KEPT.md` there saying what was kept. The five cited runs that had nothing left to keep are listed there with the reason (#2124).
 
 Before the README was shortened, its "Support and evidence" section said the following; "this README" there means the figures on this page.
 
