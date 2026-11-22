@@ -8,7 +8,9 @@ largest face set. This counts such items twice, and the two counts must agree:
 
 1. **The census.** Each Body item of each `IfcElement` but openings (which carry their host's
    Tag), mapped items replaced by the items they map, is meshed on its own; the items that raise
-   are counted by class and error, and the elements that hold one by class and type.
+   are counted by class and error, and the elements that hold one by class and type. The openings'
+   and the spaces' Body items, which scorers of openings and rooms mesh, are counted the same way on
+   a line of their own.
 2. **The helper.** `mesh_bodies_vs_ifc.meshes()` meshes every element with a Tag, and
    `ifc_common.mesh_parts` names in `ITEM_FAILURES` the Body items each mesh leaves out that raise
    on their own (`lost_items`). An item the element's own opening cuts away is left out of the
@@ -34,13 +36,13 @@ from mesh_bodies_vs_ifc import meshes  # noqa: E402
 from roof_bodies_vs_ifc import shapes_of  # noqa: E402
 
 
-def census(model, settings):
-    """(element count, elements with a Body, Body items, {(product id, item id): (class, error)})."""
+def census(model, settings, products=None):
+    """(product count, products with a Body, Body items, {(product id, item id): (class, error)}),
+    over every `IfcElement` but openings, or over `products`."""
     failed = {}
     elements = bodied = items = 0
-    for element in model.by_type("IfcElement"):
-        if element.is_a("IfcOpeningElement"):
-            continue
+    chosen = products if products is not None else [e for e in model.by_type("IfcElement") if not e.is_a("IfcOpeningElement")]
+    for element in chosen:
         elements += 1
         leaves = body_leaves(element)
         if not leaves:
@@ -72,6 +74,12 @@ def main():
         kinds = collections.Counter(failed.values())
         print("items that fail: " + ", ".join(f"{k} {e} {n}" for (k, e), n in sorted(kinds.items())))
         print("elements that lose one: " + ", ".join(f"{k} {t!r} {n}" for (k, t), n in sorted(losing.items())))
+    others = model.by_type("IfcOpeningElement") + model.by_type("IfcSpace")
+    o_all, o_bodied, o_items, o_failed = census(model, settings, others)
+    o_losing = collections.Counter(model.by_id(p).is_a() for p in {p for p, _ in o_failed})
+    print(f"openings and spaces: {o_all}, with a Body {o_bodied}, Body items {o_items}; "
+          f"items IfcOpenShell cannot process {len(o_failed)} on {sum(o_losing.values())} of them"
+          + (": " + ", ".join(f"{k} {n}" for k, n in sorted(o_losing.items())) if o_losing else ""))
     # The helper meshes the elements with a Tag and their aggregated parts: the census is held
     # to the same parts.
     meshed = {part.id() for e in model.by_type("IfcElement")
