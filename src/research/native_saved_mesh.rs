@@ -1403,6 +1403,8 @@ fn ring_segments(
 /// no wider gap (2026-11-21). A ring with an edge whose ends lie
 /// within that distance of each other, or of the ring's last point, which could join at
 /// either end, stays refused.
+// The export joins through `joined_ring_keeping`; the touching join's tests keep this form.
+#[cfg(test)]
 fn joined_ring(
     segments: Vec<Vec<[f64; 2]>>,
     length: impl FnOnce() -> Result<StepLength>,
