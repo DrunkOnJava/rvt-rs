@@ -12,7 +12,8 @@ and the run's verdict. `<source>` holds a run's artifacts as `gh run download -n
   the witness observations (`witness-*.json`), and at the artifact's top the outputs that read
   several models (`areas_across_saves.txt` and the like) and its `commit.txt`;
 - `verdict/`, `compare/` and `timing/`, the whole of `measure-verdict`, `compare-scorer-diff` and
-  `measure-timing` (each model's export time and peak memory on both sides).
+  `measure-timing` (each model's export time and peak memory on both sides), except that the scorer
+  diff's sections for the models whose folders are left out (below) are left out too.
 
 Models are kept only from the folders Measure gives the models anyone can fetch: `core-interior`,
 `einhoven`, `re1-*`, `nordic-*`, `r2025-*`, `sample-*`, `family-*`, and a `spent-*` pair that
@@ -68,6 +69,24 @@ def spent_stems(root):
             if len(cells) > 1 and cells[0] == "member":
                 (spent if cells[1].startswith("spent/") else held).add(stem(cells[1]))
     return spent, held
+
+
+def drop_left_out_sections(path, notes):
+    """Drop, from a `diff -r` listing, the sections whose paths are a left-out model's folder."""
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().splitlines(keepends=True)
+    out, keep, dropped = [], True, 0
+    folder = re.compile(r"(^|[\s/])(" + "|".join(re.escape(p) for p in LEFT_OUT_PREFIXES) + r")")
+    for line in lines:
+        if line.startswith(("diff ", "Only in ")):
+            keep = not folder.search(line)
+            dropped += not keep
+        if keep:
+            out.append(line)
+    if dropped:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.writelines(out)
+        notes.add(f"the {dropped} sections of `{os.path.basename(path)}` that diff a left-out folder")
 
 
 def kept_file(name):
@@ -137,8 +156,12 @@ def main():
         path = os.path.join(args.source, artifact)
         if os.path.isdir(path):
             shutil.copytree(path, os.path.join(args.out, side))
+            for directory, _, names in os.walk(os.path.join(args.out, side)):
+                for name in names:
+                    if name.endswith(".txt"):
+                        drop_left_out_sections(os.path.join(directory, name), notes)
             count = sum(len(f) for _, _, f in os.walk(os.path.join(args.out, side)))
-            lines.append(f"- `{side}/`, the whole of `{artifact}`: {count} file{'' if count == 1 else 's'}")
+            lines.append(f"- `{side}/`, from `{artifact}`: {count} file{'' if count == 1 else 's'}")
     if not lines:
         sys.exit(f"{args.source} holds none of {', '.join(list(MODEL_SIDES) + list(WHOLE))}")
     commit = ""
