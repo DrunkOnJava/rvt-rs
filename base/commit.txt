@@ -1,0 +1,1 @@
+8b8f1fee59a6786bf56f3ae0a97798e8d98e6aa4 docs(ifc): the support matrix names the instance origin a hand-off, and the hand-off entry says where an opening's place is (#1308) (#1312)
