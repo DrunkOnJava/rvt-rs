@@ -1,0 +1,1 @@
+2e07e27a3a90f579bc3bb0b76e86fa0856ea10f2 fix(reader): a partition may inflate to 16 times its stored size at the default limits, 1 to 4 GiB, so a 202 MB model reads without --large-model (#1075) (#1278)
