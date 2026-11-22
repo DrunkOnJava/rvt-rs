@@ -6,6 +6,8 @@
 # the form the pages' citations are to link to (Griffin, 2026-11-22). A run whose artifacts were
 # gone before it could be kept has `-` for its commit and says why. These are the runs the five
 # evidence pages cited on 2026-11-22; a run cited later is kept by dispatching the workflow on it.
+# A row named `<run>-probes` or `<run>-holdout` is a commit beside the run's first, holding only its
+# probes' own output (#2143) or its held-out models' summary counts (#2145, Griffin 2026-11-22).
 run	commit	kept
 40156315852	ad5237bea8d24f9f764471b19b5ae6af4593b1c9	head 1027 files for 31 models; base 1027 files for 31 models
 40927543524	77ccec7682e9774912eefcc0aedbab3d0e8180db	head 1474 files for 101 models
@@ -63,3 +65,14 @@ run	commit	kept
 43525326226	f44968af85882bdf0ae7831f5e81638274bf8f1d	head 2616 files for 121 models; base 2614 files for 121 models; verdict 1 file; compare 1 file
 43662654246	7a52f2903f28aeafc048083bd38952209c295dfc	head 2559 files for 102 models; base 2557 files for 102 models; verdict 1 file; compare 1 file
 43688985749	830ab42e928997526fbcebbe64957d5747e98c3f	head 71 files for 14 models; verdict 1 file
+41658225355-holdout	6dc275f5853e9b58f19bdded4dd79f4bdcf30d4e	head 7 files for 6 models
+41707934595-holdout	c4c35f110e33945fce97de1414d6f04c25385a29	head 6 files for 5 models; base 6 files for 5 models
+41741114199-holdout	2a63f5141ed7e3d56ab49f05a16a0db3cac5398c	head 19 files for 18 models; base 19 files for 18 models
+41757734285-holdout	fb7e503d662c81ddaabd9ef98a0d983c4dd4e7a7	head 19 files for 18 models; base 19 files for 18 models
+41764492879-holdout	e9055da97f37fbf5c7e67f7fcf81c2b9a5716318	head 19 files for 18 models; base 19 files for 18 models
+41787230413-probes	5489f767bc5f0d0502bb9ddb5508ed3ca22545f9	head 33 files for 16 models
+42003913780-holdout	52b697b98aae7092fdd4df755ba877c4c6eb6040	head 19 files for 18 models; base 19 files for 18 models
+42027776156-holdout	68a42783041c94c1b73b6e4a4872075a2c85397d	head 19 files for 18 models; base 19 files for 18 models
+42097940515-probes	cffadffd9acfbc5d6a1ec287645ca4f771f627d1	head 73 files for 72 models
+42108271073-probes	c636faa7a6694b94234e05b79aeee5f155f57afd	head 22 files for 21 models
+42556745265-holdout	b979b8cfce303b87ac1e356bc1a36ca3922b4660	head 19 files for 18 models; base 19 files for 18 models
