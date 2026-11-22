@@ -4,6 +4,7 @@ use crate::native_parameters::ObjectGraph;
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FaceMesh {
     pub face_index: usize,
@@ -886,7 +887,34 @@ fn refined_plane_edge(
         samples.len() == original.len(),
         "shared edge sample count mismatch"
     );
-    for (uv, expected) in samples.iter().zip(&original) {
+    // #2085, research branch only (`RVT_2085_PLANE_ANCHOR`): an end sample of the curved face's
+    // that leaves the plane, within `PLANE_ANCHOR_LIMIT` of the plane's own saved sample there,
+    // is taken as that saved sample, which Revit's export holds at a contributor's chairs. The
+    // samples between must still lie on the plane.
+    let last = samples.len() - 1;
+    let anchor = |i: usize| -> Result<Option<[f64; 2]>> {
+        if !plane_anchor() || project(samples[i]).is_ok() {
+            return Ok(None);
+        }
+        let q = evaluate(samples[i])?;
+        let own: [f64; 3] =
+            std::array::from_fn(|k| origin[k] + original[i][0] * x[k] + original[i][1] * y[k]);
+        let apart = (0..3).map(|k| (q[k] - own[k]).powi(2)).sum::<f64>().sqrt();
+        Ok((apart <= PLANE_ANCHOR_LIMIT).then_some(original[i]))
+    };
+    let anchors = [anchor(0)?, anchor(last)?];
+    // The edge's ends, by the curved face's samples: the point an anchor names, else the
+    // sample projected onto the plane.
+    let project_end = |uv: [f64; 2], end: Option<usize>| -> Result<[f64; 2]> {
+        match end.and_then(|e| anchors[e]) {
+            Some(point) => Ok(point),
+            None => project(uv),
+        }
+    };
+    for (i, (uv, expected)) in samples.iter().zip(&original).enumerate() {
+        if (i == 0 && anchors[0].is_some()) || (i == last && anchors[1].is_some()) {
+            continue;
+        }
         ensure!(
             close(project(*uv)?, *expected),
             "shared edge surface samples disagree"
@@ -932,7 +960,20 @@ fn refined_plane_edge(
                 cylinder_envelope(&g.objects[other_surface].fields["m_Envelope"]["m_corners"])?,
             );
         }
-        return refined.into_iter().map(project).collect();
+        let ends = (samples[0], samples[last]);
+        return refined
+            .into_iter()
+            .map(|uv| {
+                let end = if uv == ends.0 {
+                    Some(0)
+                } else if uv == ends.1 {
+                    Some(1)
+                } else {
+                    None
+                };
+                project_end(uv, end)
+            })
+            .collect();
     };
     let knots = if axis == 0 { u_values } else { v_values };
     let lo = start[axis].min(end[axis]);
@@ -952,15 +993,37 @@ fn refined_plane_edge(
         values.len() <= limit.saturating_add(1),
         PLANAR_BUDGET_EXCEEDED
     );
+    let count = values.len();
     values
         .into_iter()
-        .map(|t| {
+        .enumerate()
+        .map(|(i, t)| {
             let mut uv = start;
             uv[axis] = t;
-            project(uv)
+            let end = if i == 0 {
+                Some(0)
+            } else if i + 1 == count {
+                Some(1)
+            } else {
+                None
+            };
+            project_end(uv, end)
         })
         .collect()
 }
+
+/// #2085, research branch only: set `RVT_2085_PLANE_ANCHOR` to take, at a plane's edge
+/// shared with a curved face, an end sample that leaves the plane as the plane's own saved
+/// sample there. Off, every export is as before.
+fn plane_anchor() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("RVT_2085_PLANE_ANCHOR").is_some())
+}
+
+/// How far, in feet, a curved face's end sample may lie from the plane's saved sample that
+/// the anchor takes: just over the 3.88e-4 ft a contributor's chairs part by at their four
+/// plane edges (#2085), fitted to one family on one save.
+const PLANE_ANCHOR_LIMIT: f64 = 3.9e-4;
 fn inside(p: [f64; 2], r: &[[f64; 2]]) -> bool {
     let mut hit = false;
     for i in 0..r.len() {
@@ -983,6 +1046,8 @@ enum EdgeSide {
     /// The loop of a cylinder: an edge it shares with a plane that crosses it
     /// takes the points the plane's side takes ([`refined_curved_edge`]).
     Cylinder,
+    /// Neither: each edge keeps the points the graph stores, for [`ring_gaps`] (#2085).
+    Stored,
 }
 /// The trim ring of the cylinder face `face`, its loop `li`, held to
 /// [`CYLINDER_RING_POINT_BUDGET`] points (#1815).
@@ -1023,7 +1088,329 @@ fn ring_impl(
     limit: usize,
 ) -> Result<Vec<[f64; 2]>> {
     let segments = ring_segments(g, index, face, li, refine, limit)?;
-    joined_ring(segments, || step_length(g, index, face))
+    // A loop whose neighbours cannot be read joins as before: the test-only join fails closed.
+    let keeps = if coordinated_join() {
+        coordinated_keeps(g, index, face, li)
+            .map(|keeps| {
+                keeps
+                    .into_iter()
+                    .map(|(at, (keep, _))| (at, keep))
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        BTreeMap::new()
+    };
+    joined_ring_keeping(segments, || step_length(g, index, face), &keeps)
+}
+
+/// #2085, research branch only: set `RVT_2085_COORDINATED_JOIN` to join the stored gaps two
+/// rings hold where the chair save's measured rule says which end Revit keeps. Off, every
+/// export is as before.
+pub(crate) fn coordinated_join() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("RVT_2085_COORDINATED_JOIN").is_some())
+}
+
+/// The widest gap the coordinated join takes, in feet: just over the widest of the 40 chair
+/// pairs its conditions take, 3.728e-4 ft apart in model coordinates (#2085, a contributor's
+/// save). It is fitted to one family on one save, and the one pair there where Revit keeps both
+/// ends, at about 1.1e-4 ft, is kept out by the conditions, not by this.
+pub(crate) const COORDINATED_LIMIT: f64 = 3.75e-4;
+
+/// Which end a ring keeps at a gap the coordinated join takes: its own last point (P), or the
+/// next edge's nearer end (Q).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Keep {
+    Own,
+    Next,
+}
+
+/// A gap of a loop's stored edges at or over [`RING_TOUCHING`], each edge joined at its nearer
+/// end as the #2085 probe joins them: `at` the edge after it (0 the closing gap), `a` and `b` the
+/// edges before and after, and whether P and Q are their edges' stored first points.
+struct LoopGap {
+    at: usize,
+    a: usize,
+    b: usize,
+    p_first: bool,
+    q_first: bool,
+    d: f64,
+}
+
+/// The loop `li` of `face` as its edges and each edge's side of it, in the loop's order.
+fn loop_edges(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    li: usize,
+) -> Result<Vec<(usize, usize)>> {
+    let mut cur = index
+        .resolve(li, &g.objects[li].fields["m_next"])?
+        .context("empty loop")?;
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    while cur != li {
+        ensure!(seen.insert(cur), "edge chain cycle before loop sentinel");
+        let e = &g.objects[cur];
+        ensure!(e.class_name == "Edge", "nonedge loop member");
+        let faces = e.fields["m_pFace"].as_array().context("edge face pair")?;
+        let mut side = None;
+        for (i, p) in faces.iter().enumerate() {
+            if index.resolve(cur, p)? == Some(face) {
+                ensure!(side.is_none(), "ambiguous edge face side");
+                side = Some(i);
+            }
+        }
+        let side = side.context("edge not on the face")?;
+        out.push((cur, side));
+        cur = index
+            .resolve(cur, &e.fields["m_next"][side])?
+            .context("null next edge")?;
+    }
+    Ok(out)
+}
+
+/// The face other than `face` that the edge `e` bounds.
+fn other_face(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    e: usize,
+    face: usize,
+) -> Result<Option<usize>> {
+    let faces = g.objects[e].fields["m_pFace"]
+        .as_array()
+        .context("edge face pair")?;
+    let mut other = None;
+    for p in faces {
+        match index.resolve(e, p)? {
+            Some(f) if f != face => other = Some(f),
+            _ => {}
+        }
+    }
+    Ok(other)
+}
+
+/// `face`'s surface class, and the length of a straight step between two of its parameters:
+/// along the surface on a plane or cylinder ([`step_length`]), and in model coordinates on a
+/// surface the parametric reader evaluates.
+fn face_length(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+) -> Result<(StepLength, String)> {
+    let si = index
+        .resolve(face, &g.objects[face].fields["m_pSurf"])?
+        .context("face surface")?;
+    let class = g.objects[si].class_name.clone();
+    if matches!(class.as_str(), "Plane" | "CylSurf") {
+        return Ok((step_length(g, index, face)?, class));
+    }
+    let surface = crate::native_parametric_surface::ParametricSurface::read(g, si)?;
+    let length: StepLength = Box::new(move |a: [f64; 2], b: [f64; 2]| -> f64 {
+        match (surface.evaluate(a[0], a[1]), surface.evaluate(b[0], b[1])) {
+            (Ok(p), Ok(q)) => (0..3).map(|k| (p[k] - q[k]).powi(2)).sum::<f64>().sqrt(),
+            // A point the surface cannot place is no join.
+            _ => f64::INFINITY,
+        }
+    });
+    Ok((length, class))
+}
+
+/// The gaps of the loop `li` of `face` at or over [`RING_TOUCHING`]: each edge joined at its
+/// nearer end, of the two ways round the first edge the one whose widest gap is smaller.
+fn loop_gaps(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    li: usize,
+) -> Result<Vec<LoopGap>> {
+    let edges = loop_edges(g, index, face, li)?;
+    ensure!(!edges.is_empty(), "empty loop");
+    let mut ends = Vec::with_capacity(edges.len());
+    for (e, side) in &edges {
+        let pts = g.objects[*e].fields["m_firstAndLastEdgePnts"]
+            .as_array()
+            .context("edge endpoints")?;
+        ensure!(pts.len() == 2, "edge endpoint count");
+        ends.push([
+            point::<2>(&pts[0]["uv"][*side])?,
+            point::<2>(&pts[1]["uv"][*side])?,
+        ]);
+    }
+    let (length, _) = face_length(g, index, face)?;
+    let mut best: Option<(f64, Vec<LoopGap>)> = None;
+    for reverse in [false, true] {
+        let (first, mut last) = if reverse {
+            (ends[0][1], ends[0][0])
+        } else {
+            (ends[0][0], ends[0][1])
+        };
+        let (first_is_first, mut last_is_first) = (!reverse, reverse);
+        let (mut prev, mut worst, mut gaps) = (0usize, 0f64, Vec::new());
+        for (k, [h, t]) in ends.iter().copied().enumerate().skip(1) {
+            let ((near, near_first), (far, far_first)) = if length(last, h) <= length(last, t) {
+                ((h, true), (t, false))
+            } else {
+                ((t, false), (h, true))
+            };
+            let d = length(last, near);
+            worst = worst.max(d);
+            if d >= RING_TOUCHING {
+                gaps.push(LoopGap {
+                    at: k,
+                    a: edges[prev].0,
+                    b: edges[k].0,
+                    p_first: last_is_first,
+                    q_first: near_first,
+                    d,
+                });
+            }
+            (last, last_is_first, prev) = (far, far_first, k);
+        }
+        let d = length(last, first);
+        worst = worst.max(d);
+        if d >= RING_TOUCHING {
+            gaps.push(LoopGap {
+                at: 0,
+                a: edges[prev].0,
+                b: edges[0].0,
+                p_first: last_is_first,
+                q_first: first_is_first,
+                d,
+            });
+        }
+        if best.as_ref().is_none_or(|(w, _)| worst < *w) {
+            best = Some((worst, gaps));
+        }
+    }
+    Ok(best.map(|(_, gaps)| gaps).unwrap_or_default())
+}
+
+/// The loops of `face`, first to last.
+fn face_loops(g: &ObjectGraph, index: &PointerIndex<'_>, face: usize) -> Result<Vec<usize>> {
+    let (mut next, mut seen, mut loops) = (
+        index.resolve(face, &g.objects[face].fields["m_pFirstLoop"])?,
+        BTreeSet::new(),
+        Vec::new(),
+    );
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "loop-list cycle");
+        loops.push(li);
+        next = index.resolve(li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    Ok(loops)
+}
+
+/// Whether the edge `e`'s face other than `face` is a spline (`HermiteSurf`).
+fn leads_to_spline(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    e: usize,
+    face: usize,
+) -> Result<bool> {
+    let Some(other) = other_face(g, index, e, face)? else {
+        return Ok(false);
+    };
+    let surface = index.resolve(other, &g.objects[other].fields["m_pSurf"])?;
+    Ok(surface.is_some_and(|si| g.objects[si].class_name == "HermiteSurf"))
+}
+
+/// #2085: the gaps of the loop `li` of `face` that the coordinated join takes, which end each
+/// keeps and how wide it is. Both rings are cylinders, or both revolved faces (`SurfRev`), the
+/// two kinds measured. A gap qualifies only as the chair save's 48 stored corner pairs do: one of its
+/// edges bounds another face whose loop holds a gap at the same stored end of that edge, the
+/// other edge of each of the two rings leads to a spline face, one ring reads `last/first` (P
+/// the edge's last point, Q the next edge's first) and the other `first/first` or `last/last`,
+/// and both gaps are under [`COORDINATED_LIMIT`]. There Revit keeps the `last/first` ring's Q,
+/// which is the other ring's P.
+fn coordinated_keeps(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    li: usize,
+) -> Result<BTreeMap<usize, (Keep, f64)>> {
+    let mut keeps = BTreeMap::new();
+    let class = |f: usize| -> Result<String> {
+        let si = index
+            .resolve(f, &g.objects[f].fields["m_pSurf"])?
+            .context("face surface")?;
+        Ok(g.objects[si].class_name.clone())
+    };
+    let own = class(face)?;
+    if !matches!(own.as_str(), "CylSurf" | "SurfRev") {
+        return Ok(keeps);
+    }
+    for gap in loop_gaps(g, index, face, li)? {
+        let mut views = Vec::new();
+        for (shared, first, own_other) in [(gap.a, gap.p_first, gap.b), (gap.b, gap.q_first, gap.a)]
+        {
+            if !leads_to_spline(g, index, own_other, face)? {
+                continue;
+            }
+            let Some(neighbour) = other_face(g, index, shared, face)? else {
+                continue;
+            };
+            if class(neighbour)? != own {
+                continue;
+            }
+            for oli in face_loops(g, index, neighbour)? {
+                for t in loop_gaps(g, index, neighbour, oli)? {
+                    let (at_end, their_other) = if t.a == shared {
+                        (t.p_first == first, t.b)
+                    } else if t.b == shared {
+                        (t.q_first == first, t.a)
+                    } else {
+                        continue;
+                    };
+                    if at_end && leads_to_spline(g, index, their_other, neighbour)? {
+                        views.push(t);
+                    }
+                }
+            }
+        }
+        // Exactly one other ring holds the corner, or the gap is left to the existing guard.
+        let [view] = views.as_slice() else {
+            continue;
+        };
+        let (mine, theirs) = ((gap.p_first, gap.q_first), (view.p_first, view.q_first));
+        let same_end = |c: (bool, bool)| c.0 == c.1;
+        let keep = if mine == (false, true) && same_end(theirs) {
+            Keep::Next
+        } else if same_end(mine) && theirs == (false, true) {
+            Keep::Own
+        } else {
+            continue;
+        };
+        let width = gap.d.max(view.d);
+        if width < COORDINATED_LIMIT {
+            keeps.insert(gap.at, (keep, width));
+        }
+    }
+    Ok(keeps)
+}
+
+/// #2085, research branch only: the gaps of the loop `li` of face `fi` that the coordinated
+/// join takes, whether or not it is switched on, each as where it is in the loop (0 the closing
+/// gap), whether it keeps Q (the next edge's end) and its width in the join's own measure. The
+/// export's revolved faces and the #2085 probe call this, so all three read the same rule.
+pub fn coordinated_join_keeps(
+    g: &ObjectGraph,
+    fi: usize,
+    li: usize,
+) -> Result<Vec<(usize, bool, f64)>> {
+    // Only cylinders and revolved faces are measured: the index is not built for the rest.
+    let face = g.objects.get(fi).context("face index")?;
+    let surface = pointer(g, fi, &face.fields["m_pSurf"])?;
+    if !surface.is_some_and(|si| matches!(g.objects[si].class_name.as_str(), "CylSurf" | "SurfRev"))
+    {
+        return Ok(Vec::new());
+    }
+    let index = PointerIndex::new(g);
+    Ok(coordinated_keeps(g, &index, fi, li)?
+        .into_iter()
+        .map(|(at, (keep, width))| (at, keep == Keep::Next, width))
+        .collect())
 }
 /// The length on a plane or cylinder face's surface of a straight step between two points
 /// of its parameters: a chord on a plane, a helix on a cylinder. A step across a cylinder's
@@ -1087,7 +1474,7 @@ fn ring_segments(
     let mut segments = Vec::new();
     let mut held = 0usize;
     let exceeded = match refine {
-        EdgeSide::Plane => PLANAR_BUDGET_EXCEEDED,
+        EdgeSide::Plane | EdgeSide::Stored => PLANAR_BUDGET_EXCEEDED,
         EdgeSide::Cylinder => CYLINDER_BUDGET_EXCEEDED,
     };
     while cur != li {
@@ -1133,6 +1520,7 @@ fn ring_segments(
                     Err(_) => pts,
                 }
             }
+            EdgeSide::Stored => pts,
         };
         held = ring_points_with(held, pts.len(), limit).context(exceeded)?;
         segments.push(pts);
@@ -1153,9 +1541,20 @@ fn ring_segments(
 /// no wider gap (2026-11-21). A ring with an edge whose ends lie
 /// within that distance of each other, or of the ring's last point, which could join at
 /// either end, stays refused.
+// The export joins through `joined_ring_keeping`; the touching join's tests keep this form.
+#[cfg(test)]
 fn joined_ring(
     segments: Vec<Vec<[f64; 2]>>,
     length: impl FnOnce() -> Result<StepLength>,
+) -> Result<Vec<[f64; 2]>> {
+    joined_ring_keeping(segments, length, &BTreeMap::new())
+}
+
+/// [`joined_ring`], with the gaps the coordinated join takes (#2085, research branch only).
+fn joined_ring_keeping(
+    segments: Vec<Vec<[f64; 2]>>,
+    length: impl FnOnce() -> Result<StepLength>,
+    keeps: &BTreeMap<usize, Keep>,
 ) -> Result<Vec<[f64; 2]>> {
     // Saved circular loops can be represented by two connected arc edges
     // (typically two semicircles). A third edge is not a topology invariant;
@@ -1165,7 +1564,7 @@ fn joined_ring(
         segments.iter().all(|s: &Vec<_>| !s.is_empty()),
         "empty boundary edge"
     );
-    let mut output = joined_within(&segments, None);
+    let mut output = joined_within(&segments, None, keeps);
     if output.is_none() {
         // A surface whose steps cannot be measured keeps the strict join's refusal.
         if let Ok(length) = length() {
@@ -1173,7 +1572,7 @@ fn joined_ring(
                 .iter()
                 .all(|s| length(s[0], s[s.len() - 1]) >= RING_TOUCHING)
             {
-                output = joined_within(&segments, Some(&*length));
+                output = joined_within(&segments, Some(&*length), keeps);
             }
         }
     }
@@ -1199,14 +1598,18 @@ type Loose<'a> = Option<&'a dyn Fn([f64; 2], [f64; 2]) -> f64>;
 /// along the surface is under [`RING_TOUCHING`] joins too, that end taken as the ring's
 /// last point, and so may the last edge's far end and the first point. `None` where
 /// neither way round the first edge closes.
-fn joined_within(segments: &[Vec<[f64; 2]>], loose: Loose<'_>) -> Option<Vec<[f64; 2]>> {
+fn joined_within(
+    segments: &[Vec<[f64; 2]>],
+    loose: Loose<'_>,
+    keeps: &BTreeMap<usize, Keep>,
+) -> Option<Vec<[f64; 2]>> {
     for reverse in [false, true] {
         let mut out = segments[0].clone();
         if reverse {
             out.reverse()
         };
         let mut valid = true;
-        for s in &segments[1..] {
+        for (k, s) in segments.iter().enumerate().skip(1) {
             let last = *out.last().unwrap();
             let tail = *s.last().unwrap();
             if close(last, s[0]) {
@@ -1215,16 +1618,29 @@ fn joined_within(segments: &[Vec<[f64; 2]>], loose: Loose<'_>) -> Option<Vec<[f6
                 out.extend(s.iter().rev().skip(1).copied())
             } else if let Some(length) = loose {
                 let (head_step, tail_step) = (length(last, s[0]), length(last, tail));
-                if head_step.min(tail_step) >= RING_TOUCHING
-                    || head_step.max(tail_step) < RING_TOUCHING
-                {
+                let (near, far) = (head_step.min(tail_step), head_step.max(tail_step));
+                // With no coordinated join this is the touching join's own test, unchanged.
+                let keep = keeps.get(&k).copied();
+                let joins = if near < RING_TOUCHING {
+                    far >= RING_TOUCHING
+                } else {
+                    keep.is_some() && near < COORDINATED_LIMIT && far >= COORDINATED_LIMIT
+                };
+                if !joins {
                     valid = false;
                     break;
                 }
-                if head_step < tail_step {
-                    out.extend_from_slice(&s[1..])
+                // Keeping Q drops the ring's own last point instead of the next edge's end.
+                let skip = if near >= RING_TOUCHING && keep == Some(Keep::Next) {
+                    out.pop();
+                    0
                 } else {
-                    out.extend(s.iter().rev().skip(1).copied())
+                    1
+                };
+                if head_step < tail_step {
+                    out.extend_from_slice(&s[skip..])
+                } else {
+                    out.extend(s.iter().rev().skip(skip).copied())
                 }
             } else {
                 valid = false;
@@ -1243,8 +1659,256 @@ fn joined_within(segments: &[Vec<[f64; 2]>], loose: Loose<'_>) -> Option<Vec<[f6
             out.pop();
             return Some(out);
         }
+        // The closing gap: P is the ring's last point and Q its first.
+        if let (Some(length), Some(keep)) = (loose, keeps.get(&0)) {
+            let d = length(last, first);
+            if (RING_TOUCHING..COORDINATED_LIMIT).contains(&d) {
+                match keep {
+                    Keep::Next => out.pop(),
+                    Keep::Own => Some(out.remove(0)),
+                };
+                return Some(out);
+            }
+        }
     }
     None
+}
+
+/// How far apart neighbouring edges' ends lie in one ring of a plane or cylinder face,
+/// which the ring's join joins only within 1e-7 in the surface's parameters (#2085).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct JointGaps {
+    /// The largest gap, from the ring's last point to the next edge's nearer end or from
+    /// the last edge's far end back to the first point, in the surface's parameters; of
+    /// the two ways round the first edge can be taken, the one whose largest gap is
+    /// smaller.
+    pub parameters: f64,
+    /// That gap's difference in each parameter, from the ring's point to the edge's.
+    pub components: [f64; 2],
+    /// The largest of the same gaps in feet, through the surface.
+    pub feet: f64,
+    /// The largest of the same gaps as a straight step in the parameters measures along
+    /// the surface: a chord on a plane, a helix on a cylinder, a whole turn across a seam.
+    pub step: f64,
+    /// The gaps not within 1e-7.
+    pub open: usize,
+    /// Of those, the ones that run back along the edge before them in feet, so that the
+    /// next edge starts behind where the last one ended (an overshoot, not a gap).
+    pub backward: usize,
+}
+
+/// One ring of a plane or cylinder face as its reader builds it, read for #2085.
+#[derive(Debug, Clone)]
+pub struct RingGaps {
+    /// The loop's place in the face's loop list, from 0.
+    pub loop_index: usize,
+    /// The loop's edges.
+    pub edges: usize,
+    /// Its edges with the points the graph stores.
+    pub stored: JointGaps,
+    /// The shortest step along the surface between one stored edge's own two ends.
+    pub shortest_edge: f64,
+    /// Its edges as the reader refines them, or the refinement's error.
+    pub refined: std::result::Result<JointGaps, String>,
+    /// Where the refinement failed: the cylinder faces beside the loop whose own ring is
+    /// refused as a disconnected UV boundary. A plane meshes such a neighbour to share
+    /// their edge (`refined_plane_edge`), so its refusal becomes the plane's.
+    pub disconnected_neighbours: Vec<usize>,
+}
+
+/// The rings of the plane or cylinder face `fi` as [`face`] builds them, with how far
+/// apart their edges' ends lie (#2085). A plane's every loop is read, each with the
+/// whole face's point budget rather than what the loops before it leave; a cylinder's
+/// one or two loops with the budget [`cylinder_face`] gives them.
+pub fn ring_gaps(g: &ObjectGraph, fi: usize) -> Result<Vec<RingGaps>> {
+    let index = PointerIndex::new(g);
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    let si = index
+        .resolve(fi, &f.fields["m_pSurf"])?
+        .context("face surface")?;
+    let s = &g.objects[si];
+    type Surface = Box<dyn Fn([f64; 2]) -> [f64; 3]>;
+    let (refine, surface): (EdgeSide, Surface) = match s.class_name.as_str() {
+        "Plane" => {
+            let origin = point::<3>(&s.fields["m_origin"])?;
+            let x = point::<3>(&s.fields["m_xVec"])?;
+            let y = point::<3>(&s.fields["m_yVec"])?;
+            (
+                EdgeSide::Plane,
+                Box::new(move |uv: [f64; 2]| -> [f64; 3] {
+                    std::array::from_fn(|k| origin[k] + uv[0] * x[k] + uv[1] * y[k])
+                }),
+            )
+        }
+        "CylSurf" => {
+            let center = point::<3>(&s.fields["m_center"])?;
+            let x = point::<3>(&s.fields["m_xVec"])?;
+            let y = point::<3>(&s.fields["m_yVec"])?;
+            let z = point::<3>(&s.fields["m_zVec"])?;
+            let r = s.fields["m_radius"].as_f64().context("cylinder radius")?;
+            (
+                EdgeSide::Cylinder,
+                Box::new(move |uv: [f64; 2]| -> [f64; 3] {
+                    let (sn, cs) = uv[0].sin_cos();
+                    std::array::from_fn(|k| center[k] + r * (cs * x[k] + sn * y[k]) + uv[1] * z[k])
+                }),
+            )
+        }
+        other => bail!("unsupported surface {other}"),
+    };
+    let mut loops = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut next = index.resolve(fi, &f.fields["m_pFirstLoop"])?;
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "loop-list cycle");
+        loops.push(li);
+        next = index.resolve(li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    let limit = match (refine, loops.len()) {
+        (EdgeSide::Cylinder, 1) => CYLINDER_RING_POINT_BUDGET,
+        (EdgeSide::Cylinder, 2) => CYLINDER_RING_POINT_BUDGET / 2,
+        (EdgeSide::Cylinder, _) => bail!("multiple cylinder trim loops unsupported"),
+        _ => PLANAR_FACE_POINT_BUDGET,
+    };
+    let step = step_length(g, &index, fi)?;
+    let mut out = Vec::new();
+    for (loop_index, &li) in loops.iter().enumerate() {
+        let stored = ring_segments(g, &index, fi, li, EdgeSide::Stored, usize::MAX)?;
+        let (refined, disconnected_neighbours) =
+            match ring_segments(g, &index, fi, li, refine, limit) {
+                Ok(segments) => (Ok(joint_gaps(&segments, &*surface, &*step)), Vec::new()),
+                Err(error) => (
+                    Err(format!("{error:#}")),
+                    disconnected_cylinders_beside(g, &index, fi, li)?,
+                ),
+            };
+        out.push(RingGaps {
+            loop_index,
+            edges: stored.len(),
+            stored: joint_gaps(&stored, &*surface, &*step),
+            shortest_edge: stored
+                .iter()
+                .filter(|s| !s.is_empty())
+                .map(|s| step(s[0], s[s.len() - 1]))
+                .fold(f64::INFINITY, f64::min),
+            refined,
+            disconnected_neighbours,
+        });
+    }
+    Ok(out)
+}
+
+/// The gaps [`joined_ring`] meets joining `segments`, each edge at its nearer end.
+fn joint_gaps(
+    segments: &[Vec<[f64; 2]>],
+    surface: &dyn Fn([f64; 2]) -> [f64; 3],
+    step: &dyn Fn([f64; 2], [f64; 2]) -> f64,
+) -> JointGaps {
+    let segments: Vec<&Vec<[f64; 2]>> = segments.iter().filter(|s| !s.is_empty()).collect();
+    let Some(first) = segments.first() else {
+        return JointGaps::default();
+    };
+    let span = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]);
+    let mut best: Option<JointGaps> = None;
+    for reverse in [false, true] {
+        // Each edge's last point and the one before it, the way round it is taken.
+        let ends = |s: &[[f64; 2]], forward: bool| {
+            let n = s.len();
+            if forward {
+                (s[n.saturating_sub(2)], s[n - 1])
+            } else {
+                (s[1.min(n - 1)], s[0])
+            }
+        };
+        let start = if reverse {
+            first[first.len() - 1]
+        } else {
+            first[0]
+        };
+        let (mut before, mut last) = ends(first.as_slice(), !reverse);
+        let mut gaps = JointGaps::default();
+        let mut note = |before: [f64; 2], a: [f64; 2], b: [f64; 2]| {
+            let d = span(a, b);
+            if !close(a, b) {
+                gaps.open += 1;
+                let (p, q, r) = (surface(before), surface(a), surface(b));
+                if (0..3).map(|k| (q[k] - p[k]) * (r[k] - q[k])).sum::<f64>() < 0. {
+                    gaps.backward += 1;
+                }
+            }
+            if d > gaps.parameters {
+                gaps.parameters = d;
+                gaps.components = [b[0] - a[0], b[1] - a[1]];
+            }
+            let (p, q) = (surface(a), surface(b));
+            let feet = (0..3).map(|k| (p[k] - q[k]).powi(2)).sum::<f64>().sqrt();
+            gaps.feet = gaps.feet.max(feet);
+            gaps.step = gaps.step.max(step(a, b));
+        };
+        for s in &segments[1..] {
+            let (head, tail) = (s[0], s[s.len() - 1]);
+            let forward = span(last, head) <= span(last, tail);
+            let near = if forward { head } else { tail };
+            note(before, last, near);
+            (before, last) = ends(s.as_slice(), forward);
+        }
+        note(before, last, start);
+        if best.is_none_or(|b| gaps.parameters < b.parameters) {
+            best = Some(gaps);
+        }
+    }
+    best.unwrap_or_default()
+}
+
+/// The cylinder faces across the edges of the loop `li` of `face` whose own ring is
+/// refused as a disconnected UV boundary.
+fn disconnected_cylinders_beside(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    li: usize,
+) -> Result<Vec<usize>> {
+    let mut beside = BTreeSet::new();
+    let mut seen = BTreeSet::new();
+    let mut cur = index
+        .resolve(li, &g.objects[li].fields["m_next"])?
+        .context("empty loop")?;
+    while cur != li && seen.insert(cur) {
+        let e = &g.objects[cur];
+        let faces = e.fields["m_pFace"].as_array().context("edge face pair")?;
+        let mut side = None;
+        for (i, p) in faces.iter().enumerate() {
+            if index.resolve(cur, p)? == Some(face) {
+                side = Some(i);
+            }
+        }
+        let side = side.context("edge face side")?;
+        for p in faces
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != side)
+            .map(|(_, p)| p)
+        {
+            if let Some(other) = index.resolve(cur, p)? {
+                beside.insert(other);
+            }
+        }
+        cur = index
+            .resolve(cur, &e.fields["m_next"][side])?
+            .context("null next edge")?;
+    }
+    let mut out = Vec::new();
+    for other in beside {
+        let surface = index.resolve(other, &g.objects[other].fields["m_pSurf"])?;
+        if surface.is_some_and(|si| g.objects[si].class_name == "CylSurf")
+            && cylinder_face(g, other, CylinderTessellationProfile::default())
+                .is_err_and(|e| format!("{e:#}").contains("disconnected UV boundary"))
+        {
+            out.push(other);
+        }
+    }
+    Ok(out)
 }
 
 fn tessellation_axis(
@@ -1540,7 +2204,10 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             CylinderTessellationProfile::default(),
         )?));
     }
-    if matches!(p.class_name.as_str(), "SurfRev" | "RuledSurf" | "ConeSurf") {
+    if matches!(
+        p.class_name.as_str(),
+        "SurfRev" | "RuledSurf" | "ConeSurf" | "HermiteSurf"
+    ) {
         return Ok(Some(crate::native_parametric_mesh::face(g, fi)?));
     }
     ensure!(
@@ -2787,14 +3454,15 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, RING_TOUCHING,
-        StepLength, area, band_mesh, cross, distance_to_chord, isoparametric_axis, joined_ring,
-        normals_follow_winding, planar_points_with, refine_crossing_edge,
-        refine_crossing_edge_within, regions_tile, regions_tile_within,
-        retain_boundary_points_within, ring_points_with, split_pinched_rings, within_envelope,
+        COORDINATED_LIMIT, EDGE_SAGITTA, EdgeLimits, Keep, PLANAR_FACE_POINT_BUDGET,
+        PLANAR_WORK_BUDGET, RING_TOUCHING, StepLength, area, band_mesh, cross, distance_to_chord,
+        isoparametric_axis, joined_ring, joined_ring_keeping, normals_follow_winding,
+        planar_points_with, refine_crossing_edge, refine_crossing_edge_within, regions_tile,
+        regions_tile_within, retain_boundary_points_within, ring_points_with, split_pinched_rings,
+        within_envelope,
     };
     use anyhow::Result;
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::f64::consts::{FRAC_PI_2, PI};
 
     const TOLERANCE: f64 = 1e-7;
@@ -3715,5 +4383,59 @@ mod tests {
             vec![[0., 1.], [0., 0.]],
         ];
         assert!(joined_ring(segments, plane_steps).is_err());
+    }
+
+    // #2085's coordinated join (research branch only), failure modes first: a gap at or over
+    // `RING_TOUCHING` joins only where it is approved, never at `COORDINATED_LIMIT` or over,
+    // and it keeps the end it is told to, at an inner gap and at the closing one.
+
+    #[test]
+    fn an_approved_wide_gap_keeps_the_rings_own_point() {
+        let gap = RING_TOUCHING * 3.;
+        let keeps = BTreeMap::from([(2, Keep::Own)]);
+        let ring = joined_ring_keeping(square_with_gap(gap), plane_steps, &keeps).unwrap();
+        assert_eq!(ring.len(), 4, "{ring:?}");
+        assert!(
+            ring.contains(&[1., 1.]) && !ring.contains(&[1. - gap, 1.]),
+            "{ring:?}"
+        );
+    }
+
+    #[test]
+    fn keeping_q_drops_the_rings_own_point() {
+        let gap = RING_TOUCHING * 3.;
+        let keeps = BTreeMap::from([(2, Keep::Next)]);
+        let ring = joined_ring_keeping(square_with_gap(gap), plane_steps, &keeps).unwrap();
+        assert_eq!(ring.len(), 4, "{ring:?}");
+        assert!(
+            ring.contains(&[1. - gap, 1.]) && !ring.contains(&[1., 1.]),
+            "{ring:?}"
+        );
+    }
+
+    #[test]
+    fn an_approved_gap_at_the_limit_stays_refused() {
+        let keeps = BTreeMap::from([(2, Keep::Own)]);
+        let segments = square_with_gap(COORDINATED_LIMIT * 1.001);
+        assert!(joined_ring_keeping(segments, plane_steps, &keeps).is_err());
+    }
+
+    #[test]
+    fn keeping_p_at_the_closing_gap_drops_the_first_point() {
+        let gap = RING_TOUCHING * 3.;
+        let segments = vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1., 1.], [0., 1.]],
+            vec![[0., 1.], [0., gap]],
+        ];
+        assert!(joined_ring(segments.clone(), plane_steps).is_err());
+        let keeps = BTreeMap::from([(0, Keep::Own)]);
+        let ring = joined_ring_keeping(segments, plane_steps, &keeps).unwrap();
+        assert_eq!(ring.len(), 4, "{ring:?}");
+        assert!(
+            ring.contains(&[0., gap]) && !ring.contains(&[0., 0.]),
+            "{ring:?}"
+        );
     }
 }
