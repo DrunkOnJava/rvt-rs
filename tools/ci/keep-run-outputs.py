@@ -34,13 +34,21 @@ figures the evidence pages cite keep a source (Griffin, 2026-11-22). Their folde
 and the `rac_advanced` and BIMcollab folders, stay out, and the folder-name scan below allows
 the held-out models' names for this part alone.
 
+With `--part log --lines <pattern>` it keeps the lines of a run's log that `<pattern>` (a Python
+regular expression, searched in each line's text) finds, for a figure a run prints only to its log,
+such as a viewer test's measurement (#2148). `<source>/run.log` holds the log as `gh run view --log`
+prints it, one `<job>\t<step>\t<time> <text>` line per log line; `log/lines.txt` keeps
+`<job>\t<time>\t<text>` for each line found, with terminal colour codes taken out. A pattern that
+finds nothing stops the run, as does a run not of this repository or of a pull request, which the
+workflow refuses before this runs.
+
 It writes `KEPT.md` saying what was kept and from where, then scans everything it wrote and fails on
 a match, since a kept copy is public once pushed: the CI PII guard's patterns, read a second time
 with JSON's doubled backslashes made single (a Windows path in `diagnostics.json` is written
 `C:\\Users\\...`), and the name of any folder left out. The timing table's rows name files, not
 folders, so its rows for a model a held-out list names are left out by name.
 
-    python3 tools/ci/keep-run-outputs.py <source> <out> --run <run id> [--part outputs|probes|holdout] [--root <repository>]
+    python3 tools/ci/keep-run-outputs.py <source> <out> --run <run id> [--part outputs|probes|holdout|log] [--lines <pattern>] [--root <repository>]
 """
 
 import argparse
@@ -55,6 +63,8 @@ OPEN_FOLDERS = ("core-interior", "einhoven")
 OPEN_PREFIXES = ("re1-", "nordic-", "r2025-", "sample-", "family-")
 LEFT_OUT_PREFIXES = ("holdout-", "racadv-", "bimcollab-")
 PROBE_OUTPUT = re.compile(r"probe(-pair)?(-.+)?\.txt")
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+LOG_TIME = re.compile(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z) ?(.*)")
 # The CI PII guard's patterns (.github/workflows/ci.yml, "PII guard"), as Python regexes.
 PII = [
     r"/Users/[A-Za-z][A-Za-z0-9._-]+/",
@@ -181,20 +191,66 @@ def keep_models(source, out, spent, held, notes, part):
     return models, files
 
 
+def keep_log(source, out, pattern):
+    """Copy the lines of `source`/run.log that `pattern` finds; return (lines, jobs)."""
+    path = os.path.join(source, "run.log")
+    if not os.path.isfile(path):
+        sys.exit(f"{path}: no log to read")
+    found, jobs = [], []
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        for raw in handle:
+            cells = raw.rstrip("\n").split("\t", 2)
+            if len(cells) != 3:
+                continue
+            job, _, rest = cells
+            m = LOG_TIME.fullmatch(rest)
+            time, text = (m.group(1), m.group(2)) if m else ("-", rest)
+            text = ANSI.sub("", text)
+            if pattern.search(text):
+                found.append(f"{job}\t{time}\t{text}\n")
+                if job not in jobs:
+                    jobs.append(job)
+    if not found:
+        sys.exit(f"{path}: `{pattern.pattern}` finds no line")
+    os.makedirs(os.path.join(out, "log"), exist_ok=True)
+    with open(os.path.join(out, "log", "lines.txt"), "w", encoding="utf-8") as handle:
+        handle.writelines(found)
+    return len(found), jobs
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("source")
     parser.add_argument("out")
     parser.add_argument("--run", required=True)
-    parser.add_argument("--part", choices=("outputs", "probes", "holdout"), default="outputs")
+    parser.add_argument("--part", choices=("outputs", "probes", "holdout", "log"), default="outputs")
+    parser.add_argument("--lines", help="with --part log: a Python regular expression; the log lines it finds are kept")
     parser.add_argument("--root", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9]+", args.run):
         sys.exit("--run must be a run id")
     if os.path.exists(args.out) and os.listdir(args.out):
         sys.exit(f"{args.out} is not empty")
+    if (args.part == "log") != (args.lines is not None):
+        sys.exit("--lines goes with --part log, and --part log needs --lines")
     os.makedirs(args.out, exist_ok=True)
     spent, held = spent_stems(args.root)
+    if args.part == "log":
+        try:
+            pattern = re.compile(args.lines)
+        except re.error as error:
+            sys.exit(f"--lines is not a regular expression: {error}")
+        count, jobs = keep_log(args.source, args.out, pattern)
+        lines = [f"- `log/lines.txt`: {count} line{'' if count == 1 else 's'} from {', '.join(f'`{j}`' for j in jobs)}"]
+        with open(os.path.join(args.out, "KEPT.md"), "w", encoding="utf-8") as handle:
+            handle.write(
+                f"# Run {args.run}: kept log lines\n\n"
+                f"From the log of https://github.com/DrunkOnJava/rvt-rs/actions/runs/{args.run}, by "
+                "`tools/ci/keep-run-outputs.py` (#2124, #2148), which says what is kept and why: the lines "
+                f"in which the pattern `{args.lines}` is found.\n\n" + "\n".join(lines) + "\n\n"
+                "Left out: every other line of the log.\n"
+            )
+        return scan(args.out, held, args.part, lines)
     notes, lines = set(), []
     for artifact, side in MODEL_SIDES.items():
         path = os.path.join(args.source, artifact)
@@ -236,20 +292,25 @@ def main():
                            f"folder, whose outputs `refs/evidence/{args.run}` keeps"}[args.part]
             + "".join(f"; {note}" for note in sorted(notes)) + ".\n"
         )
+    return scan(args.out, held, args.part, lines)
+
+
+def scan(out, held, part, lines):
+    """Print what was kept; fail on a PII-shaped pattern or a left-out folder's name in any file."""
     patterns = [re.compile(p) for p in PII]
     # The held-out part keeps held-out folders, so their names are no leak there; the other
     # left-out kinds stay refused.
-    refused = [p for p in LEFT_OUT_PREFIXES if not (args.part == "holdout" and p == "holdout-")]
+    refused = [p for p in LEFT_OUT_PREFIXES if not (part == "holdout" and p == "holdout-")]
     patterns.append(re.compile(r"(^|[^A-Za-z0-9])(" + "|".join(re.escape(p) for p in refused) + r")[A-Za-z0-9]"))
-    if args.part != "holdout":
+    if part != "holdout":
         patterns += [re.compile(r"(^|[^A-Za-z0-9])" + re.escape(f"spent-{name}") + r"($|[^A-Za-z0-9_.-])") for name in sorted(held)]
     hits = []
-    for directory, _, names in os.walk(args.out):
+    for directory, _, names in os.walk(out):
         for name in names:
             with open(os.path.join(directory, name), encoding="utf-8", errors="replace") as handle:
                 text = handle.read()
             single = text.replace("\\\\", "\\")
-            hits += [(os.path.relpath(os.path.join(directory, name), args.out), p.pattern)
+            hits += [(os.path.relpath(os.path.join(directory, name), out), p.pattern)
                      for p in patterns if p.search(text) or p.search(single)]
     print("\n".join(lines))
     if hits:
