@@ -1,0 +1,46 @@
+  Area-2691046: ours ('Area-2691046', None) Revit ('LIIK1', 'HUONEISTOALA')
+  Turning Free Space:Turning Free Space 1500 mm:3609724: storey ours Level_01 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3609912: storey ours Level_01 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3609932: storey ours Level_01 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3610022: storey ours Level_01 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3610074: storey ours Level_01 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611041: storey ours Level_01 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611150: storey ours Level_01 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611218: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611219: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611280: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611296: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611312: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611330: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611346: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611366: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611384: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611402: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611420: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611438: storey ours Basement Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611606: storey ours Level_02 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611607: storey ours Level_02 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611715: storey ours Level_02 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611777: storey ours Level_02 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611841: storey ours Level_02 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611981: storey ours Level_03 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611982: storey ours Level_03 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611983: storey ours Level_03 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611984: storey ours Level_03 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3611985: storey ours Level_03 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612100: storey ours Level_03 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612187: storey ours Level_04 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612188: storey ours Level_04 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612189: storey ours Level_04 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612190: storey ours Level_04 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612191: storey ours Level_04 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612192: storey ours Level_04 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612298: storey ours Level_05 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612436: storey ours Level_05 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612490: storey ours Level_05 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612544: storey ours Level_05 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612598: storey ours Level_05 Revit None
+  Turning Free Space:Turning Free Space 1500 mm:3612654: storey ours Level_05 Revit None
+spaces in both: storey equal 263, different 42
+rooms: 305; Revit's number and name 304, different 1, not in the reference 0
+exit 0

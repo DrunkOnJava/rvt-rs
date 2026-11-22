@@ -1,0 +1,5 @@
+record-box bodies: 0; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+total                              0       0       0       0       0       0       0
+box bodies by class and reason (SavedMeshRefusal, #1645): 0 of 0 have one
+exit 0

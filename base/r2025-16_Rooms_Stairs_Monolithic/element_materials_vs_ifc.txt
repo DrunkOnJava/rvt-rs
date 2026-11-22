@@ -1,0 +1,8 @@
+elements Revit gives materials: 21
+of those, rvt-rs gives materials: 18, the same set: 18
+different sets by Revit entity: {}
+no materials from rvt-rs, by Revit entity: {'IfcRailing': 2, 'IfcStairFlight': 1}
+different sets, how: none
+elements sharing an earlier element's Tag, not compared, rvt-rs by entity: {}
+elements sharing an earlier element's Tag, not compared, Revit by entity: {'IfcSlab': 1}
+exit 0

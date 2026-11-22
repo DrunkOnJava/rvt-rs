@@ -1,0 +1,11 @@
+arity:
+  schema: IFC4
+  PredefinedType populated: IfcBeam=8, IfcColumn=5, IfcMember=414, IfcSlab=2, IfcWall=14
+  placement composition: 36 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+validate:
+findings 0
+rules:
+findings 0
+property sets:
+sets 1037 on 526 objects and types
+findings 0

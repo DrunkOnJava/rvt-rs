@@ -1,0 +1,36 @@
+record-box bodies: 99; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcSanitaryTerminal               50       0       0       0      50       0       0    0.095
+        17  IDO Glow washbasin 11461_11561:PA-4
+        15  Sense_Public_allas:PA-3.LE
+        10  Shower_columns_15486:SU-1
+IfcFurniture                      30       0       0       0      30       0       0    0.062
+        30  Stay_Wall_Mounted_:VAR-1
+IfcStair                          14       0       0       0       0       0      14      nan
+IfcStairFlight                     2       0       0       0       2       0       0    0.034
+         2  Monolithic Run:Monolithic Run
+IfcCurtainWall                     1       0       0       0       0       0       1      nan
+IfcPlate                           1       0       0       1       0       0       0    0.652
+         1  System Panel:Lasitettu
+IfcRailing                         1       0       0       0       1       0       0    0.001
+         1  Railing:KAI-6
+total                             99       0       0       1      83       0      15
+box bodies by class and reason (SavedMeshRefusal, #1645): 99 of 99 have one
+IfcSanitaryTerminal               50
+        17  partial: unsupported parametric profile curve GHermiteSpline
+        15  partial: a trim loop does not close in the surface's parameters; disconnected UV boundary; multiple cylinder trim loops unsupported; unsupported surface HermiteSurf
+        10  partial: scaled instance mode is not qualified
+         8  partial: unsupported surface HermiteSurf
+IfcFurniture                      30
+        30  partial: multiple cylinder trim loops unsupported
+IfcStair                          14
+        14  not_a_candidate: whole_drawn_by_its_parts
+IfcStairFlight                     2
+         2  partial: unsupported parametric profile curve GHermiteSpline
+IfcCurtainWall                     1
+         1  not_a_candidate: whole_drawn_by_its_parts
+IfcPlate                           1
+         1  partial: boundary sample was discarded by triangulation
+IfcRailing                         1
+         1  partial: unsupported surface HermiteSurf
+exit 0

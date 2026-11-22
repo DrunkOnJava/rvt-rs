@@ -1,0 +1,10 @@
+openings in Revit's export: 455; in rvt-rs's: 455; both: 455
+  IfcDoor over 1 ft: 6
+  IfcDoor within 0.001 ft: 183
+  IfcDoor within 1.0 ft: 1
+  IfcWindow within 0.001 ft: 265
+unfilled openings in Revit's export: 211; in rvt-rs's: 157; both: 155
+  IfcSlab within 0.001 ft: 35
+  IfcWall over 1 ft: 2
+  IfcWall within 0.001 ft: 118
+exit 0

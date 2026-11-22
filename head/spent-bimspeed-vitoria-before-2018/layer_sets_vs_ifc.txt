@@ -1,0 +1,22 @@
+IfcOpenShell cannot mesh: RuntimeError: No suitable IfcRepresentation found
+      4  IfcOpenShell cannot mesh Revit's element
+    511  Revit's usage: layer names equal
+      4  layer count: Revit's export names no layers
+    545  layer names: Revit's, in Revit's order
+      4  layer sets whose count differs from Revit's
+    163  layer sets written
+    159  positions not comparable
+    163  set name differs from Revit's Family:Type
+  whole layer sets within 0.001 ft of Revit's: 159 of 159
+  whole layer sets within 0.01 ft of Revit's: 159 of 159
+  whole layer sets within 0.1 ft of Revit's: 159 of 159
+  worst [(0.0, '554977', 'IfcWall'), (0.0, '554847', 'IfcWall'), (0.0, '574743', 'IfcWall'), (0.0, '529868', 'IfcWall'), (0.0, '706847', 'IfcWall')]
+  layers placed by Revit's own usage within 0.001 ft of Revit's: 145 of 152
+  layers placed by Revit's own usage within 0.01 ft of Revit's: 145 of 152
+  layers placed by Revit's own usage within 0.1 ft of Revit's: 145 of 152
+  worst [(1.0335, '563982', 'IfcSlab'), (1.0335, '572814', 'IfcSlab'), (1.4009, '1166427', 'IfcSlab'), (2.1063, '558069', 'IfcSlab'), (2.851, '1166537', 'IfcSlab')]
+  Revit's own usage against Revit's own body: sets within 0.001 ft of Revit's: 150 of 152
+  Revit's own usage against Revit's own body: sets within 0.01 ft of Revit's: 150 of 152
+  Revit's own usage against Revit's own body: sets within 0.1 ft of Revit's: 150 of 152
+  worst [(0.0, '572762', 'IfcSlab'), (0.0, '529725', 'IfcWall'), (0.0, '530600', 'IfcWall'), (1.0728, '558069', 'IfcSlab'), (1.4501, '1166537', 'IfcSlab')]
+exit 0

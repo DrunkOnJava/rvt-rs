@@ -1,0 +1,11 @@
+Revit types 123 elements; 123 of them are in ours
+typed in ours: 123 of 123
+  entity agrees: 123 of 123
+  name agrees: 123 of 123
+  tag agrees: 123 of 123
+  global_id agrees: 123 of 123
+typed in ours but not in Revit's export: 0
+untyped in ours, by class: {}
+TypeName carried: 123 of 123; equal to Revit's type: 123
+type objects in ours: 22
+exit 0

@@ -1,0 +1,10 @@
+record-box bodies: 2; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcFurniture                       2       0       0       0       2       0       0    0.111
+         2  Chair, Dining-NON-COLLECTUS:-
+total                              2       0       0       0       2       0       0
+box bodies by class and reason (SavedMeshRefusal, #1645): 2 of 2 have one
+IfcFurniture                       2
+         1  partial: a trim loop does not close in the surface's parameters; disconnected UV boundary
+         1  partial: disconnected UV boundary
+exit 0

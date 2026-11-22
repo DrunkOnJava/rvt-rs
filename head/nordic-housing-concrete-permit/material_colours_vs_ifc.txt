@@ -1,0 +1,5 @@
+IfcMaterial: rvt-rs 168, Revit 74
+Revit's styled materials: 73; same colour and transparency: 72
+different: [('Smooth - Dark Forest Green', (0, 0, 0, 0.0), (0, 208, 0, 0.0))]
+unstyled or absent in rvt-rs: []
+exit 0

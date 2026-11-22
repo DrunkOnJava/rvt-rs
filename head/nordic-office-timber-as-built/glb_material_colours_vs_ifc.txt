@@ -1,0 +1,10 @@
+63 ('IfcBeam', 'name =', 'colour =')
+288 ('IfcColumn', 'name =', 'colour =')
+33 ('IfcDoor', 'name =', 'colour =')
+17 ('IfcFurniture', 'name =', 'colour =')
+7876 ('IfcMember', 'name =', 'colour =')
+269 ('IfcPlate', 'name =', 'colour =')
+48 ('IfcSanitaryTerminal', 'name =', 'colour =')
+276 ('revit', 'multi')
+17 ('revit', 'no colour')
+exit 0

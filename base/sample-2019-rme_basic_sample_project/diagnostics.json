@@ -1,0 +1,317 @@
+{
+  "schema_version": 1,
+  "mode": "default",
+  "input": {
+    "revit_version": 2019,
+    "build": "20180123_1515(x64)",
+    "original_path": "rme_basic_sample_project.rvt",
+    "project_name": "rme_basic_sample_project",
+    "stream_count": 13,
+    "has_basic_file_info": true,
+    "has_part_atom": false,
+    "has_formats_latest": true,
+    "has_global_latest": true,
+    "release_support": {
+      "status": "experimental",
+      "capability": "element-records-revit-2019-2022"
+    }
+  },
+  "decoded": {
+    "production_walker_elements": 6944,
+    "diagnostic_proxy_candidates": 0,
+    "arcwall_records": 0,
+    "class_counts": {},
+    "production_class_counts": {
+      "Ceiling": 43,
+      "Column": 4,
+      "Conduit": 20,
+      "ConduitFitting": 14,
+      "CurtainWall": 31,
+      "CurtainWallMullion": 1450,
+      "CurtainWallPanel": 629,
+      "Door": 124,
+      "Duct": 724,
+      "DuctFitting": 935,
+      "DuctTerminal": 309,
+      "ElectricalEquipment": 29,
+      "ElectricalFixture": 424,
+      "Floor": 21,
+      "GenericModel": 82,
+      "LightingDevice": 63,
+      "LightingFixture": 410,
+      "Mass": 6,
+      "Material": 175,
+      "MechanicalEquipment": 47,
+      "Pipe": 491,
+      "PipeFitting": 535,
+      "PlumbingFixture": 11,
+      "Railing": 14,
+      "Room": 76,
+      "SpecialtyEquipment": 3,
+      "Stair": 8,
+      "StructuralColumn": 131,
+      "Wall": 135
+    },
+    "parameter_value_count": 18489,
+    "mean_element_confidence": 0.8024935,
+    "elements_below_min_confidence": 0,
+    "min_element_confidence": 0.55,
+    "recovered_unit_identifiers": [],
+    "unknown_unit_identifiers": [],
+    "element_record_stages": {
+      "layout_release": 2019,
+      "total": {
+        "markers": 11222,
+        "declared_id": 11218,
+        "frame_outside_stream": 0,
+        "category_out_of_range": 121,
+        "box_not_valid": 0,
+        "no_declared_id": 4,
+        "records": 11097,
+        "id_from_enclosing_record": 0,
+        "not_placed_instances": 1362,
+        "placed_instances": 9735,
+        "without_volume": 1558,
+        "with_volume": 8177,
+        "superseded": 0,
+        "nested_components": 0,
+        "selected": 8177,
+        "in_non_primary_design_option": 0,
+        "not_in_export_phase": 0,
+        "nested_in_door_or_window": 0,
+        "category_not_exported": 1408,
+        "handed_to_export": 6769,
+        "stream_not_read": 0
+      },
+      "streams": {
+        "Partitions/8": {
+          "markers": 11222,
+          "declared_id": 11218,
+          "frame_outside_stream": 0,
+          "category_out_of_range": 121,
+          "box_not_valid": 0,
+          "no_declared_id": 4,
+          "records": 11097,
+          "id_from_enclosing_record": 0,
+          "not_placed_instances": 1362,
+          "placed_instances": 9735,
+          "without_volume": 1558,
+          "with_volume": 8177,
+          "superseded": 0,
+          "nested_components": 0,
+          "selected": 8177,
+          "in_non_primary_design_option": 0,
+          "not_in_export_phase": 0,
+          "nested_in_door_or_window": 0,
+          "category_not_exported": 1408,
+          "handed_to_export": 6769,
+          "stream_not_read": 0
+        }
+      },
+      "written_to_model": 6763,
+      "id_already_held": 0,
+      "below_min_confidence": 0,
+      "not_written_by_class": {
+        "Mass": 6
+      }
+    }
+  },
+  "exported": {
+    "total_entities": 52856,
+    "building_elements": 6763,
+    "building_elements_with_geometry": 6732,
+    "building_elements_carried_by_parts": 31,
+    "by_ifc_type": {
+      "IFCAIRTERMINAL": 309,
+      "IFCBUILDINGELEMENTPROXY": 648,
+      "IFCCABLECARRIERFITTING": 14,
+      "IFCCABLECARRIERSEGMENT": 20,
+      "IFCCOLUMN": 135,
+      "IFCCOVERING": 43,
+      "IFCCURTAINWALL": 31,
+      "IFCDOOR": 124,
+      "IFCDUCTFITTING": 935,
+      "IFCDUCTSEGMENT": 724,
+      "IFCLIGHTFIXTURE": 410,
+      "IFCMEMBER": 1450,
+      "IFCPIPEFITTING": 535,
+      "IFCPIPESEGMENT": 491,
+      "IFCPLATE": 629,
+      "IFCRAILING": 14,
+      "IFCSANITARYTERMINAL": 11,
+      "IFCSLAB": 21,
+      "IFCSPACE": 76,
+      "IFCSTAIR": 8,
+      "IFCWALL": 135
+    },
+    "classification_count": 0,
+    "unit_assignment_count": 0,
+    "material_count": 175,
+    "storey_count": 4,
+    "storey_names": [
+      "Level 1",
+      "Level 2",
+      "Level 3",
+      "Roof Level"
+    ],
+    "storey_elevations_feet": [
+      0.30896239133315895,
+      12.46719160104952,
+      23.95013123359545,
+      35.761154855642694
+    ],
+    "storey_bound_elements": 6663,
+    "material_names_sample": [
+      "Default",
+      "Default Wall",
+      "Default Roof",
+      "Glass",
+      "Phase - Demo",
+      "Phase - Exist",
+      "Phase - Temporary",
+      "Masonry - Brick",
+      "Masonry - Concrete Block",
+      "Metal - Stud Layer",
+      "Wood - Sheathing - plywood",
+      "Misc. Air Layers - Air Space"
+    ],
+    "layered_element_count": 197,
+    "body_sources": {
+      "native_duct_line": 724,
+      "partition_element_record_bbox": 5382,
+      "partition_element_record_join_trimmed": 166,
+      "partition_pipe_axis": 491
+    },
+    "bounding_box_bodies": 5355,
+    "bounding_box_spaces": 49,
+    "area_body_refusals": {},
+    "slab_shape_refusals": {},
+    "saved_mesh_refusals": {
+      "not_offered: release_outside_2023_to_2027": 5355
+    },
+    "wall_base_refusals": {},
+    "wall_end_refusals": {},
+    "wall_end_sources": {},
+    "wall_top_stubs_cut": {},
+    "wall_profile_top_sources": {},
+    "wall_profile_cuts": {},
+    "wall_base_sources": {},
+    "wall_ends_order_dependent": 0,
+    "wall_profile_sources": {},
+    "wall_profile_refusals": {},
+    "resolved_outline_spaces": 0,
+    "edge_outline_spaces": 0,
+    "approximate_outline_spaces": 1,
+    "space_kinds": {
+      "room": 76
+    },
+    "spaces_without_kind": 0,
+    "wall_cut_openings_left_out": {
+      "curtain_wall_box_not_read": 3
+    },
+    "wall_end_reads_unmarked": {},
+    "wall_profile_height_checks": {},
+    "port_joins_left_out": {
+      "connector_named_with_conflicting_partners": 10
+    },
+    "body_pieces_folded": {}
+  },
+  "skipped": [
+    {
+      "reason": "unsupported_geometry_unresolved_host",
+      "count": 17,
+      "classes": {
+        "IFCDOOR": 17
+      },
+      "sample_names": [
+        "Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas:573615",
+        "Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas:573637",
+        "Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas:573681",
+        "Türelement 1-flg - Drehflügel - Glas:Türelement 1-flg - Drehflügel - Glas:575891",
+        "Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas:575897",
+        "Türelement 2-flg - Drehflügel - Glas:Türelement 2-flg - Drehflügel - Glas:575953",
+        "Türelement 1-flg - Drehflügel - Glas:Türelement 1-flg - Drehflügel - Glas:576667",
+        "Türelement 1-flg - Drehflügel - Glas:Türelement 1-flg - Drehflügel - Glas:576692",
+        "Türelement 1-flg - Drehflügel - Glas:Türelement 1-flg - Drehflügel - Glas:576717",
+        "Türelement 1-flg - Drehflügel - Glas:Türelement 1-flg - Drehflügel - Glas:576742",
+        "Türelement 1-flg - Drehflügel - Glas:Türelement 1-flg - Drehflügel - Glas:576766",
+        "Türelement 1-flg - Drehflügel - Glas:Türelement 1-flg - Drehflügel - Glas:576790"
+      ]
+    },
+    {
+      "reason": "unsupported_geometry_missing_level",
+      "count": 100,
+      "classes": {
+        "IFCAIRTERMINAL": 7,
+        "IFCBUILDINGELEMENTPROXY": 85,
+        "IFCRAILING": 8
+      },
+      "sample_names": [
+        "M_Return Grille - Rectangular - Hosted:Standard:411597",
+        "M_Return Grille - Rectangular - Hosted:Standard:411600",
+        "M_Return Grille - Rectangular - Hosted:Standard:411656",
+        "M_Return Grille - Rectangular - Hosted:Standard:411657",
+        "M_Return Grille - Rectangular - Hosted:Standard:411674",
+        "M_Return Grille - Rectangular - Hosted:Standard:412887",
+        "M_Return Grille - Rectangular - Hosted:Standard:412889",
+        "Railing-576231",
+        "Railing-576235",
+        "Railing-576361",
+        "Railing-576365",
+        "Railing-576957"
+      ]
+    },
+    {
+      "reason": "element_record_frame_stopped",
+      "count": 1683,
+      "classes": {
+        "category_out_of_range": 121,
+        "no_declared_id": 4,
+        "without_volume": 1558
+      },
+      "sample_names": []
+    }
+  ],
+  "unsupported_features": [
+    "project_units_from_revit_bytes",
+    "partial_element_geometry",
+    "revit_compound_assemblies_and_walltype_widths",
+    "typed_door_window_discrimination_and_host_binding",
+    "schema_field_wall_instances",
+    "partial_revit_element_parameters"
+  ],
+  "warnings": [
+    "Revit 2019: elements come from their records with their ElementId, category and bounding box, doors and windows with their host wall, rooms with their outline, and, where its Levels are read, each element on the storey of the Level its record names; family instances, walls, floors and roofs carry their family and type names, and family instances their type's materials. Layers become material layer sets where their materials are named, a layer that takes its category's material taking the object styles' one, and a wall at an angle is drawn along its location line and joined by its join lists where those are read and its record box closes on the line's rectangle, and any other wall keeps its record box, cut back at its joins. The export phase and design options are applied for 2019: elements that do not exist in the last phase or are in a non-primary design option are left out. A wall's joined-wall lists, end steps, profile openings and `Length`, parameters and \"Export to IFC As\" overrides are not read for 2019, and components nested in doors and windows are left out.",
+    "Revit 2019 is read experimentally (element-records-revit-2019-2022 in docs/support-matrix.json): too few files of this release are measured against Revit's own export to rely on its elements, which may be missing, extra or of another class.",
+    "Unsupported or incomplete geometry was reported: unsupported_geometry_unresolved_host=17, unsupported_geometry_missing_level=100.",
+    "No Revit display units were recovered; the IFC declares the SI units its values are written in.",
+    "4 building storey name(s) came from partition Level records; 4568 of the 4668 element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59) and 100 reached no storey and are contained in the building."
+  ],
+  "confidence": {
+    "level": "geometry",
+    "score": 0.9,
+    "has_project_metadata": true,
+    "has_typed_elements": true,
+    "has_geometry": true,
+    "has_diagnostic_proxies": false,
+    "warning_count": 5,
+    "unexported_element_records": 0
+  },
+  "source_coverage": {
+    "status": "measured",
+    "notes": "Measured from export diagnostics counts only (production walker, exported building elements, ElementIds declared by Global/ElemTable). Not a converter-grade completeness claim.",
+    "decoded_element_fraction": 0.25277567,
+    "exported_element_fraction": 0.97393435,
+    "geometry_element_fraction": 0.9954162
+  },
+  "formats_latest_integrity": {
+    "stream": "Formats/Latest",
+    "stored_bytes": 154295,
+    "inflated_bytes": 428839,
+    "page_boundary_detected": true,
+    "checksum_tail_stripping": "enabled",
+    "integrity_status": "ok",
+    "schema_scan_truncated": false,
+    "schema_scanned_bytes": 428839
+  }
+}

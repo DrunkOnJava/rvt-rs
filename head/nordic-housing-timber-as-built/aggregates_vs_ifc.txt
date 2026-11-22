@@ -1,0 +1,9 @@
+     27  IfcCurtainWall: neither aggregates
+     76  IfcDoor: neither aggregates
+    452  IfcMember: same whole
+     78  IfcPlate: same whole
+     33  IfcRailing: neither aggregates
+     23  IfcRailing: same whole
+     11  IfcStairFlight: same whole
+     64  IfcWindow: neither aggregates
+exit 0

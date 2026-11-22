@@ -1,0 +1,9 @@
+roofs in Revit's export with a body: 5; rvt-rs writes one for 5 of them
+vertices within 0.001 ft and volume within 0.0001 of Revit's: 4 of 5
+every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 5 of 5
+  1538082: match, Revit 8 vertices, farthest 2.24e-06 ft, from rvt-rs's surface at most 1.68e-06 ft, volume rvt-rs 32.368346 ft3, Revit 32.368358 ft3
+  1551460: match, Revit 16 vertices, farthest 2.24e-06 ft, from rvt-rs's surface at most 2.05e-06 ft, volume rvt-rs 397.567028 ft3, Revit 397.567249 ft3
+  1567719: match, Revit 30 vertices, farthest 3.74e-06 ft, from rvt-rs's surface at most 2.69e-06 ft, volume rvt-rs 1147.994279 ft3, Revit 1147.995324 ft3
+  1567730: match, Revit 10 vertices, farthest 2.24e-06 ft, from rvt-rs's surface at most 1.14e-06 ft, volume rvt-rs 733.950609 ft3, Revit 733.949998 ft3
+  1627602: differs, Revit 24 vertices, farthest 0.033 ft, from rvt-rs's surface at most 2.57e-06 ft, volume rvt-rs 33.656735 ft3, Revit 33.588523 ft3
+exit 0

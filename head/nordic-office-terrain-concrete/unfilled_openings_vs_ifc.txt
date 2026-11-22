@@ -1,0 +1,16 @@
+unfilled openings in Revit's export: 1; in rvt-rs's: 1; both: 1
+none in IfcWall:
+  revit: 1
+  written: 1
+  box compared: 1
+  box within 0.01 ft: 1
+  volume compared: 1
+  volume within 0.01 %: 1
+  Name equal: 1
+  PredefinedType equal: 1
+  Pset_OpeningElementCommon.Reference equal: 1
+  Pset_EnvironmentalImpactIndicators.Reference equal: 1
+written that Revit's export does not: 0
+written that Revit's export does not, where its export is IFC2X3, counted apart (an IFC2X3 view removes no value): 0
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+exit 0

@@ -1,0 +1,32 @@
+IfcStairFlight in Revit's export with a body: 6; rvt-rs writes one for 6 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 0 of 6
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 1 of 6
+    566533: differs, Revit 117 vertices, farthest 7.5 ft, from rvt-rs's surface at most 3.28 ft, volume rvt-rs 768.899176 ft3, Revit 52.830247 ft3, z rvt-rs 14.4357 to 24.2782, Revit 14.4357 to 23.7314
+      farthest Revit vertex (6.5419, -7.8646, 19.8779), nearest rvt-rs vertex (9.8227, -2.7464, 24.2782) of 8
+    569255: differs, Revit 28 vertices, farthest 2.48 ft, from rvt-rs's surface at most 1.94e-06 ft, volume rvt-rs 389.828718 ft3, Revit 21.014765 ft3, z rvt-rs 0.0000 to 14.4357, Revit 0.0000 to 2.2209
+      farthest Revit vertex (2.4736, -21.9066, 1.6657), nearest rvt-rs vertex (2.4736, -20.0693, 0.0) of 8
+    569667: differs, Revit 133 vertices, farthest 9.57 ft, from rvt-rs's surface at most 3.28 ft, volume rvt-rs 1420.090329 ft3, Revit 61.777742 ft3, z rvt-rs 1.1102 to 15.5459, Revit 2.2009 to 13.8803
+      farthest Revit vertex (5.7545, -8.7832, 7.7729), nearest rvt-rs vertex (2.4736, -2.7464, 1.1102) of 8
+    572179: differs, Revit 117 vertices, farthest 7.5 ft, from rvt-rs's surface at most 3.28 ft, volume rvt-rs 768.899176 ft3, Revit 52.830247 ft3, z rvt-rs 24.2782 to 34.1207, Revit 24.2782 to 33.5739
+      farthest Revit vertex (6.5419, -7.8646, 29.7204), nearest rvt-rs vertex (9.8227, -2.7464, 34.1207) of 8
+    572318: differs, Revit 117 vertices, farthest 7.5 ft, from rvt-rs's surface at most 3.28 ft, volume rvt-rs 768.899176 ft3, Revit 52.830247 ft3, z rvt-rs 34.1207 to 43.9633, Revit 34.1207 to 43.4164
+      farthest Revit vertex (6.5419, -7.8646, 39.5629), nearest rvt-rs vertex (9.8227, -2.7464, 43.9633) of 8
+    572448: differs, Revit 117 vertices, farthest 7.5 ft, from rvt-rs's surface at most 3.28 ft, volume rvt-rs 768.899176 ft3, Revit 52.830247 ft3, z rvt-rs 43.9633 to 53.8058, Revit 43.9633 to 53.2590
+      farthest Revit vertex (6.5419, -7.8646, 49.4054), nearest rvt-rs vertex (9.8227, -2.7464, 53.8058) of 8
+IfcStair in Revit's export with a body: 6; rvt-rs writes one for 6 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 0 of 6
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 1 of 6
+    566529: differs, Revit 726 vertices, farthest 7.5 ft, from rvt-rs's surface at most 3.6 ft, volume rvt-rs 768.899176 ft3, Revit 53.903965 ft3, z rvt-rs 14.4357 to 24.2782, Revit 14.4357 to 27.8795
+      farthest Revit vertex (6.5419, -7.8646, 19.8779), nearest rvt-rs vertex (9.8227, -2.7464, 24.2782) of 8
+    569234: differs, Revit 28 vertices, farthest 2.48 ft, from rvt-rs's surface at most 1.94e-06 ft, volume rvt-rs 389.828718 ft3, Revit 21.014765 ft3, z rvt-rs 0.0000 to 14.4357, Revit 0.0000 to 2.2209
+      farthest Revit vertex (2.4736, -21.9066, 1.6657), nearest rvt-rs vertex (2.4736, -20.0693, 0.0) of 8
+    569656: differs, Revit 1527 vertices, farthest 9.62 ft, from rvt-rs's surface at most 3.28 ft, volume rvt-rs 1420.090329 ft3, Revit 65.015475 ft3, z rvt-rs 1.1102 to 15.5459, Revit 2.2009 to 18.0367
+      farthest Revit vertex (5.7121, -9.4312, 7.2176), nearest rvt-rs vertex (2.4736, -2.7464, 1.1102) of 8
+    572176: differs, Revit 726 vertices, farthest 7.5 ft, from rvt-rs's surface at most 3.6 ft, volume rvt-rs 768.899176 ft3, Revit 53.903965 ft3, z rvt-rs 24.2782 to 34.1207, Revit 24.2782 to 37.7220
+      farthest Revit vertex (6.5419, -7.8646, 29.7204), nearest rvt-rs vertex (9.8227, -2.7464, 34.1207) of 8
+    572315: differs, Revit 726 vertices, farthest 7.5 ft, from rvt-rs's surface at most 3.6 ft, volume rvt-rs 768.899176 ft3, Revit 53.903965 ft3, z rvt-rs 34.1207 to 43.9633, Revit 34.1207 to 47.5645
+      farthest Revit vertex (6.5419, -7.8646, 39.5629), nearest rvt-rs vertex (9.8227, -2.7464, 43.9633) of 8
+    572445: differs, Revit 726 vertices, farthest 7.5 ft, from rvt-rs's surface at most 3.6 ft, volume rvt-rs 768.899176 ft3, Revit 53.903965 ft3, z rvt-rs 43.9633 to 53.8058, Revit 43.9633 to 57.4070
+      farthest Revit vertex (6.5419, -7.8646, 49.4054), nearest rvt-rs vertex (9.8227, -2.7464, 53.8058) of 8
+IfcSlab .LANDING. in Revit's export with a body: 0; rvt-rs writes one for 0 of them
+exit 0

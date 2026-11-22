@@ -1,0 +1,10 @@
+68 floors, roofs and ceilings drawn in layers in the GLB
+     68  IFCSLAB in both
+     68  compared
+  layer bottoms and tops within 0.001 ft: 68 of 68
+  layer bottoms and tops within 0.01 ft: 68 of 68
+  layer bottoms and tops within 0.1 ft: 68 of 68
+  max 0.0000 ft; worst [(np.float64(3.3333333817608946e-06), 70966, 'IFCSLAB'), (np.float64(3.3333333817608946e-06), 71007, 'IFCSLAB'), (np.float64(3.3333333817608946e-06), 71048, 'IFCSLAB'), (np.float64(3.338300416544371e-06), 71089, 'IFCSLAB'), (np.float64(3.338300416544371e-06), 71130, 'IFCSLAB')]
+compared layers' colours against Revit's surface styles:
+     69  same
+exit 0

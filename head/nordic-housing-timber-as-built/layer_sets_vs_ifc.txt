@@ -1,0 +1,15 @@
+   1313  layer names: Revit's, in Revit's order
+      9  layer names: none written
+    464  layer sets written
+    312  positions compared
+    152  positions not comparable
+    464  set name = Revit's Family:Type
+  layer spans within 0.001 ft of Revit's: 307 of 312
+  layer spans within 0.01 ft of Revit's: 307 of 312
+  layer spans within 0.1 ft of Revit's: 309 of 312
+  worst [(0.0656, '1407283', 'IfcSlab'), (0.0656, '1683955', 'IfcSlab'), (0.3117, '1457056', 'IfcSlab'), (0.3117, '1551639', 'IfcSlab'), (0.3117, '1552573', 'IfcSlab')]
+  whole layer sets within 0.001 ft of Revit's: 464 of 464
+  whole layer sets within 0.01 ft of Revit's: 464 of 464
+  whole layer sets within 0.1 ft of Revit's: 464 of 464
+  worst [(0.0, '2291010', 'IfcStair'), (0.0, '2291067', 'IfcStair'), (0.0, '2334612', 'IfcWall'), (0.0, '1566928', 'IfcWall'), (0.0, '1566926', 'IfcWall')]
+exit 0

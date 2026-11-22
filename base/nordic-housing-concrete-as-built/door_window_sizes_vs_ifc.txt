@@ -1,0 +1,23 @@
+IfcDoor: 74 matched by Tag, OverallWidth and OverallHeight equal 65  differ 0  $ 9
+IfcWindow: 64 matched by Tag, OverallWidth and OverallHeight equal 53  differ 11  $ 0
+  IfcWindow 1553512: Revit 2.6247 x 6.1340 ft, rvt-rs 2.5591 x 5.8399 ft
+  IfcWindow 1553513: Revit 3.5105 x 6.0356 ft, rvt-rs 3.5433 x 5.8399 ft
+  IfcWindow 1553514: Revit 3.5105 x 6.0356 ft, rvt-rs 3.5433 x 5.8399 ft
+  IfcWindow 1666164: Revit 3.3465 x 7.0810 ft, rvt-rs 3.3793 x 6.8241 ft
+  IfcWindow 1670074: Revit 3.2808 x 3.5705 ft, rvt-rs 3.2152 x 3.2152 ft
+  IfcWindow 1670341: Revit 3.2808 x 3.5705 ft, rvt-rs 3.2152 x 3.2152 ft
+  IfcWindow 1670408: Revit 3.2808 x 3.5705 ft, rvt-rs 3.2152 x 3.2152 ft
+  IfcWindow 2090093: Revit 3.3465 x 7.0810 ft, rvt-rs 3.3793 x 6.8241 ft
+  IfcWindow 2090101: Revit 3.3465 x 7.0810 ft, rvt-rs 3.3793 x 6.8241 ft
+  IfcWindow 2090194: Revit 3.3465 x 7.0810 ft, rvt-rs 3.3793 x 6.8241 ft
+  IfcWindow 2090290: Revit 3.3465 x 7.0810 ft, rvt-rs 3.3793 x 6.8241 ft
+  IfcDoor 1526131: Revit 7.8740 x 7.4803 ft, rvt-rs $
+  IfcDoor 1568069: Revit 4.1758 x 4.1758 ft, rvt-rs $
+  IfcDoor 1568157: Revit 4.1758 x 4.1758 ft, rvt-rs $
+  IfcDoor 1666619: Revit 7.8740 x 6.8898 ft, rvt-rs $
+  IfcDoor 2138273: Revit 7.8740 x 7.4803 ft, rvt-rs $
+  IfcDoor 2138730: Revit 7.8740 x 7.4803 ft, rvt-rs $
+  IfcDoor 2138733: Revit 7.8740 x 7.4803 ft, rvt-rs $
+  IfcDoor 2138746: Revit 7.8740 x 7.4803 ft, rvt-rs $
+  IfcDoor 2138747: Revit 7.8740 x 7.4803 ft, rvt-rs $
+exit 0

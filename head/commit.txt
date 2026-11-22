@@ -1,0 +1,1 @@
+b19b321cb4a14132c6a228193cdc0e7c8f941224 fix(ifc): a mullion turned about its own axis is read along its own Z by the mesh pass, so it gets a Span (#1193)

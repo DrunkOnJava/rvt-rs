@@ -1,0 +1,4 @@
+IfcStairFlight in Revit's export with a body: 0; rvt-rs writes one for 0 of them
+IfcStair in Revit's export with a body: 0; rvt-rs writes one for 0 of them
+IfcSlab .LANDING. in Revit's export with a body: 0; rvt-rs writes one for 0 of them
+exit 0

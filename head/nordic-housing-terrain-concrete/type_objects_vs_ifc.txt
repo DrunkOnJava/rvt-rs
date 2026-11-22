@@ -1,0 +1,12 @@
+Revit types 546 elements; 501 of them are in ours
+typed in ours: 501 of 501
+  entity agrees: 498 of 501
+  name agrees: 0 of 501
+  tag agrees: 501 of 501
+  global_id agrees: 488 of 501
+typed in ours but not in Revit's export: 3
+untyped in ours, by class: {}
+disagreements: {('name', 'IfcBuildingElementProxy'): 1, ('name', 'IfcSlab'): 2, ('name', 'IfcWall'): 14, ('name', 'IfcWasteTerminal'): 25, ('entity', 'IfcFlowTerminal'): 3, ('name', 'IfcFlowTerminal'): 3, ('name', 'IfcGeographicElement'): 23, ('name', 'IfcStair'): 1, ('name', 'IfcStairFlight'): 1, ('name', 'IfcColumn'): 5, ('global_id', 'IfcColumn'): 5, ('name', 'IfcBeam'): 8, ('global_id', 'IfcBeam'): 8, ('name', 'IfcMember'): 414, ('name', 'IfcCurtainWall'): 4}
+TypeName carried: 501 of 501; equal to Revit's type: 501
+type objects in ours: 69
+exit 0

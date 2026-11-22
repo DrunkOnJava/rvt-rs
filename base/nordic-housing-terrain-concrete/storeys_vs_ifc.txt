@@ -1,0 +1,9 @@
+504 elements, 19 not on a storey
+     16  IfcWasteTerminal
+      3  IfcBuildingElementProxy
+against Revit's export:
+    482  same storey as Revit's
+     19  on no storey; Revit's is a storey
+      3  a different storey from Revit's
+  different, by type: IfcRailing 2, IfcRamp 1
+exit 0

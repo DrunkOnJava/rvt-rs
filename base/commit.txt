@@ -1,0 +1,1 @@
+ac1ff346888559160ef94e07245efb831f02a72b feat(ifc): a column that names three or more Levels, and a footing that names none, are put in a storey on Revit 2027, as in the one structural model that holds them (#1842) (RE-469) (#2013)

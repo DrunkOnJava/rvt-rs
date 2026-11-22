@@ -1,0 +1,8 @@
+elements: {"GlobalId = Revit's": 10560}
+storeys: 10 of 10 equal Revit's
+storeys whose GlobalId is one of Revit's: 10 of 10
+IfcProject: 1 of 1 equal Revit's
+IfcSite: 1 of 1 equal Revit's
+IfcBuilding: 1 of 1 equal Revit's
+spaces: 305 of 305 equal one of Revit's
+exit 0

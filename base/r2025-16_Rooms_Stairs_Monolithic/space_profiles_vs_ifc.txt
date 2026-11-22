@@ -1,0 +1,13 @@
+space profiles: matched by globalid
+space profiles: IfcSpace in rvt-rs 2, in Revit 2, with a body 2 and 2
+space profiles: in both 2, only in rvt-rs 0, only in Revit 0
+space profiles: only in Revit and in rvt-rs without a body 0, paired where the Revit top surface has no area 0
+space profiles: area within 0.1% 2, within 1% 2, off 0
+space profiles: outline within 0.01 ft 2, off 0
+space profiles: vertices within 0.01 ft 2, off 0
+space profiles: boundary within 0.01 ft 2, off 0
+space profiles: area within 0.1% and outline within 0.01 ft 2
+space profiles: lowest and highest vertex within 0.01 ft 2, off 0
+space profiles: rvt-rs room stored solid: 2, area within 0.1% 2, outline within 0.01 ft 2, both 2, boundary within 0.01 ft 2
+space profiles: rvt-rs room stored solid height: 2, lowest and highest vertex within 0.01 ft 2
+exit 0
