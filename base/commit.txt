@@ -1,0 +1,1 @@
+8664b94a9287f3f5091a4294b70e7b51b37dcfd6 perf(ifc): rvt-ifc writes the IFC as it builds it, after releasing the file handle (#1075) (#1291)
