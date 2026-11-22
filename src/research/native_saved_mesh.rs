@@ -887,7 +887,34 @@ fn refined_plane_edge(
         samples.len() == original.len(),
         "shared edge sample count mismatch"
     );
-    for (uv, expected) in samples.iter().zip(&original) {
+    // #2085, research branch only (`RVT_2085_PLANE_ANCHOR`): an end sample of the curved face's
+    // that leaves the plane, within `PLANE_ANCHOR_LIMIT` of the plane's own saved sample there,
+    // is taken as that saved sample, which Revit's export holds at a contributor's chairs. The
+    // samples between must still lie on the plane.
+    let last = samples.len() - 1;
+    let anchor = |i: usize| -> Result<Option<[f64; 2]>> {
+        if !plane_anchor() || project(samples[i]).is_ok() {
+            return Ok(None);
+        }
+        let q = evaluate(samples[i])?;
+        let own: [f64; 3] =
+            std::array::from_fn(|k| origin[k] + original[i][0] * x[k] + original[i][1] * y[k]);
+        let apart = (0..3).map(|k| (q[k] - own[k]).powi(2)).sum::<f64>().sqrt();
+        Ok((apart <= PLANE_ANCHOR_LIMIT).then_some(original[i]))
+    };
+    let anchors = [anchor(0)?, anchor(last)?];
+    // The edge's ends, by the curved face's samples: the point an anchor names, else the
+    // sample projected onto the plane.
+    let project_end = |uv: [f64; 2], end: Option<usize>| -> Result<[f64; 2]> {
+        match end.and_then(|e| anchors[e]) {
+            Some(point) => Ok(point),
+            None => project(uv),
+        }
+    };
+    for (i, (uv, expected)) in samples.iter().zip(&original).enumerate() {
+        if (i == 0 && anchors[0].is_some()) || (i == last && anchors[1].is_some()) {
+            continue;
+        }
         ensure!(
             close(project(*uv)?, *expected),
             "shared edge surface samples disagree"
@@ -933,7 +960,20 @@ fn refined_plane_edge(
                 cylinder_envelope(&g.objects[other_surface].fields["m_Envelope"]["m_corners"])?,
             );
         }
-        return refined.into_iter().map(project).collect();
+        let ends = (samples[0], samples[last]);
+        return refined
+            .into_iter()
+            .map(|uv| {
+                let end = if uv == ends.0 {
+                    Some(0)
+                } else if uv == ends.1 {
+                    Some(1)
+                } else {
+                    None
+                };
+                project_end(uv, end)
+            })
+            .collect();
     };
     let knots = if axis == 0 { u_values } else { v_values };
     let lo = start[axis].min(end[axis]);
@@ -953,15 +993,37 @@ fn refined_plane_edge(
         values.len() <= limit.saturating_add(1),
         PLANAR_BUDGET_EXCEEDED
     );
+    let count = values.len();
     values
         .into_iter()
-        .map(|t| {
+        .enumerate()
+        .map(|(i, t)| {
             let mut uv = start;
             uv[axis] = t;
-            project(uv)
+            let end = if i == 0 {
+                Some(0)
+            } else if i + 1 == count {
+                Some(1)
+            } else {
+                None
+            };
+            project_end(uv, end)
         })
         .collect()
 }
+
+/// #2085, research branch only: set `RVT_2085_PLANE_ANCHOR` to take, at a plane's edge
+/// shared with a curved face, an end sample that leaves the plane as the plane's own saved
+/// sample there. Off, every export is as before.
+fn plane_anchor() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("RVT_2085_PLANE_ANCHOR").is_some())
+}
+
+/// How far, in feet, a curved face's end sample may lie from the plane's saved sample that
+/// the anchor takes: just over the 3.88e-4 ft a contributor's chairs part by at their four
+/// plane edges (#2085), fitted to one family on one save.
+const PLANE_ANCHOR_LIMIT: f64 = 3.9e-4;
 fn inside(p: [f64; 2], r: &[[f64; 2]]) -> bool {
     let mut hit = false;
     for i in 0..r.len() {
@@ -1028,7 +1090,14 @@ fn ring_impl(
     let segments = ring_segments(g, index, face, li, refine, limit)?;
     // A loop whose neighbours cannot be read joins as before: the test-only join fails closed.
     let keeps = if coordinated_join() {
-        coordinated_keeps(g, index, face, li).unwrap_or_default()
+        coordinated_keeps(g, index, face, li)
+            .map(|keeps| {
+                keeps
+                    .into_iter()
+                    .map(|(at, (keep, _))| (at, keep))
+                    .collect()
+            })
+            .unwrap_or_default()
     } else {
         BTreeMap::new()
     };
@@ -1038,14 +1107,16 @@ fn ring_impl(
 /// #2085, research branch only: set `RVT_2085_COORDINATED_JOIN` to join the stored gaps two
 /// rings hold where the chair save's measured rule says which end Revit keeps. Off, every
 /// export is as before.
-fn coordinated_join() -> bool {
+pub(crate) fn coordinated_join() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("RVT_2085_COORDINATED_JOIN").is_some())
 }
 
-/// The widest gap the coordinated join takes, in feet: from 1e-4 ft up a piece of edge looks
-/// missing ([`RING_TOUCHING`]).
-const COORDINATED_LIMIT: f64 = 1e-4;
+/// The widest gap the coordinated join takes, in feet: just over the widest of the 40 chair
+/// pairs its conditions take, 3.728e-4 ft apart in model coordinates (#2085, a contributor's
+/// save). It is fitted to one family on one save, and the one pair there where Revit keeps both
+/// ends, at about 1.1e-4 ft, is kept out by the conditions, not by this.
+pub(crate) const COORDINATED_LIMIT: f64 = 3.75e-4;
 
 /// Which end a ring keeps at a gap the coordinated join takes: its own last point (P), or the
 /// next edge's nearer end (Q).
@@ -1120,6 +1191,32 @@ fn other_face(
     Ok(other)
 }
 
+/// `face`'s surface class, and the length of a straight step between two of its parameters:
+/// along the surface on a plane or cylinder ([`step_length`]), and in model coordinates on a
+/// surface the parametric reader evaluates.
+fn face_length(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+) -> Result<(StepLength, String)> {
+    let si = index
+        .resolve(face, &g.objects[face].fields["m_pSurf"])?
+        .context("face surface")?;
+    let class = g.objects[si].class_name.clone();
+    if matches!(class.as_str(), "Plane" | "CylSurf") {
+        return Ok((step_length(g, index, face)?, class));
+    }
+    let surface = crate::native_parametric_surface::ParametricSurface::read(g, si)?;
+    let length: StepLength = Box::new(move |a: [f64; 2], b: [f64; 2]| -> f64 {
+        match (surface.evaluate(a[0], a[1]), surface.evaluate(b[0], b[1])) {
+            (Ok(p), Ok(q)) => (0..3).map(|k| (p[k] - q[k]).powi(2)).sum::<f64>().sqrt(),
+            // A point the surface cannot place is no join.
+            _ => f64::INFINITY,
+        }
+    });
+    Ok((length, class))
+}
+
 /// The gaps of the loop `li` of `face` at or over [`RING_TOUCHING`]: each edge joined at its
 /// nearer end, of the two ways round the first edge the one whose widest gap is smaller.
 fn loop_gaps(
@@ -1141,7 +1238,7 @@ fn loop_gaps(
             point::<2>(&pts[1]["uv"][*side])?,
         ]);
     }
-    let length = step_length(g, index, face)?;
+    let (length, _) = face_length(g, index, face)?;
     let mut best: Option<(f64, Vec<LoopGap>)> = None;
     for reverse in [false, true] {
         let (first, mut last) = if reverse {
@@ -1219,8 +1316,9 @@ fn leads_to_spline(
     Ok(surface.is_some_and(|si| g.objects[si].class_name == "HermiteSurf"))
 }
 
-/// #2085: the gaps of the loop `li` of `face` that the coordinated join takes, and which end
-/// each keeps. A gap qualifies only as the chair save's 40 stored corner pairs do: one of its
+/// #2085: the gaps of the loop `li` of `face` that the coordinated join takes, which end each
+/// keeps and how wide it is. Both rings are cylinders, or both revolved faces (`SurfRev`), the
+/// two kinds measured. A gap qualifies only as the chair save's 48 stored corner pairs do: one of its
 /// edges bounds another face whose loop holds a gap at the same stored end of that edge, the
 /// other edge of each of the two rings leads to a spline face, one ring reads `last/first` (P
 /// the edge's last point, Q the next edge's first) and the other `first/first` or `last/last`,
@@ -1231,8 +1329,18 @@ fn coordinated_keeps(
     index: &PointerIndex<'_>,
     face: usize,
     li: usize,
-) -> Result<BTreeMap<usize, Keep>> {
+) -> Result<BTreeMap<usize, (Keep, f64)>> {
     let mut keeps = BTreeMap::new();
+    let class = |f: usize| -> Result<String> {
+        let si = index
+            .resolve(f, &g.objects[f].fields["m_pSurf"])?
+            .context("face surface")?;
+        Ok(g.objects[si].class_name.clone())
+    };
+    let own = class(face)?;
+    if !matches!(own.as_str(), "CylSurf" | "SurfRev") {
+        return Ok(keeps);
+    }
     for gap in loop_gaps(g, index, face, li)? {
         let mut views = Vec::new();
         for (shared, first, own_other) in [(gap.a, gap.p_first, gap.b), (gap.b, gap.q_first, gap.a)]
@@ -1243,6 +1351,9 @@ fn coordinated_keeps(
             let Some(neighbour) = other_face(g, index, shared, face)? else {
                 continue;
             };
+            if class(neighbour)? != own {
+                continue;
+            }
             for oli in face_loops(g, index, neighbour)? {
                 for t in loop_gaps(g, index, neighbour, oli)? {
                     let (at_end, their_other) = if t.a == shared {
@@ -1271,11 +1382,35 @@ fn coordinated_keeps(
         } else {
             continue;
         };
-        if gap.d.max(view.d) < COORDINATED_LIMIT {
-            keeps.insert(gap.at, keep);
+        let width = gap.d.max(view.d);
+        if width < COORDINATED_LIMIT {
+            keeps.insert(gap.at, (keep, width));
         }
     }
     Ok(keeps)
+}
+
+/// #2085, research branch only: the gaps of the loop `li` of face `fi` that the coordinated
+/// join takes, whether or not it is switched on, each as where it is in the loop (0 the closing
+/// gap), whether it keeps Q (the next edge's end) and its width in the join's own measure. The
+/// export's revolved faces and the #2085 probe call this, so all three read the same rule.
+pub fn coordinated_join_keeps(
+    g: &ObjectGraph,
+    fi: usize,
+    li: usize,
+) -> Result<Vec<(usize, bool, f64)>> {
+    // Only cylinders and revolved faces are measured: the index is not built for the rest.
+    let face = g.objects.get(fi).context("face index")?;
+    let surface = pointer(g, fi, &face.fields["m_pSurf"])?;
+    if !surface.is_some_and(|si| matches!(g.objects[si].class_name.as_str(), "CylSurf" | "SurfRev"))
+    {
+        return Ok(Vec::new());
+    }
+    let index = PointerIndex::new(g);
+    Ok(coordinated_keeps(g, &index, fi, li)?
+        .into_iter()
+        .map(|(at, (keep, width))| (at, keep == Keep::Next, width))
+        .collect())
 }
 /// The length on a plane or cylinder face's surface of a straight step between two points
 /// of its parameters: a chord on a plane, a helix on a cylinder. A step across a cylinder's

@@ -637,9 +637,10 @@ fn loop_polygon(
     surface: &ParametricSurface,
     segments: &[Vec<[f64; 2]>],
     bound: f64,
+    keeps: &Keeps,
 ) -> Result<Vec<[f64; 2]>> {
     if bound > STRICT_JOIN {
-        return loop_polygon_within(surface, segments, bound);
+        return loop_polygon_within(surface, segments, bound, keeps);
     }
     let same =
         |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
@@ -797,7 +798,9 @@ pub fn merged_chord_ends(g: &ObjectGraph, fi: usize) -> Result<(String, usize, u
         } else {
             loop_join_bound(&surface, &segments)?
         };
-        if let Some(ring) = bound.and_then(|b| loop_polygon(&surface, &segments, b).ok()) {
+        if let Some(ring) =
+            bound.and_then(|b| loop_polygon(&surface, &segments, b, &Keeps::new()).ok())
+        {
             for (seg, edge) in segments.iter().zip(&edges) {
                 if edge.is_none() {
                     continue;
@@ -856,7 +859,7 @@ pub fn polygon_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<Polygon
             loop_join_bound(&surface, &segments)?
         };
         let failing = match bound {
-            Some(bound) => loop_polygon(&surface, &segments, bound)
+            Some(bound) => loop_polygon(&surface, &segments, bound, &Keeps::new())
                 .is_err()
                 .then_some(bound),
             None => None,
@@ -946,12 +949,21 @@ fn loop_join_bound(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> R
     Ok(None)
 }
 
-/// `loop_polygon` at a bound looser than `STRICT_JOIN` (#2085 candidate).
+/// #2085, research branch only: the gaps of a loop the coordinated join takes, by where each is
+/// in the loop (0 the closing gap), and whether it keeps Q, the next edge's end, or P, the
+/// loop's own last point ([`crate::native_saved_mesh::coordinated_join_keeps`]).
+type Keeps = std::collections::BTreeMap<usize, bool>;
+
+/// `loop_polygon` at a bound looser than `STRICT_JOIN` (#2085 candidate). A gap at or over
+/// `bound` that `keeps` names, under the coordinated join's limit, keeps the end it names
+/// instead of the point halfway; a step across a seam or to a pole is still refused.
 fn loop_polygon_within(
     surface: &ParametricSurface,
     segments: &[Vec<[f64; 2]>],
     bound: f64,
+    keeps: &Keeps,
 ) -> Result<Vec<[f64; 2]>> {
+    let limit = crate::native_saved_mesh::COORDINATED_LIMIT;
     let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
     let env = surface.bounds();
     let range = [
@@ -991,31 +1003,60 @@ fn loop_polygon_within(
             segments[0].clone()
         };
         let mut joined = true;
-        for seg in &segments[1..] {
+        for (k, seg) in segments.iter().enumerate().skip(1) {
             let last = *ring.last().unwrap();
             let p = at(last)?;
             let (a, b) = (seg[0], *seg.last().unwrap());
             let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
             let forward = da <= db;
             let (gap, near) = if forward { (da, a) } else { (db, b) };
-            if gap >= bound || !steps(last, near)? {
+            // With no keeps this is the loose join's own test, unchanged.
+            let keep = keeps
+                .get(&k)
+                .copied()
+                .filter(|_| gap >= bound && gap < limit);
+            if (gap >= bound && keep.is_none()) || !steps(last, near)? {
                 joined = false;
                 break;
             }
-            *ring.last_mut().unwrap() = meet(last, near)?;
+            let skip = match keep {
+                None => {
+                    *ring.last_mut().unwrap() = meet(last, near)?;
+                    1
+                }
+                // P, the loop's own point, stays, and the next edge's near end is dropped.
+                Some(false) => 1,
+                // Q stays: the loop's last point gives way to the next edge's near end.
+                Some(true) => {
+                    ring.pop();
+                    0
+                }
+            };
             if forward {
-                ring.extend(seg.iter().skip(1).copied());
+                ring.extend(seg.iter().skip(skip).copied());
             } else {
-                ring.extend(seg.iter().rev().skip(1).copied());
+                ring.extend(seg.iter().rev().skip(skip).copied());
             }
         }
         if !joined {
             continue;
         }
         let (first, last) = (ring[0], *ring.last().unwrap());
-        if distance(at(first)?, at(last)?) < bound && steps(last, first)? {
+        let closing = distance(at(first)?, at(last)?);
+        if closing < bound && steps(last, first)? {
             ring[0] = meet(first, last)?;
             ring.pop();
+            ensure!(ring.len() >= 3, "a trim loop needs three points");
+            return Ok(ring);
+        }
+        // The closing gap: P is the loop's last point and Q its first.
+        let wide = closing >= bound && closing < limit;
+        if let (Some(&keep_q), true) = (keeps.get(&0), wide && steps(last, first)?) {
+            if keep_q {
+                ring.pop();
+            } else {
+                ring.remove(0);
+            }
             ensure!(ring.len() >= 3, "a trim loop needs three points");
             return Ok(ring);
         }
@@ -1105,6 +1146,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     let mut chord_edges = std::collections::BTreeSet::new();
     let mut chords = Vec::new();
     let mut bounds = Vec::new();
+    let mut keeps = Vec::new();
     let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
     while let Some(li) = next {
         ensure!(seen_loops.insert(li), "trim loop cycle");
@@ -1114,13 +1156,27 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         // #2085 (candidate, `research/2085-chairs` only): a loop that does not join within
         // 1e-7 joins at the smallest of `LOOP_JOIN_BOUNDS` that closes it whole; a loop that
         // already closes keeps the strict path unchanged.
-        let bound = if loop_closes(&surface, &segments)? {
-            STRICT_JOIN
+        let (bound, keep) = if loop_closes(&surface, &segments)? {
+            (STRICT_JOIN, Keeps::new())
+        } else if let Some(bound) = loop_join_bound(&surface, &segments)? {
+            (bound, Keeps::new())
+        } else if crate::native_saved_mesh::coordinated_join() {
+            // #2085, research branch only: the gaps the coordinated join takes; the polygon
+            // still refuses the loop if any other gap is at or over the touching bound.
+            let keep: Keeps = crate::native_saved_mesh::coordinated_join_keeps(g, fi, li)?
+                .into_iter()
+                .map(|(at, keep_q, _)| (at, keep_q))
+                .collect();
+            ensure!(
+                !keep.is_empty(),
+                "disconnected parametric trim in model coordinates"
+            );
+            (LOOP_JOIN_BOUNDS[LOOP_JOIN_BOUNDS.len() - 1], keep)
         } else {
-            loop_join_bound(&surface, &segments)?
-                .context("disconnected parametric trim in model coordinates")?
+            anyhow::bail!("disconnected parametric trim in model coordinates")
         };
         bounds.push(bound);
+        keeps.push(keep);
         // The spans come from the clamped samples the loop's polygon is made of, so
         // that a vertex the cells put on one lies on it exactly.
         for (points, edge) in segments.iter().zip(&edges) {
@@ -1166,8 +1222,8 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     } else {
         loops
             .iter()
-            .zip(&bounds)
-            .map(|(segments, bound)| loop_polygon(&surface, segments, *bound))
+            .zip(bounds.iter().zip(&keeps))
+            .map(|(segments, (bound, keep))| loop_polygon(&surface, segments, *bound, keep))
             .collect::<Result<Vec<_>>>()?
     };
     const CHORD: f64 = 0.001;

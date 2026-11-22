@@ -129,6 +129,11 @@
 //!     more_rings=<n> widest_candidate=<ft>: over the file, the stored gaps two rings hold, those
 //!     that meet the candidate and the export's join, those only one ring holds and those more
 //!     than two do;
+//!   exportkeep graph=<ElementId> face=<n> surface=<class> loop=<n> at=<k> keep=<P|Q> width=<ft>:
+//!     a gap the export's coordinated join takes, by the function the export calls
+//!     (`native_saved_mesh::coordinated_join_keeps`), whether or not it is switched on, with its
+//!     width in the join's own measure (along a plane or cylinder, in model coordinates on a
+//!     revolved face); `exportkeeps gaps=<n> keep_q=<n> keep_p=<n> widest=<ft>` totals the file;
 //!   pairrings rings_with_gaps=<n> rings_the_join_touches=<n> rings_the_join_closes=<n>: the
 //!     rings with a stored gap of `TOUCHING` or more, those with one the export's join takes
 //!     under 0.0001 ft, and those all of whose such gaps it takes, which it alone can close;
@@ -754,6 +759,29 @@ struct OrientRow {
 }
 /// Every stored gap read, across surface classes, since a gap's two rings can be on two.
 static ORIENTS: Mutex<Vec<OrientRow>> = Mutex::new(Vec::new());
+/// The gaps the export's coordinated join takes (#2085), from the function the export calls:
+/// (keeps Q, width in the join's own measure).
+static EXPORT_KEEPS: Mutex<Vec<(bool, f64)>> = Mutex::new(Vec::new());
+/// The export's coordinated join on each loop of `fi`, by
+/// `native_saved_mesh::coordinated_join_keeps`, whether or not it is switched on.
+fn report_export_keeps(id: u64, fi: usize, class: &str, graph: &ObjectGraph) {
+    for (loop_index, li) in face_loops(graph, fi).into_iter().enumerate() {
+        let Ok(keeps) = rvt::research::native_saved_mesh::coordinated_join_keeps(graph, fi, li)
+        else {
+            continue;
+        };
+        for (at, keep_q, width) in keeps {
+            println!(
+                "exportkeep graph={id} face={fi} surface={class} loop={loop_index} at={at} keep={} width={width:.9}",
+                if keep_q { "Q" } else { "P" }
+            );
+            if let Ok(mut all) = EXPORT_KEEPS.lock() {
+                all.push((keep_q, width));
+            }
+        }
+    }
+}
+
 /// A point of model coordinates to 1e-6 ft, the scorer's corner key.
 fn micro(p: [f64; 3]) -> [i64; 3] {
     p.map(|x| (x * 1e6).round() as i64)
@@ -1485,13 +1513,15 @@ fn scan(id: u64, graph: &ObjectGraph, tally: &mut BTreeMap<String, Tally>) -> (b
             continue;
         }
         // Planes and cylinders are meshed by `native_saved_mesh`, not on this grid.
-        let class = object
+        let class_of_face = object
             .fields
             .get("m_pSurf")
             .and_then(|p| pointer(graph, fi, p).ok().flatten())
             .and_then(|si| graph.objects.get(si))
             .map(|s| s.class_name.to_string())
             .unwrap_or_else(|| "unknown".to_string());
+        let class = class_of_face;
+        report_export_keeps(id, fi, &class, graph);
         if class == "Plane" || class == "CylSurf" {
             // Their own ring (`native_saved_mesh::face`): what each refused face says, digits
             // masked, so a reason a neighbour's grid raised can be told from the ring's own.
@@ -2076,6 +2106,15 @@ fn main() -> Result<()> {
 /// The stored gaps two rings of a graph hold, each with both rings' `pieceorient` reading,
 /// and whether they meet the coordinated join the chair save suggests (#2085).
 fn report_orient_pairs() {
+    if let Ok(all) = EXPORT_KEEPS.lock() {
+        let q = all.iter().filter(|(keep_q, _)| *keep_q).count();
+        let widest = all.iter().map(|(_, w)| *w).fold(0f64, f64::max);
+        println!(
+            "exportkeeps gaps={} keep_q={q} keep_p={} widest={widest:.9}",
+            all.len(),
+            all.len() - q
+        );
+    }
     let Ok(rows) = ORIENTS.lock() else {
         return;
     };
