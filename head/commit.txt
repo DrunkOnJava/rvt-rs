@@ -1,0 +1,1 @@
+1be73ffba9c1edf4622533e4f9ba4b2a105d34a7 fix(ifc): the stored-host door axes rule reads the curtain wall the door is set in (#1494) (RE-474)
