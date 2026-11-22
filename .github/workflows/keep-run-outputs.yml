@@ -1,13 +1,14 @@
 # Keep a Measure run's small scored outputs past the 90 days GitHub keeps its artifacts (#2124).
 #
 # The evidence pages cite Measure runs by id. This copies what those citations read from a run's
-# `measure-head`, `measure-base`, `measure-verdict` and `compare-scorer-diff` artifacts (scorer
-# outputs, export digests, export diagnostics, timings and the verdict; tools/ci/keep-run-outputs.py
-# says which and why) into a commit of their own, with no parent, and pushes it to
+# `measure-head`, `measure-base`, `measure-verdict`, `compare-scorer-diff` and `measure-timing`
+# artifacts (scorer outputs, export digests, export diagnostics, timings and the verdict;
+# tools/ci/keep-run-outputs.py says which and why) into a commit of their own, with no parent, and pushes it to
 # `refs/evidence/<run id>`. A ref
 # outside refs/heads and refs/tags is not fetched by a clone, so the kept outputs cost a clone
-# nothing, and GitHub serves the commit's tree at
-# https://github.com/DrunkOnJava/rvt-rs/tree/<commit>, where a citation links to it.
+# nothing. A citation links to the kept file that holds its figure, as plain text:
+# https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/<commit>/<path> (Griffin, 2026-11-22). GitHub's
+# own page for a commit on no branch and no tag warns that it "does not belong to any branch".
 # research/kept-runs.tsv lists each kept run and its commit, added by a pull request after the run.
 #
 # Trust. Only a workflow_dispatch run of measure.yml in this repository is kept: a pull request
@@ -74,7 +75,7 @@ jobs:
           fi
           names=$(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" --jq '.artifacts[] | select(.expired | not) | .name')
           found=0
-          for name in measure-head measure-base measure-verdict compare-scorer-diff; do
+          for name in measure-head measure-base measure-verdict compare-scorer-diff measure-timing; do
             if grep -qx "$name" <<< "$names"; then
               gh run download "$RUN_ID" --repo "$REPO" -n "$name" -D "$RUNNER_TEMP/in/$name"
               found=1

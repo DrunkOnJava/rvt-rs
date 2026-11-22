@@ -9,8 +9,10 @@ and the run's verdict. `<source>` holds a run's artifacts as `gh run download -n
 - `head/` and `base/`, from `measure-head` and `measure-base`, model by model: every scorer output
   (`.txt`, but not a probe's own output, `probe.txt`, `probe-<probe>.txt` or `probe-pair*.txt`, which
   can be large and holds a file's coordinates), `ifc.sha256`, `diagnostics.json`, `timings.log` and
-  the witness observations (`witness-*.json`), and the artifact's `commit.txt`;
-- `verdict/` and `compare/`, the whole of `measure-verdict` and `compare-scorer-diff`.
+  the witness observations (`witness-*.json`), and at the artifact's top the outputs that read
+  several models (`areas_across_saves.txt` and the like) and its `commit.txt`;
+- `verdict/`, `compare/` and `timing/`, the whole of `measure-verdict`, `compare-scorer-diff` and
+  `measure-timing` (each model's export time and peak memory on both sides).
 
 Models are kept only from the folders Measure gives the models anyone can fetch: `core-interior`,
 `einhoven`, `re1-*`, `nordic-*`, `r2025-*`, `sample-*`, `family-*`, and a `spent-*` pair that
@@ -34,7 +36,7 @@ import shutil
 import sys
 
 MODEL_SIDES = {"measure-head": "head", "measure-base": "base"}
-WHOLE = {"measure-verdict": "verdict", "compare-scorer-diff": "compare"}
+WHOLE = {"measure-verdict": "verdict", "compare-scorer-diff": "compare", "measure-timing": "timing"}
 OPEN_FOLDERS = ("core-interior", "einhoven")
 OPEN_PREFIXES = ("re1-", "nordic-", "r2025-", "sample-", "family-")
 LEFT_OUT_PREFIXES = ("holdout-", "racadv-", "bimcollab-")
@@ -81,7 +83,8 @@ def keep_models(source, out, spent, held, notes):
     for top in sorted(os.listdir(source)):
         path = os.path.join(source, top)
         if not os.path.isdir(path):
-            if top == "commit.txt":
+            # The runner's own files (`runner-*.txt`, `vmstat-*.log`, `score-cache-*.log`) are not kept.
+            if top.endswith(".txt") and not top.startswith("runner-"):
                 os.makedirs(out, exist_ok=True)
                 shutil.copyfile(path, os.path.join(out, top))
                 files += 1
