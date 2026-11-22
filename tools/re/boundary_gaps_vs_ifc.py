@@ -81,7 +81,10 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    the two edges' other faces has the lower index in the decoded graph (`piecenbr`), in case the
    face a mesher takes first fixes the corner it shares; and, for a corner seen from more than one
    ring, whether that reading names the same end from every ring, since the rings of one corner
-   compare different faces while Revit keeps one point.
+   compare different faces while Revit keeps one point. Where the probe prints `ownnbr` rows (#2136:
+   each side's neighbouring edges placed through their own face), the sides on which a neighbour's
+   end joins the shared edge within 1e-7 ft and lies at exactly one gap end within 1e-7 ft, against
+   whether Revit keeps that end.
 
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
@@ -158,6 +161,9 @@ def read_probe(path):
             elif line.startswith("piecemore "):
                 f = fields(line)
                 FLAGS[(f["graph"], f["face"], f["loop"], f["at"])] = (f.get("a_flags"), f.get("b_flags"))
+            elif line.startswith("ownnbr "):
+                f = fields(line)
+                OWN.setdefault((f["graph"], f["face"], f["loop"], f["at"]), []).append(f)
             elif line.startswith("piecenbr "):
                 f = fields(line)
                 key = (f["graph"], f["face"], f["loop"], f["at"])
@@ -207,6 +213,8 @@ REACH_JOIN = {}
 PLACE = {}
 # (graph, face, loop, at) -> whose edge's other face comes first: `P's edge`, `Q's edge`, or unread.
 ORDER = {}
+# (graph, face, loop, at) -> the probe's `ownnbr` rows for the gap (#2136).
+OWN = {}
 
 
 def face_order(a, b):
@@ -248,6 +256,13 @@ def reach(value, bound):
     if not read:
         return "unread"
     return "P+Q" if near_p and near_q else "P" if near_p else "Q" if near_q else "-"
+
+
+def side_of(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def flags_of(key):
@@ -694,6 +709,23 @@ def main():
             other = "q_only" if a else "p_only"
             flagged = "p_only" if a else "q_only"
             other_end[(cohort(g), "at the other edge's end only" if o == other else "at the flagged edge's end only" if o == flagged else "otherwise")] += 1
+    # The `ownnbr` rows: a side whose neighbour joins the shared edge and lies at one gap end.
+    own_sides, own_seen = collections.Counter(), {}
+    for g, o in scored:
+        if o not in ONE_END:
+            continue
+        for side in ("a", "b"):
+            ends = set()
+            for row in OWN.get(key_of(g), []):
+                if row.get("side") != side:
+                    continue
+                join, to_p, to_q = side_of(row.get("join")), side_of(row.get("end_p")), side_of(row.get("end_q"))
+                if join is not None and to_p is not None and to_q is not None and join < JOIN and (to_p < JOIN) != (to_q < JOIN):
+                    ends.add("p_only" if to_p < JOIN else "q_only")
+            if len(ends) == 1:
+                own_seen.setdefault((key_of(g), side), (cohort(g), "keeps that end" if o in ends else "keeps the other end"))
+    # Counted once per stored gap's side, as the drawings of one stored gap agree.
+    own_sides.update(own_seen.values())
     for c in COHORTS:
         groups = {}
         for (cc, w, o), n in sorted(by_bit.items()):
@@ -716,6 +748,10 @@ def main():
         ordered = [f"{w} first {o} {n}" for (cc, w, o), n in sorted(by_order.items()) if cc == c]
         if ordered:
             print(f"kept end by whose edge's other face comes first in the graph, {c}: " + ", ".join(ordered))
+        own = {k: n for (cc, k), n in own_sides.items() if cc == c}
+        if own:
+            print(f"ownnbr sides of stored gaps whose neighbour joins the shared edge and lies at one gap end, within 1e-7 ft, {c}: "
+                  + ", ".join(f"{k} {n}" for k, n in sorted(own.items())))
         corner_order = collections.Counter()
         for _, members in corners.items():
             views = [g for g, _ in members if cohort(g) == c and ORDER.get(key_of(g)) in ("P's edge", "Q's edge")]
