@@ -114,8 +114,9 @@
 //!     the first gap's loop, edge, edge points and face;
 //!   pieceorient graph=<ElementId> face=<n> loop=<n> at=<k> p_is=<first|last> q_is=<first|last>:
 //!     whether the gap's P is the stored first or last point of the edge before it
-//!     (`m_firstAndLastEdgePnts`), and Q of the edge after it. The ring's P and Q follow the
-//!     direction that joins best, so this is the edges' own stored direction at the gap;
+//!     (`m_firstAndLastEdgePnts`), and Q of the edge after it. The ring's edges are in their
+//!     stored loop order (`m_next`) and which end of each is P or Q is the one that joins best, so
+//!     this is each edge's own stored direction at the gap;
 //!   ownnbr graph=<ElementId> face=<n> loop=<n> at=<k> side=<a|b> order=<prev|next>
 //!     class=<class> poly_p=<ft> poly_q=<ft> end_p=<ft> end_q=<ft>
 //!     shared_p=<ft> shared_q=<ft> join=<ft>: the two edges adjacent to the shared edge in
@@ -734,8 +735,8 @@ struct Gap {
     duv: [f64; 2],
     d: f64,
     /// Whether P is the stored first point of the edge before the gap (`m_firstAndLastEdgePnts[0]`),
-    /// and whether Q is the stored first point of the edge after it: the ring's P and Q follow the
-    /// direction that joins best, not the stored one.
+    /// and whether Q is the stored first point of the edge after it. The ring's edges are in their
+    /// stored loop order (`m_next`); which end of each is P or Q is the one that joins best.
     p_first: bool,
     q_first: bool,
 }

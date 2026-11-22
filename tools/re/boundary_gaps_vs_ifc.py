@@ -794,6 +794,17 @@ def main():
             sided = [f"meets {r}, {k} {n}" for (cc, bb, r, k), n in sorted(flagged_side.items()) if cc == c and bb == bound]
             if sided:
                 print(f"bit 0x{FLAG_BIT:x} on one edge only, where the flagged edge's other face's loop meets the gap within {bound}, {c}: " + "; ".join(sided))
+        # A corner's two rings label the kept point P in one and Q in the other, so a reading by the
+        # stored orientation holds on a corner only where its two views read opposite ways.
+        if c == COHORTS[0]:
+            pairs = collections.Counter()
+            for _, members in corners.items():
+                views = sorted(f"{'/'.join(ORIENT[key_of(g)])} {o}" for g, o in members if key_of(g) in ORIENT and o in ONE_END)
+                if len(views) >= 2:
+                    pairs[" with ".join(views)] += 1
+            if pairs:
+                print("stored orientation of a corner's rings, on corners seen from more than one ring, every cohort: "
+                      + "; ".join(f"{k}: {n}" for k, n in sorted(pairs.items())))
         oriented = collections.Counter((w, o) for cc, w, o in orient_seen.values() if cc == c)
         if oriented:
             print(f"kept end by whether P and Q are their edges' stored first or last points (P/Q), stored gaps, {c}: "
