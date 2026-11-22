@@ -1,0 +1,7 @@
+placed bodies vs base: doors and windows in the base 138, in the head 138; tags only in the base 0, only in the head 0
+placed bodies vs base: IfcDoor placement axes moved 92, unchanged 40
+placed bodies vs base: IfcWindow placement axes moved 6, unchanged 0
+placed bodies vs base: bodies: paired 138; meshed in neither export, not compared 0; meshed in one export only or differently 0; volume moved 0 (largest relative change 4.55e-16); vertices moved 0 (largest 0.000000 ft)
+placed bodies vs base: openings: paired 138; meshed in neither export, not compared 0; meshed in one export only or differently 0; volume moved 0 (largest relative change 2.45e-16); vertices moved 0 (largest 0.000000 ft)
+placed bodies vs base: identity differences: none
+exit 0
