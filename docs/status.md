@@ -114,7 +114,7 @@ its outline is read (RE-351): the walls of `rac_basic` that its 2024 (15),
 2026 and 2027 (16) saves cut at roof 243274, up to 3.1865 m lower than its
 2025 save draws them (Measure run [42106436497](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106436497)), are drawn to their record
 boxes as the 2025 save draws them (on the 2026 and 2027 saves all 16 are the
-2025 save's bodies, Measure run [42554270370](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42554270370), and on the held-out AA house, Revit
+2025 save's bodies, Measure run [42554270370](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42554270370) (kept: [2026 save][kept-1], [2027 save][kept-2]), and on the held-out AA house, Revit
 26.4's IFC4X3 export and the one Revit export the rule changes, the walls with
 Revit's base and top go from 43 to 56 of 59, counts only, run [42556745265](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42556745265)), which is a
 smaller error and not Revit's body: Revit's walls attach to the gable's sloped
@@ -139,7 +139,7 @@ and of the 7 elements whose sketch holds an arc, 2 (a floor and a roof of
 rac_advanced) are compared as drawn outlines and equal, the ceiling and a
 railing being record boxes in both saves and 3 more having no body. None of
 the 19 held-out and spent models changes. That check cannot catch an error the
-2024 saves share (Measure run [42091457764](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42091457764), head 830a4d94). The floor of
+2024 saves share (Measure run [42091457764](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42091457764) (kept: [`rac_advanced`][kept-3], [`rst_basic`][kept-4], [`rac_basic`][kept-5]), head 830a4d94). The floor of
 rac_advanced, drawn with chords on the 2025 save before (24 vertices), has the
 170 vertices of the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
 exports. Since RE-346 a pipe there is placed by RE-131's connector entries
@@ -178,7 +178,7 @@ Each
 is held to the same Autodesk project's 2025 save, on the MEP samples too
 (`tools/re/bodies_across_saves.py`, which Measure fails on a difference), and
 not to a Revit export: no held-out model holds a pipe, a duct or a port, and
-that cannot catch an error the 2025 save shares. In Measure run [42545885153](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42545885153)
+that cannot catch an error the 2025 save shares. In Measure run [42545885153](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42545885153) (kept: [`rme_advanced` 2026][kept-6], [`rme_basic` 2026][kept-7], [on `main`][kept-8], and the 2027 saves' in the [file list][kept-9])
 (against `main` at 1c088750, unfiltered, the same-project gates passing on 15
 samples) no body of the MEP samples' 2026 and 2027 saves differs from the 2025
 save's (36 walls on each did on `main`), and their placed ports are the 2025 save's
@@ -227,7 +227,7 @@ walls whose layers Revit ends at different heights or cuts at a height no join n
 the rooms whose stored solid still does not close (RE-316 §4) and opening
 profiles are not decoded, and rvt-rs does not edit Revit model data.
 
-**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, is an Area's region among its boundary lines (`area_boundary`, RE-317; `area_boundary_joined` where its outline needed a boundary line carried on to the line it joins, or a connector, RE-330) or the loop of Revit's own plan topology for it (`area_plan_topology`, RE-333; `area_plan_topology_unchecked` on Revit 2025 to 2027 and on the Areas drawn from lines whose partition copies disagree, #1434, whose Areas nothing outside the file checks), or has no body (an Area whose boundary is not proven), and the diagnostics count the boxes (`exported.bounding_box_spaces`) and, by reason, the Areas that have no body (`exported.area_body_refusals`, RE-317; `area_regions_disagree` where the plan topology and the lines' arrangement give different regions, none on a public model in Measure run [42017400629](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42017400629) on `5008247d`). Areas are read on Revit 2015 to 2027 (RE-324, RE-333), the region first the loop of Revit's own plan topology where that is read and passes its checks (RE-333: the 25 Areas of `rac_advanced`'s 2020 save are all within 0.1% in area and 0.01 ft in outline of the three.js IFC2X3 export, none extra and none missing, which nothing of the topology was read off; on `5008247d` the racadv pairs have 116 spaces in both files and none only in either, Measure run [42017400629](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42017400629); the 0.1% and 0.01 ft figures are from `e9124b3a`), else the lines' arrangement with its joins; an Area drawn from the topology says `area_plan_topology` (`area_plan_topology_unchecked` on Revit 2025 to 2027 and on `rac_advanced`'s 2021 save, whose lines have partition copies that disagree and whose 25 Areas are drawn from the topology alone, #1434), so `area_boundary` and `area_boundary_joined` are written only where the topology is not read; those of 2015 to 2023 are written only where their body is proven, counted otherwise in `skipped` as `area_without_proven_body`, and checked against the same project's 2024 save on Autodesk's samples and, for the 16 Areas of `rac_advanced` it draws, against an IFC2X3 export of that project from the three.js repository, by a build of Revit 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not established), showing the 2015 to 2020 state of the project (RE-330): the only export of a 2015 to 2023 Area there is, and not one of Revit's IFC4 exports. Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). A room whose stored solid the exact walk did not close is read again from the faces its solid lists, up to the solid's own end, and says so: `stored_solid_faces` where the faces' edges close as the walk reads them (9 of the BIM4LCA office's 13 such rooms as built, all at Revit's area to 0.1%) or `stored_solid_approximate` where a column overlaps a wall, an end of one wall edge lies on another, or the outline falls up to 0.02 ft short of the box (4 as built and 11 of the 12 at building permit: 10 of the 15 at Revit's floor area to 0.1%, the 5 others, four rooms, 0.45% to 0.68% under it). On Revit 2024, a room neither reads is read from its solid's edges as the outline of its floor, `stored_solid_edges`, where the solid is a prism of that floor up to 4 ft above it (#90, RE-374: the BIM4LCA office's room 3095831 at building permit, 1864.737 ft² against the 1864.74 of Revit's IFC4 export, and Snowdon Towers' room 830902, within 0.001 ft² of Revit's area in the model's later VIM edition; Snowdon Towers' room 2181757, whose area Revit takes 4 ft up, keeps its box); the diagnostics count them (`exported.edge_outline_spaces`, `exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`). The scorer's upward-face area reads one of them (1671995) as 323% over and RE-313's 66% room as 66% off; by Revit's floor both are within 0.5% and 0.1%. A room's outline takes off the round columns its stored solid holds (RE-334): all 91 rooms of `rac_advanced`'s 2015 to 2020 saves are within 0.1% in area and 0.01 ft in outline of the IFC2X3 export of that project (before, 42 of 85 were, and 6 kept their box); Revit's public IFC4 export of `rac_basic` draws the one column of its room 101 as a void too (the reader moves that room from 1.710% to 0.628% over Revit's area), and none of the 53 other models measured (the office, Core Interior, RE1, the R2025 models, the held-out files) has such a room. 49 rooms of each `rme` save and 4 of Snowdon Towers' 54, whose outlines RE-316 and RE-374 do not read, are drawn from the meshes Revit saved for them on the saves of 2023 to 2027 (`saved_mesh`, #1191) and keep their box on the `rme` saves of 2015 and 2019; no Revit export of those files checks them. Not measured against any Revit export (Griffin, 2026-11-05, "Ship, labelled", then "Same-project gate"): the Areas of Revit 2025 to 2027 and the 108 Area spaces of the recorded Autodesk 2024 Snowdon Towers samples (101 Architectural and 7 Structural written, 96 and 2 with a body; the bodies are from Measure run [42003913780](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42003913780) on `bcb02107`, Architectural's refusals from run [42017400629](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42017400629) on `5008247d`, Structural's total from `e9124b3a`). They are written by default. The Areas of Revit 2025 to 2027 say `SpaceOutlineSource` `area_plan_topology_unchecked`, so that the file shows that nothing outside it checks them (Griffin, 2026-11-05, "Mark 2025 to 2027 in the file"); the Snowdon Towers 2024 samples' Areas say `area_plan_topology`, because a 2024 file shares its release and code path with the office's, whose Areas Revit's IFC4 export checks, and that release is not split. The evidence is that the loop drawn for each equals the area Revit saves in the file for that loop (`PlanCircuit m_area`, to 1e-6) and holds the Area's point and, on 2025 to 2027, the same project's 2024 save gives the same Areas. They stay written only while the Areas of rac_advanced on its 2025, 2026 and 2027 saves equal its 2024 save's, Area by Area, in GlobalId, number, name, storey, outline source, body area, top surface, height and lowest vertex (Griffin, 2026-11-05, "Same-project gate"). Every Measure run of the samples that holds the four saves checks it with `tools/re/areas_across_saves.py` and fails on a difference, a missing or extra Area, other than 25 Areas or 25 bodies on a save, an Area with no storey, or a missing save; a run with fewer than the four saves (a narrower `sample_years`) checks nothing and prints a notice. Measure is not a required check: a failure blocks landing by the landing rule, read before merging. It compares rvt-rs with itself and cannot catch an error the 2024 read shares with the later reads. The seven held-out Revit 2025 to 2027 models write no Area and their exports are byte-identical to main's, so they test nothing here. [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
+**Rooms.** Each `IfcSpace` says in `RvtElementRecordGeometry.SpaceOutlineSource` whether its outline was read from the room's stored solid (`stored_solid`), is the record's bounding box (`record_box`), was drawn from a saved mesh or a family's body, is an Area's region among its boundary lines (`area_boundary`, RE-317; `area_boundary_joined` where its outline needed a boundary line carried on to the line it joins, or a connector, RE-330) or the loop of Revit's own plan topology for it (`area_plan_topology`, RE-333; `area_plan_topology_unchecked` on Revit 2025 to 2027 and on the Areas drawn from lines whose partition copies disagree, #1434, whose Areas nothing outside the file checks), or has no body (an Area whose boundary is not proven), and the diagnostics count the boxes (`exported.bounding_box_spaces`) and, by reason, the Areas that have no body (`exported.area_body_refusals`, RE-317; `area_regions_disagree` where the plan topology and the lines' arrangement give different regions, none on a public model in Measure run [42017400629](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42017400629) (kept: each model's `diagnostics.json`, none naming `area_regions_disagree`, in the [file list][kept-10]) on `5008247d`). Areas are read on Revit 2015 to 2027 (RE-324, RE-333), the region first the loop of Revit's own plan topology where that is read and passes its checks (RE-333: the 25 Areas of `rac_advanced`'s 2020 save are all within 0.1% in area and 0.01 ft in outline of the three.js IFC2X3 export, none extra and none missing, which nothing of the topology was read off; on `5008247d` the racadv pairs have 116 spaces in both files and none only in either, Measure run [42017400629](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42017400629); the 0.1% and 0.01 ft figures are from `e9124b3a`), else the lines' arrangement with its joins; an Area drawn from the topology says `area_plan_topology` (`area_plan_topology_unchecked` on Revit 2025 to 2027 and on `rac_advanced`'s 2021 save, whose lines have partition copies that disagree and whose 25 Areas are drawn from the topology alone, #1434), so `area_boundary` and `area_boundary_joined` are written only where the topology is not read; those of 2015 to 2023 are written only where their body is proven, counted otherwise in `skipped` as `area_without_proven_body`, and checked against the same project's 2024 save on Autodesk's samples and, for the 16 Areas of `rac_advanced` it draws, against an IFC2X3 export of that project from the three.js repository, by a build of Revit 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not established), showing the 2015 to 2020 state of the project (RE-330): the only export of a 2015 to 2023 Area there is, and not one of Revit's IFC4 exports. Measure scores every space's plan area and outline against Revit's export, and CI gates Core Interior (116 of 116 rooms) and RE1 Architecture (11 of 11). A room whose stored solid the exact walk did not close is read again from the faces its solid lists, up to the solid's own end, and says so: `stored_solid_faces` where the faces' edges close as the walk reads them (9 of the BIM4LCA office's 13 such rooms as built, all at Revit's area to 0.1%) or `stored_solid_approximate` where a column overlaps a wall, an end of one wall edge lies on another, or the outline falls up to 0.02 ft short of the box (4 as built and 11 of the 12 at building permit: 10 of the 15 at Revit's floor area to 0.1%, the 5 others, four rooms, 0.45% to 0.68% under it). On Revit 2024, a room neither reads is read from its solid's edges as the outline of its floor, `stored_solid_edges`, where the solid is a prism of that floor up to 4 ft above it (#90, RE-374: the BIM4LCA office's room 3095831 at building permit, 1864.737 ft² against the 1864.74 of Revit's IFC4 export, and Snowdon Towers' room 830902, within 0.001 ft² of Revit's area in the model's later VIM edition; Snowdon Towers' room 2181757, whose area Revit takes 4 ft up, keeps its box); the diagnostics count them (`exported.edge_outline_spaces`, `exported.resolved_outline_spaces`, `exported.approximate_outline_spaces`). The scorer's upward-face area reads one of them (1671995) as 323% over and RE-313's 66% room as 66% off; by Revit's floor both are within 0.5% and 0.1%. A room's outline takes off the round columns its stored solid holds (RE-334): all 91 rooms of `rac_advanced`'s 2015 to 2020 saves are within 0.1% in area and 0.01 ft in outline of the IFC2X3 export of that project (before, 42 of 85 were, and 6 kept their box); Revit's public IFC4 export of `rac_basic` draws the one column of its room 101 as a void too (the reader moves that room from 1.710% to 0.628% over Revit's area), and none of the 53 other models measured (the office, Core Interior, RE1, the R2025 models, the held-out files) has such a room. 49 rooms of each `rme` save and 4 of Snowdon Towers' 54, whose outlines RE-316 and RE-374 do not read, are drawn from the meshes Revit saved for them on the saves of 2023 to 2027 (`saved_mesh`, #1191) and keep their box on the `rme` saves of 2015 and 2019; no Revit export of those files checks them. Not measured against any Revit export (Griffin, 2026-11-05, "Ship, labelled", then "Same-project gate"): the Areas of Revit 2025 to 2027 and the 108 Area spaces of the recorded Autodesk 2024 Snowdon Towers samples (101 Architectural and 7 Structural written, 96 and 2 with a body; the bodies are from Measure run [42003913780](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42003913780) (kept: [Architectural][kept-11], [Structural][kept-12]) on `bcb02107`, Architectural's refusals from run [42017400629](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42017400629) (kept: [Architectural][kept-13]) on `5008247d`, Structural's total from `e9124b3a`). They are written by default. The Areas of Revit 2025 to 2027 say `SpaceOutlineSource` `area_plan_topology_unchecked`, so that the file shows that nothing outside it checks them (Griffin, 2026-11-05, "Mark 2025 to 2027 in the file"); the Snowdon Towers 2024 samples' Areas say `area_plan_topology`, because a 2024 file shares its release and code path with the office's, whose Areas Revit's IFC4 export checks, and that release is not split. The evidence is that the loop drawn for each equals the area Revit saves in the file for that loop (`PlanCircuit m_area`, to 1e-6) and holds the Area's point and, on 2025 to 2027, the same project's 2024 save gives the same Areas. They stay written only while the Areas of rac_advanced on its 2025, 2026 and 2027 saves equal its 2024 save's, Area by Area, in GlobalId, number, name, storey, outline source, body area, top surface, height and lowest vertex (Griffin, 2026-11-05, "Same-project gate"). Every Measure run of the samples that holds the four saves checks it with `tools/re/areas_across_saves.py` and fails on a difference, a missing or extra Area, other than 25 Areas or 25 bodies on a save, an Area with no storey, or a missing save; a run with fewer than the four saves (a narrower `sample_years`) checks nothing and prints a notice. Measure is not a required check: a failure blocks landing by the landing rule, read before merging. It compares rvt-rs with itself and cannot catch an error the 2024 read shares with the later reads. The seven held-out Revit 2025 to 2027 models write no Area and their exports are byte-identical to main's, so they test nothing here. [docs/rooms.md](rooms.md) says what to trust per release, and RE-313 has the runs.
 
 **What a space is.** Each `IfcSpace` says what it is in `RvtElementRecordGeometry.SpaceKind` (#1437): `room`, `area` (a Revit Area), `mep_space` (a Revit Space) or `family_instance` (any other element, a family instance or a mass in the files measured, that its "Export to IFC As" writes as a space), taken from the Revit class of the record it was read from. No `mep_space` is written today: rvt-rs reads no Revit Space from a file's partition records, which says what rvt-rs writes and not what the files hold. It is the property to read to tell an Area from a room; `SpaceOutlineSource` says only where an outline came from, and its values change with the rules that read outlines, so an importer does not filter on them. The same value is `space_kind` in the MCP server's `list_rooms` and the room schedule's last column. A space whose property set is not `RvtElementRecordGeometry` (in principle a wall or floor read through the schema walker) has no `SpaceKind` and is counted (`exported.spaces_without_kind`, zero on every model measured); `tools/re/space_kinds_vs_ifc.py` checks every export Measure and CI make. On Measure run [42027776156](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42027776156) (head 04d1b101) the 117 models and samples exported held 4,453 `IfcSpace`s, all with a `SpaceKind` (3,733 rooms, 628 Areas, 92 family instances, no `mep_space`), and the scorer passes on all 117: no space without a kind, no `area` outside the Area outline sources and no other kind inside them. See [rooms](rooms.md).
 
@@ -463,9 +463,9 @@ the world (a quarter turn swaps its two sides) and the element says so in
 `RvtElementRecordGeometry.PlacementAxesSource`. Before, rvt-rs wrote the
 default axes on every door and window, which were Revit's on 115 of the 521
 doors and 226 of the 540 windows it binds to a plain wall in the open models
-(Measure run [42066757105](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42066757105)). Now the rule is written for all 521 and 540, and
+(Measure run [42066757105](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42066757105) (kept: each model's `probe_score.txt` in the [file list][kept-14])). Now the rule is written for all 521 and 540, and
 Revit's axes are the same on all of them, and on the 24 doors and windows of
-the R2025 models (Measure run [42106711251](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106711251), head `c1a2a739`; the BIM4LCA office
+the R2025 models (Measure run [42106711251](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106711251) (kept: each R2025 model's `door_axes_vs_ifc.txt` in the [file list][kept-15]), head `c1a2a739`; the BIM4LCA office
 files are one building). In the held-out models of 2024 to 2027 it is written
 for 41 of 41 doors and 104 of 105 windows (the one other already had a
 rotation of its own, which is Revit's) and none differs. Every door's and
@@ -477,7 +477,7 @@ and [42106731054](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106731054
 cuts it no opening, is placed the same way, reversed also where its curtain
 wall's `m_isFlipped` is set (RE-474, #1494): 269 of 269 equal to Revit's on
 the BIM4LCA office's four files and RE1 Architecture (Measure run
-[43688985749](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43688985749)). Another door bound to none, an element with no stored transform
+[43688985749](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43688985749) (kept: each model's `probe_score.txt`, its rows with `"rule": true`, in the [file list][kept-16])). Another door bound to none, an element with no stored transform
 (Revit 2023 and older) and a turned instance keep the default axes, which say
 nothing of the direction they face; the origin is still the record box's
 centre, more than 0.5 ft from Revit's on all 1,061 walled doors and windows
@@ -486,10 +486,10 @@ one value for every element of an `IfcDoorType` or `IfcWindowType` entity
 (160 of 160), which revit-ifc keeps in the type's `StyleTransform` from the
 instance that created the type and the file does not record; two of its axes
 follow the element's own opening and the third does not, so no rule with 0
-wrong exists (Measure run [42127619521](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42127619521),
+wrong exists (Measure run [42127619521](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42127619521) (kept: each model's `probe_score.txt` in the [file list][kept-17]),
 `reports/element-framing/RE-357-door-window-origin.md`). On Revit 2025,
 2026 and 2027 the same elements are held to the 2024 save by the same-project
-check (`tools/re/bodies_across_saves.py`, run [42106711251](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106711251)): it compares 107,
+check (`tools/re/bodies_across_saves.py`, run [42106711251](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106711251) (kept: [2025][kept-18], [2026][kept-19], [2027][kept-20])): it compares 107,
 79 and 65 doors and windows of `rac_advanced` and 17 each of `rac_basic` (of
 them 66, 44, 31 and 14, 14, 14 not on the default axes), so two buildings,
 each saved by three releases, exercise it; 28 and 42 the 2024 save places by
@@ -1030,7 +1030,7 @@ more are in sets Revit names with `(Type)` on 13 of its type objects, as
 the order of its export has it, and 18 are curtain panels' type category,
 written before. Against the exports with Revit's property sets of
 puzzbobb's 19 Revit 2025 models, which Measure scores in CI (run
-[41636859789](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41636859789)), 2,502 of the 2,646 properties written are Revit's: 126 differ,
+[41636859789](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41636859789) (kept: each R2025 model's `revit_property_sets_vs_ifc.txt` in the [file list][kept-21])), 2,502 of the 2,646 properties written are Revit's: 126 differ,
 as Revit's export writes a window type's sill height and its nested
 families' lengths at 1/304.8² of their value, and 18, a stringer type's, are
 in no set Revit writes there. On the BIM4LCA office as
@@ -1264,7 +1264,7 @@ The 621 rooms of the 12 models that have a Revit export (Core Interior, RE1
 Architecture, the BIM4LCA office as built and at permit and its two terrain
 variants, six R2025 room models) are all in the last phase and all in
 Revit's export, so none of them changes: in the unfiltered Measure (run
-[41784044966](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41784044966)) 12 of 111 exports move, the `rac_basic_sample_project` saves of
+[41784044966](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41784044966) (kept: each model's `ifc.sha256` on both sides in the [file list][kept-22])) 12 of 111 exports move, the `rac_basic_sample_project` saves of
 Revit 2016 to 2027, and 99 are byte for byte as before, the held-out models
 included. The rule is unmeasured against a
 Revit export made with the default setup, because no project in the corpus
@@ -1349,7 +1349,7 @@ stored transform (RE-361) and a railing's type from its payload (RE-66) keep
 their range, each held to the project's 2024 save on the releases the corpora
 have a file of; RE-119 and RE-370 still run on releases no file measures, the
 experimental band, and a file of one of them is how they are measured. In an
-unfiltered Measure of 146 exports (run [43525326226](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43525326226), the held-out and spent
+unfiltered Measure of 146 exports (run [43525326226](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43525326226) (kept: each model's `ifc.sha256` and `diagnostics.json` on both sides in the [file list][kept-23]), the held-out and spent
 models included) none of the exports and none of the 121 diagnostics moves: no
 file of the corpora holds a case of the four rules that stop. The tool is
 `tools/re/release_rules_across_saves.py`
@@ -1547,7 +1547,7 @@ unchanged: values and unit assignment stay SI
 outside importer reported Autodesk's `rac_basic_sample_project` going from 14
 rooms to 0 between 0.13.0 and 0.14.0, and the cause is the RE-326 rule: all 14
 rooms are in Working Drawings, the second of three phases, and the last,
-Learning Content, holds none (Measure run [41985023986](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41985023986) on the 2016 to 2027 saves:
+Learning Content, holds none (Measure run [41985023986](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41985023986) (kept: each `rac_basic` save's `diagnostics.json` in the [file list][kept-24]) on the 2016 to 2027 saves:
 `room_not_in_export_phase` 14 on each, all in Working Drawings). Where no phase
 is named and the project's last phase holds no room, the export now writes the
 rooms of the latest phase that holds any, because rooms all in one phase
@@ -1559,7 +1559,7 @@ named (`--phase`, `phase=`), the last included, is exact, and a project with a
 room in its last phase is unchanged. It is a choice and not a measurement of
 Revit's default: no Revit export made at the last phase of such a project
 exists, and a project with no room in its last phase gets earlier rooms that
-Revit's default might leave out. Measured (Measure run [42035308270](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42035308270) at `ea0c7449`): the 12
+Revit's default might leave out. Measured (Measure run [42035308270](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42035308270) (kept: each `rac_basic` save's `diagnostics.json` in the [file list][kept-25]) at `ea0c7449`): the 12
 saves of 2016 to 2027 each write 14 `IfcSpace` of kind `room` (0 before) and the
 other 99 of 111 exports, held-out ones included, are byte for byte as before; the
 default is byte for byte the `--phase "Working Drawings"` export and pairs 14 of
@@ -1735,7 +1735,7 @@ sketches (26), sweeps, revolutions, blends and voids' cuts are not drawn. The 20
 the native releases, so its 85 of 86 is not reproduced. The 79 are
 reversed by default, a rule found on them and not held out; every instance in
 an export is checked against its own mesh. `rvt-ifc --family-extrusions`
-(opt-in; the default export is unchanged, hash for hash on 34 of 34 models of Measure run [41884073888](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41884073888), 111 of 111 at the earlier heads) draws an
+(opt-in; the default export is unchanged, hash for hash on 34 of 34 models of Measure run [41884073888](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41884073888) (kept: each model's `ifc.sha256` on both sides; [file list][kept-26]), 111 of 111 at the earlier heads) draws an
 instance from its family's extrusions where they reproduce its saved mesh.
 On Core Interior, RE1 and the BIM4LCA office files the first run (`aaa38de8`, before
 the flat-arc rule), which drew arcs as arcs, replaced 335 bodies; of the 251 the body scorer matched, 250 had
@@ -1749,7 +1749,7 @@ a body both files write as true curves is the fine tessellation (RE-331 §8,
 the maintainer's decision on #1355). Revit 24.0.5's IFC4 export of the office
 writes a circle as half arcs and Revit 26.2's IFC2X3 export as an
 `IfcCircleProfileDef`. Every arc is written as the arc, whatever its radius
-(#1366). Measured at `34750454` (Measure runs [41884078892](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41884078892) and [41884639625](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41884639625),
+(#1366). Measured at `34750454` (Measure runs [41884078892](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41884078892) (kept: the bodies replaced in each model's `diagnostics.json`, the bodies scored in its `family_extrusion_bodies_vs_ifc.txt`; [file list][kept-27]) and [41884639625](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41884639625) (kept: each model's `ifc.sha256` on both sides, held-out models left out; [file list][kept-28]),
 RE-331 §9.1): 335 bodies are replaced (Core Interior 37, each office file 129,
 each terrain file 11, RE1 Architecture 8, Electrical 8, Mechanical 1, Plumbing
 1), where the 0.12 ft rule of #1352 replaced 66 and kept 269; 251 of them are
@@ -1765,7 +1765,7 @@ the bodies the rule kept, none held-out, and no row that passed on `main`
 fails. At `aaa38de8`, before the flat-arc rule, the first arc run had 250 of
 the 251 within the default tessellation's bar, the one that did not being a
 count mismatch between its default tessellation of Revit 26.2's IFC2X3 circle
-profile (27 chords) and of two half arcs of it (28) (run [41805333248](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41805333248), RE-327
+profile (27 chords) and of two half arcs of it (28) (run [41805333248](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41805333248) (kept: [RE1 Architecture][kept-29], and each model's `family_extrusion_bodies_vs_ifc.txt` in the [file list][kept-30]), RE-327
 §11). The flag reads Revit 2024 to 2027
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
@@ -1806,7 +1806,7 @@ on one project and 3 elements: Revit's public IFC4 export of Autodesk's 2018
 `rac_basic` holds 3 `IfcSystemFurnitureElement`, and the 3 the head writes for
 that save are its 3 by `Tag`, none extra and none missing, with record boxes
 equal to Revit's bodies to 0.0000 ft (counts and distances; the export has no
-licence and nothing is quoted from it; Measure run [42135914864](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42135914864) on `4ca938ad`).
+licence and nothing is quoted from it; Measure run [42135914864](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42135914864) (kept: each model's `ifc.sha256` on both sides; [file list][kept-31]) on `4ca938ad`).
 That export writes no property set on its 3, so no `Reference` is written. It
 contains all 3 in a space; rvt-rs contains 2 of the 3 in a space on Revit 2024
 and later only, as for every furniture class, and the third has no Level and
@@ -2261,3 +2261,35 @@ coverage. The existing family-extrusion option is unchanged. Profiles containing
 arcs are refused for partial sweeps: ARC-B contradicts Revit's IFC and ARC-BT
 has no native IFC verdict. Their face captures remain research leads only. The fixed
 acceptance limits are 0.3048 mm sampled distance and 0.01% volume error.
+
+[kept-1]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/bb535399b1c1f5b7f1c520db07a1f29b573aac1f/head/sample-2026-racbasicsampleproject/bodies_across_saves.txt
+[kept-2]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/bb535399b1c1f5b7f1c520db07a1f29b573aac1f/head/sample-2027-racbasicsampleproject/bodies_across_saves.txt
+[kept-3]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/ee7352fa522eeed8eef5fee3a540193a4e48e22e/head/sample-2025-racadvancedsampleproject/bodies_across_saves.txt
+[kept-4]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/ee7352fa522eeed8eef5fee3a540193a4e48e22e/head/sample-2025-rstbasicsampleproject/bodies_across_saves.txt
+[kept-5]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/ee7352fa522eeed8eef5fee3a540193a4e48e22e/head/sample-2025-racbasicsampleproject/bodies_across_saves.txt
+[kept-6]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/30bad05bf2b72d10cea4c7fd6162da6084fa8ab8/head/sample-2026-rmeadvancedsampleproject/bodies_across_saves.txt
+[kept-7]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/30bad05bf2b72d10cea4c7fd6162da6084fa8ab8/head/sample-2026-rmebasicsampleproject/bodies_across_saves.txt
+[kept-8]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/30bad05bf2b72d10cea4c7fd6162da6084fa8ab8/base/sample-2026-rmeadvancedsampleproject/bodies_across_saves.txt
+[kept-9]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/30bad05bf2b72d10cea4c7fd6162da6084fa8ab8?recursive=1
+[kept-10]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/495803393bbe282852893ebf0d75c494bfa014a1?recursive=1
+[kept-11]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/720a9a67bcaa94f9f096fcdc323ab325313744a8/head/sample-2024-snowdon_towers_sample_architectural/diagnostics.json
+[kept-12]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/720a9a67bcaa94f9f096fcdc323ab325313744a8/head/sample-2024-snowdon_towers_sample_structural/diagnostics.json
+[kept-13]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/495803393bbe282852893ebf0d75c494bfa014a1/head/sample-2024-snowdon_towers_sample_architectural/diagnostics.json
+[kept-14]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/1af5ed6306795aaf951d303e2042b7a11e95c7c1?recursive=1
+[kept-15]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/2977cf634d3326a52c1adfd7097ed5b231124c0d?recursive=1
+[kept-16]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/830ab42e928997526fbcebbe64957d5747e98c3f?recursive=1
+[kept-17]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/b0b423da0b49c4f21af6ca1a836af645bd75a4d0?recursive=1
+[kept-18]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/2977cf634d3326a52c1adfd7097ed5b231124c0d/head/sample-2025-racadvancedsampleproject/bodies_across_saves.txt
+[kept-19]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/2977cf634d3326a52c1adfd7097ed5b231124c0d/head/sample-2026-racadvancedsampleproject/bodies_across_saves.txt
+[kept-20]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/2977cf634d3326a52c1adfd7097ed5b231124c0d/head/sample-2027-racadvancedsampleproject/bodies_across_saves.txt
+[kept-21]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/67f4cdc23647fffcb1ab616013b7d169de77fc05?recursive=1
+[kept-22]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/62735c2bf5e4aa633e4f05c62a010f3e7c5f1f70?recursive=1
+[kept-23]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/f44968af85882bdf0ae7831f5e81638274bf8f1d?recursive=1
+[kept-24]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/9b66140f210090ed34f9988d5dbd6a5d054a7249?recursive=1
+[kept-25]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/eb124f242dfcd5058c0cd6e8236308089c2c9491?recursive=1
+[kept-26]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/8f091648bc057074cc6547c2fe4fe669a5cff14c?recursive=1
+[kept-27]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/2c8c73fc10ecd59cb4a7e92d07b148b2a32733e8?recursive=1
+[kept-28]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/0f354e780db624abcf5d3b0dd0e8b3bcdb8e732c?recursive=1
+[kept-29]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/52302f084af559ccb4a187ffe5c2c7909107f960/head/re1-architecture/family_extrusion_bodies_vs_ifc.txt
+[kept-30]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/52302f084af559ccb4a187ffe5c2c7909107f960?recursive=1
+[kept-31]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/cc1a09c6b324b739bd5709eb44273a37bd16a141?recursive=1
