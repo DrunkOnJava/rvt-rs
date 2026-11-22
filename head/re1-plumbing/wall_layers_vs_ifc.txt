@@ -1,0 +1,4 @@
+0 walls drawn in layers in the GLB
+      0  of them one layer
+compared layers' colours against Revit's surface styles:
+exit 0

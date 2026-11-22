@@ -1,0 +1,5 @@
+record-box bodies: 1; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcSanitaryTerminal                1       0       0       0       0       0       1      nan
+total                              1       0       0       0       0       0       1
+exit 0

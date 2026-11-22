@@ -1,0 +1,16 @@
+record-box bodies: 183; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcSanitaryTerminal               97       0       0       2      95       0       0    0.198
+        43  WC-istuin:WC-1
+        19  IDO Glow washbasin 11461_11561:PA-4
+        15  Sense_Public_allas:PA-3.LE
+IfcRailing                        41       0       0       0      41       0       0    0.001
+        22  Railing:KJO-1
+        10  Railing:KAI-4
+         3  Railing:KAI-5
+IfcFurniture                      30       0       0       0      30       0       0    0.062
+        30  Stay_Wall_Mounted_:VAR-1
+IfcStair                          14       0       0       0       0       0      14      nan
+IfcCurtainWall                     1       0       0       0       0       0       1      nan
+total                            183       0       0       2     166       0      15
+exit 0

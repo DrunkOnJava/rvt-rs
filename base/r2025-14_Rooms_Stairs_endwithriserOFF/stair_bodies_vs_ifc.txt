@@ -1,0 +1,12 @@
+IfcStairFlight in Revit's export with a body: 1; rvt-rs writes one for 1 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 0 of 1
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 1 of 1
+    12642: differs, Revit 98 vertices, farthest 0.0328 ft, from rvt-rs's surface at most 1.43e-06 ft, volume rvt-rs 4.428920 ft3, Revit 4.428920 ft3, z rvt-rs 0.0000 to 4.5646, Revit 0.0000 to 4.5646
+      farthest Revit vertex (7.2327, 12.4736, 0.9771), nearest rvt-rs vertex (7.2655, 12.4736, 0.9771) of 84
+IfcStair in Revit's export with a body: 1; rvt-rs writes one for 1 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 0 of 1
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 0 of 1
+    12599: differs, Revit 140 vertices, farthest 2.56 ft, from rvt-rs's surface at most 2.36 ft, volume rvt-rs 7.999739 ft3, Revit 8.707639 ft3, z rvt-rs 0.0000 to 5.3458, Revit 0.0000 to 7.5174
+      farthest Revit vertex (5.3954, 12.6403, 3.5233), nearest rvt-rs vertex (6.3141, 12.4736, 1.1412) of 102
+IfcSlab .LANDING. in Revit's export with a body: 0; rvt-rs writes one for 0 of them
+exit 0

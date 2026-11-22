@@ -1,0 +1,7 @@
+     11  family instance | IfcWasteTerminal | Name equal | ObjectType equal
+      5  system family | IfcRamp | Name differs | ObjectType equal
+      2  family instance | IfcBuildingElementProxy | Name equal | ObjectType equal
+      2  system family | IfcWall | Name equal | ObjectType equal
+      1  system family | IfcRailing | Name differs | ObjectType differs
+      1  system family | IfcRamp | Name equal | ObjectType equal
+exit 0

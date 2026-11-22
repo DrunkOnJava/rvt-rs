@@ -1,0 +1,226 @@
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/mesh_bodies_vs_ifc.txt measure-head/nordic-office-as-built/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-as-built/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:10.221906501 +0000
++++ measure-head/nordic-office-as-built/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:09.147911331 +0000
+@@ -2 +2 @@
+-saved_graphics_mesh bodies scored: 1641; in Revit's export 1641
++saved_graphics_mesh bodies scored: 1563; in Revit's export 1563
+@@ -32,3 +31,0 @@
+-IfcWasteTerminal                 78      78        0       78        0          78  1.0035
+-       62      62        0       62        0          62  Lattiakaivo:LK-1
+-       16      16        0       16        0          16  Lattiakaivo:VK-1.Kattokaivo
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/saved_meshes_vs_ifc.txt measure-head/nordic-office-as-built/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-as-built/saved_meshes_vs_ifc.txt	2026-11-04 18:23:10.221906501 +0000
++++ measure-head/nordic-office-as-built/saved_meshes_vs_ifc.txt	2026-11-04 18:23:09.147911331 +0000
+@@ -9 +8,0 @@
+-IfcWasteTerminal                78        78       0       0      0       0
+@@ -20 +19 @@
+-total                        11025     11025       0       0      0       0
++total                        10947     10947       0       0      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/schema.txt measure-head/nordic-office-as-built/schema.txt
+--- measure-base/nordic-office-as-built/schema.txt	2026-11-04 18:23:10.221906501 +0000
++++ measure-head/nordic-office-as-built/schema.txt	2026-11-04 18:23:09.147911331 +0000
+@@ -4 +4 @@
+-  placement composition: 2450 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 2570 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/space_profiles_vs_ifc.txt measure-head/nordic-office-as-built/space_profiles_vs_ifc.txt
+--- measure-base/nordic-office-as-built/space_profiles_vs_ifc.txt	2026-11-04 18:23:10.221906501 +0000
++++ measure-head/nordic-office-as-built/space_profiles_vs_ifc.txt	2026-11-04 18:23:09.148911327 +0000
+@@ -7 +7 @@
+-space profiles: vertices within 0.01 ft 117, off 189
++space profiles: vertices within 0.01 ft 159, off 147
+@@ -12 +12,2 @@
+-space profiles: rvt-rs family instance saved mesh: 44, area within 0.1% 44, outline within 0.01 ft 43, both 43, boundary within 0.01 ft 44
++space profiles: rvt-rs family instance family body: 42, area within 0.1% 42, outline within 0.01 ft 42, both 42, boundary within 0.01 ft 42
++space profiles: rvt-rs family instance saved mesh: 2, area within 0.1% 2, outline within 0.01 ft 1, both 1, boundary within 0.01 ft 2
+@@ -17 +18,2 @@
+-space profiles: rvt-rs family instance saved mesh height: 44, lowest and highest vertex within 0.01 ft 44
++space profiles: rvt-rs family instance family body height: 42, lowest and highest vertex within 0.01 ft 42
++space profiles: rvt-rs family instance saved mesh height: 2, lowest and highest vertex within 0.01 ft 2
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/mesh_bodies_vs_ifc.txt measure-head/nordic-office-permit/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-permit/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:10.369905835 +0000
++++ measure-head/nordic-office-permit/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:09.139911367 +0000
+@@ -2 +2 @@
+-saved_graphics_mesh bodies scored: 1729; in Revit's export 1729
++saved_graphics_mesh bodies scored: 1651; in Revit's export 1651
+@@ -27,3 +26,0 @@
+-IfcWasteTerminal                 78      78        0       78        0          78  1.0035
+-       62      62        0       62        0          62  Lattiakaivo:LK-1
+-       16      16        0       16        0          16  Lattiakaivo:VK-1.Kattokaivo
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/saved_meshes_vs_ifc.txt measure-head/nordic-office-permit/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-permit/saved_meshes_vs_ifc.txt	2026-11-04 18:23:10.370905831 +0000
++++ measure-head/nordic-office-permit/saved_meshes_vs_ifc.txt	2026-11-04 18:23:09.140911363 +0000
+@@ -9 +8,0 @@
+-IfcWasteTerminal                78        78       0       0      0       0
+@@ -20 +19 @@
+-total                        11140     11138       1       1      0       0
++total                        11062     11060       1       1      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/schema.txt measure-head/nordic-office-permit/schema.txt
+--- measure-base/nordic-office-permit/schema.txt	2026-11-04 18:23:10.370905831 +0000
++++ measure-head/nordic-office-permit/schema.txt	2026-11-04 18:23:09.140911363 +0000
+@@ -4 +4 @@
+-  placement composition: 2417 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 2537 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/space_profiles_vs_ifc.txt measure-head/nordic-office-permit/space_profiles_vs_ifc.txt
+--- measure-base/nordic-office-permit/space_profiles_vs_ifc.txt	2026-11-04 18:23:10.436905534 +0000
++++ measure-head/nordic-office-permit/space_profiles_vs_ifc.txt	2026-11-04 18:23:09.149911322 +0000
+@@ -7 +7 @@
+-space profiles: vertices within 0.01 ft 115, off 193
++space profiles: vertices within 0.01 ft 157, off 151
+@@ -12 +12,2 @@
+-space profiles: rvt-rs family instance saved mesh: 44, area within 0.1% 44, outline within 0.01 ft 43, both 43, boundary within 0.01 ft 44
++space profiles: rvt-rs family instance family body: 42, area within 0.1% 42, outline within 0.01 ft 42, both 42, boundary within 0.01 ft 42
++space profiles: rvt-rs family instance saved mesh: 2, area within 0.1% 2, outline within 0.01 ft 1, both 1, boundary within 0.01 ft 2
+@@ -17 +18,2 @@
+-space profiles: rvt-rs family instance saved mesh height: 44, lowest and highest vertex within 0.01 ft 44
++space profiles: rvt-rs family instance family body height: 42, lowest and highest vertex within 0.01 ft 42
++space profiles: rvt-rs family instance saved mesh height: 2, lowest and highest vertex within 0.01 ft 2
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/mesh_bodies_vs_ifc.txt measure-head/nordic-office-terrain-concrete/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-terrain-concrete/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:10.480905336 +0000
++++ measure-head/nordic-office-terrain-concrete/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:09.215911026 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 16; in Revit's export 16
++saved_graphics_mesh bodies scored: 5; in Revit's export 5
+@@ -3,2 +2,0 @@
+-IfcWasteTerminal                 11      11        0       11        0          11  1.0008
+-       11      11        0       11        0          11  Hulevesikaivo:HVK-1
+@@ -10,11 +7,0 @@
+-  1392205 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392200 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392196 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392197 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392204 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008706 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392201 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392202 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392199 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392203 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392198 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008702 ft, rvt-rs's to Revit's 0.001581 ft
+-  1392195 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008699 ft, rvt-rs's to Revit's 0.001581 ft
+@@ -24,0 +12 @@
++  1385641 IfcRampFlight 'Ramp:AP-ajoramppi': volume ratio 0.5000, Revit's vertices to rvt-rs's surface 2.023e-06 ft, rvt-rs's to Revit's 1.307e-06 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/saved_meshes_vs_ifc.txt measure-head/nordic-office-terrain-concrete/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-terrain-concrete/saved_meshes_vs_ifc.txt	2026-11-04 18:23:10.480905336 +0000
++++ measure-head/nordic-office-terrain-concrete/saved_meshes_vs_ifc.txt	2026-11-04 18:23:09.250910868 +0000
+@@ -2 +2 @@
+-file-wide offset removed (ft): [-0.0, -0.0, 0.0]
++file-wide offset removed (ft): [-0.0, 0.0, -0.0]
+@@ -4 +3,0 @@
+-IfcWasteTerminal                11        11       0       0      0       0
+@@ -7 +6 @@
+-total                           16        16       0       0      0       0
++total                            5         5       0       0      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/schema.txt measure-head/nordic-office-terrain-concrete/schema.txt
+--- measure-base/nordic-office-terrain-concrete/schema.txt	2026-11-04 18:23:10.480905336 +0000
++++ measure-head/nordic-office-terrain-concrete/schema.txt	2026-11-04 18:23:09.250910868 +0000
+@@ -4 +4 @@
+-  placement composition: 14 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 25 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/mesh_bodies_vs_ifc.txt measure-head/nordic-office-terrain-timber/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-terrain-timber/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:10.481905332 +0000
++++ measure-head/nordic-office-terrain-timber/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:09.263910809 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 16; in Revit's export 16
++saved_graphics_mesh bodies scored: 5; in Revit's export 5
+@@ -3,2 +2,0 @@
+-IfcWasteTerminal                 11      11        0       11        0          11  1.0008
+-       11      11        0       11        0          11  Hulevesikaivo:HVK-1
+@@ -10,11 +7,0 @@
+-  1395257 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395111 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008707 ft, rvt-rs's to Revit's 0.001581 ft
+-  1394993 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395023 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395237 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008706 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395137 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395171 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395083 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395203 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008705 ft, rvt-rs's to Revit's 0.001581 ft
+-  1395053 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008702 ft, rvt-rs's to Revit's 0.001581 ft
+-  1394736 IfcWasteTerminal 'Hulevesikaivo:HVK-1': volume ratio 1.0008, Revit's vertices to rvt-rs's surface 0.0008699 ft, rvt-rs's to Revit's 0.001581 ft
+@@ -24,0 +12 @@
++  1385641 IfcRampFlight 'Ramp:AP-ajoramppi': volume ratio 0.5000, Revit's vertices to rvt-rs's surface 2.023e-06 ft, rvt-rs's to Revit's 1.307e-06 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/saved_meshes_vs_ifc.txt measure-head/nordic-office-terrain-timber/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-terrain-timber/saved_meshes_vs_ifc.txt	2026-11-04 18:23:10.481905332 +0000
++++ measure-head/nordic-office-terrain-timber/saved_meshes_vs_ifc.txt	2026-11-04 18:23:09.263910809 +0000
+@@ -2 +2 @@
+-file-wide offset removed (ft): [-0.0, -0.0, 0.0]
++file-wide offset removed (ft): [-0.0, 0.0, -0.0]
+@@ -4 +3,0 @@
+-IfcWasteTerminal                11        11       0       0      0       0
+@@ -7 +6 @@
+-total                           16        16       0       0      0       0
++total                            5         5       0       0      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/schema.txt measure-head/nordic-office-terrain-timber/schema.txt
+--- measure-base/nordic-office-terrain-timber/schema.txt	2026-11-04 18:23:10.481905332 +0000
++++ measure-head/nordic-office-terrain-timber/schema.txt	2026-11-04 18:23:09.263910809 +0000
+@@ -4 +4 @@
+-  placement composition: 15 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 26 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-architecture/mesh_bodies_vs_ifc.txt measure-head/re1-architecture/mesh_bodies_vs_ifc.txt
+--- measure-base/re1-architecture/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:10.572904922 +0000
++++ measure-head/re1-architecture/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:09.463909910 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 46; in Revit's export 46
++saved_graphics_mesh bodies scored: 45; in Revit's export 45
+@@ -12 +12 @@
+-IfcBuildingElementProxy           7       7        6        7        6           7  1.0000
++IfcBuildingElementProxy           6       6        6        6        6           6  1.0000
+@@ -15 +14,0 @@
+-        1       1        0        1        0           1  Dispenser, Toilet Paper - NON-COLLECTUS:-
+@@ -39 +37,0 @@
+-  360331 IfcBuildingElementProxy 'Dispenser, Toilet Paper - NON-COLLECTUS:-': volume ratio 1.0047, Revit's vertices to rvt-rs's surface 0.0009143 ft, rvt-rs's to Revit's 0.001552 ft
+@@ -47,0 +46 @@
++  366924 IfcFurnishingElement 'Cabinet, Base Integrated Trash Single-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.91e-06 ft, rvt-rs's to Revit's 1.882e-06 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-architecture/saved_meshes_vs_ifc.txt measure-head/re1-architecture/saved_meshes_vs_ifc.txt
+--- measure-base/re1-architecture/saved_meshes_vs_ifc.txt	2026-11-04 18:23:10.572904922 +0000
++++ measure-head/re1-architecture/saved_meshes_vs_ifc.txt	2026-11-04 18:23:09.463909910 +0000
+@@ -6 +5,0 @@
+-IfcBuildingElementProxy          7         7       0       0      0       0
+@@ -7,0 +7 @@
++IfcBuildingElementProxy          6         6       0       0      0       0
+@@ -10 +10 @@
+-total                           46        46       0       0      0       0
++total                           45        45       0       0      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-architecture/schema.txt measure-head/re1-architecture/schema.txt
+--- measure-base/re1-architecture/schema.txt	2026-11-04 18:23:10.572904922 +0000
++++ measure-head/re1-architecture/schema.txt	2026-11-04 18:23:09.463909910 +0000
+@@ -4 +4 @@
+-  placement composition: 51 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 58 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-electrical/mesh_bodies_vs_ifc.txt measure-head/re1-electrical/mesh_bodies_vs_ifc.txt
+--- measure-base/re1-electrical/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:10.572904922 +0000
++++ measure-head/re1-electrical/mesh_bodies_vs_ifc.txt	2026-11-04 18:23:09.463909910 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 45; in Revit's export 45
++saved_graphics_mesh bodies scored: 39; in Revit's export 39
+@@ -3 +3 @@
+-IfcBuildingElementProxy          28      28       22       28       22          28  1.0000
++IfcBuildingElementProxy          22      22       22       22       22          22  1.0000
+@@ -6 +5,0 @@
+-        6       6        0        6        0           6  283513-OCC:Occupancy Sensor
+@@ -9,0 +9 @@
++        1       1        1        1        1           1  262726-RECEPT:120V Special Purpose Outlet - Washer
+@@ -29,5 +29,5 @@
+-  806286 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009333 ft, rvt-rs's to Revit's 0.001574 ft
+-  806248 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009341 ft, rvt-rs's to Revit's 0.001573 ft
+-  799007 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009336 ft, rvt-rs's to Revit's 0.001573 ft
+-  806296 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009335 ft, rvt-rs's to Revit's 0.001573 ft
+-  806274 IfcBuildingElementProxy '283513-OCC:Occupancy Sensor': volume ratio 1.0046, Revit's vertices to rvt-rs's surface 0.0009328 ft, rvt-rs's to Revit's 0.001573 ft
++  476469 IfcBuildingElementProxy '262726-RECEPT:120V Special Purpose Outlet - Washer': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.522e-06 ft, rvt-rs's to Revit's 3.493e-06 ft
++  476602 IfcBuildingElementProxy '262726-RECEPT:240V Special Purpose Outlet - Dryer (2 Poles)': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.522e-06 ft, rvt-rs's to Revit's 3.493e-06 ft
++  478205 IfcBuildingElementProxy '262726-RECEPT:120V Duplex': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.993e-06 ft, rvt-rs's to Revit's 3.424e-06 ft
++  808280 IfcBuildingElementProxy '262726-RECEPT:120V Duplex GFCI Above Counter': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.356e-06 ft, rvt-rs's to Revit's 3.233e-06 ft
++  508466 IfcBuildingElementProxy '260923-SWITCH:120V Single Pole': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.948e-06 ft, rvt-rs's to Revit's 3.152e-06 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-electrical/saved_meshes_vs_ifc.txt measure-head/re1-electrical/saved_meshes_vs_ifc.txt
+--- measure-base/re1-electrical/saved_meshes_vs_ifc.txt	2026-11-04 18:23:10.572904922 +0000
++++ measure-head/re1-electrical/saved_meshes_vs_ifc.txt	2026-11-04 18:23:09.464909906 +0000
+@@ -4 +4 @@
+-IfcBuildingElementProxy         28        28       0       0      0       0
++IfcBuildingElementProxy         22        22       0       0      0       0
+@@ -7 +7 @@
+-total                           45        45       0       0      0       0
++total                           39        39       0       0      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x '*.ifc' -x '*.glb' measure-base/re1-electrical/schema.txt measure-head/re1-electrical/schema.txt
+--- measure-base/re1-electrical/schema.txt	2026-11-04 18:23:10.572904922 +0000
++++ measure-head/re1-electrical/schema.txt	2026-11-04 18:23:09.464909906 +0000
+@@ -4 +4 @@
+-  placement composition: 4 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 10 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched

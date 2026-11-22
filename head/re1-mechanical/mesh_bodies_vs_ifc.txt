@@ -1,0 +1,38 @@
+saved_graphics_mesh bodies scored: 67; in Revit's export 67
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcFlowFitting                   35      32       32       32       32          32  1.0000
+       15      15       15       15       15          15  Rect Duct Transition - Angle:-
+       10      10       10       10       10          10  Rect Duct Elbow - Mitered:-
+        6       6        6        6        6           6  Rect Duct Tee:-
+        3       0        0        0        0           0  Closet Bend Reducing:-
+        1       1        1        1        1           1  Rect Endcap:-
+IfcFlowSegment                   25      25       25       25       25          25  1.0000
+       25      25       25       25       25          25  Rectangular Duct:233113-DUCT-Tees
+IfcFlowTerminal                   7       7        7        7        7           7  1.0000
+        6       6        6        6        6           6  233713-AIRTRM-Supply Diffuser:300x150
+        1       1        1        1        1           1  233713-AIRTRM-Return Grille:600x600
+  442037 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1431, Revit's vertices to rvt-rs's surface 0.02007 ft, rvt-rs's to Revit's 0.02067 ft
+  442191 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1431, Revit's vertices to rvt-rs's surface 0.02007 ft, rvt-rs's to Revit's 0.02067 ft
+  442040 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1431, Revit's vertices to rvt-rs's surface 0.02006 ft, rvt-rs's to Revit's 0.02048 ft
+  438945 IfcFlowSegment 'Rectangular Duct:233113-DUCT-Tees': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.505e-06 ft, rvt-rs's to Revit's 2.957e-06 ft
+  434968 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.602e-06 ft, rvt-rs's to Revit's 1.671e-06 ft
+  435015 IfcFlowSegment 'Rectangular Duct:233113-DUCT-Tees': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.671e-06 ft, rvt-rs's to Revit's 2.602e-06 ft
+  439228 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.381e-06 ft, rvt-rs's to Revit's 1.797e-06 ft
+  438862 IfcFlowSegment 'Rectangular Duct:233113-DUCT-Tees': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 7.492e-07 ft, rvt-rs's to Revit's 2.381e-06 ft
+  439088 IfcFlowSegment 'Rectangular Duct:233113-DUCT-Tees': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.354e-06 ft, rvt-rs's to Revit's 1.505e-06 ft
+  439118 IfcFlowSegment 'Rectangular Duct:233113-DUCT-Tees': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.634e-06 ft, rvt-rs's to Revit's 2.307e-06 ft
+  439123 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.1e-06 ft, rvt-rs's to Revit's 2.1e-06 ft
+  439119 IfcFlowFitting 'Rect Duct Tee:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.1e-06 ft, rvt-rs's to Revit's 2.1e-06 ft
+  439120 IfcFlowSegment 'Rectangular Duct:233113-DUCT-Tees': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.1e-06 ft, rvt-rs's to Revit's 1.671e-06 ft
+  490317 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.973e-06 ft, rvt-rs's to Revit's 1.977e-06 ft
+  435175 IfcFlowSegment 'Rectangular Duct:233113-DUCT-Tees': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.977e-06 ft, rvt-rs's to Revit's 1.671e-06 ft
+  volume 442037 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1431, farthest vertex 0.02067 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0021
+    Revit shells 1, signed volumes (cubic ft): 0.0018
+  volume 442191 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1431, farthest vertex 0.02067 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0021
+    Revit shells 1, signed volumes (cubic ft): 0.0018
+  volume 442040 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1431, farthest vertex 0.02048 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0021
+    Revit shells 1, signed volumes (cubic ft): 0.0018
+exit 0

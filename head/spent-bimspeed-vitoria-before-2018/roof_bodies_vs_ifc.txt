@@ -1,0 +1,12 @@
+roofs in Revit's export with a body: 8; rvt-rs writes one for 8 of them
+vertices within 0.001 ft and volume within 0.0001 of Revit's: 2 of 8
+every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 7 of 8
+  573584: differs, Revit 64 vertices, farthest 35.5 ft, from rvt-rs's surface at most 3.79 ft, volume rvt-rs 24456.924468 ft3, Revit 1439.406916 ft3
+  579558: differs, Revit 16 vertices, farthest 1.12 ft, from rvt-rs's surface at most 1.32e-06 ft, volume rvt-rs 79.635548 ft3, Revit 46.265540 ft3
+  655660: differs, Revit 24 vertices, farthest 16.1 ft, from rvt-rs's surface at most 1.31e-06 ft, volume rvt-rs 323.227399 ft3, Revit 240.549268 ft3
+  655738: differs, Revit 8 vertices, farthest 12.7 ft, from rvt-rs's surface at most 2.68e-06 ft, volume rvt-rs 1810.198316 ft3, Revit 589.919052 ft3
+  682810: differs, Revit 8 vertices, farthest 0.131 ft, from rvt-rs's surface at most 2.36e-06 ft, volume rvt-rs 27.958231 ft3, Revit 5.335934 ft3
+  682821: match, Revit 8 vertices, farthest 3e-06 ft, from rvt-rs's surface at most 2.78e-06 ft, volume rvt-rs 3.716467 ft3, Revit 3.716469 ft3
+  682867: differs, Revit 8 vertices, farthest 0.131 ft, from rvt-rs's surface at most 1.77e-06 ft, volume rvt-rs 27.958231 ft3, Revit 5.335934 ft3
+  682878: match, Revit 8 vertices, farthest 3e-06 ft, from rvt-rs's surface at most 3.02e-06 ft, volume rvt-rs 3.716467 ft3, Revit 3.716469 ft3
+exit 0

@@ -1,0 +1,6 @@
+     48  angled, not scored
+    398  ends
+    353  ends within 0.001 ft
+    353  ends within 0.01 ft
+    368  ends within 0.1 ft
+exit 0

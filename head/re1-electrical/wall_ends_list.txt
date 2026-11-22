@@ -1,0 +1,4 @@
+straight and angled walls in both: 0; both ends within 0.001 ft: 0
+BodySource | start (Revit's joins there) | end (Revit's joins there) | walls; short/long = rvt-rs's wall shorter/longer there
+the 40 largest (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):
+exit 0

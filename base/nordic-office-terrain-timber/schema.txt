@@ -1,0 +1,12 @@
+arity:
+  schema: IFC4
+  PredefinedType populated: IfcWall=2
+  placement composition: 15 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+validate:
+findings 0
+rules:
+findings 1
+1 IfcRelAssociatesMaterial IfcRelAssociatesMaterial.AllowedElements: (sizeof([temp for temp in SELF.RelatedObjects if sizeof(typeof(temp) * ['ifc4.ifcelement', 'ifc4.ifcelementtype', 'ifc4.ifcwindowstyle', 'ifc4.ifcdoorstyle', 'ifc4.ifcstructuralmember', 'ifc4.ifcport']) == 0]) == 0) Violated by: (2 =
+property sets:
+sets 58 on 35 objects and types
+findings 0
