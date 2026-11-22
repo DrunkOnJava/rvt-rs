@@ -10,6 +10,9 @@
 # (Griffin, 2026-11-22). GitHub's own page for a commit on no branch and no tag warns that it "does
 # not belong to any branch".
 # research/kept-runs.tsv lists each kept run and its commit, added by a pull request after the run.
+# With `part: probes` it keeps only the probes' own output, which the first keeping leaves out, as
+# `refs/evidence/<run id>-probes` beside it: a figure only a probe prints is cited from there, and
+# the first kept commit, which citations already link to, is never replaced.
 #
 # Trust. Only a workflow_dispatch run of measure.yml in this repository is kept: a pull request
 # from a fork runs its own measure.yml and controls its whole artifact, and a kept copy is public
@@ -26,11 +29,16 @@ on:
       run_id:
         description: The Measure run whose outputs are kept
         required: true
+      part:
+        description: outputs (the scored outputs) or probes (the probes' own output, kept beside them)
+        type: choice
+        options: [outputs, probes]
+        default: outputs
 
 permissions: {}
 
 concurrency:
-  group: keep-run-outputs-${{ inputs.run_id }}
+  group: keep-run-outputs-${{ inputs.run_id }}-${{ inputs.part }}
   cancel-in-progress: false
 
 jobs:
@@ -57,12 +65,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ inputs.run_id }}
+          PART: ${{ inputs.part }}
         run: |
           set -euo pipefail
           if ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
             echo "::error::run_id must be a run id"
             exit 1
           fi
+          case "$PART" in
+            outputs) ref="refs/evidence/$RUN_ID"; artifacts="measure-head measure-base measure-verdict compare-scorer-diff measure-timing" ;;
+            probes) ref="refs/evidence/$RUN_ID-probes"; artifacts="measure-head measure-base" ;;
+            *) echo "::error::part must be outputs or probes"; exit 1 ;;
+          esac
           read -r head_repo run_event run_path < <(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '[(.head_repository.full_name // "unknown"), .event, .path] | @tsv')
           if [ "$run_event" != workflow_dispatch ] || [ "$head_repo" != "$REPO" ] || [ "$run_path" != .github/workflows/measure.yml ]; then
             echo "::error::run $RUN_ID is a $run_event run of $run_path in $head_repo: only a workflow_dispatch run of measure.yml in $REPO is kept"
@@ -70,13 +84,13 @@ jobs:
           fi
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           remote="https://github.com/$REPO"
-          if git -c "http.extraheader=$auth" ls-remote --exit-code "$remote" "refs/evidence/$RUN_ID" > /dev/null; then
-            echo "::error::refs/evidence/$RUN_ID exists; delete it first to keep the run again"
+          if git -c "http.extraheader=$auth" ls-remote --exit-code "$remote" "$ref" > /dev/null; then
+            echo "::error::$ref exists; delete it first to keep the run again"
             exit 1
           fi
           names=$(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/artifacts?per_page=100" --jq '.artifacts[] | select(.expired | not) | .name')
           found=0
-          for name in measure-head measure-base measure-verdict compare-scorer-diff measure-timing; do
+          for name in $artifacts; do
             if grep -qx "$name" <<< "$names"; then
               gh run download "$RUN_ID" --repo "$REPO" -n "$name" -D "$RUNNER_TEMP/in/$name"
               found=1
@@ -86,14 +100,14 @@ jobs:
             echo "::error::run $RUN_ID has no artifact left to keep"
             exit 1
           fi
-          python3 tools/ci/keep-run-outputs.py "$RUNNER_TEMP/in" "$RUNNER_TEMP/out" --run "$RUN_ID" --root "$GITHUB_WORKSPACE" | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 tools/ci/keep-run-outputs.py "$RUNNER_TEMP/in" "$RUNNER_TEMP/out" --run "$RUN_ID" --part "$PART" --root "$GITHUB_WORKSPACE" | tee -a "$GITHUB_STEP_SUMMARY"
           cd "$RUNNER_TEMP/out"
           git init -q -b kept
           git add -A
           GIT_AUTHOR_NAME="github-actions[bot]" GIT_AUTHOR_EMAIL="41898282+github-actions[bot]@users.noreply.github.com" \
             GIT_COMMITTER_NAME="github-actions[bot]" GIT_COMMITTER_EMAIL="41898282+github-actions[bot]@users.noreply.github.com" \
-            git commit -q -m "Measure run $RUN_ID: kept outputs (#2124)"
+            git commit -q -m "Measure run $RUN_ID: kept $PART (#2124)"
           commit=$(git rev-parse HEAD)
           echo "files in the commit: $(git ls-tree -r HEAD --name-only | wc -l)" | tee -a "$GITHUB_STEP_SUMMARY"
-          git -c "http.extraheader=$auth" push "$remote" "HEAD:refs/evidence/$RUN_ID"
-          echo "kept run $RUN_ID as refs/evidence/$RUN_ID, commit $commit: https://raw.githubusercontent.com/$REPO/$commit/KEPT.md" | tee -a "$GITHUB_STEP_SUMMARY"
+          git -c "http.extraheader=$auth" push "$remote" "HEAD:$ref"
+          echo "kept run $RUN_ID's $PART as $ref, commit $commit: https://raw.githubusercontent.com/$REPO/$commit/KEPT.md" | tee -a "$GITHUB_STEP_SUMMARY"
