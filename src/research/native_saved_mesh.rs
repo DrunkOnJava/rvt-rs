@@ -1188,12 +1188,42 @@ fn loop_gaps(
     Ok(best.map(|(_, gaps)| gaps).unwrap_or_default())
 }
 
+/// The loops of `face`, first to last.
+fn face_loops(g: &ObjectGraph, index: &PointerIndex<'_>, face: usize) -> Result<Vec<usize>> {
+    let (mut next, mut seen, mut loops) = (
+        index.resolve(face, &g.objects[face].fields["m_pFirstLoop"])?,
+        BTreeSet::new(),
+        Vec::new(),
+    );
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "loop-list cycle");
+        loops.push(li);
+        next = index.resolve(li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    Ok(loops)
+}
+
+/// Whether the edge `e`'s face other than `face` is a spline (`HermiteSurf`).
+fn leads_to_spline(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    e: usize,
+    face: usize,
+) -> Result<bool> {
+    let Some(other) = other_face(g, index, e, face)? else {
+        return Ok(false);
+    };
+    let surface = index.resolve(other, &g.objects[other].fields["m_pSurf"])?;
+    Ok(surface.is_some_and(|si| g.objects[si].class_name == "HermiteSurf"))
+}
+
 /// #2085: the gaps of the loop `li` of `face` that the coordinated join takes, and which end
-/// each keeps. A gap qualifies only where both its edges bound one other face, a loop of that
-/// face holds the same gap, one of the two rings reads `last/first` (P the edge's last point, Q
-/// the next edge's first) and the other `first/first` or `last/last`, and both are under
-/// [`COORDINATED_LIMIT`]. On the chair save's 8,960 corners Revit keeps the `last/first` ring's
-/// Q, which is the other ring's P; neither the office nor RE1 Architecture holds such a corner.
+/// each keeps. A gap qualifies only as the chair save's 40 stored corner pairs do: one of its
+/// edges bounds another face whose loop holds a gap at the same stored end of that edge, the
+/// other edge of each of the two rings leads to a spline face, one ring reads `last/first` (P
+/// the edge's last point, Q the next edge's first) and the other `first/first` or `last/last`,
+/// and both gaps are under [`COORDINATED_LIMIT`]. There Revit keeps the `last/first` ring's Q,
+/// which is the other ring's P.
 fn coordinated_keeps(
     g: &ObjectGraph,
     index: &PointerIndex<'_>,
@@ -1202,25 +1232,32 @@ fn coordinated_keeps(
 ) -> Result<BTreeMap<usize, Keep>> {
     let mut keeps = BTreeMap::new();
     for gap in loop_gaps(g, index, face, li)? {
-        let Some(other) = other_face(g, index, gap.a, face)? else {
-            continue;
-        };
-        if other_face(g, index, gap.b, face)? != Some(other) {
-            continue;
-        }
-        let first = &g.objects[other].fields["m_pFirstLoop"];
-        let (mut next, mut seen, mut view) = (index.resolve(other, first)?, BTreeSet::new(), None);
-        while let Some(oli) = next {
-            ensure!(seen.insert(oli), "loop-list cycle");
-            view = loop_gaps(g, index, other, oli)?
-                .into_iter()
-                .find(|t| (t.a == gap.b && t.b == gap.a) || (t.a == gap.a && t.b == gap.b));
-            if view.is_some() {
-                break;
+        let mut views = Vec::new();
+        for (shared, first, own_other) in [(gap.a, gap.p_first, gap.b), (gap.b, gap.q_first, gap.a)]
+        {
+            if !leads_to_spline(g, index, own_other, face)? {
+                continue;
             }
-            next = index.resolve(oli, &g.objects[oli].fields["m_nextLoop"])?;
+            let Some(neighbour) = other_face(g, index, shared, face)? else {
+                continue;
+            };
+            for oli in face_loops(g, index, neighbour)? {
+                for t in loop_gaps(g, index, neighbour, oli)? {
+                    let (at_end, their_other) = if t.a == shared {
+                        (t.p_first == first, t.b)
+                    } else if t.b == shared {
+                        (t.q_first == first, t.a)
+                    } else {
+                        continue;
+                    };
+                    if at_end && leads_to_spline(g, index, their_other, neighbour)? {
+                        views.push(t);
+                    }
+                }
+            }
         }
-        let Some(view) = view else {
+        // Exactly one other ring holds the corner, or the gap is left to the existing guard.
+        let [view] = views.as_slice() else {
             continue;
         };
         let (mine, theirs) = ((gap.p_first, gap.q_first), (view.p_first, view.q_first));
