@@ -12,7 +12,10 @@
 # research/kept-runs.tsv lists each kept run and its commit, added by a pull request after the run.
 # With `part: probes` it keeps only the probes' own output, which the first keeping leaves out, as
 # `refs/evidence/<run id>-probes` beside it: a figure only a probe prints is cited from there, and
-# the first kept commit, which citations already link to, is never replaced.
+# the first kept commit, which citations already link to, is never replaced. With `part: holdout`
+# it keeps each held-out model's `counts.txt`, Measure's own summary counts, as
+# `refs/evidence/<run id>-holdout`, so that the held-out figures the evidence pages cite keep a
+# source (Griffin, 2026-11-22).
 #
 # Trust. Only a workflow_dispatch run of measure.yml in this repository is kept: a pull request
 # from a fork runs its own measure.yml and controls its whole artifact, and a kept copy is public
@@ -30,9 +33,9 @@ on:
         description: The Measure run whose outputs are kept
         required: true
       part:
-        description: outputs (the scored outputs) or probes (the probes' own output, kept beside them)
+        description: outputs (the scored outputs), probes (the probes' own output) or holdout (the held-out models' summary counts), the last two kept beside the first
         type: choice
-        options: [outputs, probes]
+        options: [outputs, probes, holdout]
         default: outputs
 
 permissions: {}
@@ -75,7 +78,8 @@ jobs:
           case "$PART" in
             outputs) ref="refs/evidence/$RUN_ID"; artifacts="measure-head measure-base measure-verdict compare-scorer-diff measure-timing" ;;
             probes) ref="refs/evidence/$RUN_ID-probes"; artifacts="measure-head measure-base" ;;
-            *) echo "::error::part must be outputs or probes"; exit 1 ;;
+            holdout) ref="refs/evidence/$RUN_ID-holdout"; artifacts="measure-head measure-base" ;;
+            *) echo "::error::part must be outputs, probes or holdout"; exit 1 ;;
           esac
           read -r head_repo run_event run_path < <(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '[(.head_repository.full_name // "unknown"), .event, .path] | @tsv')
           if [ "$run_event" != workflow_dispatch ] || [ "$head_repo" != "$REPO" ] || [ "$run_path" != .github/workflows/measure.yml ]; then
