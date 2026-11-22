@@ -76,8 +76,8 @@ distances only, never a coordinate; `--per-gap` adds one line per gap with its E
    one edge only, the same two readings for the flagged edge's side, each end named by whose
    it is, against the end Revit keeps. And the outcome against the gap's place in its ring
    (`piece`'s `at`: 0 is the step from the last edge back to the first) and against the signs of
-   the step from P to Q in the surface's two parameters (`du_ft`, `dv_ft`; 0 where a step is
-   under 1e-9 ft).
+   the step from P to Q in the surface's two parameters (`du_ft`, `dv_ft`; 0 for a component under
+   1% of the other, as `piece`'s `sig=one` reads a step along one parameter).
 
 An empty or unreadable probe output fails row 0 rather than reading as nothing to score.
 
@@ -145,7 +145,7 @@ def read_probe(path):
                 f = fields(line)
                 key = (f["graph"], f["face"], f["loop"], f["at"].split("/")[0])
                 PLACE[key] = ("closing" if f["at"].split("/")[0] == "0" else "inner",
-                              "".join(sign(f.get(k)) for k in ("du_ft", "dv_ft")))
+                              signs(side(f.get("du_ft")), side(f.get("dv_ft"))))
                 split, state = states(side(f.get("sides_a")), side(f.get("sides_b")))
                 pieces[key] = (float(f["gap"]), split, f.get("surface", "-"), state, state)
             elif line.startswith("piecex "):
@@ -202,11 +202,13 @@ REACH_JOIN = {}
 PLACE = {}
 
 
-def sign(value):
-    x = side(value)
-    if x is None:
-        return "?"
-    return "0" if abs(x) < 1e-9 else "+" if x > 0 else "-"
+def signs(du, dv):
+    """The signs of a step's two parameter components, `0` for one under 1% of the other (as
+    `piece`'s `sig=one` reads a step along one parameter) or under 1e-9 ft."""
+    if du is None or dv is None:
+        return "??"
+    big = max(abs(du), abs(dv))
+    return "".join("0" if abs(x) < max(1e-9, 0.01 * big) else "+" if x > 0 else "-" for x in (du, dv))
 # The bound within which the probe's loops join (`native_saved_mesh`'s `close`).
 JOIN = 1e-7
 
