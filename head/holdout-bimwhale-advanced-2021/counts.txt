@@ -1,0 +1,157 @@
+psets: Revit values on objects rvt-rs writes: 9307; equal: 3405; different: 2; missing: 5900; rvt-rs values Revit does not write: 13
+psets:   Pset_AirSideSystemInformation.Name: 10, equal 0, different 0, missing 10
+psets:   Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+psets:   Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingElementProxyCommon.Reference: 370, equal 320, different 0, missing 50
+psets:   Pset_BuildingStoreyCommon.AboveGround: 10, equal 10, different 0, missing 0
+psets:   Pset_ConcreteElementGeneral.FireRating: 268, equal 0, different 0, missing 268
+psets:   Pset_DoorCommon.FireRating: 78, equal 0, different 0, missing 78
+psets:   Pset_DoorCommon.IsExternal: 118, equal 0, different 0, missing 118
+psets:   Pset_DoorCommon.Reference: 118, equal 10, different 0, missing 108
+psets:   Pset_DoorCommon.ThermalTransmittance: 107, equal 0, different 0, missing 107
+psets:   Pset_ElementShading.Color: 24, equal 0, different 0, missing 24
+psets:   Pset_ElementShading.Roughness: 448, equal 0, different 0, missing 448
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 1769, equal 1343, different 1, missing 425
+psets:   Pset_FurnitureTypeCommon.Description: 35, equal 0, different 0, missing 35
+psets:   Pset_ManufacturerOccurrence.SerialNumber: 24, equal 0, different 0, missing 24
+psets:   Pset_ManufacturerTypeInformation.Manufacturer: 579, equal 0, different 0, missing 579
+psets:   Pset_MemberCommon.IsExternal: 47, equal 0, different 0, missing 47
+psets:   Pset_MemberCommon.Reference: 47, equal 0, different 0, missing 47
+psets:   Pset_MemberCommon.Slope: 47, equal 0, different 0, missing 47
+psets:   Pset_OpeningElementCommon.Reference: 19, equal 0, different 0, missing 19
+psets:   Pset_ProductRequirements.Category: 1780, equal 0, different 0, missing 1780
+psets:   Pset_ProductRequirements.Name: 34, equal 0, different 0, missing 34
+psets:   Pset_ProvisionForVoid.Depth: 4, equal 0, different 0, missing 4
+psets:   Pset_ProvisionForVoid.Height: 36, equal 0, different 0, missing 36
+psets:   Pset_ProvisionForVoid.Shape: 24, equal 0, different 0, missing 24
+psets:   Pset_ProvisionForVoid.Width: 4, equal 0, different 0, missing 4
+psets:   Pset_RailingCommon.Height: 11, equal 0, different 0, missing 11
+psets:   Pset_RailingCommon.IsExternal: 11, equal 0, different 0, missing 11
+psets:   Pset_RailingCommon.Reference: 11, equal 0, different 0, missing 11
+psets:   Pset_RampCommon.IsExternal: 2, equal 0, different 0, missing 2
+psets:   Pset_RampCommon.Reference: 2, equal 0, different 0, missing 2
+psets:   Pset_RampFlightCommon.Reference: 2, equal 0, different 0, missing 2
+psets:   Pset_ReinforcementBarPitchOfSlab.Reference: 49, equal 41, different 0, missing 8
+psets:   Pset_ReinforcementBarPitchOfWall.Description: 166, equal 0, different 0, missing 166
+psets:   Pset_ReinforcementBarPitchOfWall.Reference: 399, equal 260, different 0, missing 139
+psets:   Pset_RoofCommon.IsExternal: 2, equal 0, different 0, missing 2
+psets:   Pset_RoofCommon.ProjectedArea: 2, equal 0, different 0, missing 2
+psets:   Pset_RoofCommon.Reference: 2, equal 1, different 1, missing 0
+psets:   Pset_RoofCommon.TotalArea: 2, equal 0, different 0, missing 2
+psets:   Pset_SanitaryTerminalTypeCommon.Reference: 49, equal 40, different 0, missing 9
+psets:   Pset_SlabCommon.IsExternal: 49, equal 0, different 0, missing 49
+psets:   Pset_SlabCommon.LoadBearing: 41, equal 0, different 0, missing 41
+psets:   Pset_SlabCommon.PitchAngle: 43, equal 41, different 0, missing 2
+psets:   Pset_SlabCommon.Reference: 49, equal 41, different 0, missing 8
+psets:   Pset_SlabCommon.ThermalTransmittance: 13, equal 0, different 0, missing 13
+psets:   Pset_StairCommon.IsExternal: 5, equal 0, different 0, missing 5
+psets:   Pset_StairCommon.NumberOfRiser: 5, equal 0, different 0, missing 5
+psets:   Pset_StairCommon.NumberOfTreads: 5, equal 0, different 0, missing 5
+psets:   Pset_StairCommon.Reference: 5, equal 0, different 0, missing 5
+psets:   Pset_StairCommon.RiserHeight: 5, equal 0, different 0, missing 5
+psets:   Pset_StairCommon.TreadLength: 5, equal 0, different 0, missing 5
+psets:   Pset_StairFlightCommon.NosingLength: 5, equal 0, different 0, missing 5
+psets:   Pset_StairFlightCommon.NumberOfRiser: 5, equal 0, different 0, missing 5
+psets:   Pset_StairFlightCommon.NumberOfTreads: 5, equal 0, different 0, missing 5
+psets:   Pset_StairFlightCommon.Reference: 5, equal 0, different 0, missing 5
+psets:   Pset_StairFlightCommon.RiserHeight: 5, equal 0, different 0, missing 5
+psets:   Pset_StairFlightCommon.TreadLength: 5, equal 0, different 0, missing 5
+psets:   Pset_StairFlightCommon.TreadLengthAtInnerSide: 5, equal 0, different 0, missing 5
+psets:   Pset_StairFlightCommon.TreadLengthAtOffset: 5, equal 0, different 0, missing 5
+psets:   Pset_WallCommon.ExtendToStructure: 390, equal 390, different 0, missing 0
+psets:   Pset_WallCommon.FireRating: 166, equal 0, different 0, missing 166
+psets:   Pset_WallCommon.IsExternal: 399, equal 390, different 0, missing 9
+psets:   Pset_WallCommon.LoadBearing: 390, equal 0, different 0, missing 390
+psets:   Pset_WallCommon.Reference: 399, equal 260, different 0, missing 139
+psets:   Pset_WallCommon.ThermalTransmittance: 72, equal 0, different 0, missing 72
+psets:   Pset_WindowCommon.IsExternal: 257, equal 0, different 0, missing 257
+psets:   Pset_WindowCommon.Reference: 257, equal 257, different 0, missing 0
+psets:   Pset_ConcreteElementGeneral.FireRating: 3
+psets:   Pset_DoorCommon.FireRating: 3
+psets:   Pset_DoorCommon.IsExternal: 3
+psets:   Pset_DoorCommon.Reference: 3
+psets:   Pset_DoorCommon.ThermalTransmittance: 3
+psets:   Pset_ElementShading.Roughness: 7
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 18
+psets:   Pset_ManufacturerTypeInformation.Manufacturer: 11
+psets:   Pset_OpeningElementCommon.Reference: 17
+psets:   Pset_ProductRequirements.Category: 18
+psets:   Pset_WindowCommon.IsExternal: 1
+psets:   Pset_WindowCommon.Reference: 1
+psets: IFC4 properties IFC2X3's definitions do not have, which Revit's IFC2X3 export cannot write, not scored: 407
+psets:   Pset_FurnitureTypeCommon.Reference: 407
+psets: IFC2X3 values also in an IFC4 set and scored there, not scored here: 24
+psets: rvt-rs values Revit does not write, on objects Revit writes and on others:
+psets:   Pset_BuildingStoreyCommon.AboveGround: 0, 6
+psets:   Pset_DoorCommon.Reference: 1, 0
+psets:   Pset_WindowCommon.Reference: 6, 0
+Revit quantities on objects rvt-rs writes: 0; equal: 0; different: 0; missing: 0; rvt-rs quantities Revit does not write: 371
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 0
+walls whose Length is rvt-rs's curve's: 0; Revit's Axis's: 0; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+exit 0
+extra Qto_SlabBaseQuantities.Depth: 35
+extra Qto_SlabBaseQuantities.GrossArea: 41
+extra Qto_SlabBaseQuantities.GrossVolume: 35
+extra Qto_WallBaseQuantities.Width: 260
+names:     407  family instance | IfcFurniture | Name equal | ObjectType equal
+names:     307  family instance | IfcBuildingElementProxy | Name equal | ObjectType equal
+names:     263  family instance | IfcWindow | Name equal | ObjectType equal
+names:     260  system family | IfcWall | Name equal | ObjectType equal
+names:     130  system family | IfcWall | Name differs | ObjectType differs
+names:     115  family instance | IfcDoor | Name differs | ObjectType differs
+names:      47  system family | IfcMember | Name differs | ObjectType differs
+names:      41  system family | IfcSlab | Name equal | ObjectType equal
+names:      40  family instance | IfcSanitaryTerminal | Name equal | ObjectType equal
+names:      30  family instance | IfcBuildingElementProxy | Name differs | ObjectType differs
+names:      13  family instance | IfcBuildingElementProxy | Name differs | ObjectType equal
+names:      11  family instance | IfcDoor | Name equal | ObjectType equal
+names:      11  system family | IfcRailing | Name differs | ObjectType differs
+names:       9  family instance | IfcSanitaryTerminal | Name differs | ObjectType differs
+names:       5  system family | IfcStair | Name differs | ObjectType differs
+names:       5  system family | IfcStairFlight | Name differs | ObjectType differs
+names:       2  system family | IfcRamp | Name differs | ObjectType differs
+names:       1  system family | IfcRoof | Name equal | ObjectType equal
+names:       1  system family | IfcRoof | Name differs | ObjectType differs
+layer sets:      59  layer names: Revit's, in Revit's order
+layer sets:      43  layer sets written
+layer sets:      41  positions not comparable
+layer sets:      42  set name = Revit's Family:Type
+layer sets:   whole layer sets within 0.001 ft of Revit's: 41 of 41
+layer sets:   whole layer sets within 0.01 ft of Revit's: 41 of 41
+layer sets:   whole layer sets within 0.1 ft of Revit's: 41 of 41
+class sets: Revit's export: 1714 paired elements and spaces, 0 untagged and 56 repeated Tags left out
+class sets: rvt-rs's export: 1700 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class sets: IfcBuildingElementProxy             358    350      0      8  
+class sets: IfcDoor                             126    126      0      0  
+class sets: IfcFlowTerminal                      49      0     49      0  IfcSanitaryTerminal 49
+class sets: IfcFurnishingElement                407      0    407      0  IfcFurniture 407
+class sets: IfcMember                            47     47      0      0  
+class sets: IfcRailing                           11     11      0      0  
+class sets: IfcRamp                               2      2      0      0  
+class sets: IfcRoof                               2      2      0      0  
+class sets: IfcSlab                              41     41      0      0  
+class sets: IfcSpace                              8      0      0      8  
+class sets: IfcStair                              5      5      0      0  
+class sets: IfcStairFlight                        5      5      0      0  
+class sets: IfcWall                               9      9      0      0  
+class sets: IfcWallStandardCase                 381      0    381      0  IfcWall 381
+class sets: IfcWindow                           263    263      0      0  
+class sets extra: IfcMember                             2
+global ids: elements: {"GlobalId = Revit's": 1696, 'differs': 2, "not in Revit's export": 2}
+global ids: storeys: 0 of 16 equal Revit's
+global ids: storeys whose GlobalId is one of Revit's: 0 of 16
+global ids: IfcProject: 0 of 1 equal Revit's
+global ids: IfcSite: 0 of 1 equal Revit's
+global ids: IfcBuilding: 0 of 1 equal Revit's
+global ids: spaces: 0 of 0 equal one of Revit's
+storeys: 1700 elements, 63 not on a storey
+storeys:      49  IfcMember
+storeys:       9  IfcRailing
+storeys:       5  IfcStairFlight
+storeys: against Revit's export:
+storeys:    1491  same storey as Revit's
+storeys:     146  a different storey from Revit's
+storeys:      61  on no storey; Revit's is a storey
+storeys:   different, by type: IfcWall 50, IfcDoor 36, IfcWindow 30, IfcBuildingElementProxy 26, IfcStair 2, IfcRailing 1, IfcSlab 1

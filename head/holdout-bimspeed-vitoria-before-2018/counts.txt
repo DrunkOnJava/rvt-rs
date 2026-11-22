@@ -1,0 +1,42 @@
+psets: Revit values on objects rvt-rs writes: 2; equal: 0; different: 0; missing: 2; rvt-rs values Revit does not write: 0
+psets:   Pset_BuildingCommon.IsLandmarked: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 5
+psets:   Pset_OpeningElementCommon.Reference: 5
+psets: rvt-rs values Revit does not write, on objects Revit writes and on others:
+Revit quantities on objects rvt-rs writes: 0; equal: 0; different: 0; missing: 0; rvt-rs quantities Revit does not write: 0
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 0
+walls whose Length is rvt-rs's curve's: 0; Revit's Axis's: 0; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+exit 0
+class sets: Revit's export: 1394 paired elements and spaces, 0 untagged and 6 repeated Tags left out
+class sets: rvt-rs's export: 0 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class sets: IfcBeam                               1      0      0      1  
+class sets: IfcBuildingElementProxy              43      0      0     43  
+class sets: IfcColumn                           114      0      0    114  
+class sets: IfcCurtainWall                        9      0      0      9  
+class sets: IfcDoor                              68      0      0     68  
+class sets: IfcElementAssembly                    3      0      0      3  
+class sets: IfcFlowFitting                      202      0      0    202  
+class sets: IfcFlowSegment                      244      0      0    244  
+class sets: IfcMember                           206      0      0    206  
+class sets: IfcPlate                             67      0      0     67  
+class sets: IfcRailing                           14      0      0     14  
+class sets: IfcRoof                               8      0      0      8  
+class sets: IfcSlab                               9      0      0      9  
+class sets: IfcSpace                             73      0      0     73  
+class sets: IfcStair                              6      0      0      6  
+class sets: IfcStairFlight                        6      0      0      6  
+class sets: IfcWall                              12      0      0     12  
+class sets: IfcWallStandardCase                 239      0      0    239  
+class sets: IfcWindow                            70      0      0     70  
+global ids: elements: {}
+global ids: storeys: 0 of 0 equal Revit's
+global ids: storeys whose GlobalId is one of Revit's: 0 of 0
+global ids: IfcProject: 0 of 1 equal Revit's
+global ids: IfcSite: 0 of 1 equal Revit's
+global ids: IfcBuilding: 0 of 1 equal Revit's
+global ids: spaces: 0 of 0 equal one of Revit's
+storeys: 0 elements, 0 not on a storey
+storeys: against Revit's export:

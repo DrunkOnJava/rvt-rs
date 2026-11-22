@@ -1,0 +1,111 @@
+psets: Revit values on objects rvt-rs writes: 3271; equal: 2061; different: 0; missing: 1210; rvt-rs values Revit does not write: 25
+psets:   Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+psets:   Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingCommon.Reference: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingElementProxyCommon.IsExternal: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingElementProxyCommon.Reference: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingStoreyCommon.AboveGround: 9, equal 8, different 0, missing 1
+psets:   Pset_BuildingStoreyCommon.Reference: 9, equal 0, different 0, missing 9
+psets:   Pset_BuildingSystemCommon.Reference: 1, equal 0, different 0, missing 1
+psets:   Pset_DoorCommon.FireRating: 14, equal 0, different 0, missing 14
+psets:   Pset_DoorCommon.IsExternal: 142, equal 0, different 0, missing 142
+psets:   Pset_DoorCommon.Reference: 142, equal 138, different 0, missing 4
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 541, equal 531, different 0, missing 10
+psets:   Pset_OpeningElementCommon.Reference: 18, equal 0, different 0, missing 18
+psets:   Pset_ReinforcementBarPitchOfSlab.Reference: 13, equal 11, different 0, missing 2
+psets:   Pset_ReinforcementBarPitchOfWall.Reference: 272, equal 269, different 0, missing 3
+psets:   Pset_RoofCommon.IsExternal: 2, equal 0, different 0, missing 2
+psets:   Pset_RoofCommon.Reference: 2, equal 1, different 0, missing 1
+psets:   Pset_RoofCommon.ThermalTransmittance: 2, equal 0, different 0, missing 2
+psets:   Pset_SlabCommon.IsExternal: 13, equal 0, different 0, missing 13
+psets:   Pset_SlabCommon.LoadBearing: 11, equal 0, different 0, missing 11
+psets:   Pset_SlabCommon.PitchAngle: 11, equal 11, different 0, missing 0
+psets:   Pset_SlabCommon.Reference: 13, equal 11, different 0, missing 2
+psets:   Pset_SlabCommon.ThermalTransmittance: 11, equal 0, different 0, missing 11
+psets:   Pset_SpaceCommon.IsExternal: 179, equal 0, different 0, missing 179
+psets:   Pset_SpaceCommon.Reference: 179, equal 179, different 0, missing 0
+psets:   Pset_SpaceHeaterTypeCommon.Reference: 179, equal 0, different 0, missing 179
+psets:   Pset_WallCommon.ExtendToStructure: 269, equal 269, different 0, missing 0
+psets:   Pset_WallCommon.IsExternal: 272, equal 269, different 0, missing 3
+psets:   Pset_WallCommon.LoadBearing: 269, equal 0, different 0, missing 269
+psets:   Pset_WallCommon.Reference: 272, equal 269, different 0, missing 3
+psets:   Pset_WallCommon.ThermalTransmittance: 233, equal 0, different 0, missing 233
+psets:   Pset_WindowCommon.IsExternal: 94, equal 0, different 0, missing 94
+psets:   Pset_WindowCommon.Reference: 94, equal 94, different 0, missing 0
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 23
+psets:   Pset_OpeningElementCommon.Reference: 23
+psets: rvt-rs values Revit does not write, on objects Revit writes and on others:
+psets:   Pset_BuildingStoreyCommon.AboveGround: 0, 1
+psets:   Pset_DoorCommon.Reference: 2, 0
+psets:   Pset_SpaceCommon.Reference: 0, 6
+psets:   Pset_WindowCommon.Reference: 16, 0
+Revit quantities on objects rvt-rs writes: 3412; equal: 272; different: 5; missing: 3135; rvt-rs quantities Revit does not write: 5
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 0
+walls whose Length is rvt-rs's curve's: 0; Revit's Axis's: 0; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+  Qto_DoorBaseQuantities.Area: 140, equal 0, different 0, missing 140
+  Qto_DoorBaseQuantities.Height: 140, equal 0, different 0, missing 140
+  Qto_DoorBaseQuantities.Width: 140, equal 0, different 0, missing 140
+  Qto_OpeningElementBaseQuantities.Depth: 184, equal 0, different 0, missing 184
+  Qto_OpeningElementBaseQuantities.Height: 56, equal 0, different 0, missing 56
+  Qto_OpeningElementBaseQuantities.Width: 56, equal 0, different 0, missing 56
+  Qto_SlabBaseQuantities.GrossArea: 11, equal 7, different 4, missing 0
+  Qto_SlabBaseQuantities.GrossVolume: 8, equal 0, different 1, missing 7
+  Qto_SlabBaseQuantities.NetArea: 11, equal 0, different 0, missing 11
+  Qto_SlabBaseQuantities.NetVolume: 11, equal 0, different 0, missing 11
+  Qto_SlabBaseQuantities.Perimeter: 11, equal 0, different 0, missing 11
+  Qto_SlabBaseQuantities.Width: 8, equal 0, different 0, missing 8
+  Qto_SpaceBaseQuantities.GrossFloorArea: 179, equal 0, different 0, missing 179
+  Qto_SpaceBaseQuantities.GrossVolume: 179, equal 0, different 0, missing 179
+  Qto_SpaceBaseQuantities.Height: 179, equal 0, different 0, missing 179
+  Qto_SpaceBaseQuantities.NetFloorArea: 179, equal 0, different 0, missing 179
+  Qto_WallBaseQuantities.GrossFootprintArea: 265, equal 0, different 0, missing 265
+  Qto_WallBaseQuantities.Height: 265, equal 0, different 0, missing 265
+  Qto_WallBaseQuantities.Length: 265, equal 0, different 0, missing 265
+  Qto_WallBaseQuantities.NetSideArea: 265, equal 0, different 0, missing 265
+  Qto_WallBaseQuantities.NetVolume: 265, equal 0, different 0, missing 265
+  Qto_WallBaseQuantities.Width: 265, equal 265, different 0, missing 0
+  Qto_WindowBaseQuantities.Area: 110, equal 0, different 0, missing 110
+  Qto_WindowBaseQuantities.Height: 110, equal 0, different 0, missing 110
+  Qto_WindowBaseQuantities.Width: 110, equal 0, different 0, missing 110
+exit 0
+different Qto_SlabBaseQuantities.GrossArea: rvt-rs over Revit 1.166817
+different Qto_SlabBaseQuantities.GrossArea: rvt-rs over Revit 1.166685
+different Qto_SlabBaseQuantities.GrossArea: rvt-rs over Revit 1.150404
+different Qto_SlabBaseQuantities.GrossVolume: rvt-rs over Revit 1.017401
+different Qto_SlabBaseQuantities.GrossArea: rvt-rs over Revit 1.017401
+extra Qto_SlabBaseQuantities.Depth: 1
+extra Qto_WallBaseQuantities.Width: 4
+names:     269  family instance | IfcWall | Name differs | ObjectType differs
+names:     140  family instance | IfcDoor | Name equal | ObjectType equal
+names:     110  family instance | IfcWindow | Name equal | ObjectType equal
+names:      11  family instance | IfcSlab | Name differs | ObjectType differs
+names:       1  family instance | IfcRoof | Name differs | ObjectType differs
+layer sets:    1062  layer names: Revit's, in Revit's order
+layer sets:     240  layer sets written
+layer sets:     236  positions not comparable
+layer sets:   whole layer sets within 0.001 ft of Revit's: 235 of 236
+layer sets:   whole layer sets within 0.01 ft of Revit's: 235 of 236
+layer sets:   whole layer sets within 0.1 ft of Revit's: 235 of 236
+class sets: Revit's export: 710 paired elements and spaces, 0 untagged and 84 repeated Tags left out
+class sets: rvt-rs's export: 716 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class sets: IfcDoor                             140    140      0      0  
+class sets: IfcRoof                               1      1      0      0  
+class sets: IfcSlab                              11     11      0      0  
+class sets: IfcSpace                            179    179      0      0  
+class sets: IfcWall                             269    269      0      0  
+class sets: IfcWindow                           110    110      0      0  
+class sets extra: IfcSpace                              6
+global ids: elements: {"GlobalId = Revit's": 447, 'differs': 84}
+global ids: storeys: 6 of 9 equal Revit's
+global ids: storeys whose GlobalId is one of Revit's: 6 of 9
+global ids: IfcProject: 1 of 1 equal Revit's
+global ids: IfcSite: 1 of 1 equal Revit's
+global ids: IfcBuilding: 1 of 1 equal Revit's
+global ids: spaces: 179 of 185 equal one of Revit's
+storeys: 531 elements, 0 not on a storey
+storeys: against Revit's export:
+storeys:     447  same storey as Revit's
+storeys:      84  a different storey from Revit's
+storeys:   different, by type: IfcWall 84
