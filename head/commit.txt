@@ -1,0 +1,1 @@
+42e07b8ff34d33df9183c06a4014af19dc78356b feat(diagnostics): the export diagnostics count the doors and windows written as such though their type record was not read (#1247) (#1272)
