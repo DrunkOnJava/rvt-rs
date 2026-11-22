@@ -1,0 +1,1049 @@
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/frames_vs_ifc.txt measure-head/nordic-office-as-built/frames_vs_ifc.txt
+--- measure-base/nordic-office-as-built/frames_vs_ifc.txt	2026-11-05 07:22:10.319257940 +0000
++++ measure-head/nordic-office-as-built/frames_vs_ifc.txt	2026-11-05 07:22:09.042248820 +0000
+@@ -8,2 +8,2 @@
+-fitted rvt-rs -> Revit: translation (0.003, -0.003, 0.006) rotation 40.3327 deg; residual median 0.0065 max 1.2437
+-Revit's site placement applied to rvt-rs: residual median 0.0000 max 1.2500
++fitted rvt-rs -> Revit: translation (0.003, -0.003, -0.000) rotation 40.3327 deg; residual median 0.0019 max 0.2056
++Revit's site placement applied to rvt-rs: residual median 0.0000 max 0.2025
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/mcp_answers_vs_ifc.txt measure-head/nordic-office-as-built/mcp_answers_vs_ifc.txt
+--- measure-base/nordic-office-as-built/mcp_answers_vs_ifc.txt	2026-11-05 07:22:10.701260668 +0000
++++ measure-head/nordic-office-as-built/mcp_answers_vs_ifc.txt	2026-11-05 07:22:09.249250299 +0000
+@@ -2 +2 @@
+-  list_elements: 13021 rows
++  list_elements: 12974 rows
+@@ -6,3 +6,2 @@
+-mcp answers: consistency counts: 84 compared, 1 differ
+-  difference counts: IFC IfcCovering count: 158 vs 111
+-mcp answers: elements the export folds into the body of another element, not rows: 0
++mcp answers: consistency counts: 84 compared, 0 differ
++mcp answers: elements the export folds into the body of another element, not rows: 47
+@@ -14 +13 @@
+-mcp answers: IfcCovering: 158 rows
++mcp answers: IfcCovering: 111 rows
+@@ -34,28 +33,2 @@
+-mcp answers: rows listed: 13021
+-mcp answers: consistency element membership: 13021 compared, 47 differ
+-  difference element membership: element 2094020 IFCCOVERING 3dx5JNAqQ1ABTSYqwpJG7R: not in the IFC
+-  difference element membership: element 2094444 IFCCOVERING 2iHL5dVBUDqB7obN8b0fsK: not in the IFC
+-  difference element membership: element 2094524 IFCCOVERING 25aOvX4Ec1bhJkL$h1XnQ4: not in the IFC
+-  difference element membership: element 2095364 IFCCOVERING 0Nn2C1A1ICwu6OC6ua2mHo: not in the IFC
+-  difference element membership: element 2095364 IFCCOVERING 3$8Rny3R22lQNeQBNOGDFw: not in the IFC
+-  difference element membership: element 2095404 IFCCOVERING 09EZ5GCiE1vhsXbatglFAU: not in the IFC
+-  difference element membership: element 2095404 IFCCOVERING 2c$XYotDQ1_vWvpUxC6Xko: not in the IFC
+-  difference element membership: element 2095436 IFCCOVERING 0fnbYwrO27LQsxg_a6QV_L: not in the IFC
+-  difference element membership: element 2095436 IFCCOVERING 2_wuFnudw74PlnjDY8z58R: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 0B6wz_gNg6A9JeLbtCHyl1: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 0qkoarT1M1nB7Rh97QJyYO: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 1JNLR6XrI3sAW9fn7BPD6A: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 1c4COHoJoC8xWJQ$uwq4iu: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 1d$v5AdbY5_xNkypFUvKWz: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 2PgvfmDj69YREzNAxm_JdG: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 345Qsv5dw24wCXQJSpqHEV: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 0hLSvrd_wDHOfZZyuP$_HY: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 1f75N7gwsAdedwLOJj7Jnx: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 26TLPeHkE4_A05ogT1lyBc: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 2VR27TwFg2iAg3Ynnf9FRM: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 3HSKB9r3s8mPVBapWv9B6j: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 3QpkiaT5_16xwLmqlI85lK: not in the IFC
+-  difference element membership: element 2105195 IFCCOVERING 1tFo2ZZR22KRbc6cr1Nw0L: not in the IFC
+-  difference element membership: element 2105195 IFCCOVERING 2F2v0LMsQCWwRQhpuhBv6w: not in the IFC
+-  difference element membership: element 2105195 IFCCOVERING 2YoV0sfIA5LhOYF8uchUyW: not in the IFC
+-  difference element membership: ... 22 more
++mcp answers: rows listed: 12974
++mcp answers: consistency element membership: 12974 compared, 0 differ
+@@ -67,38 +40,4 @@
+-mcp answers: consistency element storeys: 12974 compared, 599 differ
+-  difference element storeys: element 1440878 IfcStairFlight 2V9jZhd2f65P2kCC5uMYSb: level None vs storey 'Level_01'
+-  difference element storeys: element 1503045 IfcStairFlight 2Xe6rbtYzAqhfyXbKpPUbx: level None vs storey 'Level_02a_Parking'
+-  difference element storeys: element 2598348 IfcStairFlight 0rb8433vT8junK7fT$s9YA: level None vs storey 'Basement'
+-  difference element storeys: element 2598357 IfcStairFlight 0rb8433vT8junK7fT$s9YJ: level None vs storey 'Basement'
+-  difference element storeys: element 2859204 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fsq: level None vs storey 'Level_01'
+-  difference element storeys: element 2859206 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fss: level None vs storey 'Level_01'
+-  difference element storeys: element 2859208 IfcSlab 2HM8XWPUz6WgsmzelJ_fsu: level None vs storey 'Level_01'
+-  difference element storeys: element 2859210 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fsw: level None vs storey 'Level_01'
+-  difference element storeys: element 2859212 IfcSlab 2HM8XWPUz6WgsmzelJ_fsy: level None vs storey 'Level_01'
+-  difference element storeys: element 2861134 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fK_: level None vs storey 'Basement'
+-  difference element storeys: element 2861136 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fKW: level None vs storey 'Basement'
+-  difference element storeys: element 2861138 IfcSlab 2HM8XWPUz6WgsmzelJ_fKY: level None vs storey 'Basement'
+-  difference element storeys: element 2861140 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fKa: level None vs storey 'Basement'
+-  difference element storeys: element 2861142 IfcSlab 2HM8XWPUz6WgsmzelJ_fKc: level None vs storey 'Basement'
+-  difference element storeys: element 2862239 IfcStairFlight 2HM8XWPUz6WgsmzelJ_f7l: level None vs storey 'Level_02'
+-  difference element storeys: element 2862241 IfcStairFlight 2HM8XWPUz6WgsmzelJ_f7H: level None vs storey 'Level_02'
+-  difference element storeys: element 2862243 IfcSlab 2HM8XWPUz6WgsmzelJ_f7J: level None vs storey 'Level_02'
+-  difference element storeys: element 2862245 IfcStairFlight 2HM8XWPUz6WgsmzelJ_f7L: level None vs storey 'Level_02'
+-  difference element storeys: element 2862247 IfcSlab 2HM8XWPUz6WgsmzelJ_f7N: level None vs storey 'Level_02'
+-  difference element storeys: element 2863241 IfcStairFlight 2HM8XWPUz6WgsmzelJ_etv: level None vs storey 'Level_04'
+-  difference element storeys: element 2863243 IfcStairFlight 2HM8XWPUz6WgsmzelJ_etx: level None vs storey 'Level_04'
+-  difference element storeys: element 2863245 IfcSlab 2HM8XWPUz6WgsmzelJ_etz: level None vs storey 'Level_04'
+-  difference element storeys: element 2863247 IfcStairFlight 2HM8XWPUz6WgsmzelJ_et$: level None vs storey 'Level_04'
+-  difference element storeys: element 2863249 IfcSlab 2HM8XWPUz6WgsmzelJ_etX: level None vs storey 'Level_04'
+-  difference element storeys: element 2867922 IfcStairFlight 2HM8XWPUz6WgsmzelJ_l_Y: level None vs storey 'Basement'
+-  difference element storeys: ... 574 more
+-mcp answers: IFC openings the writer cuts for doors and windows, in no row: 541
+-mcp answers: IFC elements and spaces: 13515
+-mcp answers: consistency levels: 10 compared, 8 differ
+-  difference levels: level 2 'Basement': 379 elements vs 389 in the IFC
+-  difference levels: level 3 'Level_01': 5416 elements vs 5425 in the IFC
+-  difference levels: level 4 'Level_02a_Parking': 11 elements vs 12 in the IFC
+-  difference levels: level 5 'Level_02': 1507 elements vs 1504 in the IFC
+-  difference levels: level 6 'Level_03': 1557 elements vs 1553 in the IFC
+-  difference levels: level 7 'Level_04': 1536 elements vs 1532 in the IFC
+-  difference levels: level 8 'Level_05': 1980 elements vs 2523 in the IFC
+-  difference levels: level 9 'Roof': 570 elements vs 28 in the IFC
++mcp answers: consistency element storeys: 12974 compared, 0 differ
++mcp answers: IFC openings the writer cuts for doors and windows, in no row: 635
++mcp answers: IFC elements and spaces: 13609
++mcp answers: consistency levels: 10 compared, 0 differ
+@@ -109,4 +48,4 @@
+-mcp answers: consistency details: 115 compared, 0 differ
+-mcp answers: consistency type objects: 115 compared, 0 differ
+-mcp answers: consistency type object sets: 115 compared, 0 differ
+-mcp answers: get_element property and quantity sets compared: 997
++mcp answers: consistency details: 116 compared, 0 differ
++mcp answers: consistency type objects: 116 compared, 0 differ
++mcp answers: consistency type object sets: 116 compared, 0 differ
++mcp answers: get_element property and quantity sets compared: 1006
+@@ -120 +59 @@
+-mcp answers: classes: the answers, rows left out for a repeated Tag: 47
++mcp answers: classes: the answers, rows left out for a repeated Tag: 0
+@@ -147 +86 @@
+-mcp answers: storeys: rows the answers and Revit export share: 12713
++mcp answers: storeys: rows the answers and Revit export share: 12666
+@@ -149,3 +88,3 @@
+-mcp answers: storeys: rows on a different storey from Revit: 548
+-mcp answers: storeys: rows on no storey where Revit has a storey: 58
+-mcp answers: storeys: rows on the same storey as in Revit: 11667
++mcp answers: storeys: rows on a different storey from Revit: 6
++mcp answers: storeys: rows on no storey where Revit has a storey: 1
++mcp answers: storeys: rows on the same storey as in Revit: 12219
+@@ -160 +99 @@
+-mcp answers: values: sampled rows the answers and Revit export share: 110
++mcp answers: values: sampled rows the answers and Revit export share: 111
+@@ -162,7 +101,7 @@
+-mcp answers: values: property values equal to Revit: 527
+-mcp answers: values: property values in the answers: 532
+-mcp answers: values: property or quantity values Revit writes that the answers lack: 233
+-mcp answers: values: quantity values equal to Revit: 129
+-mcp answers: values: quantity values in the answers: 129
+-mcp answers: consistency FAIL: counts, element membership, element storeys, levels
+-exit 1
++mcp answers: values: property values equal to Revit: 531
++mcp answers: values: property values in the answers: 536
++mcp answers: values: property or quantity values Revit writes that the answers lack: 236
++mcp answers: values: quantity values equal to Revit: 130
++mcp answers: values: quantity values in the answers: 130
++mcp answers: consistency PASS: every check equal
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/mesh_bodies_vs_ifc.txt measure-head/nordic-office-as-built/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-as-built/mesh_bodies_vs_ifc.txt	2026-11-05 07:22:10.701260668 +0000
++++ measure-head/nordic-office-as-built/mesh_bodies_vs_ifc.txt	2026-11-05 07:22:09.249250299 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 538; in Revit's export 538
++saved_graphics_mesh bodies scored: 544; in Revit's export 544
+@@ -16,0 +17,3 @@
++IfcWall                           6       6        5        5        5           5  1.0000
++        6       6        5        5        5           5  Basic Wall:VS-11
++  2177212 IfcWall 'Basic Wall:VS-11': volume ratio 0.9902, Revit's vertices to rvt-rs's surface 0.3018 ft, rvt-rs's to Revit's 1.926e-06 ft
+@@ -31 +33,0 @@
+-  3016449 IfcDoor 'O-3:O-3.8x21': volume ratio 1.0001, Revit's vertices to rvt-rs's surface 5.684e-05 ft, rvt-rs's to Revit's 0.0005488 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/opening_boxes_vs_ifc.txt measure-head/nordic-office-as-built/opening_boxes_vs_ifc.txt
+--- measure-base/nordic-office-as-built/opening_boxes_vs_ifc.txt	2026-11-05 07:22:10.701260668 +0000
++++ measure-head/nordic-office-as-built/opening_boxes_vs_ifc.txt	2026-11-05 07:22:09.249250299 +0000
+@@ -6 +6 @@
+-unfilled openings in Revit's export: 207; in rvt-rs's: 75; both: 66
++unfilled openings in Revit's export: 207; in rvt-rs's: 167; both: 155
+@@ -8 +8,2 @@
+-  IfcWall within 0.001 ft: 30
++  IfcWall over 1 ft: 2
++  IfcWall within 0.001 ft: 117
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/opening_hosts_vs_ifc.txt measure-head/nordic-office-as-built/opening_hosts_vs_ifc.txt
+--- measure-base/nordic-office-as-built/opening_hosts_vs_ifc.txt	2026-11-05 07:22:10.701260668 +0000
++++ measure-head/nordic-office-as-built/opening_hosts_vs_ifc.txt	2026-11-05 07:22:09.249250299 +0000
+@@ -3,2 +3,2 @@
+-openings with no filler: 78
+-openings with no filler voiding Revit's wall: 69
++openings with no filler: 172
++openings with no filler voiding Revit's wall: 160
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/psets_vs_ifc.txt measure-head/nordic-office-as-built/psets_vs_ifc.txt
+--- measure-base/nordic-office-as-built/psets_vs_ifc.txt	2026-11-05 07:22:10.702260675 +0000
++++ measure-head/nordic-office-as-built/psets_vs_ifc.txt	2026-11-05 07:22:09.249250299 +0000
+@@ -1 +1,2 @@
+-Revit values on objects rvt-rs writes: 45601; equal: 44231; different: 1; missing: 1369; rvt-rs values Revit does not write: 2
++Revit values on objects rvt-rs writes: 45808; equal: 44413; different: 1; missing: 1394; rvt-rs values Revit does not write: 2
++rvt-rs values on openings Revit's export of this file lacks but its export of a sibling file holds, counted apart (a pair inconsistency, RE-338): 6 on 3 openings
+@@ -41 +42 @@
+-  Pset_EnvironmentalImpactIndicators.Reference: 12732, equal 12696, different 0, missing 36
++  Pset_EnvironmentalImpactIndicators.Reference: 12823, equal 12787, different 0, missing 36
+@@ -48 +49,2 @@
+-  Pset_OpeningElementCommon.Reference: 66, equal 66, different 0, missing 0
++  Pset_OpeningElementCommon.FireExit: 25, equal 0, different 0, missing 25
++  Pset_OpeningElementCommon.Reference: 157, equal 157, different 0, missing 0
+@@ -117,3 +119,3 @@
+-Revit values the project's own property set file places, out of scope (RE-239), not scored: 1981
+-  Pset_DoorWindowGlazingType.IsLaminated: 846
+-  Pset_DoorWindowGlazingType.IsTempered: 846
++Revit values the project's own property set file places, out of scope (RE-239), not scored: 2085
++  Pset_DoorWindowGlazingType.IsLaminated: 898
++  Pset_DoorWindowGlazingType.IsTempered: 898
+@@ -122,6 +124,6 @@
+-Revit values on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut), not scored: 579
+-  Pset_DoorWindowGlazingType.IsLaminated: 114
+-  Pset_DoorWindowGlazingType.IsTempered: 114
+-  Pset_EnvironmentalImpactIndicators.Reference: 154
+-  Pset_OpeningElementCommon.FireExit: 43
+-  Pset_OpeningElementCommon.Reference: 154
++Revit values on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut), not scored: 268
++  Pset_DoorWindowGlazingType.IsLaminated: 62
++  Pset_DoorWindowGlazingType.IsTempered: 62
++  Pset_EnvironmentalImpactIndicators.Reference: 63
++  Pset_OpeningElementCommon.FireExit: 18
++  Pset_OpeningElementCommon.Reference: 63
+@@ -139,0 +142 @@
++  Pset_OpeningElementCommon.FireExit: ('IfcBoolean', False) x25; on IfcOpeningElement x25
+@@ -171 +173,0 @@
+-  Pset_DoorCommon.ThermalTransmittance: ('IfcThermalTransmittanceMeasure', 3.7021) x1; on IfcDoorType x1
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/qtos_vs_ifc.txt measure-head/nordic-office-as-built/qtos_vs_ifc.txt
+--- measure-base/nordic-office-as-built/qtos_vs_ifc.txt	2026-11-05 07:22:10.702260675 +0000
++++ measure-head/nordic-office-as-built/qtos_vs_ifc.txt	2026-11-05 07:22:09.249250299 +0000
+@@ -1 +1 @@
+-Revit quantities on objects rvt-rs writes: 39492; equal: 29562; different: 1; missing: 9929; rvt-rs quantities Revit does not write: 0
++Revit quantities on objects rvt-rs writes: 39765; equal: 29760; different: 1; missing: 10004; rvt-rs quantities Revit does not write: 0
+@@ -6 +6 @@
+-Revit quantities on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut, #1165), not scored: 462
++Revit quantities on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut, #1165), not scored: 189
+@@ -8,2 +8,2 @@
+-  Qto_OpeningElementBaseQuantities.Depth: 150
+-  Qto_OpeningElementBaseQuantities.Height: 152
++  Qto_OpeningElementBaseQuantities.Depth: 59
++  Qto_OpeningElementBaseQuantities.Height: 61
+@@ -11 +11 @@
+-  Qto_OpeningElementBaseQuantities.Width: 153
++  Qto_OpeningElementBaseQuantities.Width: 62
+@@ -42,3 +42,3 @@
+-  Qto_OpeningElementBaseQuantities.Depth: 218, equal 217, different 0, missing 1
+-  Qto_OpeningElementBaseQuantities.Height: 61, equal 30, different 0, missing 31
+-  Qto_OpeningElementBaseQuantities.Width: 61, equal 30, different 0, missing 31
++  Qto_OpeningElementBaseQuantities.Depth: 309, equal 283, different 0, missing 26
++  Qto_OpeningElementBaseQuantities.Height: 152, equal 96, different 0, missing 56
++  Qto_OpeningElementBaseQuantities.Width: 152, equal 96, different 0, missing 56
+@@ -95,0 +96,2 @@
++  Qto_OpeningElementBaseQuantities.Height: 56; on IfcOpeningElement x56
++  Qto_OpeningElementBaseQuantities.Width: 56; on IfcOpeningElement x56
+@@ -101,2 +102,0 @@
+-  Qto_OpeningElementBaseQuantities.Height: 31; on IfcOpeningElement x31
+-  Qto_OpeningElementBaseQuantities.Width: 31; on IfcOpeningElement x31
+@@ -104,0 +105 @@
++  Qto_OpeningElementBaseQuantities.Depth: 26; on IfcOpeningElement x26
+@@ -121 +121,0 @@
+-  Qto_OpeningElementBaseQuantities.Depth: 1; on IfcOpeningElement x1
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/saved_meshes_vs_ifc.txt measure-head/nordic-office-as-built/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-as-built/saved_meshes_vs_ifc.txt	2026-11-05 07:22:10.702260675 +0000
++++ measure-head/nordic-office-as-built/saved_meshes_vs_ifc.txt	2026-11-05 07:22:09.250250306 +0000
+@@ -6 +6,2 @@
+-total                          538       538       0       0      0       0
++IfcWall                          6         5       0       1      0       0
++total                          544       543       0       1      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/schema.txt measure-head/nordic-office-as-built/schema.txt
+--- measure-base/nordic-office-as-built/schema.txt	2026-11-05 07:22:10.702260675 +0000
++++ measure-head/nordic-office-as-built/schema.txt	2026-11-05 07:22:09.250250306 +0000
+@@ -4 +4 @@
+-  placement composition: 12963 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 13047 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -14 +14 @@
+-sets 27330 on 13075 objects and types
++sets 27518 on 13169 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/space_overlaps_vs_ifc.txt measure-head/nordic-office-as-built/space_overlaps_vs_ifc.txt
+--- measure-base/nordic-office-as-built/space_overlaps_vs_ifc.txt	2026-11-05 07:22:10.703260682 +0000
++++ measure-head/nordic-office-as-built/space_overlaps_vs_ifc.txt	2026-11-05 07:22:09.250250306 +0000
+@@ -18 +18 @@
+-  3xtnrBUgHBCwRh$xfyB4IZ: stored_solid_faces, up 3818.36, floor 3818.36, every face 3818.36 ft2 (Revit up 3818.36, floor 3818.36, every face 3818.36 ft2), inside walls 31.19 ft2 (0.82%), inside other rooms 0.00 ft2 (0.00%)
++  3xtnrBUgHBCwRh$xfyB4IZ: stored_solid_faces, up 3818.36, floor 3818.36, every face 3818.36 ft2 (Revit up 3818.36, floor 3818.36, every face 3818.36 ft2), inside walls 31.18 ft2 (0.82%), inside other rooms 0.00 ft2 (0.00%)
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/unfilled_openings_vs_ifc.txt measure-head/nordic-office-as-built/unfilled_openings_vs_ifc.txt
+--- measure-base/nordic-office-as-built/unfilled_openings_vs_ifc.txt	2026-11-05 07:22:10.702260675 +0000
++++ measure-head/nordic-office-as-built/unfilled_openings_vs_ifc.txt	2026-11-05 07:22:09.250250306 +0000
+@@ -1 +1 @@
+-unfilled openings in Revit's export: 220; in rvt-rs's: 75; both: 66
++unfilled openings in Revit's export: 220; in rvt-rs's: 169; both: 157
+@@ -3,0 +4,10 @@
++  written: 27
++  box compared: 27
++  box within 0.01 ft: 27
++  GlobalId equal: 27
++  Name equal: 27
++  PredefinedType equal: 27
++  Pset_OpeningElementCommon.Reference equal: 27
++  Pset_EnvironmentalImpactIndicators.Reference equal: 27
++  Depth in Revit's: 27
++  Depth equal: 27
+@@ -7,0 +18,9 @@
++  written: 25
++  box compared: 25
++  box within 0.01 ft: 25
++  GlobalId equal: 25
++  Name equal: 25
++  PredefinedType equal: 25
++  Pset_OpeningElementCommon.Reference equal: 25
++  Pset_EnvironmentalImpactIndicators.Reference equal: 25
++  Depth in Revit's: 25
+@@ -9,0 +29,10 @@
++  written: 39
++  box compared: 39
++  box within 0.01 ft: 39
++  GlobalId equal: 39
++  Name equal: 39
++  PredefinedType equal: 39
++  Pset_OpeningElementCommon.Reference equal: 39
++  Pset_EnvironmentalImpactIndicators.Reference equal: 39
++  Depth in Revit's: 39
++  Depth equal: 39
+@@ -45 +74,4 @@
+-written that Revit's export does not but its export of a sibling file does, counted apart: 0
++written that Revit's export does not but its export of a sibling file does, counted apart: 3
++  IfcCurtainWall in IfcWall, Tag 1815871 in 1815838: ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
++  IfcCurtainWall in IfcWall, Tag 1892067 in 1892039: ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
++  IfcFireSuppressionTerminal in IfcWall, Tag 3388647 in 1494012: ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/wall_bodies_vs_ifc.txt measure-head/nordic-office-as-built/wall_bodies_vs_ifc.txt
+--- measure-base/nordic-office-as-built/wall_bodies_vs_ifc.txt	2026-11-05 07:22:10.702260675 +0000
++++ measure-head/nordic-office-as-built/wall_bodies_vs_ifc.txt	2026-11-05 07:22:09.250250306 +0000
+@@ -6 +6 @@
+-ends (along), axis-parallel: 606 walls; within 0.001 ft: 510 0.01 ft: 510 0.1 ft: 513 1.0 ft: 582; max 1.606 ft
++ends (along), axis-parallel: 606 walls; within 0.001 ft: 514 0.01 ft: 514 0.1 ft: 517 1.0 ft: 584; max 1.606 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/wall_ends_cv_vs_ifc.txt measure-head/nordic-office-as-built/wall_ends_cv_vs_ifc.txt
+--- measure-base/nordic-office-as-built/wall_ends_cv_vs_ifc.txt	2026-11-05 07:22:10.702260675 +0000
++++ measure-head/nordic-office-as-built/wall_ends_cv_vs_ifc.txt	2026-11-05 07:22:09.250250306 +0000
+@@ -3,3 +3,3 @@
+-   1103  ends within 0.001 ft
+-   1103  ends within 0.01 ft
+-   1112  ends within 0.1 ft
++   1109  ends within 0.001 ft
++   1109  ends within 0.01 ft
++   1117  ends within 0.1 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/wall_ends_list.txt measure-head/nordic-office-as-built/wall_ends_list.txt
+--- measure-base/nordic-office-as-built/wall_ends_list.txt	2026-11-05 07:22:10.703260682 +0000
++++ measure-head/nordic-office-as-built/wall_ends_list.txt	2026-11-05 07:22:09.250250306 +0000
+@@ -1 +1 @@
+-straight and angled walls in both: 607; both ends within 0.001 ft: 510
++straight and angled walls in both: 607; both ends within 0.001 ft: 514
+@@ -3,2 +3,2 @@
+-    217  partition_wall_centreline_layer_joins | start ok [free] | end ok [free]
+-    207  partition_element_record_join_trimmed | start ok [free] | end ok [free]
++    214  partition_wall_centreline_layer_joins | start ok [free] | end ok [free]
++    209  partition_element_record_join_trimmed | start ok [free] | end ok [free]
+@@ -8 +8 @@
+-     11  partition_element_record_join_trimmed | start short [free] | end ok [free]
++     10  partition_element_record_join_trimmed | start short [free] | end ok [free]
+@@ -13,2 +13,2 @@
+-      6  partition_element_record_join_trimmed | start ok [free] | end short [free]
+-      6  partition_wall_centreline_layer_joins | start long [free] | end long [free]
++      5  partition_element_record_join_trimmed | start ok [free] | end short [free]
++      5  saved_graphics_mesh | start ok [free] | end ok [free]
+@@ -16 +16,2 @@
+-      4  partition_wall_centreline_layer_joins | start ok [free] | end long [free]
++      4  partition_wall_centreline_layer_joins | start long [free] | end long [free]
++      3  partition_wall_centreline_layer_joins | start ok [free] | end long [free]
+@@ -23,0 +25 @@
++      1  saved_graphics_mesh | start short [free] | end ok [free]
+@@ -44 +45,0 @@
+-  2105250 partition_wall_centreline_layer_joins 'VS-11' start -1.2467 end -1.0531 start[] end[] path 0
+@@ -46 +46,0 @@
+-  2098938 partition_wall_centreline_layer_joins 'VS-11' start -1.1614 end -1.1614 start[] end[] path 0
+@@ -67,0 +68,2 @@
++  1347199 partition_element_record_join_trimmed 'KS-1' start +0.5429 end -0.5085 start[] end[] path 0
++  3015330 partition_wall_centreline_layer_joins 'VS-3' start +0.4921 end -0.0000 start[] end[] path 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/wall_heights_vs_ifc.txt measure-head/nordic-office-as-built/wall_heights_vs_ifc.txt
+--- measure-base/nordic-office-as-built/wall_heights_vs_ifc.txt	2026-11-05 07:22:10.705260696 +0000
++++ measure-head/nordic-office-as-built/wall_heights_vs_ifc.txt	2026-11-05 07:22:09.262250391 +0000
+@@ -88,2 +88 @@
+-  base and top Revit's: 598
+-  top Revit's, base not: 8
++  base and top Revit's: 606
+@@ -91,2 +90,2 @@
+-  misses in the same storey: 9
+-plan turn Revit - rvt-rs: 40.332546 degrees (median wall-middle residual 0.0159 ft)
++  misses in the same storey: 1
++plan turn Revit - rvt-rs: 40.331946 degrees (median wall-middle residual 0.0144 ft)
+@@ -251,9 +250,9 @@
+-over tag:2056705 2057322:174.9344,175.8530:174.9306,175.8493
+-over tag:2056741 2057322:175.7559,176.6746:175.7522,176.6709
+-over tag:2056770 2057322:174.9344,175.8530:174.9307,175.8493
+-over tag:2057668 2057673:174.9959,175.9145:174.9896,175.9083
+-over tag:2057669 2057673:175.7559,176.6746:175.7497,176.6684
+-over tag:2057670 2057673:174.9959,175.9145:174.9897,175.9083
+-over tag:2058499 2058504:174.8810,175.7996:174.8778,175.7964
+-over tag:2058500 2058504:175.7357,176.6543:175.7326,176.6512
+-over tag:2058501 2058504:174.8810,175.7996:174.8779,175.7965
++over tag:2056705 2057322:174.9344,175.8530:174.9307,175.8493
++over tag:2056741 2057322:175.7559,176.6746:175.7523,176.6709
++over tag:2056770 2057322:174.9344,175.8530:174.9308,175.8494
++over tag:2057668 2057673:174.9344,175.8530:174.9288,175.8474
++over tag:2057669 2057673:175.7559,176.6746:175.7504,176.6690
++over tag:2057670 2057673:174.9344,175.8530:174.9289,175.8475
++over tag:2058499 2058504:174.8810,175.7996:174.8777,175.7963
++over tag:2058500 2058504:175.7357,176.6543:175.7324,176.6510
++over tag:2058501 2058504:174.8810,175.7996:174.8777,175.7964
+@@ -264,4 +263,4 @@
+-over tag:2070689 2070694:174.9344,175.8530:174.9317,175.8504
+-over tag:2070690 2070694:175.7477,176.6664:175.7451,176.6638
+-over tag:2070691 2070694:174.9344,175.8530:174.9318,175.8504
+-over tag:2098938 1451421:194.3898,195.8661:194.3898,195.8661 1457693:207.3491,208.8255:207.3491,208.8255
++over tag:2070689 2070694:174.9344,175.8530:174.9319,175.8505
++over tag:2070690 2070694:175.7477,176.6664:175.7452,176.6639
++over tag:2070691 2070694:174.9344,175.8530:174.9319,175.8505
++over tag:2098938 1457693:207.3491,208.8255:207.3491,208.8255
+@@ -269 +268 @@
+-over tag:2105250 1457785:220.3084,221.7848:220.3084,221.7848 1474132:234.4816,235.9580:234.4816,235.9580
++over tag:2105250 1474132:234.4816,235.9580:234.4816,235.9580
+@@ -276 +275 @@
+-over tag:2177212 1451421:194.3898,195.8661:194.3898,195.8661 1457693:207.3491,208.8255:207.3491,208.8255
++over tag:2177212 1457693:207.3491,208.8255:207.3491,208.8255
+@@ -294 +293 @@
+-over tag:2293116 1384047:180.6102,182.0866:180.6102,182.0866 1451421:194.3898,195.8661:194.3898,195.8661
++over tag:2293116 1451421:194.3898,195.8661:194.3898,195.8661
+@@ -296 +295 @@
+-over tag:2294996 1384047:180.6102,182.0866:180.6102,182.0866 1451421:194.3898,195.8661:194.3898,195.8661
++over tag:2294996 1451421:194.3898,195.8661:194.3898,195.8661
+@@ -617 +616 @@
+-over tag:3450274 1451421:194.3898,195.8661:194.3898,195.8661 1498471:179.7900,182.0866:179.7900,182.0866
++over tag:3450274 1451421:194.3898,195.8661:194.3898,195.8661
+@@ -631,4 +630,3 @@
+-  base: uncut and Revit's: 587
+-  base: uncut, Revit cuts: 6
+-  top: cut, not Revit's: 121
+-  top: uncut and Revit's: 486
++  base: uncut and Revit's: 593
++  top: cut, not Revit's: 120
++  top: uncut and Revit's: 487
+@@ -818 +816 @@
+-wall tag:2057668 rvt-rs 174.9918 183.7343 122.8960 123.7162 75.7285 80.3806 Revit 174.8688 183.7343
++wall tag:2057668 rvt-rs 174.8688 183.7343 122.8960 123.7162 75.4183 80.3806 Revit 174.8688 183.7343
+@@ -820 +818 @@
+-wall tag:2057670 rvt-rs 174.9918 183.7343 127.1611 127.9813 75.7285 80.3806 Revit 174.8688 183.7343
++wall tag:2057670 rvt-rs 174.8688 183.7343 127.1611 127.9813 75.4183 80.3806 Revit 174.8688 183.7343
+@@ -831 +829 @@
+-wall tag:2098938 rvt-rs 195.8661 207.3491 202.1012 202.4884 34.0763 54.8375 Revit 204.0682 207.3491
++wall tag:2098938 rvt-rs 204.0682 207.3491 202.1012 202.4884 35.2378 53.6761 Revit 204.0682 207.3491
+@@ -833 +831 @@
+-wall tag:2105250 rvt-rs 221.7848 234.4816 201.2417 201.6288 34.1846 54.9228 Revit 229.9869 234.4816
++wall tag:2105250 rvt-rs 229.9869 234.4816 201.2417 201.6288 35.2378 53.6761 Revit 229.9869 234.4816
+@@ -840 +838 @@
+-wall tag:2177212 rvt-rs 195.8661 207.3491 202.1012 214.2772 33.9910 34.3782 Revit 204.0682 207.3491
++wall tag:2177212 rvt-rs 204.0682 207.3491 202.4884 213.9754 33.9910 34.3782 Revit 204.0682 207.3491
+@@ -861 +859 @@
+-wall tag:2293116 rvt-rs 182.0866 194.3898 122.4695 161.8716 20.8071 21.1942 Revit 190.2887 194.3898
++wall tag:2293116 rvt-rs 190.2887 194.3898 122.4695 161.8716 20.8071 21.1942 Revit 190.2887 194.3898
+@@ -863 +861 @@
+-wall tag:2294996 rvt-rs 182.0866 194.3898 261.1145 300.2581 20.8071 21.1942 Revit 190.2887 194.3898
++wall tag:2294996 rvt-rs 190.2887 194.3898 261.1145 300.2581 20.8071 21.1942 Revit 190.2887 194.3898
+@@ -1224 +1222 @@
+-wall tag:3450274 rvt-rs 182.0866 194.3898 300.9143 319.4839 20.8071 21.1942 Revit 190.2887 194.3898
++wall tag:3450274 rvt-rs 190.2887 194.3898 300.9143 319.4839 20.8071 21.1942 Revit 190.2887 194.3898
+@@ -1299 +1296,0 @@
+-crossed tag:2105250 top:1863610:passes:beside
+@@ -1377,7 +1373,0 @@
+-  tag:2057668 top Revit's, base not: base -0.1230 ft, top +0.0000 ft, rvt-rs storey 'Basement', Revit storey 'Basement', Revit body Tessellation
+-  tag:2057670 top Revit's, base not: base -0.1230 ft, top +0.0000 ft, rvt-rs storey 'Basement', Revit storey 'Basement', Revit body Tessellation
+-  tag:2098938 top Revit's, base not: base +8.2021 ft, top -0.0000 ft, rvt-rs storey 'Level_02', Revit storey 'Level_02', Revit body SweptSolid
+-  tag:2105250 top Revit's, base not: base +8.2021 ft, top +0.0000 ft, rvt-rs storey 'Level_04', Revit storey 'Level_04', Revit body SweptSolid
+-  tag:2177212 top Revit's, base not: base +8.2021 ft, top -0.0000 ft, rvt-rs storey 'Level_02', Revit storey 'Level_02', Revit body Tessellation
+-  tag:2293116 top Revit's, base not: base +8.2021 ft, top +0.0000 ft, rvt-rs storey 'Level_01', Revit storey 'Level_01', Revit body Tessellation
+-  tag:2294996 top Revit's, base not: base +8.2021 ft, top +0.0000 ft, rvt-rs storey 'Level_01', Revit storey 'Level_01', Revit body Tessellation
+@@ -1385 +1374,0 @@
+-  tag:3450274 top Revit's, base not: base +8.2021 ft, top +0.0000 ft, rvt-rs storey 'Level_01', Revit storey 'Level_01', Revit body SweptSolid
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/wall_layers_vs_ifc.txt measure-head/nordic-office-as-built/wall_layers_vs_ifc.txt
+--- measure-base/nordic-office-as-built/wall_layers_vs_ifc.txt	2026-11-05 07:22:10.703260682 +0000
++++ measure-head/nordic-office-as-built/wall_layers_vs_ifc.txt	2026-11-05 07:22:09.250250306 +0000
+@@ -1 +1 @@
+-602 walls drawn in layers in the GLB
++596 walls drawn in layers in the GLB
+@@ -3,3 +3,3 @@
+-    602  drawn in layers in the GLB and present in the IFC
+-    598  compared
+-    295  compared, two or more layers
++    596  drawn in layers in the GLB and present in the IFC
++    592  compared
++    289  compared, two or more layers
+@@ -8,5 +8,5 @@
+-  layer centres within 0.001 ft: 583 of 598
+-  layer centres within 0.01 ft: 597 of 598
+-  layer centres within 0.05 ft: 597 of 598
+-  layer centres within 0.25 ft: 597 of 598
+-  median 2.05e-06 ft, max 0.4921 ft
++  layer centres within 0.001 ft: 577 of 592
++  layer centres within 0.01 ft: 591 of 592
++  layer centres within 0.05 ft: 591 of 592
++  layer centres within 0.25 ft: 591 of 592
++  median 2.06e-06 ft, max 0.4921 ft
+@@ -15 +15 @@
+-    710  same
++    704  same
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/frames_vs_ifc.txt measure-head/nordic-office-permit/frames_vs_ifc.txt
+--- measure-base/nordic-office-permit/frames_vs_ifc.txt	2026-11-05 07:22:10.318257933 +0000
++++ measure-head/nordic-office-permit/frames_vs_ifc.txt	2026-11-05 07:22:09.121249385 +0000
+@@ -8,2 +8,2 @@
+-fitted rvt-rs -> Revit: translation (0.011, -0.005, 0.007) rotation 40.3391 deg; residual median 0.0087 max 1.2428
+-Revit's site placement applied to rvt-rs: residual median 0.0000 max 1.2500
++fitted rvt-rs -> Revit: translation (0.011, -0.005, -0.000) rotation 40.3391 deg; residual median 0.0049 max 0.2235
++Revit's site placement applied to rvt-rs: residual median 0.0000 max 0.2275
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/mcp_answers_vs_ifc.txt measure-head/nordic-office-permit/mcp_answers_vs_ifc.txt
+--- measure-base/nordic-office-permit/mcp_answers_vs_ifc.txt	2026-11-05 07:22:10.692260604 +0000
++++ measure-head/nordic-office-permit/mcp_answers_vs_ifc.txt	2026-11-05 07:22:09.258250363 +0000
+@@ -2 +2 @@
+-  list_elements: 13067 rows
++  list_elements: 13020 rows
+@@ -6,3 +6,2 @@
+-mcp answers: consistency counts: 84 compared, 1 differ
+-  difference counts: IFC IfcCovering count: 122 vs 75
+-mcp answers: elements the export folds into the body of another element, not rows: 0
++mcp answers: consistency counts: 84 compared, 0 differ
++mcp answers: elements the export folds into the body of another element, not rows: 47
+@@ -14 +13 @@
+-mcp answers: IfcCovering: 122 rows
++mcp answers: IfcCovering: 75 rows
+@@ -34,28 +33,2 @@
+-mcp answers: rows listed: 13067
+-mcp answers: consistency element membership: 13067 compared, 47 differ
+-  difference element membership: element 2094020 IFCCOVERING 3_EpWmVV6AqBJlp$5Z$qkS: not in the IFC
+-  difference element membership: element 2094444 IFCCOVERING 24S0Yv1e260xFtG$WTY_Kx: not in the IFC
+-  difference element membership: element 2094524 IFCCOVERING 32hz27fv2BZhYqXzYdwMEW: not in the IFC
+-  difference element membership: element 2095364 IFCCOVERING 1w4fCY$eo26u1NuDvVF8rW: not in the IFC
+-  difference element membership: element 2095364 IFCCOVERING 3g321Jmlc1y9eBLRITXK9u: not in the IFC
+-  difference element membership: element 2095404 IFCCOVERING 2NhtTy7Ho9MBWxQX2kFkTZ: not in the IFC
+-  difference element membership: element 2095404 IFCCOVERING 2fGxWX2XMDf841vLRgoPb7: not in the IFC
+-  difference element membership: element 2095436 IFCCOVERING 0fK16NIXo3Avl$55YWslkM: not in the IFC
+-  difference element membership: element 2095436 IFCCOVERING 3ktCcXHhE31AIfBG3vRQqL: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 053Fn33mY1suJbH240AnA7: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 0mEYeZQv659AyncNJUXJVu: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 126LseRHsERwLwMTsZJg4I: not in the IFC
+-  difference element membership: element 2097832 IFCCOVERING 1GSYk1smcE$RZcbgyhM_Lt: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 00cFbs7io8IAoRhKHVmjNV: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 0zZPeGOBc4Yxs$zUbsRtke: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 1W9m2cZMo5MPjQWZ2Xnadf: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 1o2WKIQUcBg9eC8UndlCfA: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 2KxmKtiuY3tAxf8pnOPCb7: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 2dIuYbsrQ9ORKT8_guEuQs: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 2vEi0tH762Bg6VJmNIfzf4: not in the IFC
+-  difference element membership: element 2103288 IFCCOVERING 3AsLtLoi20kuBPsJOefLb3: not in the IFC
+-  difference element membership: element 2105195 IFCCOVERING 0WRVv2xIc7XOJ9mZ74ogLe: not in the IFC
+-  difference element membership: element 2105195 IFCCOVERING 0lBHkbL$AFDvXlgfWnChaG: not in the IFC
+-  difference element membership: element 2105195 IFCCOVERING 2XwoRmX0ICUATIoXDYkt5N: not in the IFC
+-  difference element membership: element 2105195 IFCCOVERING 2yt83VSUU9DB5hxsEOk7pW: not in the IFC
+-  difference element membership: ... 22 more
++mcp answers: rows listed: 13020
++mcp answers: consistency element membership: 13020 compared, 0 differ
+@@ -67,37 +40,4 @@
+-mcp answers: consistency element storeys: 13020 compared, 599 differ
+-  difference element storeys: element 1440878 IfcStairFlight 2V9jZhd2f65P2kCC5uMYSb: level None vs storey 'Level_01'
+-  difference element storeys: element 1503045 IfcStairFlight 2Xe6rbtYzAqhfyXbKpPUbx: level None vs storey 'Level_02a_Parking'
+-  difference element storeys: element 2598348 IfcStairFlight 0rb8433vT8junK7fT$s9YA: level None vs storey 'Basement'
+-  difference element storeys: element 2598357 IfcStairFlight 0rb8433vT8junK7fT$s9YJ: level None vs storey 'Basement'
+-  difference element storeys: element 2859204 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fsq: level None vs storey 'Level_01'
+-  difference element storeys: element 2859206 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fss: level None vs storey 'Level_01'
+-  difference element storeys: element 2859208 IfcSlab 2HM8XWPUz6WgsmzelJ_fsu: level None vs storey 'Level_01'
+-  difference element storeys: element 2859210 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fsw: level None vs storey 'Level_01'
+-  difference element storeys: element 2859212 IfcSlab 2HM8XWPUz6WgsmzelJ_fsy: level None vs storey 'Level_01'
+-  difference element storeys: element 2861134 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fK_: level None vs storey 'Basement'
+-  difference element storeys: element 2861136 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fKW: level None vs storey 'Basement'
+-  difference element storeys: element 2861138 IfcSlab 2HM8XWPUz6WgsmzelJ_fKY: level None vs storey 'Basement'
+-  difference element storeys: element 2861140 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fKa: level None vs storey 'Basement'
+-  difference element storeys: element 2861142 IfcSlab 2HM8XWPUz6WgsmzelJ_fKc: level None vs storey 'Basement'
+-  difference element storeys: element 2862239 IfcStairFlight 2HM8XWPUz6WgsmzelJ_f7l: level None vs storey 'Level_02'
+-  difference element storeys: element 2862241 IfcStairFlight 2HM8XWPUz6WgsmzelJ_f7H: level None vs storey 'Level_02'
+-  difference element storeys: element 2862243 IfcSlab 2HM8XWPUz6WgsmzelJ_f7J: level None vs storey 'Level_02'
+-  difference element storeys: element 2862245 IfcStairFlight 2HM8XWPUz6WgsmzelJ_f7L: level None vs storey 'Level_02'
+-  difference element storeys: element 2862247 IfcSlab 2HM8XWPUz6WgsmzelJ_f7N: level None vs storey 'Level_02'
+-  difference element storeys: element 2863241 IfcStairFlight 2HM8XWPUz6WgsmzelJ_etv: level None vs storey 'Level_04'
+-  difference element storeys: element 2863243 IfcStairFlight 2HM8XWPUz6WgsmzelJ_etx: level None vs storey 'Level_04'
+-  difference element storeys: element 2863245 IfcSlab 2HM8XWPUz6WgsmzelJ_etz: level None vs storey 'Level_04'
+-  difference element storeys: element 2863247 IfcStairFlight 2HM8XWPUz6WgsmzelJ_et$: level None vs storey 'Level_04'
+-  difference element storeys: element 2863249 IfcSlab 2HM8XWPUz6WgsmzelJ_etX: level None vs storey 'Level_04'
+-  difference element storeys: element 2867922 IfcStairFlight 2HM8XWPUz6WgsmzelJ_l_Y: level None vs storey 'Basement'
+-  difference element storeys: ... 574 more
+-mcp answers: IFC openings the writer cuts for doors and windows, in no row: 529
+-mcp answers: IFC elements and spaces: 13549
+-mcp answers: consistency levels: 10 compared, 7 differ
+-  difference levels: level 2 'Basement': 391 elements vs 401 in the IFC
+-  difference levels: level 3 'Level_01': 5442 elements vs 5451 in the IFC
+-  difference levels: level 4 'Level_02a_Parking': 11 elements vs 12 in the IFC
+-  difference levels: level 6 'Level_03': 1565 elements vs 1559 in the IFC
+-  difference levels: level 7 'Level_04': 1542 elements vs 1537 in the IFC
+-  difference levels: level 8 'Level_05': 1984 elements vs 2527 in the IFC
+-  difference levels: level 9 'Roof': 559 elements vs 17 in the IFC
++mcp answers: consistency element storeys: 13020 compared, 0 differ
++mcp answers: IFC openings the writer cuts for doors and windows, in no row: 616
++mcp answers: IFC elements and spaces: 13636
++mcp answers: consistency levels: 10 compared, 0 differ
+@@ -108,4 +48,4 @@
+-mcp answers: consistency details: 115 compared, 0 differ
+-mcp answers: consistency type objects: 115 compared, 0 differ
+-mcp answers: consistency type object sets: 115 compared, 0 differ
+-mcp answers: get_element property and quantity sets compared: 997
++mcp answers: consistency details: 116 compared, 0 differ
++mcp answers: consistency type objects: 116 compared, 0 differ
++mcp answers: consistency type object sets: 116 compared, 0 differ
++mcp answers: get_element property and quantity sets compared: 1006
+@@ -119 +59 @@
+-mcp answers: classes: the answers, rows left out for a repeated Tag: 47
++mcp answers: classes: the answers, rows left out for a repeated Tag: 0
+@@ -147 +87 @@
+-mcp answers: storeys: rows the answers and Revit export share: 12758
++mcp answers: storeys: rows the answers and Revit export share: 12711
+@@ -149,3 +89,2 @@
+-mcp answers: storeys: rows on a different storey from Revit: 548
+-mcp answers: storeys: rows on no storey where Revit has a storey: 57
+-mcp answers: storeys: rows on the same storey as in Revit: 11713
++mcp answers: storeys: rows on a different storey from Revit: 6
++mcp answers: storeys: rows on the same storey as in Revit: 12265
+@@ -160 +99 @@
+-mcp answers: values: sampled rows the answers and Revit export share: 110
++mcp answers: values: sampled rows the answers and Revit export share: 111
+@@ -162,7 +101,7 @@
+-mcp answers: values: property values equal to Revit: 527
+-mcp answers: values: property values in the answers: 532
+-mcp answers: values: property or quantity values Revit writes that the answers lack: 246
+-mcp answers: values: quantity values equal to Revit: 129
+-mcp answers: values: quantity values in the answers: 129
+-mcp answers: consistency FAIL: counts, element membership, element storeys, levels
+-exit 1
++mcp answers: values: property values equal to Revit: 531
++mcp answers: values: property values in the answers: 536
++mcp answers: values: property or quantity values Revit writes that the answers lack: 249
++mcp answers: values: quantity values equal to Revit: 130
++mcp answers: values: quantity values in the answers: 130
++mcp answers: consistency PASS: every check equal
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/mesh_bodies_vs_ifc.txt measure-head/nordic-office-permit/mesh_bodies_vs_ifc.txt
+--- measure-base/nordic-office-permit/mesh_bodies_vs_ifc.txt	2026-11-05 07:22:10.692260604 +0000
++++ measure-head/nordic-office-permit/mesh_bodies_vs_ifc.txt	2026-11-05 07:22:09.258250363 +0000
+@@ -1 +1 @@
+-saved_graphics_mesh bodies scored: 534; in Revit's export 534
++saved_graphics_mesh bodies scored: 542; in Revit's export 542
+@@ -14,0 +15,4 @@
++IfcWall                           8       8        7        7        7           7  1.0000
++        6       6        5        5        5           5  Basic Wall:VS-11
++        2       2        2        2        2           2  Basic Wall:VS-1
++  2177212 IfcWall 'Basic Wall:VS-11': volume ratio 0.9901, Revit's vertices to rvt-rs's surface 0.3018 ft, rvt-rs's to Revit's 1.307e-06 ft
+@@ -29 +32,0 @@
+-  3098324 IfcDoor 'O-4:O-4.8x21': volume ratio 1.0001, Revit's vertices to rvt-rs's surface 5.642e-05 ft, rvt-rs's to Revit's 0.0005484 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/opening_boxes_vs_ifc.txt measure-head/nordic-office-permit/opening_boxes_vs_ifc.txt
+--- measure-base/nordic-office-permit/opening_boxes_vs_ifc.txt	2026-11-05 07:22:10.692260604 +0000
++++ measure-head/nordic-office-permit/opening_boxes_vs_ifc.txt	2026-11-05 07:22:09.258250363 +0000
+@@ -6 +6 @@
+-unfilled openings in Revit's export: 207; in rvt-rs's: 69; both: 59
++unfilled openings in Revit's export: 207; in rvt-rs's: 154; both: 142
+@@ -8 +8,2 @@
+-  IfcWall within 0.001 ft: 24
++  IfcWall over 1 ft: 2
++  IfcWall within 0.001 ft: 105
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/opening_hosts_vs_ifc.txt measure-head/nordic-office-permit/opening_hosts_vs_ifc.txt
+--- measure-base/nordic-office-permit/opening_hosts_vs_ifc.txt	2026-11-05 07:22:10.692260604 +0000
++++ measure-head/nordic-office-permit/opening_hosts_vs_ifc.txt	2026-11-05 07:22:09.259250370 +0000
+@@ -3,2 +3,2 @@
+-openings with no filler: 72
+-openings with no filler voiding Revit's wall: 62
++openings with no filler: 159
++openings with no filler voiding Revit's wall: 146
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/psets_vs_ifc.txt measure-head/nordic-office-permit/psets_vs_ifc.txt
+--- measure-base/nordic-office-permit/psets_vs_ifc.txt	2026-11-05 07:22:10.693260611 +0000
++++ measure-head/nordic-office-permit/psets_vs_ifc.txt	2026-11-05 07:22:09.259250370 +0000
+@@ -1,2 +1,2 @@
+-Revit values on objects rvt-rs writes: 45766; equal: 44394; different: 1; missing: 1371; rvt-rs values Revit does not write: 7
+-rvt-rs values on openings Revit's export of this file lacks but its export of a sibling file holds, counted apart (a pair inconsistency, RE-338): 2 on 1 openings
++Revit values on objects rvt-rs writes: 45967; equal: 44562; different: 1; missing: 1404; rvt-rs values Revit does not write: 7
++rvt-rs values on openings Revit's export of this file lacks but its export of a sibling file holds, counted apart (a pair inconsistency, RE-338): 8 on 4 openings
+@@ -42 +42 @@
+-  Pset_EnvironmentalImpactIndicators.Reference: 12770, equal 12735, different 0, missing 35
++  Pset_EnvironmentalImpactIndicators.Reference: 12854, equal 12819, different 0, missing 35
+@@ -49 +49,2 @@
+-  Pset_OpeningElementCommon.Reference: 59, equal 59, different 0, missing 0
++  Pset_OpeningElementCommon.FireExit: 33, equal 0, different 0, missing 33
++  Pset_OpeningElementCommon.Reference: 143, equal 143, different 0, missing 0
+@@ -117,3 +118,3 @@
+-Revit values the project's own property set file places, out of scope (RE-239), not scored: 1907
+-  Pset_DoorWindowGlazingType.IsLaminated: 809
+-  Pset_DoorWindowGlazingType.IsTempered: 809
++Revit values the project's own property set file places, out of scope (RE-239), not scored: 1999
++  Pset_DoorWindowGlazingType.IsLaminated: 855
++  Pset_DoorWindowGlazingType.IsTempered: 855
+@@ -122,6 +123,6 @@
+-Revit values on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut), not scored: 595
+-  Pset_DoorWindowGlazingType.IsLaminated: 118
+-  Pset_DoorWindowGlazingType.IsTempered: 118
+-  Pset_EnvironmentalImpactIndicators.Reference: 157
+-  Pset_OpeningElementCommon.FireExit: 45
+-  Pset_OpeningElementCommon.Reference: 157
++Revit values on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut), not scored: 302
++  Pset_DoorWindowGlazingType.IsLaminated: 72
++  Pset_DoorWindowGlazingType.IsTempered: 72
++  Pset_EnvironmentalImpactIndicators.Reference: 73
++  Pset_OpeningElementCommon.FireExit: 12
++  Pset_OpeningElementCommon.Reference: 73
+@@ -143,0 +145 @@
++  Pset_OpeningElementCommon.FireExit: ('IfcBoolean', False) x33; on IfcOpeningElement x33
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/qtos_vs_ifc.txt measure-head/nordic-office-permit/qtos_vs_ifc.txt
+--- measure-base/nordic-office-permit/qtos_vs_ifc.txt	2026-11-05 07:22:10.693260611 +0000
++++ measure-head/nordic-office-permit/qtos_vs_ifc.txt	2026-11-05 07:22:09.259250370 +0000
+@@ -1 +1 @@
+-Revit quantities on objects rvt-rs writes: 39763; equal: 29849; different: 1; missing: 9913; rvt-rs quantities Revit does not write: 0
++Revit quantities on objects rvt-rs writes: 40015; equal: 30002; different: 1; missing: 10012; rvt-rs quantities Revit does not write: 0
+@@ -6 +6 @@
+-Revit quantities on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut, #1165), not scored: 470
++Revit quantities on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut, #1165), not scored: 218
+@@ -8,2 +8,2 @@
+-  Qto_OpeningElementBaseQuantities.Depth: 154
+-  Qto_OpeningElementBaseQuantities.Height: 155
++  Qto_OpeningElementBaseQuantities.Depth: 70
++  Qto_OpeningElementBaseQuantities.Height: 71
+@@ -11 +11 @@
+-  Qto_OpeningElementBaseQuantities.Width: 156
++  Qto_OpeningElementBaseQuantities.Width: 72
+@@ -42,3 +42,3 @@
+-  Qto_OpeningElementBaseQuantities.Depth: 212, equal 211, different 0, missing 1
+-  Qto_OpeningElementBaseQuantities.Height: 53, equal 24, different 0, missing 29
+-  Qto_OpeningElementBaseQuantities.Width: 53, equal 24, different 0, missing 29
++  Qto_OpeningElementBaseQuantities.Depth: 296, equal 262, different 0, missing 34
++  Qto_OpeningElementBaseQuantities.Height: 137, equal 75, different 0, missing 62
++  Qto_OpeningElementBaseQuantities.Width: 137, equal 75, different 0, missing 62
+@@ -96,0 +97,2 @@
++  Qto_OpeningElementBaseQuantities.Height: 62; on IfcOpeningElement x62
++  Qto_OpeningElementBaseQuantities.Width: 62; on IfcOpeningElement x62
+@@ -99,0 +102 @@
++  Qto_OpeningElementBaseQuantities.Depth: 34; on IfcOpeningElement x34
+@@ -101,2 +103,0 @@
+-  Qto_OpeningElementBaseQuantities.Height: 29; on IfcOpeningElement x29
+-  Qto_OpeningElementBaseQuantities.Width: 29; on IfcOpeningElement x29
+@@ -125 +125,0 @@
+-  Qto_OpeningElementBaseQuantities.Depth: 1; on IfcOpeningElement x1
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/saved_meshes_vs_ifc.txt measure-head/nordic-office-permit/saved_meshes_vs_ifc.txt
+--- measure-base/nordic-office-permit/saved_meshes_vs_ifc.txt	2026-11-05 07:22:10.693260611 +0000
++++ measure-head/nordic-office-permit/saved_meshes_vs_ifc.txt	2026-11-05 07:22:09.259250370 +0000
+@@ -6 +6,2 @@
+-total                          534       534       0       0      0       0
++IfcWall                          8         7       0       1      0       0
++total                          542       541       0       1      0       0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/schema.txt measure-head/nordic-office-permit/schema.txt
+--- measure-base/nordic-office-permit/schema.txt	2026-11-05 07:22:10.693260611 +0000
++++ measure-head/nordic-office-permit/schema.txt	2026-11-05 07:22:09.260250377 +0000
+@@ -4 +4 @@
+-  placement composition: 13048 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 13126 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -14 +14 @@
+-sets 27451 on 13110 objects and types
++sets 27625 on 13197 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/unfilled_openings_vs_ifc.txt measure-head/nordic-office-permit/unfilled_openings_vs_ifc.txt
+--- measure-base/nordic-office-permit/unfilled_openings_vs_ifc.txt	2026-11-05 07:22:10.693260611 +0000
++++ measure-head/nordic-office-permit/unfilled_openings_vs_ifc.txt	2026-11-05 07:22:09.260250377 +0000
+@@ -1 +1 @@
+-unfilled openings in Revit's export: 216; in rvt-rs's: 69; both: 59
++unfilled openings in Revit's export: 216; in rvt-rs's: 156; both: 143
+@@ -3,0 +4,10 @@
++  written: 13
++  box compared: 13
++  box within 0.01 ft: 13
++  GlobalId equal: 13
++  Name equal: 13
++  PredefinedType equal: 13
++  Pset_OpeningElementCommon.Reference equal: 13
++  Pset_EnvironmentalImpactIndicators.Reference equal: 13
++  Depth in Revit's: 13
++  Depth equal: 13
+@@ -7,0 +18,9 @@
++  written: 33
++  box compared: 33
++  box within 0.01 ft: 33
++  GlobalId equal: 33
++  Name equal: 33
++  PredefinedType equal: 33
++  Pset_OpeningElementCommon.Reference equal: 33
++  Pset_EnvironmentalImpactIndicators.Reference equal: 33
++  Depth in Revit's: 33
+@@ -9,0 +29,10 @@
++  written: 38
++  box compared: 38
++  box within 0.01 ft: 38
++  GlobalId equal: 38
++  Name equal: 38
++  PredefinedType equal: 38
++  Pset_OpeningElementCommon.Reference equal: 38
++  Pset_EnvironmentalImpactIndicators.Reference equal: 38
++  Depth in Revit's: 38
++  Depth equal: 38
+@@ -45 +74,2 @@
+-written that Revit's export does not but its export of a sibling file does, counted apart: 1
++written that Revit's export does not but its export of a sibling file does, counted apart: 4
++  IfcDoor in IfcWall, Tag 1728679 in 1728013: ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc
+@@ -46,0 +77,2 @@
++  IfcFireSuppressionTerminal in IfcWall, Tag 3387194 in 3363820: ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc
++  IfcFireSuppressionTerminal in IfcWall, Tag 3390319 in 1728013: ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/wall_bodies_vs_ifc.txt measure-head/nordic-office-permit/wall_bodies_vs_ifc.txt
+--- measure-base/nordic-office-permit/wall_bodies_vs_ifc.txt	2026-11-05 07:22:10.693260611 +0000
++++ measure-head/nordic-office-permit/wall_bodies_vs_ifc.txt	2026-11-05 07:22:09.260250377 +0000
+@@ -4 +4 @@
+-ends (along), axis-parallel: 589 walls; within 0.001 ft: 430 0.01 ft: 430 0.1 ft: 440 1.0 ft: 549; max 1.493 ft
++ends (along), axis-parallel: 589 walls; within 0.001 ft: 437 0.01 ft: 437 0.1 ft: 445 1.0 ft: 550; max 1.493 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/wall_ends_cv_vs_ifc.txt measure-head/nordic-office-permit/wall_ends_cv_vs_ifc.txt
+--- measure-base/nordic-office-permit/wall_ends_cv_vs_ifc.txt	2026-11-05 07:22:10.693260611 +0000
++++ measure-head/nordic-office-permit/wall_ends_cv_vs_ifc.txt	2026-11-05 07:22:09.260250377 +0000
+@@ -2,3 +2,3 @@
+-    986  ends within 0.001 ft
+-    986  ends within 0.01 ft
+-   1000  ends within 0.1 ft
++    996  ends within 0.001 ft
++    996  ends within 0.01 ft
++   1008  ends within 0.1 ft
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/wall_ends_list.txt measure-head/nordic-office-permit/wall_ends_list.txt
+--- measure-base/nordic-office-permit/wall_ends_list.txt	2026-11-05 07:22:10.693260611 +0000
++++ measure-head/nordic-office-permit/wall_ends_list.txt	2026-11-05 07:22:09.260250377 +0000
+@@ -1 +1 @@
+-straight and angled walls in both: 589; both ends within 0.001 ft: 430
++straight and angled walls in both: 589; both ends within 0.001 ft: 437
+@@ -6,3 +6,2 @@
+-     23  partition_element_record_join_trimmed | start ok [free] | end long [free]
+-     18  partition_element_record_join_trimmed | start long [free] | end long [free]
+-     15  partition_element_record_join_trimmed | start short [free] | end ok [free]
++     22  partition_element_record_join_trimmed | start ok [free] | end long [free]
++     15  partition_element_record_join_trimmed | start long [free] | end long [free]
+@@ -9,0 +9 @@
++     13  partition_element_record_join_trimmed | start short [free] | end ok [free]
+@@ -13 +12,0 @@
+-      9  partition_element_record_join_trimmed | start ok [free] | end short [free]
+@@ -14,0 +14,2 @@
++      8  partition_element_record_join_trimmed | start ok [free] | end short [free]
++      7  saved_graphics_mesh | start ok [free] | end ok [free]
+@@ -17 +17,0 @@
+-      3  partition_wall_centreline | start ok [free] | end long [free]
+@@ -18,0 +19 @@
++      2  partition_wall_centreline | start ok [free] | end long [free]
+@@ -23,0 +25 @@
++      1  saved_graphics_mesh | start short [free] | end ok [free]
+@@ -60 +61,0 @@
+-  2105250 partition_element_record_join_trimmed 'VS-11' start -1.1483 end -1.1483 start[] end[] path 0
+@@ -64,0 +66 @@
++  1892122 partition_element_record_join_trimmed 'VS-1' start -0.9843 end +0.0000 start[] end[] path 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/wall_heights_vs_ifc.txt measure-head/nordic-office-permit/wall_heights_vs_ifc.txt
+--- measure-base/nordic-office-permit/wall_heights_vs_ifc.txt	2026-11-05 07:22:10.704260689 +0000
++++ measure-head/nordic-office-permit/wall_heights_vs_ifc.txt	2026-11-05 07:22:09.262250391 +0000
+@@ -88,4 +88,4 @@
+-  base and top Revit's: 577
+-  top Revit's, base not: 12
+-  misses in the same storey: 12
+-plan turn Revit - rvt-rs: 40.334113 degrees (median wall-middle residual 0.0107 ft)
++  base and top Revit's: 587
++  top Revit's, base not: 2
++  misses in the same storey: 2
++plan turn Revit - rvt-rs: 40.333894 degrees (median wall-middle residual 0.0100 ft)
+@@ -102 +102 @@
+-over tag:1378125 1384047:180.6102,182.0866:180.6102,182.0866 1451421:194.3898,195.8661:194.3898,195.8661
++over tag:1378125 1451421:194.3898,195.8661:194.3898,195.8661
+@@ -113 +113 @@
+-over tag:1416796 1451421:194.3898,195.8661:194.3898,195.8661 1498471:179.7900,182.0866:179.7900,182.0866
++over tag:1416796 1451421:194.3898,195.8661:194.3898,195.8661
+@@ -255,6 +255,6 @@
+-over tag:2057668 2057673:174.9563,175.8750:174.9516,175.8702
+-over tag:2057669 2057673:175.7357,176.6543:175.7310,176.6497
+-over tag:2057670 2057673:174.9563,175.8750:174.9517,175.8704
+-over tag:2058499 2058504:174.9563,175.8750:174.9579,175.8766
+-over tag:2058500 2058504:175.7357,176.6543:175.7374,176.6560
+-over tag:2058501 2058504:174.9563,175.8750:174.9581,175.8767
++over tag:2057668 2057673:174.9344,175.8530:174.9299,175.8485
++over tag:2057669 2057673:175.7357,176.6543:175.7313,176.6499
++over tag:2057670 2057673:174.9344,175.8530:174.9300,175.8487
++over tag:2058499 2058504:174.9563,175.8750:174.9579,175.8765
++over tag:2058500 2058504:175.7357,176.6543:175.7373,176.6559
++over tag:2058501 2058504:174.9563,175.8750:174.9580,175.8766
+@@ -265,6 +265,6 @@
+-over tag:2070689 2070694:174.9344,175.8530:174.9337,175.8523
+-over tag:2070690 2070694:175.7357,176.6543:175.7351,176.6537
+-over tag:2070691 2070694:174.9344,175.8530:174.9338,175.8525
+-over tag:2098938 1451421:194.3898,195.8661:194.3898,195.8661 1457693:207.3491,208.8255:207.3491,208.8255
+-over tag:2103576 1457693:207.3491,208.8255:207.3491,208.8255 1457785:220.3084,221.7848:220.3084,221.7848
+-over tag:2105250 1457785:220.3084,221.7848:220.3084,221.7848 1474132:234.4816,235.9580:234.4816,235.9580
++over tag:2070689 2070694:174.9344,175.8530:174.9339,175.8525
++over tag:2070690 2070694:175.7357,176.6543:175.7352,176.6539
++over tag:2070691 2070694:174.9344,175.8530:174.9340,175.8526
++over tag:2098938 1457693:207.3491,208.8255:207.3491,208.8255
++over tag:2103576 1457785:220.3084,221.7848:220.3084,221.7848
++over tag:2105250 1474132:234.4816,235.9580:234.4816,235.9580
+@@ -277 +277 @@
+-over tag:2177212 1451421:194.3898,195.8661:194.3898,195.8661 1457693:207.3491,208.8255:207.3491,208.8255
++over tag:2177212 1457693:207.3491,208.8255:207.3491,208.8255
+@@ -298 +298 @@
+-over tag:2294996 1384047:180.6102,182.0866:180.6102,182.0866 1451421:194.3898,195.8661:194.3898,195.8661
++over tag:2294996 1451421:194.3898,195.8661:194.3898,195.8661
+@@ -330 +330 @@
+-over tag:2495664 1457693:207.3491,208.8255:207.3491,208.8255 1457785:220.3084,221.7848:220.3084,221.7848
++over tag:2495664 1457785:220.3084,221.7848:220.3084,221.7848
+@@ -619,4 +619,3 @@
+-  base: uncut and Revit's: 567
+-  base: uncut, Revit cuts: 8
+-  top: cut, not Revit's: 107
+-  top: uncut and Revit's: 482
++  base: uncut and Revit's: 575
++  top: cut, not Revit's: 106
++  top: uncut and Revit's: 483
+@@ -645 +644 @@
+-wall tag:1378125 rvt-rs 182.0866 194.3898 143.4668 162.1676 33.9567 34.6129 Revit 191.6010 194.3898
++wall tag:1378125 rvt-rs 191.6010 194.3898 143.4668 161.8395 33.9567 34.6129 Revit 191.6010 194.3898
+@@ -656 +655 @@
+-wall tag:1416796 rvt-rs 182.0866 194.3898 300.2910 319.3198 33.9567 34.6129 Revit 191.6010 194.3898
++wall tag:1416796 rvt-rs 191.6010 194.3898 300.9471 319.3198 33.9567 34.6129 Revit 191.6010 194.3898
+@@ -807 +806 @@
+-wall tag:2057668 rvt-rs 174.9127 183.7270 122.8960 123.7162 76.0663 80.3806 Revit 174.8688 183.7270
++wall tag:2057668 rvt-rs 174.8688 183.7270 122.8960 123.7162 75.9678 80.3806 Revit 174.8688 183.7270
+@@ -809 +808 @@
+-wall tag:2057670 rvt-rs 174.9127 183.7270 127.1611 127.9813 76.0663 80.3806 Revit 174.8688 183.7270
++wall tag:2057670 rvt-rs 174.8688 183.7270 127.1611 127.9813 75.9678 80.3806 Revit 174.8688 183.7270
+@@ -820,3 +819,3 @@
+-wall tag:2098938 rvt-rs 195.8661 207.3491 202.1348 202.5219 34.3438 54.5669 Revit 204.0682 207.3491
+-wall tag:2103576 rvt-rs 208.8255 220.3084 202.1348 202.5219 34.3438 54.5669 Revit 217.0276 220.3084
+-wall tag:2105250 rvt-rs 221.7848 234.4816 201.2096 201.5967 34.1207 54.7900 Revit 229.9869 234.4816
++wall tag:2098938 rvt-rs 204.0682 207.3491 202.1348 202.5219 35.2690 53.6417 Revit 204.0682 207.3491
++wall tag:2103576 rvt-rs 217.0276 220.3084 202.1348 202.5219 35.2690 53.6417 Revit 217.0276 220.3084
++wall tag:2105250 rvt-rs 229.9869 234.4816 201.2096 201.5967 35.2690 53.6417 Revit 229.9869 234.4816
+@@ -829 +828 @@
+-wall tag:2177212 rvt-rs 195.8661 207.3491 202.5219 213.9754 33.9567 34.3438 Revit 204.0682 207.3491
++wall tag:2177212 rvt-rs 204.0682 207.3491 202.5219 213.9754 33.9567 34.3438 Revit 204.0682 207.3491
+@@ -854 +853 @@
+-wall tag:2294996 rvt-rs 182.0866 194.3898 261.1145 319.7300 20.8071 21.1942 Revit 191.6010 194.3898
++wall tag:2294996 rvt-rs 191.6010 194.3898 261.1145 319.7300 20.8071 21.1942 Revit 191.6010 194.3898
+@@ -887 +886 @@
+-wall tag:2495664 rvt-rs 208.8255 220.3084 260.7273 261.1145 63.0741 73.3268 Revit 217.0276 220.3084
++wall tag:2495664 rvt-rs 217.0276 220.3084 260.7273 261.1145 63.0741 73.3268 Revit 217.0276 220.3084
+@@ -1260 +1258,0 @@
+-crossed tag:2105250 top:1863610:passes:beside
+@@ -1333,4 +1330,0 @@
+-  tag:1378125 top Revit's, base not: base +9.5144 ft, top +0.0000 ft, rvt-rs storey 'Level_01', Revit storey 'Level_01', Revit body Tessellation
+-  tag:1416796 top Revit's, base not: base +9.5144 ft, top +0.0000 ft, rvt-rs storey 'Level_01', Revit storey 'Level_01', Revit body Tessellation
+-  tag:2057668 top Revit's, base not: base -0.0439 ft, top +0.0000 ft, rvt-rs storey 'Basement', Revit storey 'Basement', Revit body Tessellation
+-  tag:2057670 top Revit's, base not: base -0.0439 ft, top +0.0000 ft, rvt-rs storey 'Basement', Revit storey 'Basement', Revit body Tessellation
+@@ -1339,6 +1332,0 @@
+-  tag:2098938 top Revit's, base not: base +8.2021 ft, top -0.0000 ft, rvt-rs storey 'Level_02', Revit storey 'Level_02', Revit body SweptSolid
+-  tag:2103576 top Revit's, base not: base +8.2021 ft, top +0.0000 ft, rvt-rs storey 'Level_03', Revit storey 'Level_03', Revit body SweptSolid
+-  tag:2105250 top Revit's, base not: base +8.2021 ft, top +0.0000 ft, rvt-rs storey 'Level_04', Revit storey 'Level_04', Revit body SweptSolid
+-  tag:2177212 top Revit's, base not: base +8.2021 ft, top -0.0000 ft, rvt-rs storey 'Level_02', Revit storey 'Level_02', Revit body SweptSolid
+-  tag:2294996 top Revit's, base not: base +9.5144 ft, top +0.0000 ft, rvt-rs storey 'Level_01', Revit storey 'Level_01', Revit body Tessellation
+-  tag:2495664 top Revit's, base not: base +8.2021 ft, top +0.0000 ft, rvt-rs storey 'Level_03', Revit storey 'Level_03', Revit body SweptSolid
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-13_Rooms_Stairs/mcp_answers_vs_ifc.txt measure-head/r2025-13_Rooms_Stairs/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-13_Rooms_Stairs/mcp_answers_vs_ifc.txt	2026-11-05 07:22:10.511259311 +0000
++++ measure-head/r2025-13_Rooms_Stairs/mcp_answers_vs_ifc.txt	2026-11-05 07:22:09.119249370 +0000
+@@ -26,4 +26 @@
+-mcp answers: consistency element storeys: 27 compared, 3 differ
+-  difference element storeys: element 12642 IfcStairFlight 3A8na$4cf8wwwyt47cExQm: level None vs storey 'Level 1'
+-  difference element storeys: element 12644 IfcMember 3A8na$4cf8wwwyt47cExQs: level None vs storey 'Level 1'
+-  difference element storeys: element 12645 IfcMember 3A8na$4cf8wwwyt47cExQt: level None vs storey 'Level 1'
++mcp answers: consistency element storeys: 27 compared, 0 differ
+@@ -32,2 +29 @@
+-mcp answers: consistency levels: 4 compared, 1 differ
+-  difference levels: level 1 'Level 1': 23 elements vs 26 in the IFC
++mcp answers: consistency levels: 4 compared, 0 differ
+@@ -63,2 +59 @@
+-mcp answers: storeys: rows on no storey where Revit has a storey: 3
+-mcp answers: storeys: rows on the same storey as in Revit: 18
++mcp answers: storeys: rows on the same storey as in Revit: 21
+@@ -79,2 +74,2 @@
+-mcp answers: consistency FAIL: element storeys, levels
+-exit 1
++mcp answers: consistency PASS: every check equal
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-14_Rooms_Stairs_endwithriserOFF/mcp_answers_vs_ifc.txt measure-head/r2025-14_Rooms_Stairs_endwithriserOFF/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-14_Rooms_Stairs_endwithriserOFF/mcp_answers_vs_ifc.txt	2026-11-05 07:22:10.512259318 +0000
++++ measure-head/r2025-14_Rooms_Stairs_endwithriserOFF/mcp_answers_vs_ifc.txt	2026-11-05 07:22:09.119249370 +0000
+@@ -26,4 +26 @@
+-mcp answers: consistency element storeys: 27 compared, 3 differ
+-  difference element storeys: element 12642 IfcStairFlight 3A8na$4cf8wwwyt47cExQm: level None vs storey 'Level 1'
+-  difference element storeys: element 12644 IfcMember 3A8na$4cf8wwwyt47cExQs: level None vs storey 'Level 1'
+-  difference element storeys: element 12645 IfcMember 3A8na$4cf8wwwyt47cExQt: level None vs storey 'Level 1'
++mcp answers: consistency element storeys: 27 compared, 0 differ
+@@ -32,2 +29 @@
+-mcp answers: consistency levels: 4 compared, 1 differ
+-  difference levels: level 1 'Level 1': 23 elements vs 26 in the IFC
++mcp answers: consistency levels: 4 compared, 0 differ
+@@ -63,2 +59 @@
+-mcp answers: storeys: rows on no storey where Revit has a storey: 3
+-mcp answers: storeys: rows on the same storey as in Revit: 18
++mcp answers: storeys: rows on the same storey as in Revit: 21
+@@ -79,2 +74,2 @@
+-mcp answers: consistency FAIL: element storeys, levels
+-exit 1
++mcp answers: consistency PASS: every check equal
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-15_Rooms_Stairs_NoRisers/mcp_answers_vs_ifc.txt measure-head/r2025-15_Rooms_Stairs_NoRisers/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-15_Rooms_Stairs_NoRisers/mcp_answers_vs_ifc.txt	2026-11-05 07:22:10.513259325 +0000
++++ measure-head/r2025-15_Rooms_Stairs_NoRisers/mcp_answers_vs_ifc.txt	2026-11-05 07:22:09.119249370 +0000
+@@ -26,4 +26 @@
+-mcp answers: consistency element storeys: 27 compared, 3 differ
+-  difference element storeys: element 12765 IfcStairFlight 1cQYWlYvH2Q9oLNqvj1ufW: level None vs storey 'Level 1'
+-  difference element storeys: element 12767 IfcMember 1cQYWlYvH2Q9oLNqvj1ufY: level None vs storey 'Level 1'
+-  difference element storeys: element 12768 IfcMember 1cQYWlYvH2Q9oLNqvj1ufT: level None vs storey 'Level 1'
++mcp answers: consistency element storeys: 27 compared, 0 differ
+@@ -32,2 +29 @@
+-mcp answers: consistency levels: 4 compared, 1 differ
+-  difference levels: level 1 'Level 1': 23 elements vs 26 in the IFC
++mcp answers: consistency levels: 4 compared, 0 differ
+@@ -63,2 +59 @@
+-mcp answers: storeys: rows on no storey where Revit has a storey: 3
+-mcp answers: storeys: rows on the same storey as in Revit: 18
++mcp answers: storeys: rows on the same storey as in Revit: 21
+@@ -79,2 +74,2 @@
+-mcp answers: consistency FAIL: element storeys, levels
+-exit 1
++mcp answers: consistency PASS: every check equal
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-16_Rooms_Stairs_Monolithic/mcp_answers_vs_ifc.txt measure-head/r2025-16_Rooms_Stairs_Monolithic/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-16_Rooms_Stairs_Monolithic/mcp_answers_vs_ifc.txt	2026-11-05 07:22:10.514259332 +0000
++++ measure-head/r2025-16_Rooms_Stairs_Monolithic/mcp_answers_vs_ifc.txt	2026-11-05 07:22:09.119249370 +0000
+@@ -25,2 +25 @@
+-mcp answers: consistency element storeys: 25 compared, 1 differ
+-  difference element storeys: element 13476 IfcStairFlight 36rDePHt1CYwc0NjHVerbv: level None vs storey 'Level 1'
++mcp answers: consistency element storeys: 25 compared, 0 differ
+@@ -29,2 +28 @@
+-mcp answers: consistency levels: 4 compared, 1 differ
+-  difference levels: level 1 'Level 1': 23 elements vs 24 in the IFC
++mcp answers: consistency levels: 4 compared, 0 differ
+@@ -59,2 +57 @@
+-mcp answers: storeys: rows on no storey where Revit has a storey: 1
+-mcp answers: storeys: rows on the same storey as in Revit: 18
++mcp answers: storeys: rows on the same storey as in Revit: 19
+@@ -75,2 +72,2 @@
+-mcp answers: consistency FAIL: element storeys, levels
+-exit 1
++mcp answers: consistency PASS: every check equal
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/r2025-17_Rooms_Stairs_Spiral/mcp_answers_vs_ifc.txt measure-head/r2025-17_Rooms_Stairs_Spiral/mcp_answers_vs_ifc.txt
+--- measure-base/r2025-17_Rooms_Stairs_Spiral/mcp_answers_vs_ifc.txt	2026-11-05 07:22:10.515259340 +0000
++++ measure-head/r2025-17_Rooms_Stairs_Spiral/mcp_answers_vs_ifc.txt	2026-11-05 07:22:09.120249378 +0000
+@@ -25,2 +25 @@
+-mcp answers: consistency element storeys: 25 compared, 1 differ
+-  difference element storeys: element 13665 IfcStairFlight 08UQwU_ovDDPhxdVvMll_Q: level None vs storey 'Level 1'
++mcp answers: consistency element storeys: 25 compared, 0 differ
+@@ -29,2 +28 @@
+-mcp answers: consistency levels: 4 compared, 1 differ
+-  difference levels: level 1 'Level 1': 23 elements vs 24 in the IFC
++mcp answers: consistency levels: 4 compared, 0 differ
+@@ -59,2 +57 @@
+-mcp answers: storeys: rows on no storey where Revit has a storey: 1
+-mcp answers: storeys: rows on the same storey as in Revit: 18
++mcp answers: storeys: rows on the same storey as in Revit: 19
+@@ -75,2 +72,2 @@
+-mcp answers: consistency FAIL: element storeys, levels
+-exit 1
++mcp answers: consistency PASS: every check equal
++exit 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-racbasicsampleproject/schema.txt measure-head/sample-2024-racbasicsampleproject/schema.txt
+--- measure-base/sample-2024-racbasicsampleproject/schema.txt	2026-11-05 07:22:10.598259932 +0000
++++ measure-head/sample-2024-racbasicsampleproject/schema.txt	2026-11-05 07:22:09.040248806 +0000
+@@ -4 +4 @@
+-  placement composition: 440 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 441 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 952 on 464 objects and types
++sets 954 on 465 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2025-racbasicsampleproject/schema.txt measure-head/sample-2025-racbasicsampleproject/schema.txt
+--- measure-base/sample-2025-racbasicsampleproject/schema.txt	2026-11-05 07:22:10.611260025 +0000
++++ measure-head/sample-2025-racbasicsampleproject/schema.txt	2026-11-05 07:22:09.115249342 +0000
+@@ -4 +4 @@
+-  placement composition: 432 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  placement composition: 433 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 949 on 463 objects and types
++sets 951 on 464 objects and types

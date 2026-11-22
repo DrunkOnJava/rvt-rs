@@ -1,0 +1,55 @@
+unfilled openings in Revit's export: 220; in rvt-rs's: 75; both: 66
+IfcCurtainWall in IfcWall:
+  revit: 70
+IfcDoor in IfcDoor:
+  revit: 4
+IfcDoor in IfcWall:
+  revit: 39
+IfcFireSuppressionTerminal in IfcWall:
+  revit: 39
+IfcSlab in IfcSlab:
+  revit: 1
+  written: 1
+  box compared: 1
+  box within 0.01 ft: 1
+  GlobalId equal: 1
+  Name equal: 1
+  PredefinedType equal: 1
+  Pset_OpeningElementCommon.Reference equal: 1
+  Depth in Revit's: 1
+IfcWall in IfcWall:
+  revit: 1
+none in IfcSlab:
+  revit: 36
+  written: 35
+  box compared: 35
+  box within 0.01 ft: 35
+  Name equal: 35
+  PredefinedType equal: 35
+  Pset_OpeningElementCommon.Reference equal: 35
+none in IfcWall:
+  revit: 30
+  written: 30
+  box compared: 30
+  box within 0.01 ft: 30
+  GlobalId equal: 30
+  Name equal: 30
+  PredefinedType equal: 30
+  Pset_OpeningElementCommon.Reference equal: 30
+  Pset_EnvironmentalImpactIndicators.Reference equal: 30
+  Depth in Revit's: 30
+  Depth equal: 30
+written that Revit's export does not: 9
+  none in IfcSlab: 1
+  none in IfcWall: 8
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+  extra: none in IfcWall, Tag 2137992 in 2058501
+  extra: none in IfcWall, Tag 2138050 in 2058499
+  extra: none in IfcWall, Tag 2138402 in 2056770
+  extra: none in IfcWall, Tag 2138449 in 2056705
+  extra: none in IfcWall, Tag 2138640 in 2057670
+  extra: none in IfcWall, Tag 2138691 in 2057668
+  extra: none in IfcWall, Tag 2139036 in 2070689
+  extra: none in IfcWall, Tag 2139150 in 2070691
+  extra: none in IfcSlab, Tag 3147722 in 1457785
+exit 0

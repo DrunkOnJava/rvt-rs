@@ -1,0 +1,1 @@
+b510ff3cd3c4971c907279bb91bef9cc9a197ccf fix(ifc): a wall with an edited profile cut back from inside the wall beneath it is drawn to that wall's face (#1396) (RE-337) (#1398)

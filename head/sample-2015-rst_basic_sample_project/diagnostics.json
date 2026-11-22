@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "mode": "default",
+  "input": {
+    "revit_version": 2015,
+    "build": "20140117_1515(x64)",
+    "original_path": "rst_basic_sample_project.rvt",
+    "project_name": "rst_basic_sample_project",
+    "stream_count": 13,
+    "has_basic_file_info": true,
+    "has_part_atom": false,
+    "has_formats_latest": true,
+    "has_global_latest": true,
+    "release_support": {
+      "status": "experimental",
+      "capability": "element-records-revit-2015-2018"
+    }
+  },
+  "decoded": {
+    "production_walker_elements": 283,
+    "diagnostic_proxy_candidates": 0,
+    "arcwall_records": 0,
+    "class_counts": {},
+    "production_class_counts": {
+      "Floor": 2,
+      "Material": 48,
+      "StructuralColumn": 70,
+      "StructuralFraming": 159,
+      "Wall": 4
+    },
+    "parameter_value_count": 1185,
+    "mean_element_confidence": 0.8169633,
+    "elements_below_min_confidence": 0,
+    "min_element_confidence": 0.55,
+    "recovered_unit_identifiers": [],
+    "unknown_unit_identifiers": [],
+    "element_record_stages": {
+      "layout_release": 2015,
+      "total": {
+        "markers": 1469,
+        "declared_id": 1465,
+        "frame_outside_stream": 0,
+        "category_out_of_range": 12,
+        "box_not_valid": 0,
+        "no_declared_id": 4,
+        "records": 1453,
+        "id_from_enclosing_record": 0,
+        "not_placed_instances": 585,
+        "placed_instances": 868,
+        "without_volume": 630,
+        "with_volume": 238,
+        "superseded": 0,
+        "nested_components": 0,
+        "selected": 238,
+        "in_non_primary_design_option": 0,
+        "not_in_export_phase": 0,
+        "nested_in_door_or_window": 0,
+        "category_not_exported": 3,
+        "handed_to_export": 235,
+        "stream_not_read": 0
+      },
+      "streams": {
+        "Partitions/70": {
+          "markers": 1469,
+          "declared_id": 1465,
+          "frame_outside_stream": 0,
+          "category_out_of_range": 12,
+          "box_not_valid": 0,
+          "no_declared_id": 4,
+          "records": 1453,
+          "id_from_enclosing_record": 0,
+          "not_placed_instances": 585,
+          "placed_instances": 868,
+          "without_volume": 630,
+          "with_volume": 238,
+          "superseded": 0,
+          "nested_components": 0,
+          "selected": 238,
+          "in_non_primary_design_option": 0,
+          "not_in_export_phase": 0,
+          "nested_in_door_or_window": 0,
+          "category_not_exported": 3,
+          "handed_to_export": 235,
+          "stream_not_read": 0
+        }
+      },
+      "written_to_model": 235,
+      "id_already_held": 0,
+      "below_min_confidence": 0
+    }
+  },
+  "exported": {
+    "total_entities": 1182,
+    "building_elements": 235,
+    "building_elements_with_geometry": 235,
+    "building_elements_carried_by_parts": 0,
+    "by_ifc_type": {
+      "IFCBEAM": 159,
+      "IFCCOLUMN": 70,
+      "IFCSLAB": 2,
+      "IFCWALL": 4
+    },
+    "classification_count": 0,
+    "unit_assignment_count": 0,
+    "material_count": 48,
+    "storey_count": 4,
+    "storey_names": [
+      "01 - Entry Level",
+      "02 - Floor",
+      "03 - Floor",
+      "Roof"
+    ],
+    "storey_elevations_feet": [
+      0.0,
+      12.467191601053667,
+      24.934383202099546,
+      37.401574803149416
+    ],
+    "storey_bound_elements": 235,
+    "material_names_sample": [
+      "Plasterboard",
+      "Ceiling Tile 600 x 1200",
+      "Masonry - Concrete Block",
+      "Vapour / Moisture Barriers - Damp-proofing",
+      "Concrete - Cast In Situ",
+      "Wood - Sheathing - Chipboard",
+      "Structure - Timber Joist/Rafter Layer",
+      "Concrete - Sand/Cement Screed",
+      "Site - Hardcore",
+      "Vapour / Moisture Barriers - Vapour Retarder",
+      "Metal - Decking",
+      "Wood - Firring"
+    ],
+    "layered_element_count": 6,
+    "body_sources": {
+      "partition_element_record_bbox": 111,
+      "partition_element_record_column_cut": 120,
+      "partition_element_record_join_trimmed": 4
+    },
+    "bounding_box_bodies": 111,
+    "bounding_box_spaces": 0,
+    "area_body_refusals": {},
+    "slab_shape_refusals": {},
+    "wall_base_refusals": {},
+    "wall_end_refusals": {},
+    "resolved_outline_spaces": 0,
+    "approximate_outline_spaces": 0,
+    "wall_cut_openings_left_out": {}
+  },
+  "skipped": [
+    {
+      "reason": "element_record_frame_stopped",
+      "count": 646,
+      "classes": {
+        "category_out_of_range": 12,
+        "no_declared_id": 4,
+        "without_volume": 630
+      },
+      "sample_names": []
+    }
+  ],
+  "unsupported_features": [
+    "project_units_from_revit_bytes",
+    "revit_compound_assemblies_and_walltype_widths",
+    "typed_door_window_discrimination_and_host_binding",
+    "opening_index_to_ifc_openingelement_host_join",
+    "schema_field_wall_instances",
+    "partial_revit_element_parameters"
+  ],
+  "warnings": [
+    "Revit 2015: elements come from their records with their ElementId, category and bounding box, doors and windows with their host wall, rooms with their outline, and, where its Levels are read, each element on the storey of the Level its record names; family instances, walls, floors and roofs carry their family and type names, and family instances their type's materials. Layers become material layer sets where their materials are named, a layer that takes its category's material taking the object styles' one, and walls keep their record box. Neither the export phase nor design options are applied for 2015 (they are on 2016 to 2023): elements outside the last phase or in a non-primary design option are written. Wall joins and profiles, parameters and \"Export to IFC As\" overrides are not read for 2015, and components nested in doors and windows are left out.",
+    "Revit 2015 is read experimentally (element-records-revit-2015-2018 in docs/support-matrix.json): too few files of this release are measured against Revit's own export to rely on its elements, which may be missing, extra or of another class.",
+    "No Revit display units were recovered; the IFC declares the SI units its values are written in.",
+    "4 building storey name(s) came from partition Level records; 235 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
+  ],
+  "confidence": {
+    "level": "geometry",
+    "score": 0.9,
+    "has_project_metadata": true,
+    "has_typed_elements": true,
+    "has_geometry": true,
+    "has_diagnostic_proxies": false,
+    "warning_count": 4,
+    "unexported_element_records": 0
+  },
+  "source_coverage": {
+    "status": "measured",
+    "notes": "Measured from export diagnostics counts only (production walker, exported building elements, ElementIds declared by Global/ElemTable). Not a converter-grade completeness claim.",
+    "decoded_element_fraction": 0.01985965,
+    "exported_element_fraction": 0.83038867,
+    "geometry_element_fraction": 1.0
+  },
+  "formats_latest_integrity": {
+    "stream": "Formats/Latest",
+    "stored_bytes": 134033,
+    "inflated_bytes": 378526,
+    "page_boundary_detected": true,
+    "checksum_tail_stripping": "enabled",
+    "integrity_status": "ok",
+    "schema_scan_truncated": false,
+    "schema_scanned_bytes": 378526
+  }
+}

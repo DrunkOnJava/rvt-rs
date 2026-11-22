@@ -1,0 +1,22 @@
+Revit's export: 84 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+rvt-rs's export: 84 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcBuildingElementProxy               9      9      0      0  
+IfcCovering                           6      6      0      0  
+IfcCurtainWall                        1      1      0      0  
+IfcDoor                               5      5      0      0  
+IfcFlowTerminal                       7      0      7      0  IfcSanitaryTerminal 7
+IfcFurnishingElement                 23      0     23      0  IfcFurniture 23
+IfcMember                            10     10      0      0  
+IfcPlate                              2      2      0      0  
+IfcRailing                            1      1      0      0  
+IfcSlab                               2      2      0      0  
+IfcSpace                             11     11      0      0  
+IfcWallStandardCase                   7      0      7      0  IfcWall 7
+written as another class, by Revit's category and export value, and rvt-rs's:
+       7  IfcFlowTerminal -> IfcSanitaryTerminal  Revit '-' '-' PredefinedType - type IfcDistributionElementType -  rvt-rs 'Plumbing Fixtures' '-'  e.g. 359466
+      13  IfcFurnishingElement -> IfcFurniture  Revit '-' '-' PredefinedType - type IfcFurnitureType -  rvt-rs 'Furniture' '-'  e.g. 351456
+      10  IfcFurnishingElement -> IfcFurniture  Revit '-' '-' PredefinedType - type IfcFurnitureType -  rvt-rs 'Casework' '-'  e.g. 362391
+       7  IfcWallStandardCase -> IfcWall  Revit '-' '-' PredefinedType - type IfcWallType STANDARD  rvt-rs 'Walls' '-'  e.g. 415431
+extra in rvt-rs's export, by class:
+exit 0

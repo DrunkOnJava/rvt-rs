@@ -1,0 +1,29 @@
+Revit 2018, layout 2018, 1 streams
+  markers: 8541
+  declared_id: 8536
+  frame_outside_stream: 0
+  category_out_of_range: 157
+  box_not_valid: 0
+  no_declared_id: 5
+  records: 8379
+  id_from_enclosing_record: 0
+  not_placed_instances: 1283
+  placed_instances: 7096
+  without_volume: 1387
+  with_volume: 5709
+  superseded: 0
+  nested_components: 0
+  selected: 5709
+  in_non_primary_design_option: 0
+  not_in_export_phase: 0
+  nested_in_door_or_window: 0
+  category_not_exported: 101
+  handed_to_export: 5608
+  stream_not_read: 0
+  written_to_model: 5606
+  id_already_held: 0
+  below_min_confidence: 0
+  not_written_by_class: {'Mass': 2}
+  exported.building_elements: 5622
+ok
+exit 0

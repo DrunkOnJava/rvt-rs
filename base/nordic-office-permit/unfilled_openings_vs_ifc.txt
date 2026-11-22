@@ -1,0 +1,56 @@
+unfilled openings in Revit's export: 216; in rvt-rs's: 69; both: 59
+IfcCurtainWall in IfcWall:
+  revit: 72
+IfcDoor in IfcDoor:
+  revit: 2
+IfcDoor in IfcWall:
+  revit: 43
+IfcFireSuppressionTerminal in IfcWall:
+  revit: 38
+IfcSlab in IfcSlab:
+  revit: 1
+  written: 1
+  box compared: 1
+  box within 0.01 ft: 1
+  GlobalId equal: 1
+  Name equal: 1
+  PredefinedType equal: 1
+  Pset_OpeningElementCommon.Reference equal: 1
+  Depth in Revit's: 1
+IfcWall in IfcWall:
+  revit: 1
+none in IfcSlab:
+  revit: 35
+  written: 34
+  box compared: 34
+  box within 0.01 ft: 34
+  Name equal: 34
+  PredefinedType equal: 34
+  Pset_OpeningElementCommon.Reference equal: 34
+none in IfcWall:
+  revit: 24
+  written: 24
+  box compared: 24
+  box within 0.01 ft: 24
+  GlobalId equal: 24
+  Name equal: 24
+  PredefinedType equal: 24
+  Pset_OpeningElementCommon.Reference equal: 24
+  Pset_EnvironmentalImpactIndicators.Reference equal: 24
+  Depth in Revit's: 24
+  Depth equal: 24
+written that Revit's export does not: 9
+  none in IfcSlab: 1
+  none in IfcWall: 8
+written that Revit's export does not but its export of a sibling file does, counted apart: 1
+  none in IfcWall, Tag 2793737 in 2114950: ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc
+  extra: none in IfcWall, Tag 2137992 in 2058501
+  extra: none in IfcWall, Tag 2138050 in 2058499
+  extra: none in IfcWall, Tag 2138402 in 2056770
+  extra: none in IfcWall, Tag 2138449 in 2056705
+  extra: none in IfcWall, Tag 2138640 in 2057670
+  extra: none in IfcWall, Tag 2138691 in 2057668
+  extra: none in IfcWall, Tag 2139036 in 2070689
+  extra: none in IfcWall, Tag 2139150 in 2070691
+  extra: none in IfcSlab, Tag 3147722 in 1457785
+exit 0

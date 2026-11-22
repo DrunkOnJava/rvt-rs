@@ -1,0 +1,168 @@
+  open_model
+  list_elements: 13067 rows
+  get_element: 116 elements
+mcp answers: consistency basis: the export of this run
+mcp answers: consistency protocol: 5 compared, 0 differ
+mcp answers: consistency counts: 84 compared, 1 differ
+  difference counts: IFC IfcCovering count: 122 vs 75
+mcp answers: elements the export folds into the body of another element, not rows: 0
+mcp answers: rows that are opening elements, which the diagnostics do not count as building elements: 0
+mcp answers: IfcAirTerminal: 1 rows
+mcp answers: IfcBeam: 8 rows
+mcp answers: IfcBuildingElementProxy: 12 rows
+mcp answers: IfcColumn: 346 rows
+mcp answers: IfcCovering: 122 rows
+mcp answers: IfcCurtainWall: 220 rows
+mcp answers: IfcDoor: 269 rows
+mcp answers: IfcElectricAppliance: 51 rows
+mcp answers: IfcFireSuppressionTerminal: 40 rows
+mcp answers: IfcFurniture: 98 rows
+mcp answers: IfcLightFixture: 43 rows
+mcp answers: IfcMember: 10031 rows
+mcp answers: IfcPipeSegment: 12 rows
+mcp answers: IfcPlate: 269 rows
+mcp answers: IfcRailing: 41 rows
+mcp answers: IfcRamp: 5 rows
+mcp answers: IfcSanitaryTerminal: 145 rows
+mcp answers: IfcSlab: 63 rows
+mcp answers: IfcSpace: 308 rows
+mcp answers: IfcStair: 16 rows
+mcp answers: IfcStairFlight: 35 rows
+mcp answers: IfcWall: 589 rows
+mcp answers: IfcWasteTerminal: 78 rows
+mcp answers: IfcWindow: 265 rows
+mcp answers: rows listed: 13067
+mcp answers: consistency element membership: 13067 compared, 47 differ
+  difference element membership: element 2094020 IFCCOVERING 3_EpWmVV6AqBJlp$5Z$qkS: not in the IFC
+  difference element membership: element 2094444 IFCCOVERING 24S0Yv1e260xFtG$WTY_Kx: not in the IFC
+  difference element membership: element 2094524 IFCCOVERING 32hz27fv2BZhYqXzYdwMEW: not in the IFC
+  difference element membership: element 2095364 IFCCOVERING 1w4fCY$eo26u1NuDvVF8rW: not in the IFC
+  difference element membership: element 2095364 IFCCOVERING 3g321Jmlc1y9eBLRITXK9u: not in the IFC
+  difference element membership: element 2095404 IFCCOVERING 2NhtTy7Ho9MBWxQX2kFkTZ: not in the IFC
+  difference element membership: element 2095404 IFCCOVERING 2fGxWX2XMDf841vLRgoPb7: not in the IFC
+  difference element membership: element 2095436 IFCCOVERING 0fK16NIXo3Avl$55YWslkM: not in the IFC
+  difference element membership: element 2095436 IFCCOVERING 3ktCcXHhE31AIfBG3vRQqL: not in the IFC
+  difference element membership: element 2097832 IFCCOVERING 053Fn33mY1suJbH240AnA7: not in the IFC
+  difference element membership: element 2097832 IFCCOVERING 0mEYeZQv659AyncNJUXJVu: not in the IFC
+  difference element membership: element 2097832 IFCCOVERING 126LseRHsERwLwMTsZJg4I: not in the IFC
+  difference element membership: element 2097832 IFCCOVERING 1GSYk1smcE$RZcbgyhM_Lt: not in the IFC
+  difference element membership: element 2103288 IFCCOVERING 00cFbs7io8IAoRhKHVmjNV: not in the IFC
+  difference element membership: element 2103288 IFCCOVERING 0zZPeGOBc4Yxs$zUbsRtke: not in the IFC
+  difference element membership: element 2103288 IFCCOVERING 1W9m2cZMo5MPjQWZ2Xnadf: not in the IFC
+  difference element membership: element 2103288 IFCCOVERING 1o2WKIQUcBg9eC8UndlCfA: not in the IFC
+  difference element membership: element 2103288 IFCCOVERING 2KxmKtiuY3tAxf8pnOPCb7: not in the IFC
+  difference element membership: element 2103288 IFCCOVERING 2dIuYbsrQ9ORKT8_guEuQs: not in the IFC
+  difference element membership: element 2103288 IFCCOVERING 2vEi0tH762Bg6VJmNIfzf4: not in the IFC
+  difference element membership: element 2103288 IFCCOVERING 3AsLtLoi20kuBPsJOefLb3: not in the IFC
+  difference element membership: element 2105195 IFCCOVERING 0WRVv2xIc7XOJ9mZ74ogLe: not in the IFC
+  difference element membership: element 2105195 IFCCOVERING 0lBHkbL$AFDvXlgfWnChaG: not in the IFC
+  difference element membership: element 2105195 IFCCOVERING 2XwoRmX0ICUATIoXDYkt5N: not in the IFC
+  difference element membership: element 2105195 IFCCOVERING 2yt83VSUU9DB5hxsEOk7pW: not in the IFC
+  difference element membership: ... 22 more
+mcp answers: consistency element entities: 13020 compared, 0 differ
+mcp answers: consistency element names: 13020 compared, 0 differ
+mcp answers: consistency element long names: 13020 compared, 0 differ
+mcp answers: consistency element ids: 13020 compared, 0 differ
+mcp answers: consistency element predefined types: 13020 compared, 0 differ
+mcp answers: consistency element storeys: 13020 compared, 599 differ
+  difference element storeys: element 1440878 IfcStairFlight 2V9jZhd2f65P2kCC5uMYSb: level None vs storey 'Level_01'
+  difference element storeys: element 1503045 IfcStairFlight 2Xe6rbtYzAqhfyXbKpPUbx: level None vs storey 'Level_02a_Parking'
+  difference element storeys: element 2598348 IfcStairFlight 0rb8433vT8junK7fT$s9YA: level None vs storey 'Basement'
+  difference element storeys: element 2598357 IfcStairFlight 0rb8433vT8junK7fT$s9YJ: level None vs storey 'Basement'
+  difference element storeys: element 2859204 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fsq: level None vs storey 'Level_01'
+  difference element storeys: element 2859206 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fss: level None vs storey 'Level_01'
+  difference element storeys: element 2859208 IfcSlab 2HM8XWPUz6WgsmzelJ_fsu: level None vs storey 'Level_01'
+  difference element storeys: element 2859210 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fsw: level None vs storey 'Level_01'
+  difference element storeys: element 2859212 IfcSlab 2HM8XWPUz6WgsmzelJ_fsy: level None vs storey 'Level_01'
+  difference element storeys: element 2861134 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fK_: level None vs storey 'Basement'
+  difference element storeys: element 2861136 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fKW: level None vs storey 'Basement'
+  difference element storeys: element 2861138 IfcSlab 2HM8XWPUz6WgsmzelJ_fKY: level None vs storey 'Basement'
+  difference element storeys: element 2861140 IfcStairFlight 2HM8XWPUz6WgsmzelJ_fKa: level None vs storey 'Basement'
+  difference element storeys: element 2861142 IfcSlab 2HM8XWPUz6WgsmzelJ_fKc: level None vs storey 'Basement'
+  difference element storeys: element 2862239 IfcStairFlight 2HM8XWPUz6WgsmzelJ_f7l: level None vs storey 'Level_02'
+  difference element storeys: element 2862241 IfcStairFlight 2HM8XWPUz6WgsmzelJ_f7H: level None vs storey 'Level_02'
+  difference element storeys: element 2862243 IfcSlab 2HM8XWPUz6WgsmzelJ_f7J: level None vs storey 'Level_02'
+  difference element storeys: element 2862245 IfcStairFlight 2HM8XWPUz6WgsmzelJ_f7L: level None vs storey 'Level_02'
+  difference element storeys: element 2862247 IfcSlab 2HM8XWPUz6WgsmzelJ_f7N: level None vs storey 'Level_02'
+  difference element storeys: element 2863241 IfcStairFlight 2HM8XWPUz6WgsmzelJ_etv: level None vs storey 'Level_04'
+  difference element storeys: element 2863243 IfcStairFlight 2HM8XWPUz6WgsmzelJ_etx: level None vs storey 'Level_04'
+  difference element storeys: element 2863245 IfcSlab 2HM8XWPUz6WgsmzelJ_etz: level None vs storey 'Level_04'
+  difference element storeys: element 2863247 IfcStairFlight 2HM8XWPUz6WgsmzelJ_et$: level None vs storey 'Level_04'
+  difference element storeys: element 2863249 IfcSlab 2HM8XWPUz6WgsmzelJ_etX: level None vs storey 'Level_04'
+  difference element storeys: element 2867922 IfcStairFlight 2HM8XWPUz6WgsmzelJ_l_Y: level None vs storey 'Basement'
+  difference element storeys: ... 574 more
+mcp answers: IFC openings the writer cuts for doors and windows, in no row: 529
+mcp answers: IFC elements and spaces: 13549
+mcp answers: consistency levels: 10 compared, 7 differ
+  difference levels: level 2 'Basement': 391 elements vs 401 in the IFC
+  difference levels: level 3 'Level_01': 5442 elements vs 5451 in the IFC
+  difference levels: level 4 'Level_02a_Parking': 11 elements vs 12 in the IFC
+  difference levels: level 6 'Level_03': 1565 elements vs 1559 in the IFC
+  difference levels: level 7 'Level_04': 1542 elements vs 1537 in the IFC
+  difference levels: level 8 'Level_05': 1984 elements vs 2527 in the IFC
+  difference levels: level 9 'Roof': 559 elements vs 17 in the IFC
+mcp answers: consistency rooms: 308 compared, 0 differ
+mcp answers: rooms: 308
+mcp answers: rooms with an area: 252
+mcp answers: rooms without an area: 56
+mcp answers: consistency details: 115 compared, 0 differ
+mcp answers: consistency type objects: 115 compared, 0 differ
+mcp answers: consistency type object sets: 115 compared, 0 differ
+mcp answers: get_element property and quantity sets compared: 997
+mcp answers: consistency diagnostics: 1 compared, 0 differ
+mcp answers: consistency export hash: 1 compared, 0 differ
+mcp answers: classes: Revit export, elements and spaces paired: 13019
+mcp answers: classes: Revit export, elements left out for no Tag: 0
+mcp answers: classes: Revit export, elements left out for a repeated Tag: 1
+mcp answers: classes: the answers, elements and spaces paired: 13020
+mcp answers: classes: the answers, rows left out for no Tag: 0
+mcp answers: classes: the answers, rows left out for a repeated Tag: 47
+mcp answers: class IfcAirTerminal: revit 1, same 1, other 0, absent 0
+mcp answers: class IfcBeam: revit 8, same 8, other 0, absent 0
+mcp answers: class IfcBuildingElementProxy: revit 12, same 12, other 0, absent 0
+mcp answers: class IfcColumn: revit 345, same 345, other 0, absent 0
+mcp answers: class IfcCovering: revit 75, same 75, other 0, absent 0
+mcp answers: class IfcCurtainWall: revit 220, same 220, other 0, absent 0
+mcp answers: class IfcDoor: revit 269, same 269, other 0, absent 0
+mcp answers: class IfcElectricAppliance: revit 51, same 51, other 0, absent 0
+mcp answers: class IfcFireSuppressionTerminal: revit 40, same 40, other 0, absent 0
+mcp answers: class IfcFlowTerminal: revit 1, same 0, other 1, absent 0
+mcp answers: class IfcFurniture: revit 98, same 98, other 0, absent 0
+mcp answers: class IfcLightFixture: revit 43, same 43, other 0, absent 0
+mcp answers: class IfcMember: revit 10031, same 10031, other 0, absent 0
+mcp answers: class IfcPipeSegment: revit 12, same 12, other 0, absent 0
+mcp answers: class IfcPlate: revit 269, same 269, other 0, absent 0
+mcp answers: class IfcRailing: revit 41, same 41, other 0, absent 0
+mcp answers: class IfcRamp: revit 5, same 5, other 0, absent 0
+mcp answers: class IfcSanitaryTerminal: revit 144, same 144, other 0, absent 0
+mcp answers: class IfcSlab: revit 63, same 63, other 0, absent 0
+mcp answers: class IfcSpace: revit 308, same 308, other 0, absent 0
+mcp answers: class IfcStair: revit 16, same 16, other 0, absent 0
+mcp answers: class IfcStairFlight: revit 35, same 35, other 0, absent 0
+mcp answers: class IfcWall: revit 589, same 589, other 0, absent 0
+mcp answers: class IfcWasteTerminal: revit 78, same 78, other 0, absent 0
+mcp answers: class IfcWindow: revit 265, same 265, other 0, absent 0
+mcp answers: class extra IfcColumn: 1
+mcp answers: consistency class sets: 13020 compared, 0 differ
+mcp answers: storeys: rows the answers and Revit export share: 12758
+mcp answers: storeys: rows on a storey where Revit has another container: 440
+mcp answers: storeys: rows on a different storey from Revit: 548
+mcp answers: storeys: rows on no storey where Revit has a storey: 57
+mcp answers: storeys: rows on the same storey as in Revit: 11713
+mcp answers: rooms: in the answers: 308
+mcp answers: rooms: Revit spaces with a body: 308
+mcp answers: rooms: paired by GlobalId: 308
+mcp answers: rooms: paired with an area in the answers: 252
+mcp answers: rooms: paired without an area in the answers: 56
+mcp answers: rooms: area within 0.1% of Revit: 248
+mcp answers: rooms: area within 1% of Revit: 251
+mcp answers: rooms: area more than 1% from Revit: 1
+mcp answers: values: sampled rows the answers and Revit export share: 110
+mcp answers: values: property values different from Revit: 5
+mcp answers: values: property values equal to Revit: 527
+mcp answers: values: property values in the answers: 532
+mcp answers: values: property or quantity values Revit writes that the answers lack: 246
+mcp answers: values: quantity values equal to Revit: 129
+mcp answers: values: quantity values in the answers: 129
+mcp answers: consistency FAIL: counts, element membership, element storeys, levels
+exit 1

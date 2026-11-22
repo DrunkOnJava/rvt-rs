@@ -1,0 +1,5 @@
+elements Revit gives materials: 43
+of those, rvt-rs gives materials: 43, the same set: 43
+different sets by Revit entity: {}
+no materials from rvt-rs, by Revit entity: {}
+exit 0

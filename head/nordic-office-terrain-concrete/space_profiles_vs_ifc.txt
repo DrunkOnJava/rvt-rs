@@ -1,0 +1,19 @@
+space profiles: matched by globalid
+space profiles: IfcSpace in rvt-rs 9, in Revit 9, with a body 9 and 9
+space profiles: in both 9, only in rvt-rs 0, only in Revit 0
+space profiles: only in Revit and in rvt-rs without a body 0, paired where the Revit top surface has no area 0
+space profiles: area within 0.1% 7, within 1% 7, off 2
+space profiles: outline within 0.01 ft 7, off 2
+space profiles: vertices within 0.01 ft 7, off 2
+space profiles: boundary within 0.01 ft 7, off 2
+space profiles: area within 0.1% and outline within 0.01 ft 7
+space profiles: lowest and highest vertex within 0.01 ft 9, off 0
+space profiles: rvt-rs family instance record box: 2, area within 0.1% 0, outline within 0.01 ft 0, both 0, boundary within 0.01 ft 0
+space profiles: rvt-rs room record box: 1, area within 0.1% 1, outline within 0.01 ft 1, both 1, boundary within 0.01 ft 1
+space profiles: rvt-rs room stored solid: 6, area within 0.1% 6, outline within 0.01 ft 6, both 6, boundary within 0.01 ft 6
+space profiles: rvt-rs family instance record box height: 2, lowest and highest vertex within 0.01 ft 2
+space profiles: rvt-rs room record box height: 1, lowest and highest vertex within 0.01 ft 1
+space profiles: rvt-rs room stored solid height: 6, lowest and highest vertex within 0.01 ft 6
+  0R_MrebNjFnuoocWuAk2Kj: area 151.01 vs 6.01 ft2 (2410.63%), vertices 8.035 ft, outline 8.035 ft, boundary 8.035 ft, family instance, rvt-rs outline from record_box, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 4.018 ft apart
+  0R_MrebNjFnuoocWuAk2N$: area 151.01 vs 6.01 ft2 (2410.63%), vertices 8.035 ft, outline 8.035 ft, boundary 8.035 ft, family instance, rvt-rs outline from record_box, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 4.018 ft apart
+exit 0
