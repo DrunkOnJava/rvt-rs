@@ -1,10 +1,11 @@
 # The workflow runs the evidence pages cite whose outputs are kept past the 90 days GitHub keeps a
 # run's artifacts (#2124). Each kept run's outputs are in a commit of their own that
 # refs/evidence/<run> points at, made by .github/workflows/keep-run-outputs.yml
-# (tools/ci/keep-run-outputs.py says what it keeps). A citation links to the kept file that holds
-# its figure, as plain text: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/<commit>/<path>
-# (Griffin, 2026-11-22). A run whose artifacts were gone before it could be kept has `-` for its
-# commit and says why.
+# (tools/ci/keep-run-outputs.py says what it keeps; `kept` is taken from each commit's KEPT.md).
+# A kept file reads as plain text at https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/<commit>/<path>,
+# the form the pages' citations are to link to (Griffin, 2026-11-22). A run whose artifacts were
+# gone before it could be kept has `-` for its commit and says why. These are the runs the five
+# evidence pages cited on 2026-11-22; a run cited later is kept by dispatching the workflow on it.
 run	commit	kept
 40156315852	ad5237bea8d24f9f764471b19b5ae6af4593b1c9	head 1027 files for 31 models; base 1027 files for 31 models
 40927543524	77ccec7682e9774912eefcc0aedbab3d0e8180db	head 1474 files for 101 models
