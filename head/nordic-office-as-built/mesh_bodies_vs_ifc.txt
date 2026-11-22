@@ -1,0 +1,92 @@
+IfcMember: 9678 bodies, every 33th scored
+saved_graphics_mesh bodies scored: 1352; in Revit's export 1352
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft  median volume ratio
+IfcMember                       294     294      294      294      294  1.0000
+      259     259      259      259      259  Rectangular Mullion:50 x 50 mm alumiini maalattu
+       29      29       29       29       29  Rectangular Mullion:50 x 50 mm
+        6       6        6        6        6  Rectangular Mullion:50 x 150 mm
+IfcWindow                       269     269      269      269      269  1.0000
+      168     168      168      168      168  Puu-alumiini-ikkuna A:IKK-1.16x25
+       82      82       82       82       82  Puu-alumiini-ikkuna A:IKK-5.16x23
+       10      10       10       10       10  Puu-alumiini-ikkuna A:IKK-3.12x25.5
+        4       4        4        4        4  Puu-alumiini-ikkuna A:IKK-4.16x12
+        4       4        4        4        4  Puu-alumiini-ikkuna A:SI-1.12x23
+        1       1        1        1        1  Puu-alumiini-ikkuna A:IKK-6.10x23
+IfcPlate                        260     260      260      260      260  1.0000
+      258     258      258      258      258  System Panel:Lasitettu
+        2       2        2        2        2  System Panel:Umpi
+IfcColumn                       199     199      199      199      199  1.0000
+      155     155      155      155      155  Concrete-Square-Column:PI-1
+       17      17       17       17       17  Concrete-Rectangular-Column:PI-10.405x680
+       12      12       12       12       12  Concrete-Rectangular-Column:PI-3
+        8       8        8        8        8  Concrete-Square-Column:PI-7
+        4       4        4        4        4  Concrete-Square-Column:PI-8
+        2       2        2        2        2  Concrete-Rectangular-Column:PI-11.505x780
+IfcFurniture                     68      68       68       68       68  1.0000
+       10      10       10       10       10  TVA-1:TVA-1
+        7       7        7        7        7  LAD-1:LAD-1
+        6       6        6        6        6  PK-2:PK-2.2400
+        6       6        6        6        6  PK-1:PK-1.400
+        6       6        6        6        6  PK-1:PK-1.800
+        4       4        4        4        4  PK-1:PK-1.3800
+IfcWasteTerminal                 51      51        0       51        0  1.0035
+       36      36        0       36        0  Lattiakaivo:LK-1
+       15      15        0       15        0  Lattiakaivo:VK-1.Kattokaivo
+IfcElectricAppliance             50      50       50       50       50  1.0000
+       13      13       13       13       13  Yleinen sähkölaite:JK-600
+       13      13       13       13       13  Yleinen sähkölaite:APK-600
+        7       7        7        7        7  Yleinen sähkölaite:U-600
+        4       4        4        4        4  Yleinen sähkölaite:JK-1600
+        3       3        3        3        3  Yleinen sähkölaite:JK-1000
+        2       2        2        2        2  Yleinen sähkölaite:L-850
+IfcDoor                          48      44       44       48       48  1.0000
+       23      23       23       23       23  O-1:O-1.12x21
+        4       4        4        4        4  LU-1:LU-1.700x700
+        4       4        4        4        4  LU-2:LU-2
+        2       2        2        2        2  O-15:O-15.10x21
+        2       2        2        2        2  UO-6:UO-6.30x24
+        2       0        0        2        2  O-7:O-7.12x23
+IfcSanitaryTerminal              40      34       34       34       34  1.0000
+       20      20       20       20       20  Tiskiallas 50:PA-1.600x500
+       14      14       14       14       14  Tiskiallas 50:PA-1.600x450
+        6       0        0        0        0  Sink Kitchen-Single:PA-5.600x600
+IfcFireSuppressionTerminal       40      40       40       40       40  1.0000
+       40      40       40       40       40  Pikapaloposti:VAR-2.PPP
+IfcBuildingElementProxy          12      12       12       12       12  1.0000
+        6       6        6        6        6  Wall Sweep:JSV-5
+        3       3        3        3        3  Wall Sweep:JSV-4
+        2       2        2        2        2  HISSI-HEN-1:HISSI-HEN-1
+        1       1        1        1        1  Kohdistuskappale:3x2x1
+IfcCovering                      12      12       12       12       12  1.0000
+        1       1        1        1        1  Ilmanvaihtokoneet6:Ilmanvaihtokoneet
+        1       1        1        1        1  Ilmanvaihtokoneet1:Ilmanvaihtokoneet
+        1       1        1        1        1  Ilmanvaihtokoneet2:Ilmanvaihtokoneet
+        1       1        1        1        1  Ilmanvaihtokoneet3:Ilmanvaihtokoneet
+        1       1        1        1        1  Ilmanvaihtokoneet4:Ilmanvaihtokoneet
+        1       1        1        1        1  Ilmanvaihtokoneet5:Ilmanvaihtokoneet
+IfcRamp                           4       4        4        4        4  1.0000
+        4       4        4        4        4  Ramp:AP-ulkoluiska
+IfcStair                          2       2        0        2        2  1.0003
+        2       2        0        2        2  LADDER
+IfcRampFlight                     1       0        0        1        1  0.5000
+        1       0        0        1        1  Ramp:AP-ulkoluiska
+IfcFlowTerminal                   1       0        0        0        0  1.0121
+        1       0        0        0        0  Sink Kitchen-Single:PA-5.500x600
+IfcAirTerminal                    1       1        1        1        1  1.0000
+        1       1        1        1        1  Yleinen sähkölaite:HUU-3000
+  3016436 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0119, Revit's vertices to rvt-rs's surface 0.003946 ft, rvt-rs's to Revit's 0.01061 ft
+  3123919 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0125, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3112712 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0119, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3120724 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0112, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3020449 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0125, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  3012930 IfcSanitaryTerminal 'Sink Kitchen-Single:PA-5.600x600': volume ratio 1.0112, Revit's vertices to rvt-rs's surface 0.003946 ft, rvt-rs's to Revit's 0.01061 ft
+  3095244 IfcFlowTerminal 'Sink Kitchen-Single:PA-5.500x600': volume ratio 1.0121, Revit's vertices to rvt-rs's surface 0.003944 ft, rvt-rs's to Revit's 0.01061 ft
+  2983892 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0035, Revit's vertices to rvt-rs's surface 0.0009611 ft, rvt-rs's to Revit's 0.00144 ft
+  2586760 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0035, Revit's vertices to rvt-rs's surface 0.0009611 ft, rvt-rs's to Revit's 0.00144 ft
+  2633698 IfcWasteTerminal 'Lattiakaivo:LK-1': volume ratio 1.0035, Revit's vertices to rvt-rs's surface 0.0009609 ft, rvt-rs's to Revit's 0.001439 ft
+  3031711 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0035, Revit's vertices to rvt-rs's surface 0.0009608 ft, rvt-rs's to Revit's 0.001439 ft
+  3031701 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0035, Revit's vertices to rvt-rs's surface 0.0009608 ft, rvt-rs's to Revit's 0.001439 ft
+  2613760 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0035, Revit's vertices to rvt-rs's surface 0.0009608 ft, rvt-rs's to Revit's 0.001439 ft
+  3031691 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0035, Revit's vertices to rvt-rs's surface 0.0009608 ft, rvt-rs's to Revit's 0.001439 ft
+  3031679 IfcWasteTerminal 'Lattiakaivo:VK-1.Kattokaivo': volume ratio 1.0035, Revit's vertices to rvt-rs's surface 0.0009608 ft, rvt-rs's to Revit's 0.001439 ft
+exit 0

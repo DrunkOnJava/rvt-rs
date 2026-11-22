@@ -1,0 +1,19 @@
+file-wide offset removed (ft): [70.2576, -143.6315, 0.0]
+class                            n  <=0.01ft   <=0.1     <=1     >1  no ref
+IfcMember                     9706         0       0       0   9706       0
+IfcColumn                      289         0       0       0    289       0
+IfcPlate                       269         0       0       0    269       0
+IfcWindow                      265         0       0       0    265       0
+IfcFurniture                    68         0       0       0     68       0
+IfcWasteTerminal                51         0       0       0     51       0
+IfcElectricAppliance            50         0       0       0     50       0
+IfcDoor                         46         0       0       0     46       0
+IfcSanitaryTerminal             41         0       0       0     41       0
+IfcFireSuppressionTerminal      40         0       0       0     40       0
+IfcBuildingElementProxy         12         0       0       0     12       0
+IfcRamp                          5         0       0       0      5       0
+IfcWall                          4         0       0       0      4       0
+IfcStair                         2         0       0       0      2       0
+IfcAirTerminal                   1         0       0       0      1       0
+total                        10849         0       0       0  10849       0
+exit 0
