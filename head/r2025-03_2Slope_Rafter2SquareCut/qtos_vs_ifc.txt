@@ -1,0 +1,28 @@
+Revit quantities on objects rvt-rs writes: 39; equal: 31; different: 0; missing: 8; rvt-rs quantities Revit does not write: 0
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 3
+walls whose Length is rvt-rs's curve's: 2; Revit's Axis's: 3; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+  Qto_RoofBaseQuantities.NetArea: 1, equal 0, different 0, missing 1
+  Qto_RoofBaseQuantities.ProjectedArea: 1, equal 0, different 0, missing 1
+  Qto_WallBaseQuantities.GrossFootprintArea: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.GrossSideArea: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.GrossVolume: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.Height: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.Length: 2, equal 2, different 0, missing 0
+  Qto_WallBaseQuantities.NetSideArea: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.NetVolume: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.Width: 5, equal 5, different 0, missing 0
+values on a key that more than one object of Revit's export holds, counted apart (#1576): 0 of Revit's on 0 such keys, and 0 of rvt-rs's with none in the object held
+entities Revit writes each missing quantity on:
+  Qto_WallBaseQuantities.GrossFootprintArea: 1; on IfcWall x1
+  Qto_WallBaseQuantities.GrossSideArea: 1; on IfcWall x1
+  Qto_WallBaseQuantities.GrossVolume: 1; on IfcWall x1
+  Qto_WallBaseQuantities.Height: 1; on IfcWall x1
+  Qto_WallBaseQuantities.NetSideArea: 1; on IfcWall x1
+  Qto_WallBaseQuantities.NetVolume: 1; on IfcWall x1
+  Qto_RoofBaseQuantities.NetArea: 1; on IfcRoof x1
+  Qto_RoofBaseQuantities.ProjectedArea: 1; on IfcRoof x1
+rvt-rs quantities Revit does not write:
+largest differences (rvt-rs, Revit; SI units):
+exit 0

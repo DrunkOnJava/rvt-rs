@@ -1,0 +1,52 @@
+Revit values on objects rvt-rs writes: 109; equal: 77; different: 0; missing: 32; rvt-rs values Revit does not write: 0
+values on a key that more than one object of Revit's export holds, scored against the object held, in the totals above (#1576): 7 on 1 such keys; equal 3, different 0, missing 4
+values on a key that more than one object of Revit's export holds, whose objects hold different values, counted apart (#1576): 0 on 0 such keys
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+  Pset_BuildingCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.IsExternal: 13, equal 9, different 0, missing 4
+  Pset_BuildingElementProxyCommon.Reference: 10, equal 9, different 0, missing 1
+  Pset_BuildingStoreyCommon.AboveGround: 5, equal 4, different 0, missing 1
+  Pset_BuildingStoreyCommon.Reference: 5, equal 4, different 0, missing 1
+  Pset_BuildingSystemCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_DoorCommon.IsExternal: 2, equal 1, different 0, missing 1
+  Pset_DoorCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_EnvironmentalImpactIndicators.Reference: 19, equal 19, different 0, missing 0
+  Pset_ReinforcementBarPitchOfSlab.Reference: 1, equal 0, different 0, missing 1
+  Pset_ReinforcementBarPitchOfWall.Reference: 5, equal 5, different 0, missing 0
+  Pset_RoofCommon.IsExternal: 2, equal 1, different 0, missing 1
+  Pset_RoofCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_SlabCommon.IsExternal: 1, equal 0, different 0, missing 1
+  Pset_SlabCommon.PitchAngle: 1, equal 0, different 0, missing 1
+  Pset_SlabCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_SpaceCommon.IsExternal: 2, equal 2, different 0, missing 0
+  Pset_SpaceCommon.Reference: 2, equal 2, different 0, missing 0
+  Pset_SpaceHeaterTypeCommon.Reference: 2, equal 0, different 0, missing 2
+  Pset_WallCommon.ExtendToStructure: 5, equal 5, different 0, missing 0
+  Pset_WallCommon.IsExternal: 6, equal 5, different 0, missing 1
+  Pset_WallCommon.LoadBearing: 5, equal 0, different 0, missing 5
+  Pset_WallCommon.Reference: 5, equal 5, different 0, missing 0
+  Pset_WindowCommon.FireRating: 4, equal 0, different 0, missing 4
+  Pset_WindowCommon.IsExternal: 4, equal 0, different 0, missing 4
+  Pset_WindowCommon.Reference: 3, equal 3, different 0, missing 0
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+Revit's most common values where rvt-rs writes none:
+  Pset_WallCommon.LoadBearing: ('IfcBoolean', False) x5; on IfcWall x5
+  Pset_BuildingElementProxyCommon.IsExternal: ('IfcBoolean', False) x4; on IfcBuildingElementProxyType x3, IfcBuilding x1
+  Pset_WindowCommon.FireRating: ('IfcLabel', '0.5h') x4; on IfcWindow x3, IfcWindowType x1
+  Pset_WindowCommon.IsExternal: ('IfcBoolean', False) x3, ('IfcBoolean', True) x1; on IfcWindow x3, IfcWindowType x1
+  Pset_SpaceHeaterTypeCommon.Reference: ('IfcIdentifier', 'ZZTEST1 1') x1, ('IfcIdentifier', 'ZZTEST2 2') x1; on IfcSpace x2
+  Pset_BuildingCommon.NumberOfStoreys: ('IfcInteger', 2) x1; on IfcBuilding x1
+  Pset_BuildingCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_BuildingElementProxyCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_BuildingStoreyCommon.AboveGround: ('IfcLogical', 'UNKNOWN') x1; on IfcBuilding x1
+  Pset_BuildingStoreyCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_BuildingSystemCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_ReinforcementBarPitchOfSlab.Reference: ('IfcLabel', 'Roof 1') x1; on IfcSlab x1
+  Pset_SlabCommon.IsExternal: ('IfcBoolean', True) x1; on IfcSlab x1
+  Pset_SlabCommon.PitchAngle: ('IfcPlaneAngleMeasure', 0.34906585039886556) x1; on IfcSlab x1
+  Pset_SlabCommon.Reference: ('IfcIdentifier', 'Roof 1') x1; on IfcSlab x1
+  Pset_WallCommon.IsExternal: ('IfcBoolean', True) x1; on IfcWallType x1
+  Pset_RoofCommon.IsExternal: ('IfcBoolean', True) x1; on IfcRoofType x1
+  Pset_DoorCommon.IsExternal: ('IfcBoolean', True) x1; on IfcDoorType x1
+exit 0

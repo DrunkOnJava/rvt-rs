@@ -1,0 +1,29 @@
+Revit values on objects rvt-rs writes: 71; equal: 54; different: 0; missing: 17; rvt-rs values Revit does not write: 0
+values on a key that more than one object of Revit's export holds, scored against the object held, in the totals above (#1576): 0 on 0 such keys; equal 0, different 0, missing 0
+values on a key that more than one object of Revit's export holds, whose objects hold different values, counted apart (#1576): 0 on 0 such keys
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+  Pset_BuildingCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.IsExternal: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_BuildingStoreyCommon.AboveGround: 5, equal 4, different 0, missing 1
+  Pset_BuildingStoreyCommon.Reference: 5, equal 4, different 0, missing 1
+  Pset_BuildingSystemCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_EnvironmentalImpactIndicators.Reference: 9, equal 9, different 0, missing 0
+  Pset_ReinforcementBarPitchOfWall.Reference: 9, equal 9, different 0, missing 0
+  Pset_WallCommon.ExtendToStructure: 9, equal 9, different 0, missing 0
+  Pset_WallCommon.IsExternal: 10, equal 9, different 0, missing 1
+  Pset_WallCommon.LoadBearing: 9, equal 0, different 0, missing 9
+  Pset_WallCommon.Reference: 9, equal 9, different 0, missing 0
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+Revit's most common values where rvt-rs writes none:
+  Pset_WallCommon.LoadBearing: ('IfcBoolean', False) x9; on IfcWall x9
+  Pset_BuildingCommon.NumberOfStoreys: ('IfcInteger', 1) x1; on IfcBuilding x1
+  Pset_BuildingCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_BuildingElementProxyCommon.IsExternal: ('IfcBoolean', False) x1; on IfcBuilding x1
+  Pset_BuildingElementProxyCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_BuildingStoreyCommon.AboveGround: ('IfcLogical', 'UNKNOWN') x1; on IfcBuilding x1
+  Pset_BuildingStoreyCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_BuildingSystemCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_WallCommon.IsExternal: ('IfcBoolean', True) x1; on IfcWallType x1
+exit 0

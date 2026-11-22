@@ -1,0 +1,7 @@
+Revit values on objects rvt-rs writes: 0; equal: 0; different: 0; missing: 0; rvt-rs values Revit does not write: 0
+values on a key that more than one object of Revit's export holds, scored against the object held, in the totals above (#1576): 0 on 0 such keys; equal 0, different 0, missing 0
+values on a key that more than one object of Revit's export holds, whose objects hold different values, counted apart (#1576): 0 on 0 such keys
+Revit's export writes no standard property set (its setup, RE-239 §5); rvt-rs values not scored: 4177
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+Revit's most common values where rvt-rs writes none:
+exit 0

@@ -1,0 +1,9 @@
+wall rules: base sources none
+wall rules: end sources none
+wall rules: ends order dependent 0
+wall rules: base refusals none
+wall rules: end refusals none
+wall rules: end reads unmarked none
+wall rules: profile sources none
+wall rules: profile refusals none
+wall rules: profile height checks none

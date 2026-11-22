@@ -1,0 +1,14 @@
+9 walls drawn in layers in the GLB
+      9  of them one layer
+      9  drawn in layers in the GLB and present in the IFC
+      9  compared
+      9  compared, one layer
+  layer centres within 0.001 ft: 9 of 9
+  layer centres within 0.01 ft: 9 of 9
+  layer centres within 0.05 ft: 9 of 9
+  layer centres within 0.25 ft: 9 of 9
+  median 5.93e-07 ft, max 0.0000 ft
+  worst [(np.float64(0.0), 3641), (np.float64(0.0), 3695), (np.float64(0.0), 4047), (np.float64(0.0), 4122), (np.float64(0.0), 4511), (np.float64(0.0), 4567)]
+compared layers' colours against Revit's surface styles:
+      9  same
+exit 0
