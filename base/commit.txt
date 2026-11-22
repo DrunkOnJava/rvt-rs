@@ -1,0 +1,1 @@
+1e2d3de40a186d611876348e7a6973ac9cd1162c feat(ifc): pipes take their type, cylinder and ports from their own record on Revit 2015 to 2027 (#1190) (RE-370) (#1523)

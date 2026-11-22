@@ -1,0 +1,17 @@
+153 walls drawn in layers in the GLB
+      8  of them one layer
+    153  drawn in layers in the GLB and present in the IFC
+      7  IFC wall has no material
+     35  compared
+     27  compared, two or more layers
+    111  no layer with a unique material
+      8  compared, one layer
+  layer centres within 0.001 ft: 8 of 35
+  layer centres within 0.01 ft: 8 of 35
+  layer centres within 0.05 ft: 8 of 35
+  layer centres within 0.25 ft: 8 of 35
+  median 3.53e-01 ft, max 0.4265 ft
+  worst [(np.float64(0.3527), 554968), (np.float64(0.3527), 554969), (np.float64(0.3527), 652557), (np.float64(0.3527), 683336), (np.float64(0.3527), 683339), (np.float64(0.4265), 529725)]
+compared layers' colours against Revit's surface styles:
+     35  same
+exit 0

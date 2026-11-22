@@ -1,0 +1,4 @@
+IfcStairFlightType PredefinedType: rvt-rs {'SPIRAL': 1}, Revit {'SPIRAL': 1}
+IfcStair: 1 in both; same 1, differs 0, unset in rvt-rs 0; Revit's: {'SPIRAL_STAIR': 1}
+IfcStairFlight: 1 in both; same 1, differs 0, unset in rvt-rs 0; Revit's: {'SPIRAL': 1}
+exit 0

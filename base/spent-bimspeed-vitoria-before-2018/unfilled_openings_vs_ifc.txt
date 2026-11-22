@@ -1,0 +1,6 @@
+unfilled openings in Revit's export: 5; in rvt-rs's: 0; both: 0
+IfcSlab in IfcSlab:
+  revit: 5
+written that Revit's export does not: 0
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+exit 0

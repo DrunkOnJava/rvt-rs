@@ -1,0 +1,6 @@
+wall rules: base sources none
+wall rules: end sources none
+wall rules: ends order dependent 0
+wall rules: base refusals none
+wall rules: end refusals none
+wall rules: end reads unmarked joined_walls_do_not_reach_the_wall_height=2

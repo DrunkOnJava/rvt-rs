@@ -1,0 +1,9 @@
+bodies across saves: sample-2026-rstbasicsampleproject, held to the 2024, 2025 saves
+beams and landings: compared 354 against the 2024 save (IfcBeam 354); left as boxes here, drawn in the 2024 save, not scored: 0
+stair runs: compared 1 against the 2025 save (IfcStairFlight 1); left as boxes here, drawn in the 2025 save, not scored: 0
+sketch outlines: compared 5 against the 2024 save (IfcSlab 5); left as boxes here, drawn in the 2024 save, not scored: 0
+sketch outlines against the 2025 save, not scored: 5 equal, 0 differ, 0 drawn otherwise there
+named elements: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0
+doors and windows: compared 0 against the 2024 save (none); left as boxes here, drawn in the 2024 save, not scored: 0; of those compared, placed on axes other than the default: 0
+bodies across saves: PASS
+exit 0

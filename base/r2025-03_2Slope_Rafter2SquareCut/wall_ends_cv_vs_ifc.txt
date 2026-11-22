@@ -1,0 +1,5 @@
+     10  ends
+     10  ends within 0.001 ft
+     10  ends within 0.01 ft
+     10  ends within 0.1 ft
+exit 0

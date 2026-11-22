@@ -1,0 +1,1 @@
+aa3324e869c0579bfd3041390198e9472e2ea859 fix(reader): a wall whose record holds its previous location line is read by VWallDriver.m_pCrv, so 14 doors of rac_advanced 2027 take the axes rule (#1475) (RE-360)
