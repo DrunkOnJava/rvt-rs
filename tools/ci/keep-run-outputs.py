@@ -24,13 +24,17 @@ stops the run, so a new kind of model is looked at before it is kept. Logs, the 
 the exports, `info.json` (a model's own metadata, which can name the path it was saved at) and MCP
 dumps are left out.
 
+With `--part probes` it keeps instead, from the same folders and under the same scans, only the
+probes' own output and `commit.txt`, for a commit beside the run's first: a figure that only a probe
+prints is cited from it, and the first kept commit, which the citations already link to, never moves.
+
 It writes `KEPT.md` saying what was kept and from where, then scans everything it wrote and fails on
 a match, since a kept copy is public once pushed: the CI PII guard's patterns, read a second time
 with JSON's doubled backslashes made single (a Windows path in `diagnostics.json` is written
 `C:\\Users\\...`), and the name of any folder left out. The timing table's rows name files, not
 folders, so its rows for a model a held-out list names are left out by name.
 
-    python3 tools/ci/keep-run-outputs.py <source> <out> --run <run id> [--root <repository>]
+    python3 tools/ci/keep-run-outputs.py <source> <out> --run <run id> [--part outputs|probes] [--root <repository>]
 """
 
 import argparse
@@ -109,14 +113,16 @@ def drop_left_out_sections(path, held, notes):
         notes.add(f"the {dropped} section{'' if dropped == 1 else 's'} of `{os.path.basename(path)}` that diff a left-out folder")
 
 
-def kept_file(name):
+def kept_file(name, part):
     if PROBE_OUTPUT.fullmatch(name):
+        return part == "probes"
+    if part == "probes":
         return False
     return (name.endswith(".txt") or name in ("ifc.sha256", "diagnostics.json", "timings.log")
             or (name.startswith("witness-") and name.endswith(".json")))
 
 
-def keep_models(source, out, spent, held, notes):
+def keep_models(source, out, spent, held, notes, part):
     """Copy one side's kept files; return (models kept, files kept)."""
     models = files = 0
     left_out_spent = [0]
@@ -124,7 +130,7 @@ def keep_models(source, out, spent, held, notes):
         path = os.path.join(source, top)
         if not os.path.isdir(path):
             # The runner's own files (`runner-*.txt`, `vmstat-*.log`, `score-cache-*.log`) are not kept.
-            if top.endswith(".txt") and not top.startswith("runner-"):
+            if top.endswith(".txt") and not top.startswith("runner-") and (part == "outputs" or top == "commit.txt"):
                 os.makedirs(out, exist_ok=True)
                 shutil.copyfile(path, os.path.join(out, top))
                 files += 1
@@ -143,7 +149,7 @@ def keep_models(source, out, spent, held, notes):
         held_any = False
         for directory, _, names in os.walk(path):
             for name in sorted(names):
-                if not kept_file(name):
+                if not kept_file(name, part):
                     continue
                 rel = os.path.relpath(os.path.join(directory, name), source)
                 target = os.path.join(out, rel)
@@ -162,6 +168,7 @@ def main():
     parser.add_argument("source")
     parser.add_argument("out")
     parser.add_argument("--run", required=True)
+    parser.add_argument("--part", choices=("outputs", "probes"), default="outputs")
     parser.add_argument("--root", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9]+", args.run):
@@ -174,11 +181,11 @@ def main():
     for artifact, side in MODEL_SIDES.items():
         path = os.path.join(args.source, artifact)
         if os.path.isdir(path):
-            models, files = keep_models(path, os.path.join(args.out, side), spent, held, notes)
+            models, files = keep_models(path, os.path.join(args.out, side), spent, held, notes, args.part)
             lines.append(f"- `{side}/`, from `{artifact}`: {files} file{'' if files == 1 else 's'} for {models} model{'' if models == 1 else 's'}")
     for artifact, side in WHOLE.items():
         path = os.path.join(args.source, artifact)
-        if os.path.isdir(path):
+        if os.path.isdir(path) and args.part == "outputs":
             shutil.copytree(path, os.path.join(args.out, side))
             for directory, _, names in os.walk(os.path.join(args.out, side)):
                 for name in names:
@@ -198,13 +205,15 @@ def main():
                 commit = (handle.read().split() or [""])[0]
     with open(os.path.join(args.out, "KEPT.md"), "w", encoding="utf-8") as handle:
         handle.write(
-            f"# Measure run {args.run}: kept outputs\n\n"
+            f"# Measure run {args.run}: kept {'outputs' if args.part == 'outputs' else 'probe outputs'}\n\n"
             f"From the artifacts of https://github.com/DrunkOnJava/rvt-rs/actions/runs/{args.run}"
             + (f", whose head side measured `{commit}`" if commit else "")
             + ", by `tools/ci/keep-run-outputs.py` (#2124), which says what is kept and why:\n\n"
             + "\n".join(lines) + "\n\n"
-            "Left out: every log but `timings.log`, the runner's own files, the exports, `info.json`, MCP dumps "
-            "and the probes' own output" + "".join(f"; {note}" for note in sorted(notes)) + ".\n"
+            + ("Left out: every log but `timings.log`, the runner's own files, the exports, `info.json`, MCP dumps "
+               "and the probes' own output" if args.part == "outputs" else
+               f"Left out: everything but the probes' own output and `commit.txt`, which `refs/evidence/{args.run}` keeps")
+            + "".join(f"; {note}" for note in sorted(notes)) + ".\n"
         )
     patterns = [re.compile(p) for p in PII]
     patterns.append(re.compile(r"(^|[^A-Za-z0-9])(" + "|".join(re.escape(p) for p in LEFT_OUT_PREFIXES) + r")[A-Za-z0-9]"))
