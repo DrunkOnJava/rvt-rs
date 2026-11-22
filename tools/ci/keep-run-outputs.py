@@ -24,8 +24,11 @@ stops the run, so a new kind of model is looked at before it is kept. Logs, the 
 the exports, `info.json` (a model's own metadata, which can name the path it was saved at) and MCP
 dumps are left out.
 
-It writes `KEPT.md` saying what was kept and from where, then scans everything it wrote with the CI
-PII guard's patterns and fails on a match, since a kept copy is public once pushed.
+It writes `KEPT.md` saying what was kept and from where, then scans everything it wrote and fails on
+a match, since a kept copy is public once pushed: the CI PII guard's patterns, read a second time
+with JSON's doubled backslashes made single (a Windows path in `diagnostics.json` is written
+`C:\\Users\\...`), and the name of any folder left out. The timing table's rows name files, not
+folders, so its rows for a model a held-out list names are left out by name.
 
     python3 tools/ci/keep-run-outputs.py <source> <out> --run <run id> [--root <repository>]
 """
@@ -71,6 +74,17 @@ def spent_stems(root):
     return spent, held
 
 
+def drop_held_out_rows(path, held, notes):
+    """Drop, from a Markdown table, the rows whose first cell is a file a held-out list names."""
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().splitlines(keepends=True)
+    kept = [line for line in lines if not (line.startswith("|") and line.split("|")[1].strip() in held)]
+    if len(kept) != len(lines):
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.writelines(kept)
+        notes.add(f"the {len(lines) - len(kept)} rows of `{os.path.basename(path)}` for held-out models")
+
+
 def drop_left_out_sections(path, notes):
     """Drop, from a `diff -r` listing, the sections whose paths are a left-out model's folder."""
     with open(path, encoding="utf-8", errors="replace") as handle:
@@ -99,6 +113,7 @@ def kept_file(name):
 def keep_models(source, out, spent, held, notes):
     """Copy one side's kept files; return (models kept, files kept)."""
     models = files = 0
+    left_out_spent = [0]
     for top in sorted(os.listdir(source)):
         path = os.path.join(source, top)
         if not os.path.isdir(path):
@@ -114,7 +129,8 @@ def keep_models(source, out, spent, held, notes):
         if top.startswith("spent-"):
             name = top[len("spent-"):]
             if name not in spent or name in held:
-                notes.add(f"`{top}`, which no list names as spent, or a held-out list names")
+                # Counted, not named: the name of a held-out model is what the scan below refuses.
+                left_out_spent[0] += 1
                 continue
         elif top not in OPEN_FOLDERS and not top.startswith(OPEN_PREFIXES):
             sys.exit(f"{source}: a folder no rule here knows, {top}: say whether its model is one anyone can fetch first")
@@ -130,6 +146,8 @@ def keep_models(source, out, spent, held, notes):
                 files += 1
                 held_any = True
         models += held_any
+    if left_out_spent[0]:
+        notes.add(f"{left_out_spent[0]} `spent-*` folder{'' if left_out_spent[0] == 1 else 's'} that no list names as spent, or that a held-out list names")
     return models, files
 
 
@@ -151,7 +169,7 @@ def main():
         path = os.path.join(args.source, artifact)
         if os.path.isdir(path):
             models, files = keep_models(path, os.path.join(args.out, side), spent, held, notes)
-            lines.append(f"- `{side}/`, from `{artifact}`: {files} files for {models} models")
+            lines.append(f"- `{side}/`, from `{artifact}`: {files} file{'' if files == 1 else 's'} for {models} model{'' if models == 1 else 's'}")
     for artifact, side in WHOLE.items():
         path = os.path.join(args.source, artifact)
         if os.path.isdir(path):
@@ -160,6 +178,8 @@ def main():
                 for name in names:
                     if name.endswith(".txt"):
                         drop_left_out_sections(os.path.join(directory, name), notes)
+                    if name.endswith(".md"):
+                        drop_held_out_rows(os.path.join(directory, name), held, notes)
             count = sum(len(f) for _, _, f in os.walk(os.path.join(args.out, side)))
             lines.append(f"- `{side}/`, from `{artifact}`: {count} file{'' if count == 1 else 's'}")
     if not lines:
@@ -181,16 +201,19 @@ def main():
             "and the probes' own output" + "".join(f"; {note}" for note in sorted(notes)) + ".\n"
         )
     patterns = [re.compile(p) for p in PII]
+    patterns.append(re.compile(r"(^|[^A-Za-z0-9])(" + "|".join(re.escape(p) for p in LEFT_OUT_PREFIXES) + r")[A-Za-z0-9]"))
     hits = []
     for directory, _, names in os.walk(args.out):
         for name in names:
             with open(os.path.join(directory, name), encoding="utf-8", errors="replace") as handle:
                 text = handle.read()
-            hits += [(os.path.relpath(os.path.join(directory, name), args.out), p.pattern) for p in patterns if p.search(text)]
+            single = text.replace("\\\\", "\\")
+            hits += [(os.path.relpath(os.path.join(directory, name), args.out), p.pattern)
+                     for p in patterns if p.search(text) or p.search(single)]
     print("\n".join(lines))
     if hits:
         for path, pattern in hits:
-            print(f"PII-shaped pattern {pattern} in {path}", file=sys.stderr)
+            print(f"a PII-shaped pattern or a left-out folder's name, {pattern}, in {path}", file=sys.stderr)
         return 1
     return 0
 
