@@ -1,0 +1,69 @@
+release saved 2025 layout 2025
+records 37
+any -2001272 unnamed 1 1685
+rule -2001272 unnamed 1 1685
+category -2001272 unnamed 0 
+any -2001271 unnamed 1 1688
+rule -2001271 unnamed 1 1688
+category -2001271 unnamed 0 
+any -2000977 unnamed 1 1734
+rule -2000977 unnamed 1 1734
+category -2000977 unnamed 0 
+any -2000919 Stairs:_Runs 1 12642
+rule -2000919 Stairs:_Runs 1 12642
+category -2000919 Stairs:_Runs 1 12642
+any -2000500 unnamed 1 2919
+rule -2000500 unnamed 0 
+category -2000500 unnamed 0 
+any -2000160 unnamed 2 3431,3433
+rule -2000160 unnamed 2 3431,3433
+category -2000160 unnamed 2 3431,3433
+any -2000151 Generic_Models 9 12540,12541,12542,12562,12563,12564,12575,12576,12577
+rule -2000151 Generic_Models 9 12540,12541,12542,12562,12563,12564,12575,12576,12577
+category -2000151 Generic_Models 9 12540,12541,12542,12562,12563,12564,12575,12576,12577
+any -2000126 Railings 2 12667,12671
+rule -2000126 Railings 2 12667,12671
+category -2000126 Railings 2 12667,12671
+any -2000123 Stairs:_Supports 2 12644,12645
+rule -2000123 Stairs:_Supports 2 12644,12645
+category -2000123 Stairs:_Supports 2 12644,12645
+any -2000120 Stairs 1 12599
+rule -2000120 Stairs 1 12599
+category -2000120 Stairs 1 12599
+any -2000045 Lines:_<Sketch> 6 2903,2906,2909,2912,12675,12676
+rule -2000045 Lines:_<Sketch> 6 2903,2906,2909,2912,12675,12676
+category -2000045 Lines:_<Sketch> 0 
+any -2000035 Roofs 1 2901
+rule -2000035 Roofs 1 2901
+category -2000035 Roofs 1 2901
+any -2000023 Doors 1 6644
+rule -2000023 Doors 1 6644
+category -2000023 Doors 1 6644
+any -2000014 Windows 3 12538,12560,12573
+rule -2000014 Windows 3 12538,12560,12573
+category -2000014 Windows 3 12538,12560,12573
+any -2000011 Walls 5 2787,2788,2789,2790,2892
+rule -2000011 Walls 5 2787,2788,2789,2790,2892
+category -2000011 Walls 5 2787,2788,2789,2790,2892
+unplaced -2000500 unnamed other_kind 1 2919
+refused -2001272 unnamed no_body_point 1 1685
+refused -2001271 unnamed no_body_point 1 1688
+refused -2000977 unnamed no_body_point 1 1734
+refused -2000045 Lines:_<Sketch> no_body_flat 1 2903
+refused -2000045 Lines:_<Sketch> no_body_line 5 2906,2909,2912,12675,12676
+census stages: -2001272 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2001271 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2000977 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2000919 Stairs:_Runs any 1 placed 1 written 1
+census stages: -2000500 unnamed any 1 placed 0 written 0; unplaced other_kind 1
+census stages: -2000160 unnamed any 2 placed 2 written 2
+census stages: -2000151 Generic_Models any 9 placed 9 written 9
+census stages: -2000126 Railings any 2 placed 2 written 2
+census stages: -2000123 Stairs:_Supports any 2 placed 2 written 2
+census stages: -2000120 Stairs any 1 placed 1 written 1
+census stages: -2000045 Lines:_<Sketch> any 6 placed 6 written 0; refused no_body_flat 1; refused no_body_line 5
+census stages: -2000035 Roofs any 1 placed 1 written 1
+census stages: -2000023 Doors any 1 placed 1 written 1
+census stages: -2000014 Windows any 3 placed 3 written 3
+census stages: -2000011 Walls any 5 placed 5 written 5
+exit 0

@@ -1,0 +1,27 @@
+release saved 2025 layout 2025
+records 13
+any -2001272 unnamed 1 1685
+rule -2001272 unnamed 1 1685
+category -2001272 unnamed 0 
+any -2001271 unnamed 1 1688
+rule -2001271 unnamed 1 1688
+category -2001271 unnamed 0 
+any -2000977 unnamed 1 1734
+rule -2000977 unnamed 1 1734
+category -2000977 unnamed 0 
+any -2000500 unnamed 1 2919
+rule -2000500 unnamed 0 
+category -2000500 unnamed 0 
+any -2000011 Walls 9 3468,3522,3590,3641,3695,4047,4122,4511,4567
+rule -2000011 Walls 9 3468,3522,3590,3641,3695,4047,4122,4511,4567
+category -2000011 Walls 9 3468,3522,3590,3641,3695,4047,4122,4511,4567
+unplaced -2000500 unnamed other_kind 1 2919
+refused -2001272 unnamed no_body_point 1 1685
+refused -2001271 unnamed no_body_point 1 1688
+refused -2000977 unnamed no_body_point 1 1734
+census stages: -2001272 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2001271 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2000977 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2000500 unnamed any 1 placed 0 written 0; unplaced other_kind 1
+census stages: -2000011 Walls any 9 placed 9 written 9
+exit 0

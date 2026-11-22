@@ -1,0 +1,689 @@
+release saved 2020 layout 2020
+records 1166
+record -2000023 232780 symbol Partitions/10 68437 container none kind 0xffff8000 option none extents 3.1496 3.2235 7.1522 enclosing false
+record -2000023 235155 symbol Partitions/10 68863 container none kind 0xffff8000 option none extents 3.1496 3.1172 7.1522 enclosing false
+record -2000023 422466 written Partitions/10 83159 container none kind 0xffffef7f option none extents 3.1496 3.3863 7.1522 enclosing false
+record -2000170 423100 written Partitions/10 83621 container none kind 0xffffef7f option none extents 4.7244 0.0833 9.7113 enclosing false
+record -2000023 423107 written Partitions/10 84023 container none kind 0xffffef7f option none extents 4.7244 4.7244 8.7270 enclosing false
+record -2000171 423134 written Partitions/10 84248 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 423136 written Partitions/10 84465 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 423138 written Partitions/10 84682 container none kind 0xffffef7f option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 423139 written Partitions/10 84899 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 423148 written Partitions/10 85116 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 423149 written Partitions/10 85325 container none kind 0xffffef7f option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000170 424758 written Partitions/10 85715 container none kind 0xffffef7f option none extents 4.7244 0.0833 9.6457 enclosing false
+record -2000170 424759 written Partitions/10 85944 container none kind 0xffffef7f option none extents 4.7244 0.0833 8.6614 enclosing false
+record -2000171 424777 written Partitions/10 86173 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 424778 written Partitions/10 86390 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 424779 written Partitions/10 86607 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 424786 written Partitions/10 86832 container none kind 0xffffef7f option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 424787 written Partitions/10 87057 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000023 425292 written Partitions/10 87483 container none kind 0xffffef7f option none extents 3.1496 3.2652 7.1522 enclosing false
+record -2000023 425293 symbol Partitions/10 87676 container none kind 0xffff8000 option none extents 3.1496 3.2652 7.1522 enclosing false
+record -2000023 430997 written Partitions/10 90510 container none kind 0xffffef7f option none extents 3.1496 3.1172 7.1522 enclosing false
+record -2000023 431054 symbol Partitions/10 90703 container none kind 0xffff8000 option none extents 3.1496 3.1172 7.1522 enclosing false
+record -2000023 431064 written Partitions/10 90928 container none kind 0xffffef7f option none extents 3.1496 3.1172 7.1522 enclosing false
+record -2000023 431144 written Partitions/10 91121 container none kind 0xffffef7f option none extents 3.1172 3.1496 7.1522 enclosing false
+record -2000023 431198 written Partitions/10 91314 container none kind 0xffffef7f option none extents 3.1172 3.1496 7.1522 enclosing false
+record -2000023 485452 written Partitions/10 92716 container none kind 0xffffef7f option none extents 2.8270 4.7244 6.8302 enclosing false
+record -2000171 485456 written Partitions/10 92941 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 485458 written Partitions/10 93158 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.6694 enclosing false
+record -2000170 485460 written Partitions/10 93552 container none kind 0xffffef7f option none extents 0.0833 4.7900 6.6929 enclosing false
+record -2000170 485462 written Partitions/10 93962 container none kind 0xffffef7f option none extents 0.0833 4.7900 6.6929 enclosing false
+record -2000170 485464 written Partitions/10 94372 container none kind 0xffffef7f option none extents 0.0833 4.7244 6.6929 enclosing false
+record -2000170 485466 written Partitions/10 94778 container none kind 0xffffef7f option none extents 0.0833 4.3378 4.5090 enclosing false
+record -2000170 485467 written Partitions/10 95003 container none kind 0xffffef7f option none extents 0.0833 4.7900 9.3061 enclosing false
+record -2000170 485468 written Partitions/10 95240 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.8851 enclosing false
+record -2000170 485469 written Partitions/10 95473 container none kind 0xffffef7f option none extents 0.0833 4.3146 4.1508 enclosing false
+record -2000171 485492 written Partitions/10 95698 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 485493 written Partitions/10 95919 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 485494 written Partitions/10 96144 container none kind 0xffffef7f option none extents 0.3281 4.7244 0.1312 enclosing false
+record -2000171 485500 written Partitions/10 96361 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 485501 written Partitions/10 96598 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 485505 written Partitions/10 96835 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 485506 written Partitions/10 97060 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 485507 written Partitions/10 97289 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 485508 written Partitions/10 97518 container none kind 0xffffef7f option none extents 0.3281 0.1312 4.7111 enclosing false
+record -2000171 485509 written Partitions/10 97747 container none kind 0xffffef7f option none extents 0.3281 0.1312 9.0770 enclosing false
+record -2000023 485679 written Partitions/10 97976 container none kind 0xffffef7f option none extents 3.1172 3.1496 7.1522 enclosing false
+record -2000023 490150 symbol Partitions/10 100685 container none kind 0xffff8000 option none extents 3.1496 3.3863 7.1522 enclosing false
+record -2000023 505854 symbol Partitions/10 105204 container none kind 0xffff8000 option none extents 6.2008 1.1446 6.6503 enclosing false
+record -2000023 505974 written Partitions/10 105477 container none kind 0xffffef7f option none extents 1.0915 6.2008 6.6503 enclosing false
+record -2000171 525603 written Partitions/10 115555 container none kind 0xffffef7f option none extents 0.3281 0.3745 0.3673 enclosing false
+record -2000171 687033 written Partitions/10 166294 container none kind 0xffffef7f option none extents 0.3281 4.6403 4.8161 enclosing false
+record -2000171 687035 written Partitions/10 166511 container none kind 0xffffef7f option none extents 0.3281 0.3672 0.3744 enclosing false
+record -2000171 687037 written Partitions/10 166728 container none kind 0xffffef7f option none extents 0.3281 4.7287 4.5562 enclosing false
+record -2001100 697575 symbol Partitions/10 186974 container none kind 0xffff8000 option none extents 3.6155 1.3189 2.4606 enclosing false
+record -2001100 697577 written Partitions/10 187274 container none kind 0xffffef7f option none extents 3.6155 1.3189 2.4606 enclosing false
+record -2000023 704276 written Partitions/10 194669 container none kind 0xffffef7f option none extents 4.7244 2.8270 6.8302 enclosing false
+record -2000170 704282 written Partitions/10 195071 container none kind 0xffffef7f option none extents 4.7900 0.0833 6.6929 enclosing false
+record -2000170 704284 written Partitions/10 195481 container none kind 0xffffef7f option none extents 4.7900 0.0833 6.6929 enclosing false
+record -2000023 704286 written Partitions/10 195891 container none kind 0xffffef7f option none extents 4.7244 2.8270 6.8302 enclosing false
+record -2000171 704288 written Partitions/10 196116 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 704289 written Partitions/10 196333 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 704290 written Partitions/10 196550 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 704291 written Partitions/10 196775 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 704293 written Partitions/10 197000 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 704294 written Partitions/10 197221 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 704296 written Partitions/10 197442 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 704297 written Partitions/10 197655 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 704298 written Partitions/10 197872 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 704299 written Partitions/10 198097 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 704300 written Partitions/10 198326 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000023 709246 written Partitions/10 205416 container none kind 0xffffef7f option none extents 4.7244 4.7244 8.7270 enclosing false
+record -2000171 709249 written Partitions/10 205637 container none kind 0xffffef7f option none extents 4.4259 0.3281 0.1312 enclosing false
+record -2000171 709251 written Partitions/10 205854 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 709253 written Partitions/10 206063 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 709256 written Partitions/10 206445 container none kind 0xffffef7f option none extents 4.4259 0.0833 8.5958 enclosing false
+record -2000171 709258 written Partitions/10 206670 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 709259 written Partitions/10 206887 container none kind 0xffffef7f option none extents 4.4259 0.3281 0.1312 enclosing false
+record -2000171 709261 written Partitions/10 207100 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 745035 written Partitions/10 216341 container none kind 0xffffef7f option none extents 0.3281 0.4665 0.4559 enclosing false
+record -2000023 769882 symbol Partitions/10 227583 container none kind 0xffff8000 option none extents 6.2008 1.0915 6.6503 enclosing false
+record -2000171 846332 written Partitions/10 253504 container none kind 0xffffef7f option none extents 0.3281 5.0122 4.8289 enclosing false
+record -2000171 846333 written Partitions/10 253729 container none kind 0xffffef7f option none extents 0.3281 4.7432 4.9231 enclosing false
+record -2000171 846334 written Partitions/10 253954 container none kind 0xffffef7f option none extents 0.3281 4.4510 0.1312 enclosing false
+record -2000171 846335 written Partitions/10 254183 container none kind 0xffffef7f option none extents 0.3281 0.1312 4.3426 enclosing false
+record -2000171 846351 written Partitions/10 254412 container none kind 0xffffef7f option none extents 0.3281 4.4640 0.1312 enclosing false
+record -2000023 866105 symbol Partitions/10 277851 container none kind 0xffff8000 option none extents 6.0000 6.0000 7.0000 enclosing false
+record -2000023 906937 written Partitions/10 278221 container none kind 0xffffef7f option none extents 3.5827 6.1745 7.2507 enclosing false
+record -2000023 907609 symbol Partitions/10 280581 container none kind 0xffff8000 option none extents 6.1745 3.4199 7.2507 enclosing false
+record -2000023 907638 symbol Partitions/10 280818 container none kind 0xffff8000 option none extents 6.1745 3.5827 7.2507 enclosing false
+record -2000170 909735 written Partitions/10 282968 container none kind 0xffffef7f option none extents 4.7244 0.0833 1.7717 enclosing false
+record -2000170 909736 written Partitions/10 283197 container none kind 0xffffef7f option none extents 4.7900 0.0833 1.7717 enclosing false
+record -2000170 909737 written Partitions/10 283430 container none kind 0xffffef7f option none extents 4.7900 0.0833 1.7717 enclosing false
+record -2000170 909738 written Partitions/10 283663 container none kind 0xffffef7f option none extents 4.7244 0.0833 1.7717 enclosing false
+record -2000171 909751 written Partitions/10 283892 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 909752 written Partitions/10 284109 container none kind 0xffffef7f option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 909753 written Partitions/10 284322 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 909754 written Partitions/10 284551 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 909755 written Partitions/10 284788 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 909756 written Partitions/10 285025 container none kind 0xffffef7f option none extents 4.7244 0.3281 0.1312 enclosing false
+record -2000171 909757 written Partitions/10 285254 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 909758 written Partitions/10 285483 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 909759 written Partitions/10 285712 container none kind 0xffffef7f option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000023 910850 symbol Partitions/10 287866 container none kind 0xffff8000 option none extents 6.0000 3.2292 7.0061 enclosing false
+record -2000023 910875 symbol Partitions/10 288079 container none kind 0xffff8000 option none extents 4.7244 2.8270 6.8302 enclosing false
+record -2000170 931858 written Partitions/10 300782 container none kind 0xffffef7f option none extents 0.0833 4.7244 2.8215 enclosing false
+record -2000170 931859 written Partitions/10 301019 container none kind 0xffffef7f option none extents 0.0833 4.7900 2.8215 enclosing false
+record -2000170 931860 written Partitions/10 301256 container none kind 0xffffef7f option none extents 0.0833 4.7900 2.8215 enclosing false
+record -2000170 931861 written Partitions/10 301493 container none kind 0xffffef7f option none extents 0.0833 4.7244 2.8215 enclosing false
+record -2000171 931877 written Partitions/10 301730 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.6800 enclosing false
+record -2000171 931878 written Partitions/10 301947 container none kind 0xffffef7f option none extents 0.3281 0.1312 6.8898 enclosing false
+record -2000171 931879 written Partitions/10 302160 container none kind 0xffffef7f option none extents 0.3281 4.7244 0.1312 enclosing false
+record -2000171 931880 written Partitions/10 302389 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 931881 written Partitions/10 302626 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 931882 written Partitions/10 302863 container none kind 0xffffef7f option none extents 0.3281 4.7244 0.1312 enclosing false
+record -2000171 931883 written Partitions/10 303092 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.9528 enclosing false
+record -2000171 931884 written Partitions/10 303329 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.9528 enclosing false
+record -2000171 931885 written Partitions/10 303566 container none kind 0xffffef7f option none extents 0.3281 0.1312 2.9528 enclosing false
+record -2000023 939962 written Partitions/10 314828 container none kind 0xffffef7f option none extents 6.2008 1.0915 6.6503 enclosing false
+record -2000023 940117 symbol Partitions/10 315021 container none kind 0xffff8000 option none extents 6.2008 1.0915 6.6503 enclosing false
+record -2000023 940221 written Partitions/10 315298 container none kind 0xffffef7f option none extents 6.2008 1.0915 6.6503 enclosing false
+record -2000023 978895 symbol Partitions/10 345687 container none kind 0xffff8000 option none extents 4.7244 4.7244 8.7270 enclosing false
+record -2000023 978910 symbol Partitions/10 345872 container none kind 0xffff8000 option none extents 4.7244 4.7244 8.7270 enclosing false
+record -2000171 459090 symbol Partitions/10 447412 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 459666 symbol Partitions/10 447577 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 462990 symbol Partitions/10 447742 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 462991 symbol Partitions/10 447907 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 462995 symbol Partitions/10 448072 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 485513 symbol Partitions/10 448237 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 485517 symbol Partitions/10 448402 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2000171 485521 symbol Partitions/10 448567 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2001100 506166 symbol Partitions/10 458411 container none kind 0xffff8000 option none extents 1.9685 3.9370 8.8583 enclosing false
+record -2001100 506168 written Partitions/10 458691 container none kind 0xffffef7f option none extents 1.9685 3.9370 8.8583 enclosing false
+record -2001100 523529 symbol Partitions/10 463323 container none kind 0xffff8000 option none extents 1.9685 3.9370 8.8583 enclosing false
+record -2001100 523531 written Partitions/10 463603 container none kind 0xffffef7f option none extents 1.9685 3.9370 8.8583 enclosing false
+record -2000171 526917 symbol Partitions/10 463776 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 526918 symbol Partitions/10 463941 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 527056 symbol Partitions/10 464106 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 707723 written Partitions/10 504129 container none kind 0xffffef7f option none extents 0.0833 4.2651 9.6457 enclosing false
+record -2000171 707726 written Partitions/10 504354 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 707727 written Partitions/10 504563 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 707728 written Partitions/10 504772 container none kind 0xffffef7f option none extents 0.3281 0.1312 9.8425 enclosing false
+record -2000171 707729 written Partitions/10 504989 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000170 707847 written Partitions/10 505383 container none kind 0xffffef7f option none extents 0.0833 4.2651 8.6614 enclosing false
+record -2000171 707857 written Partitions/10 505608 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 707859 written Partitions/10 505825 container none kind 0xffffef7f option none extents 0.3281 0.1312 9.8425 enclosing false
+record -2000171 707861 written Partitions/10 506042 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 708062 symbol Partitions/10 506263 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000171 708063 symbol Partitions/10 506428 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000171 708064 symbol Partitions/10 506593 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000170 708065 symbol Partitions/10 506758 container none kind 0xffff8000 option none extents 4.2651 0.0833 9.6457 enclosing false
+record -2000170 708066 symbol Partitions/10 506923 container none kind 0xffff8000 option none extents 4.2651 0.0833 8.6614 enclosing false
+record -2000170 708089 written Partitions/10 507305 container none kind 0xffffef7f option none extents 0.0833 4.2651 8.5958 enclosing false
+record -2000171 708090 written Partitions/10 507526 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 708091 written Partitions/10 507735 container none kind 0xffffef7f option none extents 0.3281 4.2651 0.1312 enclosing false
+record -2000171 708092 written Partitions/10 507944 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 708093 written Partitions/10 508153 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 709264 symbol Partitions/10 508362 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 709616 symbol Partitions/10 508527 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 709618 symbol Partitions/10 508692 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 709619 symbol Partitions/10 508857 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 846315 symbol Partitions/10 529706 container none kind 0xffff8000 option none extents 4.7900 0.0833 9.3061 enclosing false
+record -2000170 846325 symbol Partitions/10 529871 container none kind 0xffff8000 option none extents 4.2651 0.0833 8.5958 enclosing false
+record -2000171 846326 symbol Partitions/10 530036 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000171 846327 symbol Partitions/10 530201 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.2651 enclosing false
+record -2000170 846339 symbol Partitions/10 530366 container none kind 0xffff8000 option none extents 4.7900 0.0833 8.8851 enclosing false
+record -2000170 846340 symbol Partitions/10 530531 container none kind 0xffff8000 option none extents 4.3146 0.0833 4.1508 enclosing false
+record -2000171 846341 symbol Partitions/10 530696 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7111 enclosing false
+record -2000171 846342 symbol Partitions/10 530861 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.0770 enclosing false
+record -2000171 846343 symbol Partitions/10 531026 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.5567 enclosing false
+record -2000171 846345 symbol Partitions/10 531191 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.4354 enclosing false
+record -2000171 846346 symbol Partitions/10 531356 container none kind 0xffff8000 option none extents 0.1312 0.3281 0.5211 enclosing false
+record -2000171 846347 symbol Partitions/10 531521 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8288 enclosing false
+record -2000171 846348 symbol Partitions/10 531686 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.7052 enclosing false
+record -2000171 846349 symbol Partitions/10 531851 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.4510 enclosing false
+record -2000171 846350 symbol Partitions/10 532016 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3426 enclosing false
+record -2000171 846352 symbol Partitions/10 532181 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.4640 enclosing false
+record -2000170 846353 symbol Partitions/10 532346 container none kind 0xffff8000 option none extents 4.3378 0.0833 4.5090 enclosing false
+record -2000171 909206 symbol Partitions/10 536610 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 909207 symbol Partitions/10 536775 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2000171 909760 symbol Partitions/10 536940 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 909761 symbol Partitions/10 537105 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000171 909762 symbol Partitions/10 537270 container none kind 0xffff8000 option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000170 909763 symbol Partitions/10 537435 container none kind 0xffff8000 option none extents 4.7244 0.0833 6.6929 enclosing false
+record -2000170 909764 symbol Partitions/10 537600 container none kind 0xffff8000 option none extents 4.7900 0.0833 6.6929 enclosing false
+record -2000171 909766 symbol Partitions/10 537765 container none kind 0xffff8000 option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000170 909767 symbol Partitions/10 537930 container none kind 0xffff8000 option none extents 4.7244 0.0833 1.7717 enclosing false
+record -2000170 909768 symbol Partitions/10 538095 container none kind 0xffff8000 option none extents 4.7900 0.0833 1.7717 enclosing false
+record -2000171 909769 symbol Partitions/10 538260 container none kind 0xffff8000 option none extents 0.1312 0.3281 1.9685 enclosing false
+record -2000171 910876 symbol Partitions/10 538425 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 910882 symbol Partitions/10 538590 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 931872 symbol Partitions/10 541557 container none kind 0xffff8000 option none extents 0.1312 0.3281 0.3932 enclosing false
+record -2000171 931886 symbol Partitions/10 541722 container none kind 0xffff8000 option none extents 0.1312 0.3281 0.3934 enclosing false
+record -2000171 931887 symbol Partitions/10 541887 container none kind 0xffff8000 option none extents 0.1312 0.3281 2.9528 enclosing false
+record -2000171 931888 symbol Partitions/10 542052 container none kind 0xffff8000 option none extents 0.1312 0.3281 6.8898 enclosing false
+record -2000171 931889 symbol Partitions/10 542217 container none kind 0xffff8000 option none extents 0.1312 0.3281 2.6694 enclosing false
+record -2000170 931890 symbol Partitions/10 542382 container none kind 0xffff8000 option none extents 4.7244 0.0833 2.8215 enclosing false
+record -2000170 931891 symbol Partitions/10 542547 container none kind 0xffff8000 option none extents 4.7900 0.0833 2.8215 enclosing false
+record -2000170 931892 symbol Partitions/10 542712 container none kind 0xffff8000 option none extents 4.7244 0.0833 2.8215 enclosing false
+record -2000171 931893 symbol Partitions/10 542877 container none kind 0xffff8000 option none extents 0.1312 0.3281 2.6800 enclosing false
+record -2000171 976939 written Partitions/10 576677 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 976940 written Partitions/10 576886 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000170 976942 written Partitions/10 577272 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.5958 enclosing false
+record -2000170 976944 written Partitions/10 577678 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.5958 enclosing false
+record -2000170 976946 written Partitions/10 578084 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.5958 enclosing false
+record -2000171 976954 written Partitions/10 578480 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976955 written Partitions/10 578705 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976956 written Partitions/10 578930 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976957 written Partitions/10 579155 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976958 written Partitions/10 579380 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 976959 written Partitions/10 579605 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 976960 written Partitions/10 579826 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 976961 written Partitions/10 580047 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 976962 symbol Partitions/10 580268 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 976964 symbol Partitions/10 580433 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 976965 symbol Partitions/10 580598 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 976966 symbol Partitions/10 580763 container none kind 0xffff8000 option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977182 written Partitions/10 582842 container none kind 0xffffef7f option none extents 4.3930 0.0833 8.5958 enclosing false
+record -2000170 977191 written Partitions/10 583244 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977193 written Partitions/10 583650 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977195 written Partitions/10 584056 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977197 written Partitions/10 584462 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977199 written Partitions/10 584868 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977201 written Partitions/10 585274 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977203 written Partitions/10 585680 container none kind 0xffffef7f option none extents 4.3930 0.0833 8.5958 enclosing false
+record -2000171 977247 written Partitions/10 585905 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977248 written Partitions/10 586126 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977249 written Partitions/10 586347 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977250 written Partitions/10 586568 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977251 written Partitions/10 586789 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977252 written Partitions/10 587010 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977253 written Partitions/10 587231 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 977406 written Partitions/10 587809 container none kind 0xffffef7f option none extents 4.3963 0.0833 8.5958 enclosing false
+record -2000171 977408 written Partitions/10 588034 container none kind 0xffffef7f option none extents 4.3963 0.3281 0.1312 enclosing false
+record -2000171 977409 written Partitions/10 588251 container none kind 0xffffef7f option none extents 4.3963 0.3281 0.1312 enclosing false
+record -2000171 977410 written Partitions/10 588468 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977411 written Partitions/10 588677 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 977413 written Partitions/10 589063 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977415 written Partitions/10 589469 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977417 written Partitions/10 589875 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977419 written Partitions/10 590281 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977421 written Partitions/10 590687 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977423 written Partitions/10 591093 container none kind 0xffffef7f option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977425 written Partitions/10 591499 container none kind 0xffffef7f option none extents 4.3963 0.0833 8.5958 enclosing false
+record -2000171 977433 written Partitions/10 591724 container none kind 0xffffef7f option none extents 4.3963 0.3281 0.1312 enclosing false
+record -2000171 977434 written Partitions/10 591941 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977435 written Partitions/10 592166 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977436 written Partitions/10 592391 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977437 written Partitions/10 592616 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977438 written Partitions/10 592841 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977439 written Partitions/10 593066 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977440 written Partitions/10 593291 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977441 written Partitions/10 593516 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977442 written Partitions/10 593741 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977443 written Partitions/10 593966 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977444 written Partitions/10 594191 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977445 written Partitions/10 594416 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977446 written Partitions/10 594641 container none kind 0xffffef7f option none extents 4.3963 0.3281 0.1312 enclosing false
+record -2000171 977447 written Partitions/10 594858 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977448 written Partitions/10 595079 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977449 written Partitions/10 595300 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977450 written Partitions/10 595521 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977451 written Partitions/10 595742 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977452 written Partitions/10 595963 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977453 written Partitions/10 596184 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977489 symbol Partitions/10 596405 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2000171 977490 symbol Partitions/10 596570 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7900 enclosing false
+record -2000171 977491 symbol Partitions/10 596735 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977493 symbol Partitions/10 596900 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977494 symbol Partitions/10 597065 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 977495 symbol Partitions/10 597230 container none kind 0xffff8000 option none extents 4.7900 0.0833 8.5958 enclosing false
+record -2000170 977507 written Partitions/10 597572 container none kind 0xffffef7f option none extents 0.0833 4.7900 8.5958 enclosing false
+record -2000171 977513 written Partitions/10 597801 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 977514 written Partitions/10 598026 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 977515 written Partitions/10 598251 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 977594 written Partitions/10 598472 container none kind 0xffffef7f option none extents 4.3930 0.3281 0.1312 enclosing false
+record -2000171 977595 written Partitions/10 598689 container none kind 0xffffef7f option none extents 4.3930 0.3281 0.1312 enclosing false
+record -2000171 977596 written Partitions/10 598906 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977597 written Partitions/10 599131 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977598 written Partitions/10 599356 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977599 written Partitions/10 599581 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977600 written Partitions/10 599806 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977601 written Partitions/10 600031 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977602 written Partitions/10 600256 container none kind 0xffffef7f option none extents 4.3930 0.3281 0.1312 enclosing false
+record -2000171 977603 written Partitions/10 600473 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977604 written Partitions/10 600698 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977605 written Partitions/10 600923 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977606 written Partitions/10 601148 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977607 written Partitions/10 601373 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977608 written Partitions/10 601598 container none kind 0xffffef7f option none extents 4.7900 0.3281 0.1312 enclosing false
+record -2000171 977609 written Partitions/10 601823 container none kind 0xffffef7f option none extents 4.3930 0.3281 0.1312 enclosing false
+record -2000171 977610 written Partitions/10 602040 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 977611 written Partitions/10 602249 container none kind 0xffffef7f option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 978500 symbol Partitions/10 602458 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3963 enclosing false
+record -2000171 978501 symbol Partitions/10 602623 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3963 enclosing false
+record -2000170 978502 symbol Partitions/10 602788 container none kind 0xffff8000 option none extents 4.3963 0.0833 8.5958 enclosing false
+record -2000171 978557 written Partitions/10 603305 container none kind 0xffffef7f option none extents 0.3281 4.7900 0.1312 enclosing false
+record -2000171 978559 written Partitions/10 603697 container none kind 0xffffef7f option none extents 0.3281 0.1312 8.8583 enclosing false
+record -2000171 978870 symbol Partitions/10 603918 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.4259 enclosing false
+record -2000171 978871 symbol Partitions/10 604083 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.4259 enclosing false
+record -2000170 978872 symbol Partitions/10 604248 container none kind 0xffff8000 option none extents 4.4259 0.0833 8.5958 enclosing false
+record -2000171 978896 symbol Partitions/10 604548 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000170 978909 symbol Partitions/10 604713 container none kind 0xffff8000 option none extents 4.7244 0.0833 9.7113 enclosing false
+record -2000171 978911 symbol Partitions/10 604878 container none kind 0xffff8000 option none extents 0.1312 0.3281 8.8583 enclosing false
+record -2000171 978912 symbol Partitions/10 605043 container none kind 0xffff8000 option none extents 0.1312 0.3281 9.8425 enclosing false
+record -2000171 1073252 symbol Partitions/10 612442 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3930 enclosing false
+record -2000171 1073253 symbol Partitions/10 612607 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.3930 enclosing false
+record -2000170 1073254 symbol Partitions/10 612772 container none kind 0xffff8000 option none extents 4.3930 0.0833 8.5958 enclosing false
+record -2000171 1073508 symbol Partitions/10 613282 container none kind 0xffff8000 option none extents 0.1312 0.3281 4.7244 enclosing false
+record -2000170 1073509 symbol Partitions/10 613447 container none kind 0xffff8000 option none extents 4.7244 0.0833 9.6457 enclosing false
+record -2000170 1073510 symbol Partitions/10 613612 container none kind 0xffff8000 option none extents 4.7244 0.0833 8.6614 enclosing false
+any -2009645 unnamed 122 414562,414563,414564,414565,493712,493713,493714,493715,493803,493804,493805,493806,493892,493893,493894,493895,495392,495393,495394,495395,495396,495397,495398,495399,584230,584231,599917,599918,599919,599920,599962,599963,599964,599965,627082,627083,627084,627085,628114,628115,628116,628117,628537,628538,628539,628540,628541,628542,650048,650049,650097,650098,650139,650140,650141,650142,708766,708767,708768,708769,709734,709735,709736,709737,764749,764750,764751,764752,764753,764754,764755,764756,765534,765535,765536,765537,765538,765539,765540,765541,765635,765636,765637,765638,765639,765640,765641,765642,766630,766631,766632,766633,766634,766635,766638,766639,766640,766641,766642,766643,766644,766645,768151,768152,849718,849719,849720,849721,931367,931368,931369,931370,931371,931372,931373,931374,955665,955666,1000017,1000018,1000019,1000020
+rule -2009645 unnamed 61 414563,414565,493713,493715,493804,493806,493893,493895,495393,495395,495397,495399,584231,599918,599920,599963,599965,627083,627085,628115,628117,628538,628540,628542,650049,650098,650140,650142,708767,708769,709735,709737,764750,764752,764754,764756,765535,765537,765539,765541,765636,765638,765640,765642,766631,766633,766635,766639,766641,766643,766645,768152,849719,849721,931368,931370,931372,931374,955666,1000018,1000020
+category -2009645 unnamed 0 
+any -2009643 unnamed 1 766599
+rule -2009643 unnamed 1 766599
+category -2009643 unnamed 0 
+any -2009641 unnamed 11 512278,512298,512320,512395,512446,512450,512470,512474,512523,512527,767154
+rule -2009641 unnamed 11 512278,512298,512320,512395,512446,512450,512470,512474,512523,512527,767154
+category -2009641 unnamed 0 
+any -2009640 unnamed 11 493613,493698,493791,493880,599842,599907,599952,627065,628524,765524,765621
+rule -2009640 unnamed 11 493613,493698,493791,493880,599842,599907,599952,627065,628524,765524,765621
+category -2009640 unnamed 1 493791
+any -2009639 unnamed 2 495353,764692
+rule -2009639 unnamed 2 495353,764692
+category -2009639 unnamed 0 
+any -2009636 unnamed 3 414483,708716,709726
+rule -2009636 unnamed 3 414483,708716,709726
+category -2009636 unnamed 0 
+any -2006045 unnamed 5 125028,125290,128303,128304,128305
+rule -2006045 unnamed 0 
+category -2006045 unnamed 0 
+any -2006040 unnamed 1 24584
+rule -2006040 unnamed 0 
+category -2006040 unnamed 0 
+any -2006020 unnamed 1 24867
+rule -2006020 unnamed 0 
+category -2006020 unnamed 0 
+any -2005100 unnamed 1 23738
+rule -2005100 unnamed 0 
+category -2005100 unnamed 0 
+any -2005021 unnamed 1 959386
+rule -2005021 unnamed 0 
+category -2005021 unnamed 0 
+any -2003400 Mass 2 628357,628359
+rule -2003400 Mass 1 628359
+category -2003400 Mass 1 628359
+any -2003000 unnamed 6 16216,16332,20074,20380,598493,951795
+rule -2003000 unnamed 0 
+category -2003000 unnamed 0 
+any -2002000 unnamed 5 29292,929137,929460,971577,972350
+rule -2002000 unnamed 0 
+category -2002000 unnamed 0 
+any -2001370 Entourage 8 950216,950367,954137,954582,954641,954779,954992,955125
+rule -2001370 Entourage 5 950367,954641,954779,954992,955125
+category -2001370 Entourage 5 950367,954641,954779,954992,955125
+any -2001360 Planting 23 945990,946004,946006,946014,946016,946018,946020,946164,946385,946484,946631,946708,946759,946816,946835,946912,946949,947002,947057,947108,947273,947330,947379
+rule -2001360 Planting 16 946164,946385,946484,946631,946708,946759,946816,946835,946912,946949,947002,947057,947108,947273,947330,947379
+category -2001360 Planting 16 946164,946385,946484,946631,946708,946759,946816,946835,946912,946949,947002,947057,947108,947273,947330,947379
+any -2001350 Specialty_Equipment 14 677680,677695,678974,679009,684776,684791,686169,686184,696969,696998,986973,986988,993076,993091
+rule -2001350 Specialty_Equipment 7 677695,679009,684791,686184,696998,986988,993091
+category -2001350 Specialty_Equipment 7 677695,679009,684791,686184,696998,986988,993091
+any -2001340 unnamed 4 411452,490318,523063,800334
+rule -2001340 unnamed 3 411452,490318,523063
+category -2001340 unnamed 3 411452,490318,523063
+any -2001330 Structural_Columns 8 414482,420952,469411,708715,708904,709206,709725,709940
+rule -2001330 Structural_Columns 3 414482,708715,709725
+category -2001330 Structural_Columns 3 414482,708715,709725
+any -2001300 Structural_Foundations 27 509468,512173,512277,512279,512297,512299,512319,512321,512394,512396,512399,512445,512447,512449,512451,512469,512471,512473,512475,512522,512524,512526,512528,564479,766598,767153,767156
+rule -2001300 Structural_Foundations 23 512277,512279,512297,512299,512319,512321,512394,512396,512445,512447,512449,512451,512469,512471,512473,512475,512522,512524,512526,512528,766598,767153,767156
+category -2001300 Structural_Foundations 23 512277,512279,512297,512299,512319,512321,512394,512396,512445,512447,512449,512451,512469,512471,512473,512475,512522,512524,512526,512528,766598,767153,767156
+any -2001272 unnamed 1 111426
+rule -2001272 unnamed 1 111426
+category -2001272 unnamed 0 
+any -2001271 unnamed 1 111429
+rule -2001271 unnamed 1 111429
+category -2001271 unnamed 0 
+any -2001269 unnamed 1 948584
+rule -2001269 unnamed 0 
+category -2001269 unnamed 0 
+any -2001268 unnamed 6 948077,948078,948079,948080,948081,948082
+rule -2001268 unnamed 6 948077,948078,948079,948080,948081,948082
+category -2001268 unnamed 0 
+any -2001265 unnamed 1 947498
+rule -2001265 unnamed 0 
+category -2001265 unnamed 0 
+any -2001263 Site:_Pads 2 490319,523064
+rule -2001263 Site:_Pads 2 490319,523064
+category -2001263 Site:_Pads 2 490319,523064
+any -2001260 unnamed 4 397393,418977,418985,554644
+rule -2001260 unnamed 3 418977,418985,554644
+category -2001260 unnamed 3 418977,418985,554644
+any -2001160 Plumbing_Fixtures 21 211807,211850,213558,213811,288367,420270,496586,698708,698859,778223,778420,778575,936387,936823,937021,937138,937371,937572,937573,938762,938763
+rule -2001160 Plumbing_Fixtures 12 211850,213811,420270,698859,778420,778575,936823,937138,937572,937573,938762,938763
+category -2001160 Plumbing_Fixtures 9 211850,213811,420270,698859,778420,778575,936823,937573,938763
+any -2001120 Lighting_Fixtures 17 754016,757198,767797,767856,767857,767870,767871,767916,767917,802440,802782,812954,856591,856593,856595,856597,856599
+rule -2001120 Lighting_Fixtures 10 757198,767797,767856,767857,767870,767871,767916,767917,802782,812954
+category -2001120 Lighting_Fixtures 10 757198,767797,767856,767857,767870,767871,767916,767917,802782,812954
+any -2001100 Furniture_Systems 6 506166,506168,523529,523531,697575,697577
+rule -2001100 Furniture_Systems 3 506168,523531,697577
+category -2001100 Furniture_Systems 3 506168,523531,697577
+any -2001040 Electrical_Equipment 14 776839,778316,800280,800325,800329,800336,800340,800342,800348,800350,800381,800383,800389,800391
+rule -2001040 Electrical_Equipment 12 778316,800280,800325,800329,800340,800342,800348,800350,800381,800383,800389,800391
+category -2001040 Electrical_Equipment 12 778316,800280,800325,800329,800340,800342,800348,800350,800381,800383,800389,800391
+any -2001000 Casework 5 690047,690080,690286,690287,692863
+rule -2001000 Casework 2 690080,690286
+category -2001000 Casework 2 690080,690286
+any -2000997 Walls:_Rectangular_Straight_Wall_Opening 2 504396,699571
+rule -2000997 Walls:_Rectangular_Straight_Wall_Opening 2 504396,699571
+category -2000997 Walls:_Rectangular_Straight_Wall_Opening 2 504396,699571
+any -2000954 unnamed 24 566609,568023,931547,931583,931643,932552,932875,933797,933824,933831,934471,934472,934473,934937,935253,976232,976233,976234,976235,976236,976237,976238,976239,976240
+rule -2000954 unnamed 24 566609,568023,931547,931583,931643,932552,932875,933797,933824,933831,934471,934472,934473,934937,935253,976232,976233,976234,976235,976236,976237,976238,976239,976240
+category -2000954 unnamed 0 
+any -2000948 unnamed 1 147064
+rule -2000948 unnamed 0 
+category -2000948 unnamed 0 
+any -2000946 unnamed 10 566600,568014,665842,931538,931574,931634,932543,932866,933815,934462
+rule -2000946 unnamed 10 566600,568014,665842,931538,931574,931634,932543,932866,933815,934462
+category -2000946 unnamed 10 566600,568014,665842,931538,931574,931634,932543,932866,933815,934462
+any -2000945 unnamed 3 668651,668652,668653
+rule -2000945 unnamed 3 668651,668652,668653
+category -2000945 unnamed 0 
+any -2000921 unnamed 1 665561
+rule -2000921 unnamed 0 
+category -2000921 unnamed 0 
+any -2000920 Stairs:_Landings 1 725396
+rule -2000920 Stairs:_Landings 1 725396
+category -2000920 Stairs:_Landings 1 725396
+any -2000919 Stairs:_Runs 3 513309,665560,725046
+rule -2000919 Stairs:_Runs 3 513309,665560,725046
+category -2000919 Stairs:_Runs 3 513309,665560,725046
+any -2000538 unnamed 1 1141
+rule -2000538 unnamed 0 
+category -2000538 unnamed 0 
+any -2000530 unnamed 10 566610,568024,665860,931548,931584,931644,932553,932876,933825,934474
+rule -2000530 unnamed 10 566610,568024,665860,931548,931584,931644,932553,932876,933825,934474
+category -2000530 unnamed 0 
+any -2000515 unnamed 1 4169
+rule -2000515 unnamed 0 
+category -2000515 unnamed 0 
+any -2000500 unnamed 7 699849,736510,744827,950797,950804,959069,960619
+rule -2000500 unnamed 0 
+category -2000500 unnamed 0 
+any -2000480 unnamed 1 857186
+rule -2000480 unnamed 0 
+category -2000480 unnamed 0 
+any -2000460 unnamed 1 862910
+rule -2000460 unnamed 0 
+category -2000460 unnamed 0 
+any -2000450 unnamed 1 859086
+rule -2000450 unnamed 0 
+category -2000450 unnamed 0 
+any -2000400 unnamed 4 1049,28045,28776,28929
+rule -2000400 unnamed 0 
+category -2000400 unnamed 0 
+any -2000350 unnamed 2 626581,626630
+rule -2000350 unnamed 2 626581,626630
+category -2000350 unnamed 2 626581,626630
+any -2000321 unnamed 32 423106,424757,485459,485461,485463,485465,704281,704283,704285,707846,709255,909609,931732,976941,976943,976945,977190,977192,977194,977196,977198,977200,977202,977412,977414,977416,977418,977420,977422,977424,977506,978550
+rule -2000321 unnamed 32 423106,424757,485459,485461,485463,485465,704281,704283,704285,707846,709255,909609,931732,976941,976943,976945,977190,977192,977194,977196,977198,977200,977202,977412,977414,977416,977418,977420,977422,977424,977506,978550
+category -2000321 unnamed 0 
+any -2000280 unnamed 1 382615
+rule -2000280 unnamed 0 
+category -2000280 unnamed 0 
+any -2000197 unnamed 1 100162
+rule -2000197 unnamed 0 
+category -2000197 unnamed 0 
+any -2000192 unnamed 2 957750,957856
+rule -2000192 unnamed 2 957750,957856
+category -2000192 unnamed 0 
+any -2000171 Curtain_Wall_Mullions 207 423134,423136,423138,423139,423148,423149,424777,424778,424779,424786,424787,459090,459666,462990,462991,462995,485456,485458,485492,485493,485494,485500,485501,485505,485506,485507,485508,485509,485513,485517,485521,525603,526917,526918,527056,687033,687035,687037,704288,704289,704290,704291,704293,704294,704296,704297,704298,704299,704300,707726,707727,707728,707729,707857,707859,707861,708062,708063,708064,708090,708091,708092,708093,709249,709251,709253,709258,709259,709261,709264,709616,709618,709619,745035,846326,846327,846332,846333,846334,846335,846341,846342,846343,846345,846346,846347,846348,846349,846350,846351,846352,909206,909207,909751,909752,909753,909754,909755,909756,909757,909758,909759,909760,909761,909762,909766,909769,910876,910882,931872,931877,931878,931879,931880,931881,931882,931883,931884,931885,931886,931887,931888,931889,931893,976939,976940,976954,976955,976956,976957,976958,976959,976960,976961,976962,976964,976965,977247,977248,977249,977250,977251,977252,977253,977408,977409,977410,977411,977433,977434,977435,977436,977437,977438,977439,977440,977441,977442,977443,977444,977445,977446,977447,977448,977449,977450,977451,977452,977453,977489,977490,977491,977493,977494,977513,977514,977515,977594,977595,977596,977597,977598,977599,977600,977601,977602,977603,977604,977605,977606,977607,977608,977609,977610,977611,978500,978501,978557,978559,978870,978871,978896,978911,978912,1073252,1073253,1073508
+rule -2000171 Curtain_Wall_Mullions 144 423134,423136,423138,423139,423148,423149,424777,424778,424779,424786,424787,485456,485458,485492,485493,485494,485500,485501,485505,485506,485507,485508,485509,525603,687033,687035,687037,704288,704289,704290,704291,704293,704294,704296,704297,704298,704299,704300,707726,707727,707728,707729,707857,707859,707861,708090,708091,708092,708093,709249,709251,709253,709258,709259,709261,745035,846332,846333,846334,846335,846351,909751,909752,909753,909754,909755,909756,909757,909758,909759,931877,931878,931879,931880,931881,931882,931883,931884,931885,976939,976940,976954,976955,976956,976957,976958,976959,976960,976961,977247,977248,977249,977250,977251,977252,977253,977408,977409,977410,977411,977433,977434,977435,977436,977437,977438,977439,977440,977441,977442,977443,977444,977445,977446,977447,977448,977449,977450,977451,977452,977453,977513,977514,977515,977594,977595,977596,977597,977598,977599,977600,977601,977602,977603,977604,977605,977606,977607,977608,977609,977610,977611,978557,978559
+category -2000171 Curtain_Wall_Mullions 144 423134,423136,423138,423139,423148,423149,424777,424778,424779,424786,424787,485456,485458,485492,485493,485494,485500,485501,485505,485506,485507,485508,485509,525603,687033,687035,687037,704288,704289,704290,704291,704293,704294,704296,704297,704298,704299,704300,707726,707727,707728,707729,707857,707859,707861,708090,708091,708092,708093,709249,709251,709253,709258,709259,709261,745035,846332,846333,846334,846335,846351,909751,909752,909753,909754,909755,909756,909757,909758,909759,931877,931878,931879,931880,931881,931882,931883,931884,931885,976939,976940,976954,976955,976956,976957,976958,976959,976960,976961,977247,977248,977249,977250,977251,977252,977253,977408,977409,977410,977411,977433,977434,977435,977436,977437,977438,977439,977440,977441,977442,977443,977444,977445,977446,977447,977448,977449,977450,977451,977452,977453,977513,977514,977515,977594,977595,977596,977597,977598,977599,977600,977601,977602,977603,977604,977605,977606,977607,977608,977609,977610,977611,978557,978559
+any -2000170 Curtain_Panels 66 423100,424758,424759,485460,485462,485464,485466,485467,485468,485469,704282,704284,707723,707847,708065,708066,708089,709256,846315,846325,846339,846340,846353,909735,909736,909737,909738,909763,909764,909767,909768,931858,931859,931860,931861,931890,931891,931892,976942,976944,976946,976966,977182,977191,977193,977195,977197,977199,977201,977203,977406,977413,977415,977417,977419,977421,977423,977425,977495,977507,978502,978872,978909,1073254,1073509,1073510
+rule -2000170 Curtain_Panels 44 423100,424758,424759,485460,485462,485464,485466,485467,485468,485469,704282,704284,707723,707847,708089,709256,909735,909736,909737,909738,931858,931859,931860,931861,976942,976944,976946,977182,977191,977193,977195,977197,977199,977201,977203,977406,977413,977415,977417,977419,977421,977423,977425,977507
+category -2000170 Curtain_Panels 44 423100,424758,424759,485460,485462,485464,485466,485467,485468,485469,704282,704284,707723,707847,708089,709256,909735,909736,909737,909738,931858,931859,931860,931861,976942,976944,976946,977182,977191,977193,977195,977197,977199,977201,977203,977406,977413,977415,977417,977419,977421,977423,977425,977507
+any -2000160 unnamed 14 857191,857194,857197,857200,857203,857206,857209,857279,857292,857346,857545,857552,906922,940325
+rule -2000160 unnamed 14 857191,857194,857197,857200,857203,857206,857209,857279,857292,857346,857545,857552,906922,940325
+category -2000160 unnamed 14 857191,857194,857197,857200,857203,857206,857209,857279,857292,857346,857545,857552,906922,940325
+any -2000151 Generic_Models 35 287141,499496,674355,674370,680524,680539,694781,694796,701300,785282,935747,937571,938761,993873,993980,994767,994782,996866,996881,997032,997033,997050,997051,997068,997069,997114,997115,997116,997117,997118,997119,997120,997121,997122,997123
+rule -2000151 Generic_Models 25 499496,674370,680539,694796,701300,935747,937571,938761,993980,994782,996881,997032,997033,997050,997051,997068,997069,997114,997115,997116,997117,997118,997119,997120,997121
+category -2000151 Generic_Models 25 499496,674370,680539,694796,701300,935747,937571,938761,993980,994782,996881,997032,997033,997050,997051,997068,997069,997114,997115,997116,997117,997118,997119,997120,997121
+any -2000150 unnamed 2 941864,961908
+rule -2000150 unnamed 0 
+category -2000150 unnamed 0 
+any -2000127 unnamed 35 12344,489599,490134,566599,568013,669450,669451,669452,669453,669454,669455,669456,669457,669458,931537,931585,931646,932878,934461,951303,951430,951431,951432,951433,951434,951435,975083,975084,975087,975088,975089,975091,976241,976242,976243
+rule -2000127 unnamed 0 
+category -2000127 unnamed 0 
+any -2000126 Railings 10 566588,567887,665711,931377,931569,931630,932401,932862,933811,933840
+rule -2000126 Railings 10 566588,567887,665711,931377,931569,931630,932401,932862,933811,933840
+category -2000126 Railings 10 566588,567887,665711,931377,931569,931630,932401,932862,933811,933840
+any -2000120 Stairs 3 513254,665557,725045
+rule -2000120 Stairs 3 513254,665557,725045
+category -2000120 Stairs 3 513254,665557,725045
+any -2000095 unnamed 22 800213,800281,800326,800330,800331,800337,800341,800343,800349,800351,800352,800382,800384,800390,800392,800393,988384,988397,988460,988591,988604,988641
+rule -2000095 unnamed 21 800213,800281,800326,800330,800331,800341,800343,800349,800351,800352,800382,800384,800390,800392,800393,988384,988397,988460,988591,988604,988641
+category -2000095 unnamed 21 800213,800281,800326,800330,800331,800341,800343,800349,800351,800352,800382,800384,800390,800392,800393,988384,988397,988460,988591,988604,988641
+any -2000080 Furniture 42 735724,735739,736435,981609,981963,982743,982762,983030,983156,983164,983236,983306,983388,983517,983518,984471,984486,985723,985756,987054,987167,988018,988128,988396,988459,988462,988603,988640,989329,989344,989521,990191,990317,990596,990620,990621,990622,990645,990646,990647,990648,997883
+rule -2000080 Furniture 30 735739,736435,981963,982762,983030,983156,983164,983236,983306,983388,984486,985756,987054,987167,988128,988396,988459,988462,988603,988640,989344,989521,990317,990596,990620,990621,990645,990646,990647,990648
+category -2000080 Furniture 30 735739,736435,981963,982762,983030,983156,983164,983236,983306,983388,984486,985756,987054,987167,988128,988396,988459,988462,988603,988640,989344,989521,990317,990596,990620,990621,990645,990646,990647,990648
+any -2000079 unnamed 5 857234,857235,857236,857237,857238
+rule -2000079 unnamed 5 857234,857235,857236,857237,857238
+category -2000079 unnamed 0 
+any -2000077 unnamed 2 970620,970773
+rule -2000077 unnamed 2 970620,970773
+category -2000077 unnamed 0 
+any -2000068 unnamed 17 668634,668635,668636,668637,668638,668639,668640,668641,668643,668644,668645,668646,668647,668648,668649,668650,669205
+rule -2000068 unnamed 17 668634,668635,668636,668637,668638,668639,668640,668641,668643,668644,668645,668646,668647,668648,668649,668650,669205
+category -2000068 unnamed 0 
+any -2000067 unnamed 10 668628,668629,668630,668631,668632,668633,725402,725403,725404,725405
+rule -2000067 unnamed 10 668628,668629,668630,668631,668632,668633,725402,725403,725404,725405
+category -2000067 unnamed 0 
+any -2000066 unnamed 3 857393,857525,1000807
+rule -2000066 unnamed 3 857393,857525,1000807
+category -2000066 unnamed 0 
+any -2000051 Lines 2 941493,970942
+rule -2000051 Lines 2 941493,970942
+category -2000051 Lines 0 
+any -2000045 Lines:_<Sketch> 123 415653,415660,415667,415674,415681,415742,418186,418197,418203,490322,490323,490324,490325,512686,512688,512689,523068,523071,523074,523077,525474,526422,529519,529520,529521,529528,529533,529716,534692,534693,534694,534701,534706,534786,534793,534801,549038,549039,549040,549041,550258,550259,550260,550261,566592,567916,580809,580865,580930,580991,626060,650190,650230,650257,650389,650531,650532,650533,650534,697615,697616,697617,697618,700284,700285,700286,700287,700293,700295,704057,704058,704059,704060,704906,704907,704908,704909,704958,709800,709879,709913,724433,724434,724435,724436,764703,764704,764705,764706,766603,766606,766609,766612,766615,766618,766621,766625,768193,768194,768196,768254,931195,931201,931280,931498,931632,932482,933766,934138,934276,934417,947593,947661,947750,947884,947963,948045,976338,976365,976683,1001886,1001888,1001889
+rule -2000045 Lines:_<Sketch> 123 415653,415660,415667,415674,415681,415742,418186,418197,418203,490322,490323,490324,490325,512686,512688,512689,523068,523071,523074,523077,525474,526422,529519,529520,529521,529528,529533,529716,534692,534693,534694,534701,534706,534786,534793,534801,549038,549039,549040,549041,550258,550259,550260,550261,566592,567916,580809,580865,580930,580991,626060,650190,650230,650257,650389,650531,650532,650533,650534,697615,697616,697617,697618,700284,700285,700286,700287,700293,700295,704057,704058,704059,704060,704906,704907,704908,704909,704958,709800,709879,709913,724433,724434,724435,724436,764703,764704,764705,764706,766603,766606,766609,766612,766615,766618,766621,766625,768193,768194,768196,768254,931195,931201,931280,931498,931632,932482,933766,934138,934276,934417,947593,947661,947750,947884,947963,948045,976338,976365,976683,1001886,1001888,1001889
+category -2000045 Lines:_<Sketch> 0 
+any -2000038 Ceilings 2 697612,704053
+rule -2000038 Ceilings 2 697612,704053
+category -2000038 Ceilings 2 697612,704053
+any -2000035 Roofs 2 243274,724430
+rule -2000035 Roofs 2 243274,724430
+category -2000035 Roofs 2 243274,724430
+any -2000032 Floors 8 176804,418183,495352,512683,549031,550255,647908,764691
+rule -2000032 Floors 8 176804,418183,495352,512683,549031,550255,647908,764691
+category -2000032 Floors 8 176804,418183,495352,512683,549031,550255,647908,764691
+any -2000023 Doors 31 232780,235155,422466,423107,425292,425293,430997,431054,431064,431144,431198,485452,485679,490150,505854,505974,704276,704286,709246,769882,866105,906937,907609,907638,910850,910875,939962,940117,940221,978895,978910
+rule -2000023 Doors 16 422466,423107,425292,430997,431064,431144,431198,485452,485679,505974,704276,704286,709246,906937,939962,940221
+category -2000023 Doors 16 422466,423107,425292,430997,431064,431144,431198,485452,485679,505974,704276,704286,709246,906937,939962,940221
+any -2000014 Windows 25 198366,457479,457534,457542,485432,488864,488881,489062,498006,507058,554383,706288,735853,736152,736223,736330,744522,744523,744524,744525,818872,818873,818874,818875,850328
+rule -2000014 Windows 17 457479,457534,457542,485432,488881,489062,498006,554383,706288,735853,736152,736223,736330,744522,744523,744524,744525
+category -2000014 Windows 17 457479,457534,457542,485432,488881,489062,498006,554383,706288,735853,736152,736223,736330,744522,744523,744524,744525
+any -2000011 Walls 56 198694,198749,234869,418079,422243,423099,424922,425745,427092,428588,428745,428797,429964,430064,430318,430361,430412,430859,493612,493697,493790,493879,497540,506386,506797,530178,599841,599906,599951,627064,627729,628523,655533,704275,707722,708088,709245,745997,746235,746589,746634,746766,765523,765620,768442,845266,846939,847436,849032,906885,937935,938974,939084,976752,977133,977377
+rule -2000011 Walls 56 198694,198749,234869,418079,422243,423099,424922,425745,427092,428588,428745,428797,429964,430064,430318,430361,430412,430859,493612,493697,493790,493879,497540,506386,506797,530178,599841,599906,599951,627064,627729,628523,655533,704275,707722,708088,709245,745997,746235,746589,746634,746766,765523,765620,768442,845266,846939,847436,849032,906885,937935,938974,939084,976752,977133,977377
+category -2000011 Walls 56 198694,198749,234869,418079,422243,423099,424922,425745,427092,428588,428745,428797,429964,430064,430318,430361,430412,430859,493612,493697,493790,493879,497540,506386,506797,530178,599841,599906,599951,627064,627729,628523,655533,704275,707722,708088,709245,745997,746235,746589,746634,746766,765523,765620,768442,845266,846939,847436,849032,906885,937935,938974,939084,976752,977133,977377
+unplaced -2009645 unnamed symbol 61 414562,414564,493712,493714,493803,493805,493892,493894,495392,495394,495396,495398,584230,599917,599919,599962,599964,627082,627084,628114,628116,628537,628539,628541,650048,650097,650139,650141,708766,708768,709734,709736,764749,764751,764753,764755,765534,765536,765538,765540,765635,765637,765639,765641,766630,766632,766634,766638,766640,766642,766644,768151,849718,849720,931367,931369,931371,931373,955665,1000017,1000019
+unplaced -2006045 unnamed symbol 5 125028,125290,128303,128304,128305
+unplaced -2006040 unnamed symbol 1 24584
+unplaced -2006020 unnamed symbol 1 24867
+unplaced -2005100 unnamed symbol 1 23738
+unplaced -2005021 unnamed symbol 1 959386
+unplaced -2003400 Mass symbol 1 628357
+unplaced -2003000 unnamed symbol 6 16216,16332,20074,20380,598493,951795
+unplaced -2002000 unnamed symbol 5 29292,929137,929460,971577,972350
+unplaced -2001370 Entourage symbol 3 950216,954137,954582
+unplaced -2001360 Planting symbol 7 945990,946004,946006,946014,946016,946018,946020
+unplaced -2001350 Specialty_Equipment symbol 7 677680,678974,684776,686169,696969,986973,993076
+unplaced -2001340 unnamed container 1 800334
+unplaced -2001330 Structural_Columns symbol 5 420952,469411,708904,709206,709940
+unplaced -2001300 Structural_Foundations symbol 4 509468,512173,512399,564479
+unplaced -2001269 unnamed symbol 1 948584
+unplaced -2001265 unnamed other_kind 1 947498
+unplaced -2001260 unnamed symbol 1 397393
+unplaced -2001160 Plumbing_Fixtures symbol 9 211807,213558,288367,496586,698708,778223,936387,937021,937371
+unplaced -2001120 Lighting_Fixtures symbol 7 754016,802440,856591,856593,856595,856597,856599
+unplaced -2001100 Furniture_Systems symbol 3 506166,523529,697575
+unplaced -2001040 Electrical_Equipment container 1 800336
+unplaced -2001040 Electrical_Equipment symbol 1 776839
+unplaced -2001000 Casework symbol 3 690047,690287,692863
+unplaced -2000948 unnamed symbol 1 147064
+unplaced -2000921 unnamed symbol 1 665561
+unplaced -2000538 unnamed symbol 1 1141
+unplaced -2000515 unnamed symbol 1 4169
+unplaced -2000500 unnamed other_kind 7 699849,736510,744827,950797,950804,959069,960619
+unplaced -2000480 unnamed symbol 1 857186
+unplaced -2000460 unnamed symbol 1 862910
+unplaced -2000450 unnamed symbol 1 859086
+unplaced -2000400 unnamed symbol 4 1049,28045,28776,28929
+unplaced -2000280 unnamed symbol 1 382615
+unplaced -2000197 unnamed symbol 1 100162
+unplaced -2000171 Curtain_Wall_Mullions symbol 63 459090,459666,462990,462991,462995,485513,485517,485521,526917,526918,527056,708062,708063,708064,709264,709616,709618,709619,846326,846327,846341,846342,846343,846345,846346,846347,846348,846349,846350,846352,909206,909207,909760,909761,909762,909766,909769,910876,910882,931872,931886,931887,931888,931889,931893,976962,976964,976965,977489,977490,977491,977493,977494,978500,978501,978870,978871,978896,978911,978912,1073252,1073253,1073508
+unplaced -2000170 Curtain_Panels symbol 22 708065,708066,846315,846325,846339,846340,846353,909763,909764,909767,909768,931890,931891,931892,976966,977495,978502,978872,978909,1073254,1073509,1073510
+unplaced -2000151 Generic_Models symbol 10 287141,674355,680524,694781,785282,993873,994767,996866,997122,997123
+unplaced -2000150 unnamed symbol 2 941864,961908
+unplaced -2000127 unnamed symbol 35 12344,489599,490134,566599,568013,669450,669451,669452,669453,669454,669455,669456,669457,669458,931537,931585,931646,932878,934461,951303,951430,951431,951432,951433,951434,951435,975083,975084,975087,975088,975089,975091,976241,976242,976243
+unplaced -2000095 unnamed container 1 800337
+unplaced -2000080 Furniture symbol 12 735724,981609,982743,983517,983518,984471,985723,988018,989329,990191,990622,997883
+unplaced -2000023 Doors symbol 15 232780,235155,425293,431054,490150,505854,769882,866105,907609,907638,910850,910875,940117,978895,978910
+unplaced -2000014 Windows symbol 8 198366,488864,507058,818872,818873,818874,818875,850328
+refused -2009645 unnamed no_body_point 61 414563,414565,493713,493715,493804,493806,493893,493895,495393,495395,495397,495399,584231,599918,599920,599963,599965,627083,627085,628115,628117,628538,628540,628542,650049,650098,650140,650142,708767,708769,709735,709737,764750,764752,764754,764756,765535,765537,765539,765541,765636,765638,765640,765642,766631,766633,766635,766639,766641,766643,766645,768152,849719,849721,931368,931370,931372,931374,955666,1000018,1000020
+refused -2009643 unnamed no_body_flat 1 766599
+refused -2009641 unnamed no_body_flat 11 512278,512298,512320,512395,512446,512450,512470,512474,512523,512527,767154
+refused -2009640 unnamed no_body_flat 10 493613,493698,493880,599842,599907,599952,627065,628524,765524,765621
+refused -2009639 unnamed no_body_flat 2 495353,764692
+refused -2009636 unnamed no_body_line 3 414483,708716,709726
+refused -2001272 unnamed no_body_point 1 111426
+refused -2001271 unnamed no_body_point 1 111429
+refused -2001268 unnamed no_body_flat 3 948078,948080,948081
+refused -2001268 unnamed no_body_line 3 948077,948079,948082
+refused -2001160 Plumbing_Fixtures no_body_flat 3 937138,937572,938762
+refused -2000954 unnamed no_body_flat 5 933797,933831,934937,935253,976236
+refused -2000954 unnamed no_body_line 19 566609,568023,931547,931583,931643,932552,932875,933824,934471,934472,934473,976232,976233,976234,976235,976237,976238,976239,976240
+refused -2000945 unnamed no_body_line 3 668651,668652,668653
+refused -2000530 unnamed no_body_flat 10 566610,568024,665860,931548,931584,931644,932553,932876,933825,934474
+refused -2000321 unnamed no_body_line 32 423106,424757,485459,485461,485463,485465,704281,704283,704285,707846,709255,909609,931732,976941,976943,976945,977190,977192,977194,977196,977198,977200,977202,977412,977414,977416,977418,977420,977422,977424,977506,978550
+refused -2000192 unnamed no_body_line 2 957750,957856
+refused -2000079 unnamed no_body_flat 2 857235,857236
+refused -2000079 unnamed no_body_line 3 857234,857237,857238
+refused -2000077 unnamed no_body_flat 2 970620,970773
+refused -2000068 unnamed no_body_flat 2 668636,668648
+refused -2000068 unnamed no_body_line 15 668634,668635,668637,668638,668639,668640,668641,668643,668644,668645,668646,668647,668649,668650,669205
+refused -2000067 unnamed no_body_line 10 668628,668629,668630,668631,668632,668633,725402,725403,725404,725405
+refused -2000066 unnamed no_body_line 3 857393,857525,1000807
+refused -2000051 Lines no_body_flat 1 941493
+refused -2000051 Lines no_body_line 1 970942
+refused -2000045 Lines:_<Sketch> no_body_flat 29 415742,418186,512686,523074,525474,526422,529528,529533,534701,534706,534786,534793,549038,550258,650230,650257,650389,650534,724433,724434,724435,724436,764703,766612,766615,766625,947661,947884,947963
+refused -2000045 Lines:_<Sketch> no_body_line 94 415653,415660,415667,415674,415681,418197,418203,490322,490323,490324,490325,512688,512689,523068,523071,523077,529519,529520,529521,529716,534692,534693,534694,534801,549039,549040,549041,550259,550260,550261,566592,567916,580809,580865,580930,580991,626060,650190,650531,650532,650533,697615,697616,697617,697618,700284,700285,700286,700287,700293,700295,704057,704058,704059,704060,704906,704907,704908,704909,704958,709800,709879,709913,764704,764705,764706,766603,766606,766609,766618,766621,768193,768194,768196,768254,931195,931201,931280,931498,931632,932482,933766,934138,934276,934417,947593,947750,948045,976338,976365,976683,1001886,1001888,1001889
+census stages: -2009645 unnamed any 122 placed 61 written 0; unplaced symbol 61; refused no_body_point 61
+census stages: -2009643 unnamed any 1 placed 1 written 0; refused no_body_flat 1
+census stages: -2009641 unnamed any 11 placed 11 written 0; refused no_body_flat 11
+census stages: -2009640 unnamed any 11 placed 11 written 1; refused no_body_flat 10
+census stages: -2009639 unnamed any 2 placed 2 written 0; refused no_body_flat 2
+census stages: -2009636 unnamed any 3 placed 3 written 0; refused no_body_line 3
+census stages: -2006045 unnamed any 5 placed 0 written 0; unplaced symbol 5
+census stages: -2006040 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2006020 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2005100 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2005021 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2003400 Mass any 2 placed 1 written 1; unplaced symbol 1
+census stages: -2003000 unnamed any 6 placed 0 written 0; unplaced symbol 6
+census stages: -2002000 unnamed any 5 placed 0 written 0; unplaced symbol 5
+census stages: -2001370 Entourage any 8 placed 5 written 5; unplaced symbol 3
+census stages: -2001360 Planting any 23 placed 16 written 16; unplaced symbol 7
+census stages: -2001350 Specialty_Equipment any 14 placed 7 written 7; unplaced symbol 7
+census stages: -2001340 unnamed any 4 placed 3 written 3; unplaced container 1
+census stages: -2001330 Structural_Columns any 8 placed 3 written 3; unplaced symbol 5
+census stages: -2001300 Structural_Foundations any 27 placed 23 written 23; unplaced symbol 4
+census stages: -2001272 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2001271 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2001269 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2001268 unnamed any 6 placed 6 written 0; refused no_body_flat 3; refused no_body_line 3
+census stages: -2001265 unnamed any 1 placed 0 written 0; unplaced other_kind 1
+census stages: -2001263 Site:_Pads any 2 placed 2 written 2
+census stages: -2001260 unnamed any 4 placed 3 written 3; unplaced symbol 1
+census stages: -2001160 Plumbing_Fixtures any 21 placed 12 written 9; unplaced symbol 9; refused no_body_flat 3
+census stages: -2001120 Lighting_Fixtures any 17 placed 10 written 10; unplaced symbol 7
+census stages: -2001100 Furniture_Systems any 6 placed 3 written 3; unplaced symbol 3
+census stages: -2001040 Electrical_Equipment any 14 placed 12 written 12; unplaced container 1; unplaced symbol 1
+census stages: -2001000 Casework any 5 placed 2 written 2; unplaced symbol 3
+census stages: -2000997 Walls:_Rectangular_Straight_Wall_Opening any 2 placed 2 written 2
+census stages: -2000954 unnamed any 24 placed 24 written 0; refused no_body_flat 5; refused no_body_line 19
+census stages: -2000948 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000946 unnamed any 10 placed 10 written 10
+census stages: -2000945 unnamed any 3 placed 3 written 0; refused no_body_line 3
+census stages: -2000921 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000920 Stairs:_Landings any 1 placed 1 written 1
+census stages: -2000919 Stairs:_Runs any 3 placed 3 written 3
+census stages: -2000538 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000530 unnamed any 10 placed 10 written 0; refused no_body_flat 10
+census stages: -2000515 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000500 unnamed any 7 placed 0 written 0; unplaced other_kind 7
+census stages: -2000480 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000460 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000450 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000400 unnamed any 4 placed 0 written 0; unplaced symbol 4
+census stages: -2000350 unnamed any 2 placed 2 written 2
+census stages: -2000321 unnamed any 32 placed 32 written 0; refused no_body_line 32
+census stages: -2000280 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000197 unnamed any 1 placed 0 written 0; unplaced symbol 1
+census stages: -2000192 unnamed any 2 placed 2 written 0; refused no_body_line 2
+census stages: -2000171 Curtain_Wall_Mullions any 207 placed 144 written 144; unplaced symbol 63
+census stages: -2000170 Curtain_Panels any 66 placed 44 written 44; unplaced symbol 22
+census stages: -2000160 unnamed any 14 placed 14 written 14
+census stages: -2000151 Generic_Models any 35 placed 25 written 25; unplaced symbol 10
+census stages: -2000150 unnamed any 2 placed 0 written 0; unplaced symbol 2
+census stages: -2000127 unnamed any 35 placed 0 written 0; unplaced symbol 35
+census stages: -2000126 Railings any 10 placed 10 written 10
+census stages: -2000120 Stairs any 3 placed 3 written 3
+census stages: -2000095 unnamed any 22 placed 21 written 21; unplaced container 1
+census stages: -2000080 Furniture any 42 placed 30 written 30; unplaced symbol 12
+census stages: -2000079 unnamed any 5 placed 5 written 0; refused no_body_flat 2; refused no_body_line 3
+census stages: -2000077 unnamed any 2 placed 2 written 0; refused no_body_flat 2
+census stages: -2000068 unnamed any 17 placed 17 written 0; refused no_body_flat 2; refused no_body_line 15
+census stages: -2000067 unnamed any 10 placed 10 written 0; refused no_body_line 10
+census stages: -2000066 unnamed any 3 placed 3 written 0; refused no_body_line 3
+census stages: -2000051 Lines any 2 placed 2 written 0; refused no_body_flat 1; refused no_body_line 1
+census stages: -2000045 Lines:_<Sketch> any 123 placed 123 written 0; refused no_body_flat 29; refused no_body_line 94
+census stages: -2000038 Ceilings any 2 placed 2 written 2
+census stages: -2000035 Roofs any 2 placed 2 written 2
+census stages: -2000032 Floors any 8 placed 8 written 8
+census stages: -2000023 Doors any 31 placed 16 written 16; unplaced symbol 15
+census stages: -2000014 Windows any 25 placed 17 written 17; unplaced symbol 8
+census stages: -2000011 Walls any 56 placed 56 written 56
+exit 0

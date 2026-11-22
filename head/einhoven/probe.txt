@@ -1,0 +1,57 @@
+release saved 2023 layout 2023
+records 58
+any -2001272 unnamed 1 1664
+rule -2001272 unnamed 1 1664
+category -2001272 unnamed 0 
+any -2001271 unnamed 1 1667
+rule -2001271 unnamed 1 1667
+category -2001271 unnamed 0 
+any -2000977 unnamed 1 1713
+rule -2000977 unnamed 1 1713
+category -2000977 unnamed 0 
+any -2000500 unnamed 1 2837
+rule -2000500 unnamed 0 
+category -2000500 unnamed 0 
+any -2000321 unnamed 8 7289,7291,7293,7299,8573,8578,8637,8680
+rule -2000321 unnamed 8 7289,7291,7293,7299,8573,8578,8637,8680
+category -2000321 unnamed 0 
+any -2000170 Curtain_Panels 30 7197,7290,7292,7294,7300,7301,7302,7303,7313,7315,7532,7534,8378,8570,8574,8575,8579,8580,8638,8639,8640,8641,8642,8643,8681,8682,8683,8684,8685,8686
+rule -2000170 Curtain_Panels 24 7197,7290,7292,7294,7300,7301,7302,7303,8574,8575,8579,8580,8638,8639,8640,8641,8642,8643,8681,8682,8683,8684,8685,8686
+category -2000170 Curtain_Panels 24 7197,7290,7292,7294,7300,7301,7302,7303,8574,8575,8579,8580,8638,8639,8640,8641,8642,8643,8681,8682,8683,8684,8685,8686
+any -2000151 Generic_Models 2 3345,3458
+rule -2000151 Generic_Models 0 
+category -2000151 Generic_Models 0 
+any -2000055 unnamed 2 2846,5980
+rule -2000055 unnamed 0 
+category -2000055 unnamed 0 
+any -2000051 Lines 1 5522
+rule -2000051 Lines 1 5522
+category -2000051 Lines 0 
+any -2000014 Windows 5 4194,5317,5373,5388,5465
+rule -2000014 Windows 2 5317,5388
+category -2000014 Windows 2 5317,5388
+any -2000011 Walls 2 2808,7187
+rule -2000011 Walls 2 2808,7187
+category -2000011 Walls 2 2808,7187
+unplaced -2000500 unnamed other_kind 1 2837
+unplaced -2000170 Curtain_Panels symbol 6 7313,7315,7532,7534,8378,8570
+unplaced -2000151 Generic_Models symbol 2 3345,3458
+unplaced -2000055 unnamed symbol 2 2846,5980
+unplaced -2000014 Windows symbol 3 4194,5373,5465
+refused -2001272 unnamed no_body_point 1 1664
+refused -2001271 unnamed no_body_point 1 1667
+refused -2000977 unnamed no_body_point 1 1713
+refused -2000321 unnamed no_body_line 8 7289,7291,7293,7299,8573,8578,8637,8680
+refused -2000051 Lines no_body_flat 1 5522
+census stages: -2001272 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2001271 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2000977 unnamed any 1 placed 1 written 0; refused no_body_point 1
+census stages: -2000500 unnamed any 1 placed 0 written 0; unplaced other_kind 1
+census stages: -2000321 unnamed any 8 placed 8 written 0; refused no_body_line 8
+census stages: -2000170 Curtain_Panels any 30 placed 24 written 24; unplaced symbol 6
+census stages: -2000151 Generic_Models any 2 placed 0 written 0; unplaced symbol 2
+census stages: -2000055 unnamed any 2 placed 0 written 0; unplaced symbol 2
+census stages: -2000051 Lines any 1 placed 1 written 0; refused no_body_flat 1
+census stages: -2000014 Windows any 5 placed 2 written 2; unplaced symbol 3
+census stages: -2000011 Walls any 2 placed 2 written 2
+exit 0
