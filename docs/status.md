@@ -997,7 +997,7 @@ memory the file is read only when asked. The page keeps each element's answer,
 up to 64 and the least recently selected going first, until a file is opened
 again. `viewer/tests/parameters-row.spec.ts` holds the panel's entries for an
 element to the entries `rvt-elements` prints for the same ElementId, whole, on
-Einhoven and on Core Interior. Viewer tests run [42125048710](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42125048710) on head 3146f14e (CI runner, WASM without LTO): all 37 of
+Einhoven and on Core Interior. Viewer tests run [42125048710](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42125048710) (kept: the [log lines][kept-41] that print the figures of Einhoven, Core Interior and the office) on head 3146f14e (CI runner, WASM without LTO): all 37 of
 Einhoven's tree elements were selected, 28 with parameters (369 entries, 332
 instance, 37 type, 8 named) equal to `rvt-elements`' and 7 with none showing
 the empty state; a read took a median of 153 ms (most 210 ms) in 17 MiB of wasm
@@ -2302,3 +2302,4 @@ acceptance limits are 0.3048 mm sampled distance and 0.01% volume error.
 [kept-38]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/68a42783041c94c1b73b6e4a4872075a2c85397d?recursive=1
 [kept-39]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/c636faa7a6694b94234e05b79aeee5f155f57afd/head/sample-2023-racadvancedsampleproject/probe.txt
 [kept-40]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/e4dee7a0d096743e78a904f20b1ca9dc51e08ebf?recursive=1
+[kept-41]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/5b50fe19006031deea5c4508d88a6b2d2c9cd82d/log/lines.txt

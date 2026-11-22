@@ -7,7 +7,8 @@
 # gone before it could be kept has `-` for its commit and says why. These are the runs the five
 # evidence pages cited on 2026-11-22; a run cited later is kept by dispatching the workflow on it.
 # A row named `<run>-probes` or `<run>-holdout` is a commit beside the run's first, holding only its
-# probes' own output (#2143) or its held-out models' summary counts (#2145, Griffin 2026-11-22).
+# probes' own output (#2143) or its held-out models' summary counts (#2145, Griffin 2026-11-22); one
+# named `<run>-log` holds the lines of a run's log a pattern found, for figures it printed only there (#2148).
 run	commit	kept
 40156315852	ad5237bea8d24f9f764471b19b5ae6af4593b1c9	head 1027 files for 31 models; base 1027 files for 31 models
 40927543524	77ccec7682e9774912eefcc0aedbab3d0e8180db	head 1474 files for 101 models
@@ -52,7 +53,7 @@ run	commit	kept
 42106711251	2977cf634d3326a52c1adfd7097ed5b231124c0d	head 1888 files for 60 models; base 1853 files for 60 models; compare 1 file
 42106731054	bf4238722b3059a59225664108cb5092d957d869	head 11 files for 5 models; base 11 files for 5 models; compare 1 file
 42108271073	aefb7f0a7995f758ff31831b4d47dc8404c24538	head 107 files for 21 models
-42125048710	-	nothing: a Viewer tests run of 2026-11-05 that lists no artifact
+42125048710	-	nothing: a Viewer tests run of 2026-11-05 that lists no artifact; its log's measurement lines are kept as 42125048710-log
 42127619521	b0b423da0b49c4f21af6ca1a836af645bd75a4d0	head 46 files for 9 models
 42135914864	cc1a09c6b324b739bd5709eb44273a37bd16a141	head 2146 files for 93 models; base 2144 files for 93 models; compare 1 file
 42530216655	e45aad07dac0a6d76082ca3a0d39bd90df1decbb	head 2146 files for 93 models; base 2144 files for 93 models; compare 1 file
@@ -79,4 +80,5 @@ run	commit	kept
 42097940515-probes	cffadffd9acfbc5d6a1ec287645ca4f771f627d1	head 73 files for 72 models
 42106436497-probes	e4dee7a0d096743e78a904f20b1ca9dc51e08ebf	head 59 files for 58 models
 42108271073-probes	c636faa7a6694b94234e05b79aeee5f155f57afd	head 22 files for 21 models
+42125048710-log	5b50fe19006031deea5c4508d88a6b2d2c9cd82d	log 4 lines from 1 job
 42556745265-holdout	b979b8cfce303b87ac1e356bc1a36ca3922b4660	head 19 files for 18 models; base 19 files for 18 models
