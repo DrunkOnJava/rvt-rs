@@ -41,7 +41,8 @@ def main():
     for page, number, run in missing:
         print(
             f"::error file={page},line={number}::run {run} is cited but research/kept-runs.tsv does not list it: "
-            "keep it with the Keep run outputs workflow and add its row"
+            "keep it with the Keep run outputs workflow and add its row, or, for a run the workflow cannot keep "
+            "(not a Measure run, or its artifacts gone), add its row with `-` and why"
         )
     cited = {run for page in PAGES for run in RUN.findall((root / page).read_text(encoding="utf-8"))}
     print(f"Cited runs: {len(cited)}, every one in research/kept-runs.tsv" if not missing else f"{len(missing)} citations of runs the index lacks")
