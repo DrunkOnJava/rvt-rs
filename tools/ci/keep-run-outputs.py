@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""The small scored outputs of a Measure run, kept past the 90 days GitHub keeps its artifacts (#2124).
+
+The evidence pages cite Measure runs by id, and a run's artifacts expire 90 days after it ran. The
+citations read scorer outputs on either side, export digests, export diagnostics' counts, timings,
+and the run's verdict. `<source>` holds a run's artifacts as `gh run download -n <name> -D
+<source>/<name>` leaves them, and this copies into `<out>`:
+
+- `head/` and `base/`, from `measure-head` and `measure-base`, model by model: every scorer output
+  (`.txt`, but not a probe's own output, `probe.txt`, `probe-<probe>.txt` or `probe-pair*.txt`, which
+  can be large and holds a file's coordinates), `ifc.sha256`, `diagnostics.json`, `timings.log` and
+  the witness observations (`witness-*.json`), and at the artifact's top the outputs that read
+  several models (`areas_across_saves.txt` and the like) and its `commit.txt`;
+- `verdict/`, `compare/` and `timing/`, the whole of `measure-verdict`, `compare-scorer-diff` and
+  `measure-timing` (each model's export time and peak memory on both sides), except that the scorer
+  diff's sections for the models whose folders are left out (below) are left out too.
+
+Models are kept only from the folders Measure gives the models anyone can fetch: `core-interior`,
+`einhoven`, `re1-*`, `nordic-*`, `r2025-*`, `sample-*`, `family-*`, and a `spent-*` pair that
+research/holdout-archive-models.tsv still lists as spent and no held-out list names. The held-out,
+`rac_advanced` and BIMcollab models' folders (`holdout-*`, `racadv-*`, `bimcollab-*`), whose outputs
+Measure keeps to summary counts, and any other `spent-*` folder are left out. Any other folder
+stops the run, so a new kind of model is looked at before it is kept. Logs, the runner's own files,
+the exports, `info.json` (a model's own metadata, which can name the path it was saved at) and MCP
+dumps are left out.
+
+It writes `KEPT.md` saying what was kept and from where, then scans everything it wrote and fails on
+a match, since a kept copy is public once pushed: the CI PII guard's patterns, read a second time
+with JSON's doubled backslashes made single (a Windows path in `diagnostics.json` is written
+`C:\\Users\\...`), and the name of any folder left out. The timing table's rows name files, not
+folders, so its rows for a model a held-out list names are left out by name.
+
+    python3 tools/ci/keep-run-outputs.py <source> <out> --run <run id> [--root <repository>]
+"""
+
+import argparse
+import os
+import re
+import shutil
+import sys
+
+MODEL_SIDES = {"measure-head": "head", "measure-base": "base"}
+WHOLE = {"measure-verdict": "verdict", "compare-scorer-diff": "compare", "measure-timing": "timing"}
+OPEN_FOLDERS = ("core-interior", "einhoven")
+OPEN_PREFIXES = ("re1-", "nordic-", "r2025-", "sample-", "family-")
+LEFT_OUT_PREFIXES = ("holdout-", "racadv-", "bimcollab-")
+PROBE_OUTPUT = re.compile(r"probe(-pair)?(-.+)?\.txt")
+# The CI PII guard's patterns (.github/workflows/ci.yml, "PII guard"), as Python regexes.
+PII = [
+    r"/Users/[A-Za-z][A-Za-z0-9._-]+/",
+    r"/home/[A-Za-z][A-Za-z0-9._-]+/",
+    r"C:\\Users\\[A-Za-z][A-Za-z0-9._ -]+\\",
+    r"OneDrive - Autodesk\\[^\\]*\\Revit - [0-9]{3,}",
+    r"F:\\Ship\\[0-9]{4}_",
+]
+
+
+def stem(path):
+    return os.path.splitext(os.path.basename(path))[0]
+
+
+def spent_stems(root):
+    """(stems listed as spent, stems any held-out list names)."""
+    spent, held = set(), set()
+    with open(os.path.join(root, "research/holdout-models.tsv"), encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip() and not line.startswith("#"):
+                held.add(stem(line.split("\t")[0]))
+    with open(os.path.join(root, "research/holdout-archive-models.tsv"), encoding="utf-8") as handle:
+        for line in handle:
+            cells = line.rstrip("\n").split("\t")
+            if len(cells) > 1 and cells[0] == "member":
+                (spent if cells[1].startswith("spent/") else held).add(stem(cells[1]))
+    return spent, held
+
+
+def drop_held_out_rows(path, held, notes):
+    """Drop, from a Markdown table, the rows whose first cell is a file a held-out list names."""
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().splitlines(keepends=True)
+    kept = [line for line in lines if not (line.startswith("|") and line.split("|")[1].strip() in held)]
+    if len(kept) != len(lines):
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.writelines(kept)
+        notes.add(f"the {len(lines) - len(kept)} rows of `{os.path.basename(path)}` for held-out models")
+
+
+def left_out_names(held):
+    """The folder prefixes and names left out: the three kinds of model kept to summary counts, and
+    a `spent-` pair a held-out list names."""
+    return list(LEFT_OUT_PREFIXES) + [f"spent-{name}" for name in sorted(held)]
+
+
+def drop_left_out_sections(path, held, notes):
+    """Drop, from a `diff -r` listing, the sections whose paths are a left-out model's folder."""
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().splitlines(keepends=True)
+    out, keep, dropped = [], True, 0
+    folder = re.compile(r"(^|[\s/])(" + "|".join(re.escape(p) for p in left_out_names(held)) + r")")
+    for line in lines:
+        if line.startswith(("diff ", "Only in ")):
+            keep = not folder.search(line)
+            dropped += not keep
+        if keep:
+            out.append(line)
+    if dropped:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.writelines(out)
+        notes.add(f"the {dropped} section{'' if dropped == 1 else 's'} of `{os.path.basename(path)}` that diff a left-out folder")
+
+
+def kept_file(name):
+    if PROBE_OUTPUT.fullmatch(name):
+        return False
+    return (name.endswith(".txt") or name in ("ifc.sha256", "diagnostics.json", "timings.log")
+            or (name.startswith("witness-") and name.endswith(".json")))
+
+
+def keep_models(source, out, spent, held, notes):
+    """Copy one side's kept files; return (models kept, files kept)."""
+    models = files = 0
+    left_out_spent = [0]
+    for top in sorted(os.listdir(source)):
+        path = os.path.join(source, top)
+        if not os.path.isdir(path):
+            # The runner's own files (`runner-*.txt`, `vmstat-*.log`, `score-cache-*.log`) are not kept.
+            if top.endswith(".txt") and not top.startswith("runner-"):
+                os.makedirs(out, exist_ok=True)
+                shutil.copyfile(path, os.path.join(out, top))
+                files += 1
+            continue
+        if top.startswith(LEFT_OUT_PREFIXES):
+            notes.add(f"the {top.split('-', 1)[0]} models' folders, whose outputs Measure keeps to summary counts")
+            continue
+        if top.startswith("spent-"):
+            name = top[len("spent-"):]
+            if name not in spent or name in held:
+                # Counted, not named: the name of a held-out model is what the scan below refuses.
+                left_out_spent[0] += 1
+                continue
+        elif top not in OPEN_FOLDERS and not top.startswith(OPEN_PREFIXES):
+            sys.exit(f"{source}: a folder no rule here knows, {top}: say whether its model is one anyone can fetch first")
+        held_any = False
+        for directory, _, names in os.walk(path):
+            for name in sorted(names):
+                if not kept_file(name):
+                    continue
+                rel = os.path.relpath(os.path.join(directory, name), source)
+                target = os.path.join(out, rel)
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                shutil.copyfile(os.path.join(directory, name), target)
+                files += 1
+                held_any = True
+        models += held_any
+    if left_out_spent[0]:
+        notes.add(f"{left_out_spent[0]} `spent-*` folder{'' if left_out_spent[0] == 1 else 's'} that no list names as spent, or that a held-out list names")
+    return models, files
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("source")
+    parser.add_argument("out")
+    parser.add_argument("--run", required=True)
+    parser.add_argument("--root", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+    args = parser.parse_args()
+    if not re.fullmatch(r"[0-9]+", args.run):
+        sys.exit("--run must be a run id")
+    if os.path.exists(args.out) and os.listdir(args.out):
+        sys.exit(f"{args.out} is not empty")
+    os.makedirs(args.out, exist_ok=True)
+    spent, held = spent_stems(args.root)
+    notes, lines = set(), []
+    for artifact, side in MODEL_SIDES.items():
+        path = os.path.join(args.source, artifact)
+        if os.path.isdir(path):
+            models, files = keep_models(path, os.path.join(args.out, side), spent, held, notes)
+            lines.append(f"- `{side}/`, from `{artifact}`: {files} file{'' if files == 1 else 's'} for {models} model{'' if models == 1 else 's'}")
+    for artifact, side in WHOLE.items():
+        path = os.path.join(args.source, artifact)
+        if os.path.isdir(path):
+            shutil.copytree(path, os.path.join(args.out, side))
+            for directory, _, names in os.walk(os.path.join(args.out, side)):
+                for name in names:
+                    if name.endswith(".txt"):
+                        drop_left_out_sections(os.path.join(directory, name), held, notes)
+                    if name.endswith(".md"):
+                        drop_held_out_rows(os.path.join(directory, name), held, notes)
+            count = sum(len(f) for _, _, f in os.walk(os.path.join(args.out, side)))
+            lines.append(f"- `{side}/`, from `{artifact}`: {count} file{'' if count == 1 else 's'}")
+    if not lines:
+        sys.exit(f"{args.source} holds none of {', '.join(list(MODEL_SIDES) + list(WHOLE))}")
+    commit = ""
+    for side in ("head", "base"):
+        commit_file = os.path.join(args.out, side, "commit.txt")
+        if not commit and os.path.isfile(commit_file):
+            with open(commit_file, encoding="utf-8", errors="replace") as handle:
+                commit = (handle.read().split() or [""])[0]
+    with open(os.path.join(args.out, "KEPT.md"), "w", encoding="utf-8") as handle:
+        handle.write(
+            f"# Measure run {args.run}: kept outputs\n\n"
+            f"From the artifacts of https://github.com/DrunkOnJava/rvt-rs/actions/runs/{args.run}"
+            + (f", whose head side measured `{commit}`" if commit else "")
+            + ", by `tools/ci/keep-run-outputs.py` (#2124), which says what is kept and why:\n\n"
+            + "\n".join(lines) + "\n\n"
+            "Left out: every log but `timings.log`, the runner's own files, the exports, `info.json`, MCP dumps "
+            "and the probes' own output" + "".join(f"; {note}" for note in sorted(notes)) + ".\n"
+        )
+    patterns = [re.compile(p) for p in PII]
+    patterns.append(re.compile(r"(^|[^A-Za-z0-9])(" + "|".join(re.escape(p) for p in LEFT_OUT_PREFIXES) + r")[A-Za-z0-9]"))
+    patterns += [re.compile(r"(^|[^A-Za-z0-9])" + re.escape(f"spent-{name}") + r"($|[^A-Za-z0-9_.-])") for name in sorted(held)]
+    hits = []
+    for directory, _, names in os.walk(args.out):
+        for name in names:
+            with open(os.path.join(directory, name), encoding="utf-8", errors="replace") as handle:
+                text = handle.read()
+            single = text.replace("\\\\", "\\")
+            hits += [(os.path.relpath(os.path.join(directory, name), args.out), p.pattern)
+                     for p in patterns if p.search(text) or p.search(single)]
+    print("\n".join(lines))
+    if hits:
+        for path, pattern in hits:
+            print(f"a PII-shaped pattern or a left-out folder's name, {pattern}, in {path}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

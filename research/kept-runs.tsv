@@ -1,0 +1,13 @@
+# The workflow runs the evidence pages cite whose outputs are kept past the 90 days GitHub keeps a
+# run's artifacts (#2124). Each kept run's outputs are in a commit of their own that
+# refs/evidence/<run> points at, made by .github/workflows/keep-run-outputs.yml
+# (tools/ci/keep-run-outputs.py says what it keeps). A citation links to the kept file that holds
+# its figure, as plain text: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/<commit>/<path>
+# (Griffin, 2026-11-22). A run whose artifacts were gone before it could be kept has `-` for its
+# commit and says why.
+run	commit	kept
+41661841411	-	nothing: a Measure run of 2026-11-03 that measured a held-out model in full while it was briefly spent; its artifacts were deleted (docs/reference-models.md)
+41668542833	-	nothing: as 41661841411
+41671242397	-	nothing: as 41661841411
+41672953553	-	nothing: as 41661841411
+42125048710	-	nothing: a Viewer tests run of 2026-11-05 that lists no artifact
