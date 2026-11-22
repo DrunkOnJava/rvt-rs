@@ -40,6 +40,7 @@ import ifcopenshell
 import ifcopenshell.geom
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ifc_common import ITEM_FAILURES, lost_items, report_lost_items  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
 BOX_SOURCE = "partition_element_record_bbox"
@@ -82,6 +83,10 @@ def boxed_tags(path):
     return classes, reasons
 
 
+# Printed after the tables, so a file with no lost item prints what it printed before #2133.
+LOST = []
+
+
 def fills(path, tags):
     """Tag -> (volume / bounding-box volume of Revit's body, its ObjectType).
 
@@ -105,6 +110,9 @@ def fills(path, tags):
         return {}
     while True:
         shape = it.get()
+        lost = lost_items(settings, model.by_id(shape.id), shape.geometry.item_ids)
+        if lost:
+            ITEM_FAILURES[shape.id] = lost
         v = shape.geometry.verts
         f = shape.geometry.faces
         points = [(v[i] - v[0], v[i + 1] - v[1], v[i + 2] - v[2]) for i in range(0, len(v), 3)]
@@ -125,6 +133,8 @@ def fills(path, tags):
                 sums[element.Tag] = (held_volume + abs(volume), held_box + box, element.ObjectType)
         if not it.next():
             break
+    # A body that lost an item keeps its fill, taken without it; the line says how many (#2133).
+    LOST.append(lambda: report_lost_items(f"fill {os.path.basename(path)}", [e.id() for e in elements]))
     return {tag: (volume / box, kind) for tag, (volume, box, kind) in sums.items()}
 
 
@@ -178,6 +188,8 @@ def main():
         print(f"{cls:28}{sum(counter.values()):>8}")
         for reason, count in counter.most_common():
             print(f"    {count:>6}  {reason}")
+    for report in LOST:
+        report()
     return 0
 
 

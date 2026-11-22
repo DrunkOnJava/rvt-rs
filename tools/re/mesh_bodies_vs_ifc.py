@@ -81,7 +81,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fine_mesh  # noqa: E402
 import true_curves  # noqa: E402
 import volume_readings  # noqa: E402
-from ifc_common import mesh_parts, site_frame, tag_sample  # noqa: E402
+from ifc_common import mesh_parts, report_lost_items, site_frame, tag_sample  # noqa: E402
 from roof_bodies_vs_ifc import shapes_of  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
@@ -131,6 +131,9 @@ def meshes(path, tags=None, source=None, model=None, role=None, settings=None, d
             continue
         chosen.append((element, shapes_of(element)))
     shapes = mesh_parts(model, settings, [part for _, parts in chosen for part in parts], path)
+    # A body that lost an item is still scored, as a part that fails is left out and its
+    # element scored on the rest; the line says how many (#2133).
+    report_lost_items(f"meshes {os.path.basename(path) if path else '(model)'}", [part.id() for _, parts in chosen for part in parts])
     out = {}
     for element, parts in chosen:
         triangles = []
