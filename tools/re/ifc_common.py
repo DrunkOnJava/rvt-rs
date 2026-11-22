@@ -149,6 +149,8 @@ def report_lost_items(label, parts):
     if line not in LOST_ITEM_LINES:
         LOST_ITEM_LINES.add(line)
         print(line)
+
+
 # Fewer parts than this are meshed in this process: a forked worker parses
 # again the parts of the file it meshes, which a handful do not repay.
 POOL_FROM = 16
