@@ -1,0 +1,1 @@
+a9c666d1f72a91fb1e4ea69f417e4c0720061037 fix(ifc): the diagnostics count the elements the IFC writes, and say how many pieces were folded (#1424) (#1425)

@@ -1,0 +1,2 @@
+0 walls in the GLB
+exit 0

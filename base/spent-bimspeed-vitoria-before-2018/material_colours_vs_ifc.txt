@@ -1,0 +1,5 @@
+IfcMaterial: rvt-rs 84, Revit 43
+Revit's styled materials: 42; same colour and transparency: 41
+different: []
+unstyled or absent in rvt-rs: ['LKS_VEN MADERA']
+exit 0

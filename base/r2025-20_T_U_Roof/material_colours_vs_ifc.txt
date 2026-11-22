@@ -1,0 +1,5 @@
+IfcMaterial: rvt-rs 33, Revit 2
+Revit's styled materials: 2; same colour and transparency: 1
+different: [('Default Roof', (0, 0, 0, 0.0), (0, 127, 0, 0.0))]
+unstyled or absent in rvt-rs: []
+exit 0

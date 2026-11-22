@@ -1,0 +1,5 @@
+elements Revit gives materials: 6
+of those, rvt-rs gives materials: 5, the same set: 5
+different sets by Revit entity: {}
+no materials from rvt-rs, by Revit entity: {'IfcRoof': 1}
+exit 0

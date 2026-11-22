@@ -1,0 +1,7 @@
+     32  family instance | IfcDuctFitting | Name equal | ObjectType equal
+     25  family instance | IfcDuctSegment | Name equal | ObjectType equal
+      7  family instance | IfcAirTerminal | Name equal | ObjectType equal
+      6  family instance | IfcPipeSegment | Name equal | ObjectType equal
+      3  family instance | IfcPipeFitting | Name equal | ObjectType equal
+      1  family instance | IfcBuildingElementProxy | Name equal | ObjectType equal
+exit 0

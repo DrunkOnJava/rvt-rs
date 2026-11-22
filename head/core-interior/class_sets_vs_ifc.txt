@@ -1,0 +1,13 @@
+Revit's export: 970 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+rvt-rs's export: 970 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcColumn                           256    256      0      0  
+IfcDoor                             132    132      0      0  
+IfcShadingDevice                     20     20      0      0  
+IfcSlab                              80     80      0      0  
+IfcSpace                            116    116      0      0  
+IfcWall                             360    360      0      0  
+IfcWindow                             6      6      0      0  
+written as another class, by Revit's category and export value, and rvt-rs's:
+extra in rvt-rs's export, by class:
+exit 0

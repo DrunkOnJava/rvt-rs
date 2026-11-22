@@ -1,0 +1,5 @@
+roofs in Revit's export with a body: 1; rvt-rs writes one for 1 of them
+vertices within 0.001 ft and volume within 0.0001 of Revit's: 1 of 1
+every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 1 of 1
+  2901: match, Revit 12 vertices, farthest 2.83e-06 ft, from rvt-rs's surface at most 2.77e-06 ft, volume rvt-rs 304.732578 ft3, Revit 304.732818 ft3
+exit 0

@@ -1,0 +1,6 @@
+7 walls drawn in layers in the GLB
+      0  of them one layer
+      7  drawn in layers in the GLB and present in the IFC
+      7  no layer with a unique material
+compared layers' colours against Revit's surface styles:
+exit 0

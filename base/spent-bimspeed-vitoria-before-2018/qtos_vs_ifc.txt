@@ -1,0 +1,16 @@
+Revit quantities on objects rvt-rs writes: 140; equal: 0; different: 0; missing: 140; rvt-rs quantities Revit does not write: 0
+Revit's export writes no base quantities (its setup's Export base quantities off, RE-242): rvt-rs writes 252, which rvt-ifc --no-base-quantities leaves out
+  Qto_SlabBaseQuantities.Depth: 2
+  Qto_SlabBaseQuantities.GrossArea: 9
+  Qto_SlabBaseQuantities.GrossVolume: 2
+  Qto_WallBaseQuantities.Width: 239
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 0
+walls whose Length is rvt-rs's curve's: 0; Revit's Axis's: 0; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+  Qto_PipeSegmentBaseQuantities.Length: 140, equal 0, different 0, missing 140
+entities Revit writes each missing quantity on:
+  Qto_PipeSegmentBaseQuantities.Length: 140; on IfcFlowSegment x140
+rvt-rs quantities Revit does not write:
+largest differences (rvt-rs, Revit; SI units):
+exit 0

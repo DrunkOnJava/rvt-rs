@@ -1,0 +1,57 @@
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-as-built/schema.txt measure-head/nordic-office-as-built/schema.txt
+--- measure-base/nordic-office-as-built/schema.txt	2026-11-05 09:43:31.739042003 +0000
++++ measure-head/nordic-office-as-built/schema.txt	2026-11-05 09:43:29.665027435 +0000
+@@ -8,5 +8 @@
+-findings 4
+-1 IfcAirTerminalType IfcAirTerminalType.CorrectPredefinedType: (predefinedtype != IfcAirTerminalTypeEnum.USERDEFINED or (predefinedtype == IfcAirTerminalTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + w
+-1 IfcElectricApplianceType IfcElectricApplianceType.CorrectPredefinedType: (predefinedtype != IfcElectricApplianceTypeEnum.USERDEFINED or (predefinedtype == IfcElectricApplianceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERD
+-1 IfcRelAssociatesMaterial IfcRelAssociatesMaterial.AllowedElements: (sizeof([temp for temp in SELF.RelatedObjects if sizeof(typeof(temp) * ['ifc4.ifcelement', 'ifc4.ifcelementtype', 'ifc4.ifcwindowstyle', 'ifc4.ifcdoorstyle', 'ifc4.ifcstructuralmember', 'ifc4.ifcport']) == 0]) == 0) Violated by: (42 
+-1 IfcSpaceType IfcSpaceType.CorrectPredefinedType: (predefinedtype != IfcSpaceTypeEnum.USERDEFINED or (predefinedtype == IfcSpaceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + where 'USERDEFINED' = Ifc
++findings 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-permit/schema.txt measure-head/nordic-office-permit/schema.txt
+--- measure-base/nordic-office-permit/schema.txt	2026-11-05 09:43:31.756042123 +0000
++++ measure-head/nordic-office-permit/schema.txt	2026-11-05 09:43:29.667027449 +0000
+@@ -8,5 +8 @@
+-findings 4
+-1 IfcAirTerminalType IfcAirTerminalType.CorrectPredefinedType: (predefinedtype != IfcAirTerminalTypeEnum.USERDEFINED or (predefinedtype == IfcAirTerminalTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + w
+-1 IfcElectricApplianceType IfcElectricApplianceType.CorrectPredefinedType: (predefinedtype != IfcElectricApplianceTypeEnum.USERDEFINED or (predefinedtype == IfcElectricApplianceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERD
+-1 IfcRelAssociatesMaterial IfcRelAssociatesMaterial.AllowedElements: (sizeof([temp for temp in SELF.RelatedObjects if sizeof(typeof(temp) * ['ifc4.ifcelement', 'ifc4.ifcelementtype', 'ifc4.ifcwindowstyle', 'ifc4.ifcdoorstyle', 'ifc4.ifcstructuralmember', 'ifc4.ifcport']) == 0]) == 0) Violated by: (42 
+-1 IfcSpaceType IfcSpaceType.CorrectPredefinedType: (predefinedtype != IfcSpaceTypeEnum.USERDEFINED or (predefinedtype == IfcSpaceTypeEnum.USERDEFINED and exists(SELF.ElementType))) Violated by: (('USERDEFINED' != 'USERDEFINED' or ('USERDEFINED' == 'USERDEFINED' and False))) + where 'USERDEFINED' = Ifc
++findings 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-concrete/schema.txt measure-head/nordic-office-terrain-concrete/schema.txt
+--- measure-base/nordic-office-terrain-concrete/schema.txt	2026-11-05 09:43:31.221038365 +0000
++++ measure-head/nordic-office-terrain-concrete/schema.txt	2026-11-05 09:43:29.177024008 +0000
+@@ -8,2 +8 @@
+-findings 1
+-1 IfcRelAssociatesMaterial IfcRelAssociatesMaterial.AllowedElements: (sizeof([temp for temp in SELF.RelatedObjects if sizeof(typeof(temp) * ['ifc4.ifcelement', 'ifc4.ifcelementtype', 'ifc4.ifcwindowstyle', 'ifc4.ifcdoorstyle', 'ifc4.ifcstructuralmember', 'ifc4.ifcport']) == 0]) == 0) Violated by: (2 =
++findings 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/nordic-office-terrain-timber/schema.txt measure-head/nordic-office-terrain-timber/schema.txt
+--- measure-base/nordic-office-terrain-timber/schema.txt	2026-11-05 09:43:31.514040423 +0000
++++ measure-head/nordic-office-terrain-timber/schema.txt	2026-11-05 09:43:29.178024015 +0000
+@@ -8,2 +8 @@
+-findings 1
+-1 IfcRelAssociatesMaterial IfcRelAssociatesMaterial.AllowedElements: (sizeof([temp for temp in SELF.RelatedObjects if sizeof(typeof(temp) * ['ifc4.ifcelement', 'ifc4.ifcelementtype', 'ifc4.ifcwindowstyle', 'ifc4.ifcdoorstyle', 'ifc4.ifcstructuralmember', 'ifc4.ifcport']) == 0]) == 0) Violated by: (2 =
++findings 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-racadvancedsampleproject/schema.txt measure-head/sample-2024-racadvancedsampleproject/schema.txt
+--- measure-base/sample-2024-racadvancedsampleproject/schema.txt	2026-11-05 09:43:30.970036602 +0000
++++ measure-head/sample-2024-racadvancedsampleproject/schema.txt	2026-11-05 09:43:28.824021528 +0000
+@@ -8,2 +8 @@
+-findings 2
+-2 IfcShapeRepresentation IfcShapeRepresentation.CorrectItemsForType: IfcShapeRepresentationTypes(SELF.RepresentationType, SELF.Items) Violated by: False + where False = IfcShapeRepresentationTypes('SweptSolid', (#=IfcFixedReferenceSweptAreaSolid(#,#,#,$,$,#),)) + where 'SweptSoli
++findings 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-rstbasicsampleproject/schema.txt measure-head/sample-2024-rstbasicsampleproject/schema.txt
+--- measure-base/sample-2024-rstbasicsampleproject/schema.txt	2026-11-05 09:43:31.008036869 +0000
++++ measure-head/sample-2024-rstbasicsampleproject/schema.txt	2026-11-05 09:43:28.873021872 +0000
+@@ -8,3 +8 @@
+-findings 14
+-13 IfcShapeRepresentation IfcShapeRepresentation.CorrectItemsForType: IfcShapeRepresentationTypes(SELF.RepresentationType, SELF.Items) Violated by: False + where False = IfcShapeRepresentationTypes('SweptSolid', (#=IfcFixedReferenceSweptAreaSolid(#,#,#,$,$,#),)) + where 'SweptSolid' =
+-1 IfcShapeRepresentation IfcShapeRepresentation.CorrectItemsForType: IfcShapeRepresentationTypes(SELF.RepresentationType, SELF.Items) Violated by: False + where False = IfcShapeRepresentationTypes('SweptSolid', (#=IfcFixedReferenceSweptAreaSolid(#,#,#,$,$,#),)) + where 'SweptSolid' = #
++findings 0
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2024-snowdon_towers_sample_structural/schema.txt measure-head/sample-2024-snowdon_towers_sample_structural/schema.txt
+--- measure-base/sample-2024-snowdon_towers_sample_structural/schema.txt	2026-11-05 09:43:31.123037677 +0000
++++ measure-head/sample-2024-snowdon_towers_sample_structural/schema.txt	2026-11-05 09:43:28.951022420 +0000
+@@ -8,3 +8 @@
+-findings 10
+-7 IfcShapeRepresentation IfcShapeRepresentation.CorrectItemsForType: IfcShapeRepresentationTypes(SELF.RepresentationType, SELF.Items) Violated by: False + where False = IfcShapeRepresentationTypes('SweptSolid', (#=IfcFixedReferenceSweptAreaSolid(#,#,#,$,$,#),)) + where 'SweptSolid' =
+-3 IfcShapeRepresentation IfcShapeRepresentation.CorrectItemsForType: IfcShapeRepresentationTypes(SELF.RepresentationType, SELF.Items) Violated by: False + where False = IfcShapeRepresentationTypes('SweptSolid', (#=IfcFixedReferenceSweptAreaSolid(#,#,#,$,$,#),)) + where 'SweptSoli
++findings 0

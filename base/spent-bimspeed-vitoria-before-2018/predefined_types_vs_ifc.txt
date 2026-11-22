@@ -1,0 +1,12 @@
+IfcStairFlightType PredefinedType: rvt-rs {}, Revit {}
+IfcStair: 6 in both; same 6, differs 0, unset in rvt-rs 0; Revit's: {'-': 6}
+IfcStairFlight: 6 in both; same 6, differs 0, unset in rvt-rs 0; Revit's: {'-': 6}
+IfcSlab: 9 in both; same 9, differs 0, unset in rvt-rs 0; Revit's: {'FLOOR': 9}
+IfcMember: 206 in both; same 0, differs 206, unset in rvt-rs 0; Revit's: {'-': 206}
+  665609: rvt-rs MULLION, Revit -
+  665612: rvt-rs MULLION, Revit -
+  672991: rvt-rs MULLION, Revit -
+  675212: rvt-rs MULLION, Revit -
+  667067: rvt-rs MULLION, Revit -
+  667068: rvt-rs MULLION, Revit -
+exit 0
