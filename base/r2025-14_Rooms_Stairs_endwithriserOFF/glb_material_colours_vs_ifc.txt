@@ -1,0 +1,2 @@
+6 ('IfcBuildingElementProxy', 'name =', 'colour =')
+exit 0

@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "mode": "default",
+  "input": {
+    "revit_version": 2016,
+    "build": "20150129_1515(x64)",
+    "original_path": "rst_basic_sample_project.rvt",
+    "project_name": "rst_basic_sample_project",
+    "stream_count": 14,
+    "has_basic_file_info": true,
+    "has_part_atom": false,
+    "has_formats_latest": true,
+    "has_global_latest": true,
+    "release_support": {
+      "status": "experimental",
+      "capability": "element-records-revit-2015-2018"
+    }
+  },
+  "decoded": {
+    "production_walker_elements": 512,
+    "diagnostic_proxy_candidates": 0,
+    "arcwall_records": 0,
+    "class_counts": {},
+    "production_class_counts": {
+      "Floor": 5,
+      "Material": 58,
+      "Stair": 1,
+      "StairsRun": 1,
+      "StairsStringer": 2,
+      "StructuralColumn": 30,
+      "StructuralFoundation": 36,
+      "StructuralFraming": 370,
+      "Wall": 9
+    },
+    "parameter_value_count": 2965,
+    "mean_element_confidence": 0.81132483,
+    "elements_below_min_confidence": 0,
+    "min_element_confidence": 0.55,
+    "recovered_unit_identifiers": [],
+    "unknown_unit_identifiers": [],
+    "element_record_stages": {
+      "layout_release": 2016,
+      "total": {
+        "markers": 6387,
+        "declared_id": 6372,
+        "frame_outside_stream": 0,
+        "category_out_of_range": 144,
+        "box_not_valid": 0,
+        "no_declared_id": 7,
+        "records": 6236,
+        "id_from_enclosing_record": 0,
+        "not_placed_instances": 519,
+        "placed_instances": 5717,
+        "without_volume": 4790,
+        "with_volume": 927,
+        "superseded": 0,
+        "nested_components": 0,
+        "selected": 927,
+        "in_non_primary_design_option": 1,
+        "not_in_export_phase": 0,
+        "nested_in_door_or_window": 0,
+        "category_not_exported": 472,
+        "handed_to_export": 454,
+        "stream_not_read": 0
+      },
+      "streams": {
+        "Partitions/446": {
+          "markers": 6387,
+          "declared_id": 6372,
+          "frame_outside_stream": 0,
+          "category_out_of_range": 144,
+          "box_not_valid": 0,
+          "no_declared_id": 7,
+          "records": 6236,
+          "id_from_enclosing_record": 0,
+          "not_placed_instances": 519,
+          "placed_instances": 5717,
+          "without_volume": 4790,
+          "with_volume": 927,
+          "superseded": 0,
+          "nested_components": 0,
+          "selected": 927,
+          "in_non_primary_design_option": 1,
+          "not_in_export_phase": 0,
+          "nested_in_door_or_window": 0,
+          "category_not_exported": 472,
+          "handed_to_export": 454,
+          "stream_not_read": 0
+        },
+        "Partitions/448": {
+          "markers": 0,
+          "declared_id": 0,
+          "frame_outside_stream": 0,
+          "category_out_of_range": 0,
+          "box_not_valid": 0,
+          "no_declared_id": 0,
+          "records": 0,
+          "id_from_enclosing_record": 0,
+          "not_placed_instances": 0,
+          "placed_instances": 0,
+          "without_volume": 0,
+          "with_volume": 0,
+          "superseded": 0,
+          "nested_components": 0,
+          "selected": 0,
+          "in_non_primary_design_option": 0,
+          "not_in_export_phase": 0,
+          "nested_in_door_or_window": 0,
+          "category_not_exported": 0,
+          "handed_to_export": 0,
+          "stream_not_read": 0
+        }
+      },
+      "written_to_model": 454,
+      "id_already_held": 0,
+      "below_min_confidence": 0
+    }
+  },
+  "exported": {
+    "total_entities": 3403,
+    "building_elements": 454,
+    "building_elements_with_geometry": 454,
+    "building_elements_carried_by_parts": 0,
+    "by_ifc_type": {
+      "IFCBEAM": 370,
+      "IFCCOLUMN": 30,
+      "IFCFOOTING": 36,
+      "IFCMEMBER": 2,
+      "IFCSLAB": 5,
+      "IFCSTAIR": 1,
+      "IFCSTAIRFLIGHT": 1,
+      "IFCWALL": 9
+    },
+    "classification_count": 0,
+    "unit_assignment_count": 0,
+    "material_count": 58,
+    "storey_count": 5,
+    "storey_names": [
+      "Elevation -3.937 ft",
+      "Elevation -1.949 ft",
+      "Elevation -1.148 ft",
+      "Elevation 8.002 ft",
+      "Elevation 9.514 ft"
+    ],
+    "storey_elevations_feet": [
+      -3.937,
+      -1.9488,
+      -1.1483,
+      8.002,
+      9.5144
+    ],
+    "storey_bound_elements": 36,
+    "material_names_sample": [
+      "Default",
+      "Brick, Common",
+      "Concrete Masonry Units",
+      "Metal Stud Layer",
+      "Plywood, Sheathing",
+      "Air",
+      "Air Infiltration Barrier",
+      "Vapour Retarder",
+      "Gypsum Wall Board",
+      "Earth",
+      "Concrete, Cast In Situ",
+      "Asphalt, Bitumen"
+    ],
+    "layered_element_count": 12,
+    "body_sources": {
+      "partition_beam_axis": 320,
+      "partition_beam_box_along_axis": 3,
+      "partition_element_record_bbox": 91,
+      "partition_element_record_column_cut": 31,
+      "partition_element_record_join_trimmed": 9
+    },
+    "bounding_box_bodies": 94,
+    "bounding_box_spaces": 0,
+    "area_body_refusals": {},
+    "slab_shape_refusals": {},
+    "wall_base_refusals": {},
+    "wall_end_refusals": {},
+    "wall_end_sources": {},
+    "wall_base_sources": {},
+    "wall_ends_order_dependent": 0,
+    "wall_profile_sources": {},
+    "wall_profile_refusals": {},
+    "resolved_outline_spaces": 0,
+    "approximate_outline_spaces": 0,
+    "space_kinds": {},
+    "spaces_without_kind": 0,
+    "wall_cut_openings_left_out": {},
+    "wall_end_reads_unmarked": {},
+    "wall_profile_height_checks": {},
+    "body_pieces_folded": {}
+  },
+  "skipped": [
+    {
+      "reason": "unsupported_geometry_missing_level",
+      "count": 418,
+      "classes": {
+        "IFCBEAM": 370,
+        "IFCFOOTING": 36,
+        "IFCMEMBER": 2,
+        "IFCSLAB": 4,
+        "IFCSTAIR": 1,
+        "IFCSTAIRFLIGHT": 1,
+        "IFCWALL": 4
+      },
+      "sample_names": [
+        "Basic Wall:CL_W1:493612",
+        "Basic Wall:CL_W1:493879",
+        "Basic Wall:CL_W1:1141594",
+        "Basic Wall:CL_W1:1141833",
+        "Floor:Insitu Concrete:495352",
+        "Floor:Insitu Concrete 250mm:647908",
+        "Floor:Insitu Concrete:1206619",
+        "Floor:Plywood double brace:1210630",
+        "M_Pile Cap-600 Pile:600 x 600 x 900mm:512319",
+        "M_Pile-Steel Pipe:600mm Diameter:512321",
+        "M_Pile Cap-600 Pile:600 x 600 x 900mm:512394",
+        "M_Pile-Steel Pipe:600mm Diameter:512396"
+      ]
+    },
+    {
+      "reason": "element_record_frame_stopped",
+      "count": 4941,
+      "classes": {
+        "category_out_of_range": 144,
+        "no_declared_id": 7,
+        "without_volume": 4790
+      },
+      "sample_names": []
+    },
+    {
+      "reason": "element_record_in_non_primary_design_option",
+      "count": 1,
+      "classes": {
+        "Mass": 1
+      },
+      "sample_names": []
+    },
+    {
+      "reason": "area_without_proven_body",
+      "count": 1,
+      "classes": {
+        "next_storey_not_proven": 1
+      },
+      "sample_names": []
+    }
+  ],
+  "unsupported_features": [
+    "project_units_from_revit_bytes",
+    "revit_compound_assemblies_and_walltype_widths",
+    "typed_door_window_discrimination_and_host_binding",
+    "opening_index_to_ifc_openingelement_host_join",
+    "schema_field_wall_instances",
+    "partial_revit_element_parameters"
+  ],
+  "warnings": [
+    "Revit 2016: elements come from their records with their ElementId, category and bounding box, doors and windows with their host wall, rooms with their outline, and, where its Levels are read, each element on the storey of the Level its record names; family instances, walls, floors and roofs carry their family and type names, and family instances their type's materials. Layers become material layer sets where their materials are named, a layer that takes its category's material taking the object styles' one, and a wall at an angle is drawn along its location line and joined by its join lists where those are read and its record box closes on the line's rectangle, and any other wall keeps its record box, cut back at its joins. The export phase and design options are applied for 2016: elements that do not exist in the last phase or are in a non-primary design option are left out. A wall's joined-wall lists, end steps, profile openings and `Length`, parameters and \"Export to IFC As\" overrides are not read for 2016, and components nested in doors and windows are left out.",
+    "Revit 2016 is read experimentally (element-records-revit-2015-2018 in docs/support-matrix.json): too few files of this release are measured against Revit's own export to rely on its elements, which may be missing, extra or of another class.",
+    "Unsupported or incomplete geometry was reported: unsupported_geometry_missing_level=418.",
+    "No Revit display units were recovered; the IFC declares the SI units its values are written in.",
+    "5 building storey(s) lack a confident partition Level name and keep elevation fallback labels.",
+    "5 building storey elevation(s) were measured from partition element-record bounding boxes and 36 building element(s) bound to them by an exact record-face elevation match (base face, or top face for slabs and shading devices) (#213, #212); the 0 recovered Level name string(s) could not be paired with those elevations and are not asserted as storey names."
+  ],
+  "confidence": {
+    "level": "geometry",
+    "score": 0.9,
+    "has_project_metadata": true,
+    "has_typed_elements": true,
+    "has_geometry": true,
+    "has_diagnostic_proxies": false,
+    "warning_count": 6,
+    "unexported_element_records": 0
+  },
+  "source_coverage": {
+    "status": "measured",
+    "notes": "Measured from export diagnostics counts only (production walker, exported building elements, ElementIds declared by Global/ElemTable). Not a converter-grade completeness claim.",
+    "decoded_element_fraction": 0.035654597,
+    "exported_element_fraction": 0.88671875,
+    "geometry_element_fraction": 1.0
+  },
+  "formats_latest_integrity": {
+    "stream": "Formats/Latest",
+    "stored_bytes": 138875,
+    "inflated_bytes": 389934,
+    "page_boundary_detected": true,
+    "checksum_tail_stripping": "enabled",
+    "integrity_status": "ok",
+    "schema_scan_truncated": false,
+    "schema_scanned_bytes": 389934
+  }
+}

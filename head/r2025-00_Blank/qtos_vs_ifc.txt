@@ -1,0 +1,11 @@
+Revit quantities on objects rvt-rs writes: 0; equal: 0; different: 0; missing: 0; rvt-rs quantities Revit does not write: 0
+Revit's export writes no base quantities (its setup's Export base quantities off, RE-242): rvt-rs writes 0, which rvt-ifc --no-base-quantities leaves out
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 0
+walls whose Length is rvt-rs's curve's: 0; Revit's Axis's: 0; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+of those, on a Tag Revit's export gives more than one object (scored against one of them): 0 such Tags
+entities Revit writes each missing quantity on:
+rvt-rs quantities Revit does not write:
+largest differences (rvt-rs, Revit; SI units):
+exit 0

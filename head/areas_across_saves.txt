@@ -1,0 +1,9 @@
+areas across saves: 2024: 25 Areas, 25 with a body
+areas across saves: 2025: 25 Areas, 25 with a body
+areas across saves: 2026: 25 Areas, 25 with a body
+areas across saves: 2027: 25 Areas, 25 with a body
+areas across saves: 2025 against 2024: 25 compared, GlobalId 25 equal 0 different, number 25 equal 0 different, name 25 equal 0 different, storey 25 equal 0 different, outline source 25 equal 0 different, body area 25 equal 0 different, top surface 25 equal 0 different, height 25 equal 0 different, lowest vertex 25 equal 0 different, missing from 2025 0, extra in 2025 0
+areas across saves: 2026 against 2024: 25 compared, GlobalId 25 equal 0 different, number 25 equal 0 different, name 25 equal 0 different, storey 25 equal 0 different, outline source 25 equal 0 different, body area 25 equal 0 different, top surface 25 equal 0 different, height 25 equal 0 different, lowest vertex 25 equal 0 different, missing from 2026 0, extra in 2026 0
+areas across saves: 2027 against 2024: 25 compared, GlobalId 25 equal 0 different, number 25 equal 0 different, name 25 equal 0 different, storey 25 equal 0 different, outline source 25 equal 0 different, body area 25 equal 0 different, top surface 25 equal 0 different, height 25 equal 0 different, lowest vertex 25 equal 0 different, missing from 2027 0, extra in 2027 0
+areas across saves: passed: 25 Areas, 25 with a body, on each of 4 saves, every field equal
+exit 0

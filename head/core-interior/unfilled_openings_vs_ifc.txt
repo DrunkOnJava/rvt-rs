@@ -1,0 +1,29 @@
+unfilled openings in Revit's export: 63; in rvt-rs's: 63; both: 63
+none in IfcShadingDevice:
+  revit: 20
+  written: 20
+  box compared: 20
+  box within 0.01 ft: 20
+  Name equal: 20
+  PredefinedType equal: 20
+  Pset_EnvironmentalImpactIndicators.Reference equal: 20
+none in IfcSlab:
+  revit: 42
+  written: 42
+  box compared: 42
+  box within 0.01 ft: 42
+  Name equal: 42
+  PredefinedType equal: 42
+  Pset_EnvironmentalImpactIndicators.Reference equal: 42
+none in IfcWall:
+  revit: 1
+  written: 1
+  box compared: 1
+  box within 0.01 ft: 1
+  Name equal: 1
+  PredefinedType equal: 1
+  Pset_OpeningElementCommon.Reference equal: 1
+  Pset_EnvironmentalImpactIndicators.Reference equal: 1
+written that Revit's export does not: 0
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+exit 0

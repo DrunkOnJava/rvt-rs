@@ -1,0 +1,1 @@
+6f71f93a8dee7ad853926f9268bab32706996fce feat(ifc): Revit 2015 to 2023 curtain walls are IfcCurtainWall with their parts under them (#1190) (RE-366)

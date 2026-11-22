@@ -1,0 +1,4 @@
+IfcStairFlightType PredefinedType: rvt-rs {'STRAIGHT': 1}, Revit {'STRAIGHT': 1}
+IfcStair: 1 in both; same 1, differs 0, unset in rvt-rs 0; Revit's: {'STRAIGHT_RUN_STAIR': 1}
+IfcStairFlight: 1 in both; same 1, differs 0, unset in rvt-rs 0; Revit's: {'STRAIGHT': 1}
+exit 0

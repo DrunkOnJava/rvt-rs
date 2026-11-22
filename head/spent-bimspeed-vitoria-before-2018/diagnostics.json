@@ -1,0 +1,367 @@
+{
+  "schema_version": 1,
+  "mode": "default",
+  "input": {
+    "revit_version": 2018,
+    "build": "20190510_1515(x64)",
+    "original_path": "ALD26 Before.rvt",
+    "project_name": "ALD26 Before",
+    "stream_count": 15,
+    "has_basic_file_info": true,
+    "has_part_atom": false,
+    "has_formats_latest": true,
+    "has_global_latest": true,
+    "release_support": {
+      "status": "experimental",
+      "capability": "element-records-revit-2015-2018"
+    }
+  },
+  "decoded": {
+    "production_walker_elements": 1471,
+    "diagnostic_proxy_candidates": 0,
+    "arcwall_records": 0,
+    "class_counts": {},
+    "production_class_counts": {
+      "Conduit": 102,
+      "ConduitFitting": 74,
+      "CurtainWall": 5,
+      "CurtainWallMullion": 206,
+      "CurtainWallPanel": 67,
+      "Door": 68,
+      "ElectricalEquipment": 6,
+      "Floor": 9,
+      "GenericModel": 22,
+      "Gutter": 2,
+      "Material": 84,
+      "MechanicalEquipment": 15,
+      "Pipe": 140,
+      "PipeFitting": 128,
+      "Railing": 14,
+      "Roof": 8,
+      "Room": 73,
+      "Stair": 6,
+      "StairsRun": 6,
+      "StructuralColumn": 114,
+      "StructuralFraming": 1,
+      "Wall": 251,
+      "Window": 70
+    },
+    "parameter_value_count": 3276,
+    "mean_element_confidence": 0.8057096,
+    "elements_below_min_confidence": 0,
+    "min_element_confidence": 0.55,
+    "recovered_unit_identifiers": [],
+    "unknown_unit_identifiers": [],
+    "element_record_stages": {
+      "layout_release": 2018,
+      "total": {
+        "markers": 6705,
+        "declared_id": 690,
+        "frame_outside_stream": 0,
+        "category_out_of_range": 2061,
+        "box_not_valid": 0,
+        "no_declared_id": 744,
+        "records": 3900,
+        "id_from_enclosing_record": 3248,
+        "not_placed_instances": 321,
+        "placed_instances": 3579,
+        "without_volume": 1032,
+        "with_volume": 2547,
+        "superseded": 677,
+        "nested_components": 0,
+        "selected": 1870,
+        "in_non_primary_design_option": 0,
+        "not_in_export_phase": 0,
+        "nested_in_door_or_window": 0,
+        "category_not_exported": 483,
+        "handed_to_export": 1387,
+        "stream_not_read": 0
+      },
+      "streams": {
+        "Partitions/0": {
+          "markers": 5906,
+          "declared_id": 690,
+          "frame_outside_stream": 0,
+          "category_out_of_range": 2058,
+          "box_not_valid": 0,
+          "no_declared_id": 697,
+          "records": 3151,
+          "id_from_enclosing_record": 2499,
+          "not_placed_instances": 321,
+          "placed_instances": 2830,
+          "without_volume": 960,
+          "with_volume": 1870,
+          "superseded": 677,
+          "nested_components": 0,
+          "selected": 1193,
+          "in_non_primary_design_option": 0,
+          "not_in_export_phase": 0,
+          "nested_in_door_or_window": 0,
+          "category_not_exported": 240,
+          "handed_to_export": 953,
+          "stream_not_read": 0
+        },
+        "Partitions/1": {
+          "markers": 2,
+          "declared_id": 0,
+          "frame_outside_stream": 0,
+          "category_out_of_range": 0,
+          "box_not_valid": 0,
+          "no_declared_id": 0,
+          "records": 2,
+          "id_from_enclosing_record": 2,
+          "not_placed_instances": 0,
+          "placed_instances": 2,
+          "without_volume": 0,
+          "with_volume": 2,
+          "superseded": 0,
+          "nested_components": 0,
+          "selected": 2,
+          "in_non_primary_design_option": 0,
+          "not_in_export_phase": 0,
+          "nested_in_door_or_window": 0,
+          "category_not_exported": 0,
+          "handed_to_export": 2,
+          "stream_not_read": 0
+        },
+        "Partitions/3": {
+          "markers": 797,
+          "declared_id": 0,
+          "frame_outside_stream": 0,
+          "category_out_of_range": 3,
+          "box_not_valid": 0,
+          "no_declared_id": 47,
+          "records": 747,
+          "id_from_enclosing_record": 747,
+          "not_placed_instances": 0,
+          "placed_instances": 747,
+          "without_volume": 72,
+          "with_volume": 675,
+          "superseded": 0,
+          "nested_components": 0,
+          "selected": 675,
+          "in_non_primary_design_option": 0,
+          "not_in_export_phase": 0,
+          "nested_in_door_or_window": 0,
+          "category_not_exported": 243,
+          "handed_to_export": 432,
+          "stream_not_read": 0
+        }
+      },
+      "written_to_model": 1387,
+      "id_already_held": 0,
+      "below_min_confidence": 0
+    }
+  },
+  "exported": {
+    "total_entities": 8333,
+    "building_elements": 1387,
+    "building_elements_with_geometry": 1382,
+    "building_elements_carried_by_parts": 5,
+    "by_ifc_type": {
+      "IFCBEAM": 1,
+      "IFCBUILDINGELEMENTPROXY": 43,
+      "IFCCABLECARRIERFITTING": 74,
+      "IFCCABLECARRIERSEGMENT": 102,
+      "IFCCOLUMN": 114,
+      "IFCCURTAINWALL": 5,
+      "IFCDOOR": 68,
+      "IFCMEMBER": 206,
+      "IFCPIPEFITTING": 128,
+      "IFCPIPESEGMENT": 142,
+      "IFCPLATE": 67,
+      "IFCRAILING": 14,
+      "IFCROOF": 8,
+      "IFCSLAB": 9,
+      "IFCSPACE": 73,
+      "IFCSTAIR": 6,
+      "IFCSTAIRFLIGHT": 6,
+      "IFCWALL": 251,
+      "IFCWINDOW": 70
+    },
+    "classification_count": 0,
+    "unit_assignment_count": 0,
+    "material_count": 84,
+    "storey_count": 7,
+    "storey_names": [
+      "P0",
+      "P1",
+      "P2",
+      "P3",
+      "P4",
+      "P5",
+      "P6"
+    ],
+    "storey_elevations_feet": [
+      0.0,
+      14.435695538057743,
+      24.278215223097114,
+      34.120734908136484,
+      43.963254593175854,
+      53.805774278215225,
+      62.23753280839894
+    ],
+    "storey_bound_elements": 1371,
+    "material_names_sample": [
+      "Por defecto",
+      "Fase - Derribo",
+      "Fase - Existente",
+      "Fase - Temporal",
+      "Hormigón, moldeado in situ",
+      "Cubiertas, Membrana EPDM",
+      "Asfalto, betún",
+      "Fase - Nueva",
+      "Poche",
+      "Hueco de masa por defecto",
+      "LKS-Cristal",
+      "Cobre"
+    ],
+    "layered_element_count": 198,
+    "body_sources": {
+      "partition_element_record_bbox": 991,
+      "partition_element_record_join_trimmed": 256,
+      "partition_pipe_axis": 140
+    },
+    "bounding_box_bodies": 918,
+    "bounding_box_spaces": 0,
+    "area_body_refusals": {},
+    "slab_shape_refusals": {},
+    "wall_base_refusals": {},
+    "wall_end_refusals": {},
+    "wall_end_sources": {},
+    "wall_base_sources": {},
+    "wall_ends_order_dependent": 0,
+    "wall_profile_sources": {},
+    "wall_profile_refusals": {},
+    "resolved_outline_spaces": 0,
+    "approximate_outline_spaces": 0,
+    "space_kinds": {
+      "room": 73
+    },
+    "spaces_without_kind": 0,
+    "wall_cut_openings_left_out": {},
+    "wall_end_reads_unmarked": {},
+    "wall_profile_height_checks": {},
+    "body_pieces_folded": {}
+  },
+  "skipped": [
+    {
+      "reason": "unsupported_geometry_profile",
+      "count": 5,
+      "classes": {
+        "IFCCURTAINWALL": 5
+      },
+      "sample_names": [
+        "CurtainWall-664482",
+        "CurtainWall-666982",
+        "CurtainWall-674081",
+        "CurtainWall-674368",
+        "CurtainWall-678099"
+      ]
+    },
+    {
+      "reason": "unsupported_geometry_unresolved_host",
+      "count": 5,
+      "classes": {
+        "IFCWINDOW": 5
+      },
+      "sample_names": [
+        "Window-644052",
+        "Window-647581",
+        "Window-804765",
+        "Window-804843",
+        "Window-1823394"
+      ]
+    },
+    {
+      "reason": "unsupported_geometry_missing_level",
+      "count": 16,
+      "classes": {
+        "IFCBUILDINGELEMENTPROXY": 9,
+        "IFCRAILING": 6,
+        "IFCSTAIRFLIGHT": 1
+      },
+      "sample_names": [
+        "Railing-567822",
+        "StairsRun-569667",
+        "Railing-570896",
+        "Railing-570900",
+        "Railing-572208",
+        "Railing-572347",
+        "Railing-572477",
+        "LKS_EME_Contador gas:Contador gas:730591",
+        "LKS_EME_Contador gas:Contador gas:731890",
+        "MechanicalEquipment-1825754",
+        "MechanicalEquipment-1825785",
+        "MechanicalEquipment-1825816"
+      ]
+    },
+    {
+      "reason": "unsupported_geometry_missing_dimensions",
+      "count": 5,
+      "classes": {
+        "IFCCURTAINWALL": 5
+      },
+      "sample_names": [
+        "CurtainWall-664482",
+        "CurtainWall-666982",
+        "CurtainWall-674081",
+        "CurtainWall-674368",
+        "CurtainWall-678099"
+      ]
+    },
+    {
+      "reason": "element_record_frame_stopped",
+      "count": 3837,
+      "classes": {
+        "category_out_of_range": 2061,
+        "no_declared_id": 744,
+        "without_volume": 1032
+      },
+      "sample_names": []
+    }
+  ],
+  "unsupported_features": [
+    "project_units_from_revit_bytes",
+    "partial_element_geometry",
+    "revit_compound_assemblies_and_walltype_widths",
+    "door_window_host_wall_binding",
+    "opening_index_to_ifc_openingelement_host_join",
+    "schema_field_wall_instances",
+    "partial_revit_element_parameters"
+  ],
+  "warnings": [
+    "Revit 2018: elements come from their records with their ElementId, category and bounding box, doors and windows with their host wall, rooms with their outline, and, where its Levels are read, each element on the storey of the Level its record names; family instances, walls, floors and roofs carry their family and type names, and family instances their type's materials. Layers become material layer sets where their materials are named, a layer that takes its category's material taking the object styles' one, and a wall at an angle is drawn along its location line and joined by its join lists where those are read and its record box closes on the line's rectangle, and any other wall keeps its record box, cut back at its joins. The export phase and design options are applied for 2018: elements that do not exist in the last phase or are in a non-primary design option are left out. A wall's joined-wall lists, end steps, profile openings and `Length`, parameters and \"Export to IFC As\" overrides are not read for 2018, and components nested in doors and windows are left out.",
+    "Revit 2018 is read experimentally (element-records-revit-2015-2018 in docs/support-matrix.json): too few files of this release are measured against Revit's own export to rely on its elements, which may be missing, extra or of another class.",
+    "Unsupported or incomplete geometry was reported: unsupported_geometry_profile=5, unsupported_geometry_unresolved_host=5, unsupported_geometry_missing_level=16, unsupported_geometry_missing_dimensions=5.",
+    "No Revit display units were recovered; the IFC declares the SI units its values are written in.",
+    "7 building storey name(s) came from partition Level records; 1366 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
+  ],
+  "confidence": {
+    "level": "geometry",
+    "score": 0.9,
+    "has_project_metadata": true,
+    "has_typed_elements": true,
+    "has_geometry": true,
+    "has_diagnostic_proxies": false,
+    "warning_count": 5,
+    "unexported_element_records": 0
+  },
+  "source_coverage": {
+    "status": "measured",
+    "notes": "Measured from export diagnostics counts only (production walker, exported building elements, ElementIds declared by Global/ElemTable). Not a converter-grade completeness claim.",
+    "decoded_element_fraction": 0.116477944,
+    "exported_element_fraction": 0.942896,
+    "geometry_element_fraction": 0.9963951
+  },
+  "formats_latest_integrity": {
+    "stream": "Formats/Latest",
+    "stored_bytes": 150201,
+    "inflated_bytes": 418793,
+    "page_boundary_detected": true,
+    "checksum_tail_stripping": "enabled",
+    "integrity_status": "ok",
+    "schema_scan_truncated": false,
+    "schema_scanned_bytes": 418793
+  }
+}

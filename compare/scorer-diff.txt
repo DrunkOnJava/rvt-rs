@@ -1,0 +1,414 @@
+Only in measure-head: areas_across_saves.txt
+Only in measure-head: areas_across_saves_2021.txt
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rac_advanced_sample_project/schema.txt measure-head/sample-2015-rac_advanced_sample_project/schema.txt
+--- measure-base/sample-2015-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:02.274798216 +0000
++++ measure-head/sample-2015-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:00.796808845 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=180, IfcWindow=24
+-  placement composition: 5755 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=146, IfcWindow=24
++  placement composition: 5704 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2115 on 951 objects and types
++sets 6674 on 5510 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rac_basic_sample_project/schema.txt measure-head/sample-2015-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2015-rac_basic_sample_project/schema.txt	2026-11-09 07:58:02.274798216 +0000
++++ measure-head/sample-2015-rac_basic_sample_project/schema.txt	2026-11-09 07:58:00.796808845 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=148, IfcSlab=11, IfcWall=56, IfcWindow=17
+-  placement composition: 504 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=148, IfcSlab=11, IfcWall=47, IfcWindow=17
++  placement composition: 490 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 476 on 239 objects and types
++sets 670 on 433 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rme_advanced_sample_project/schema.txt measure-head/sample-2015-rme_advanced_sample_project/schema.txt
+--- measure-base/sample-2015-rme_advanced_sample_project/schema.txt	2026-11-09 07:58:02.299798036 +0000
++++ measure-head/sample-2015-rme_advanced_sample_project/schema.txt	2026-11-09 07:58:00.962807651 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=135, IfcCovering=43, IfcDoor=124, IfcMember=1450, IfcSlab=21, IfcWall=166
+-  placement composition: 6842 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=135, IfcCovering=43, IfcDoor=124, IfcMember=1450, IfcSlab=21, IfcWall=135
++  placement composition: 6794 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 7940 on 3828 objects and types
++sets 10018 on 5906 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2015-rme_basic_sample_project/schema.txt measure-head/sample-2015-rme_basic_sample_project/schema.txt
+--- measure-base/sample-2015-rme_basic_sample_project/schema.txt	2026-11-09 07:58:02.335797778 +0000
++++ measure-head/sample-2015-rme_basic_sample_project/schema.txt	2026-11-09 07:58:00.962807651 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=135, IfcCovering=43, IfcDoor=124, IfcMember=1450, IfcSlab=21, IfcWall=166
+-  placement composition: 6886 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=135, IfcCovering=43, IfcDoor=124, IfcMember=1450, IfcSlab=21, IfcWall=135
++  placement composition: 6838 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 8034 on 3875 objects and types
++sets 10112 on 5953 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2016-rac_advanced_sample_project/schema.txt measure-head/sample-2016-rac_advanced_sample_project/schema.txt
+--- measure-base/sample-2016-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:02.335797778 +0000
++++ measure-head/sample-2016-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:00.881808234 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=180, IfcWindow=24
+-  placement composition: 5755 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=146, IfcWindow=24
++  placement composition: 5704 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2115 on 951 objects and types
++sets 6674 on 5510 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2016-rac_basic_sample_project/schema.txt measure-head/sample-2016-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2016-rac_basic_sample_project/schema.txt	2026-11-09 07:58:02.433797073 +0000
++++ measure-head/sample-2016-rac_basic_sample_project/schema.txt	2026-11-09 07:58:01.065806911 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=56, IfcWindow=17
+-  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=47, IfcWindow=17
++  placement composition: 484 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 476 on 239 objects and types
++sets 664 on 427 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2017-rac_advanced_sample_project/schema.txt measure-head/sample-2017-rac_advanced_sample_project/schema.txt
+--- measure-base/sample-2017-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:02.433797073 +0000
++++ measure-head/sample-2017-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:01.065806911 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=180, IfcWindow=24
+-  placement composition: 5755 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=146, IfcWindow=24
++  placement composition: 5704 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2115 on 951 objects and types
++sets 6674 on 5510 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2017-rac_basic_sample_project/schema.txt measure-head/sample-2017-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2017-rac_basic_sample_project/schema.txt	2026-11-09 07:58:02.433797073 +0000
++++ measure-head/sample-2017-rac_basic_sample_project/schema.txt	2026-11-09 07:58:01.066806904 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=56, IfcWindow=17
+-  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=47, IfcWindow=17
++  placement composition: 484 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 476 on 239 objects and types
++sets 664 on 427 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2018-rac_advanced_sample_project/schema.txt measure-head/sample-2018-rac_advanced_sample_project/schema.txt
+--- measure-base/sample-2018-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:02.434797066 +0000
++++ measure-head/sample-2018-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:01.066806904 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=180, IfcWindow=24
+-  placement composition: 5755 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=146, IfcWindow=24
++  placement composition: 5704 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2115 on 951 objects and types
++sets 6674 on 5510 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2018-rac_basic_sample_project/schema.txt measure-head/sample-2018-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2018-rac_basic_sample_project/schema.txt	2026-11-09 07:58:02.434797066 +0000
++++ measure-head/sample-2018-rac_basic_sample_project/schema.txt	2026-11-09 07:58:01.066806904 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=56, IfcWindow=17
+-  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=47, IfcWindow=17
++  placement composition: 484 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 476 on 239 objects and types
++sets 664 on 427 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rac_advanced_sample_project/schema.txt measure-head/sample-2019-rac_advanced_sample_project/schema.txt
+--- measure-base/sample-2019-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:02.435797058 +0000
++++ measure-head/sample-2019-rac_advanced_sample_project/schema.txt	2026-11-09 07:58:01.067806897 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=180, IfcWindow=24
+-  placement composition: 5755 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=146, IfcWindow=24
++  placement composition: 5704 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2115 on 951 objects and types
++sets 6674 on 5510 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rac_basic_sample_project/schema.txt measure-head/sample-2019-rac_basic_sample_project/schema.txt
+--- measure-base/sample-2019-rac_basic_sample_project/schema.txt	2026-11-09 07:58:02.445796987 +0000
++++ measure-head/sample-2019-rac_basic_sample_project/schema.txt	2026-11-09 07:58:01.098806673 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=56, IfcWindow=17
+-  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=47, IfcWindow=17
++  placement composition: 484 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 476 on 239 objects and types
++sets 664 on 427 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rme_advanced_sample_project/schema.txt measure-head/sample-2019-rme_advanced_sample_project/schema.txt
+--- measure-base/sample-2019-rme_advanced_sample_project/schema.txt	2026-11-09 07:58:02.540796303 +0000
++++ measure-head/sample-2019-rme_advanced_sample_project/schema.txt	2026-11-09 07:58:01.098806673 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=135, IfcCovering=43, IfcDoor=124, IfcMember=1450, IfcSlab=21, IfcWall=166
+-  placement composition: 6842 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=135, IfcCovering=43, IfcDoor=124, IfcMember=1450, IfcSlab=21, IfcWall=135
++  placement composition: 6794 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 7940 on 3828 objects and types
++sets 10018 on 5906 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2019-rme_basic_sample_project/schema.txt measure-head/sample-2019-rme_basic_sample_project/schema.txt
+--- measure-base/sample-2019-rme_basic_sample_project/schema.txt	2026-11-09 07:58:02.540796303 +0000
++++ measure-head/sample-2019-rme_basic_sample_project/schema.txt	2026-11-09 07:58:01.098806673 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=135, IfcCovering=43, IfcDoor=124, IfcMember=1450, IfcSlab=21, IfcWall=166
+-  placement composition: 6887 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=135, IfcCovering=43, IfcDoor=124, IfcMember=1450, IfcSlab=21, IfcWall=135
++  placement composition: 6839 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 8036 on 3876 objects and types
++sets 10114 on 5954 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2020-racadvancedsampleproject/schema.txt measure-head/sample-2020-racadvancedsampleproject/schema.txt
+--- measure-base/sample-2020-racadvancedsampleproject/schema.txt	2026-11-09 07:58:02.540796303 +0000
++++ measure-head/sample-2020-racadvancedsampleproject/schema.txt	2026-11-09 07:58:01.099806666 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=180, IfcWindow=24
+-  placement composition: 5755 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3276, IfcSlab=17, IfcWall=146, IfcWindow=24
++  placement composition: 5704 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2115 on 951 objects and types
++sets 6674 on 5510 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2020-racbasicsampleproject/schema.txt measure-head/sample-2020-racbasicsampleproject/schema.txt
+--- measure-base/sample-2020-racbasicsampleproject/schema.txt	2026-11-09 07:58:02.540796303 +0000
++++ measure-head/sample-2020-racbasicsampleproject/schema.txt	2026-11-09 07:58:01.100806659 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=56, IfcWindow=17
+-  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=47, IfcWindow=17
++  placement composition: 484 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 476 on 239 objects and types
++sets 664 on 427 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2021-racadvancedsampleproject/schema.txt measure-head/sample-2021-racadvancedsampleproject/schema.txt
+--- measure-base/sample-2021-racadvancedsampleproject/schema.txt	2026-11-09 07:58:02.541796296 +0000
++++ measure-head/sample-2021-racadvancedsampleproject/schema.txt	2026-11-09 07:58:01.100806659 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3312, IfcSlab=22, IfcWall=180, IfcWindow=24
+-  placement composition: 5806 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3312, IfcSlab=22, IfcWall=146, IfcWindow=24
++  placement composition: 5755 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2115 on 951 objects and types
++sets 6674 on 5510 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2021-racbasicsampleproject/schema.txt measure-head/sample-2021-racbasicsampleproject/schema.txt
+--- measure-base/sample-2021-racbasicsampleproject/schema.txt	2026-11-09 07:58:02.558796174 +0000
++++ measure-head/sample-2021-racbasicsampleproject/schema.txt	2026-11-09 07:58:01.100806659 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=56, IfcWindow=17
+-  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=47, IfcWindow=17
++  placement composition: 484 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 476 on 239 objects and types
++sets 664 on 427 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2022-racadvancedsampleproject/schema.txt measure-head/sample-2022-racadvancedsampleproject/schema.txt
+--- measure-base/sample-2022-racadvancedsampleproject/schema.txt	2026-11-09 07:58:02.651795505 +0000
++++ measure-head/sample-2022-racadvancedsampleproject/schema.txt	2026-11-09 07:58:01.101806652 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3312, IfcSlab=22, IfcWall=180, IfcWindow=24
+-  placement composition: 5806 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3312, IfcSlab=22, IfcWall=146, IfcWindow=24
++  placement composition: 5755 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2115 on 951 objects and types
++sets 6674 on 5510 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2022-racbasicsampleproject/schema.txt measure-head/sample-2022-racbasicsampleproject/schema.txt
+--- measure-base/sample-2022-racbasicsampleproject/schema.txt	2026-11-09 07:58:02.652795498 +0000
++++ measure-head/sample-2022-racbasicsampleproject/schema.txt	2026-11-09 07:58:01.102806645 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=56, IfcWindow=17
+-  placement composition: 498 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=47, IfcWindow=17
++  placement composition: 484 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 476 on 239 objects and types
++sets 664 on 427 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2023-racadvancedsampleproject/schema.txt measure-head/sample-2023-racadvancedsampleproject/schema.txt
+--- measure-base/sample-2023-racadvancedsampleproject/schema.txt	2026-11-09 07:58:02.652795498 +0000
++++ measure-head/sample-2023-racadvancedsampleproject/schema.txt	2026-11-09 07:58:01.138806386 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3312, IfcSlab=22, IfcWall=180, IfcWindow=24
+-  placement composition: 5682 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=38, IfcColumn=176, IfcCovering=65, IfcDoor=100, IfcMember=3312, IfcSlab=22, IfcWall=146, IfcWindow=24
++  placement composition: 5631 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2111 on 949 objects and types
++sets 6670 on 5508 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/sample-2023-racbasicsampleproject/schema.txt measure-head/sample-2023-racbasicsampleproject/schema.txt
+--- measure-base/sample-2023-racbasicsampleproject/schema.txt	2026-11-09 07:58:02.652795498 +0000
++++ measure-head/sample-2023-racbasicsampleproject/schema.txt	2026-11-09 07:58:01.139806379 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=56, IfcWindow=17
+-  placement composition: 465 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcColumn=3, IfcCovering=2, IfcDoor=16, IfcMember=144, IfcSlab=11, IfcWall=47, IfcWindow=17
++  placement composition: 451 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 472 on 241 objects and types
++sets 664 on 429 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/aggregates_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/aggregates_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/aggregates_vs_ifc.txt	2026-11-09 07:58:02.362797583 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/aggregates_vs_ifc.txt	2026-11-09 07:58:00.969807601 +0000
+@@ -1,2 +1,3 @@
+-    206  IfcMember: only Revit aggregates
+-     67  IfcPlate: only Revit aggregates
++      5  IfcCurtainWall: neither aggregates
++    206  IfcMember: same whole
++     67  IfcPlate: same whole
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/class_sets_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/class_sets_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/class_sets_vs_ifc.txt	2026-11-09 07:58:02.396797339 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/class_sets_vs_ifc.txt	2026-11-09 07:58:01.067806897 +0000
+@@ -7 +7 @@
+-IfcCurtainWall                        9      0      9      0  IfcWall 9
++IfcCurtainWall                        9      5      4      0  IfcWall 4
+@@ -24 +24 @@
+-       9  IfcCurtainWall -> IfcWall  Revit '-' '-' PredefinedType - type IfcCurtainWallType NOTDEFINED  rvt-rs 'Walls' '-'  e.g. 643672
++       4  IfcCurtainWall -> IfcWall  Revit '-' '-' PredefinedType - type IfcCurtainWallType NOTDEFINED  rvt-rs 'Walls' '-'  e.g. 643672
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/door_bodies_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/door_bodies_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/door_bodies_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/door_bodies_vs_ifc.txt	2026-11-09 07:58:01.067806897 +0000
+@@ -2,4 +2,4 @@
+-      1 mirror rule gives Revit's
+-     67 mirror rule wrong
+-      1 Revit's body centred on the wall
+-     67 Revit's body off the wall's centre
++      2 mirror rule gives Revit's
++     66 mirror rule wrong
++      2 Revit's body centred on the wall
++     66 Revit's body off the wall's centre
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/mcp_answers_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/mcp_answers_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/mcp_answers_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/mcp_answers_vs_ifc.txt	2026-11-09 07:58:01.067806897 +0000
+@@ -3 +3 @@
+-  get_element: 86 elements
++  get_element: 91 elements
+@@ -6 +6 @@
+-mcp answers: consistency counts: 59 compared, 0 differ
++mcp answers: consistency counts: 61 compared, 0 differ
+@@ -13,0 +14 @@
++mcp answers: IfcCurtainWall: 5 rows
+@@ -25 +26 @@
+-mcp answers: IfcWall: 256 rows
++mcp answers: IfcWall: 251 rows
+@@ -49,4 +50,4 @@
+-mcp answers: consistency details: 86 compared, 0 differ
+-mcp answers: consistency type objects: 86 compared, 0 differ
+-mcp answers: consistency type object sets: 86 compared, 0 differ
+-mcp answers: get_element property and quantity sets compared: 506
++mcp answers: consistency details: 91 compared, 0 differ
++mcp answers: consistency type objects: 91 compared, 0 differ
++mcp answers: consistency type object sets: 91 compared, 0 differ
++mcp answers: get_element property and quantity sets compared: 546
+@@ -64 +65 @@
+-mcp answers: class IfcCurtainWall: revit 9, same 0, other 9, absent 0
++mcp answers: class IfcCurtainWall: revit 9, same 5, other 4, absent 0
+@@ -96 +97 @@
+-mcp answers: values: sampled rows the answers and Revit export share: 81
++mcp answers: values: sampled rows the answers and Revit export share: 86
+@@ -98,5 +99,5 @@
+-mcp answers: values: property values equal to Revit: 73
+-mcp answers: values: property values in the answers: 127
+-mcp answers: values: property or quantity values Revit writes that the answers lack: 304
+-mcp answers: values: quantity values Revit export does not write: 21
+-mcp answers: values: quantity values in the answers: 21
++mcp answers: values: property values equal to Revit: 93
++mcp answers: values: property values in the answers: 147
++mcp answers: values: property or quantity values Revit writes that the answers lack: 299
++mcp answers: values: quantity values Revit export does not write: 26
++mcp answers: values: quantity values in the answers: 26
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/names_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/names_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/names_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/names_vs_ifc.txt	2026-11-09 07:58:01.067806897 +0000
+@@ -1 +1 @@
+-    256  family instance | IfcWall | Name differs | ObjectType differs
++    251  family instance | IfcWall | Name differs | ObjectType differs
+@@ -18,0 +19 @@
++      5  family instance | IfcCurtainWall | Name differs | ObjectType differs
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/opening_boxes_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/opening_boxes_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/opening_boxes_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/opening_boxes_vs_ifc.txt	2026-11-09 07:58:01.067806897 +0000
+@@ -2,2 +2,2 @@
+-  IfcDoor over 1 ft: 16
+-  IfcDoor within 0.26 ft: 1
++  IfcDoor over 1 ft: 15
++  IfcDoor within 0.26 ft: 2
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/opening_hosts_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/opening_hosts_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/opening_hosts_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/opening_hosts_vs_ifc.txt	2026-11-09 07:58:01.067806897 +0000
+@@ -1,2 +1,2 @@
+-the wall Revit fills: 128
+-a wall Revit does not cut: 5
++the wall Revit fills: 130
++a wall Revit does not cut: 3
+@@ -8 +8 @@
+-not the wall Revit fills: 582148 635651 635662 667466 674705
++not the wall Revit fills: 582148 635651 635662
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/openings_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/openings_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/openings_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/openings_vs_ifc.txt	2026-11-09 07:58:01.067806897 +0000
+@@ -3,3 +3,3 @@
+-  within 0.26 ft: 4
+-  within 1.0 ft: 98
+-  largest difference: 7.62 ft
++  within 0.26 ft: 5
++  within 1.0 ft: 99
++  largest difference: 2.95 ft
+@@ -9 +9 @@
+-  over 0.26 ft: 16 IfcDoor in IfcWall (over 1 ft)
++  over 0.26 ft: 15 IfcDoor in IfcWall (over 1 ft)
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/psets_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/psets_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/psets_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/psets_vs_ifc.txt	2026-11-09 07:58:01.068806889 +0000
+@@ -1 +1 @@
+-Revit values on objects rvt-rs writes: 5317; equal: 2737; different: 0; missing: 2580; rvt-rs values Revit does not write: 65
++Revit values on objects rvt-rs writes: 5317; equal: 2948; different: 0; missing: 2369; rvt-rs values Revit does not write: 55
+@@ -14 +14 @@
+-  Pset_CurtainWallCommon.IsExternal: 9, equal 0, different 0, missing 9
++  Pset_CurtainWallCommon.IsExternal: 9, equal 5, different 0, missing 4
+@@ -23 +23 @@
+-  Pset_MemberCommon.Span: 206, equal 0, different 0, missing 206
++  Pset_MemberCommon.Span: 206, equal 206, different 0, missing 0
+@@ -75,2 +75,2 @@
+-  Pset_WallCommon.ExtendToStructure: 9, 0
+-  Pset_WallCommon.IsExternal: 9, 0
++  Pset_WallCommon.ExtendToStructure: 4, 0
++  Pset_WallCommon.IsExternal: 4, 0
+@@ -82 +81,0 @@
+-  Pset_MemberCommon.Span: ('IfcPositiveLengthMeasure', 0.119999999999999) x120, ('IfcPositiveLengthMeasure', 0.67) x66, ('IfcPositiveLengthMeasure', 0.0740494455530195) x4, ('IfcPositiveLengthMeasure', 2.2) x4; on IfcMember x206
+@@ -104 +102,0 @@
+-  Pset_CurtainWallCommon.IsExternal: ('IfcBoolean', True) x9; on IfcCurtainWall x9
+@@ -117,0 +116,2 @@
++  Pset_StairFlightCommon.NumberOfTreads: ('IfcCountMeasure', 17.0) x4, ('IfcCountMeasure', 4.0) x1, ('IfcCountMeasure', 20.0) x1; on IfcStairFlight x6
++  Pset_StairFlightCommon.Reference: ('IfcIdentifier', 'LKS_GEN_Tramo in-situ') x6; on IfcStairFlight x6
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/qtos_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/qtos_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/qtos_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/qtos_vs_ifc.txt	2026-11-09 07:58:01.068806889 +0000
+@@ -2 +2,2 @@
+-Revit's export writes no base quantities (its setup's Export base quantities off, RE-242): rvt-rs writes 629, which rvt-ifc --no-base-quantities leaves out
++Revit's export writes no base quantities (its setup's Export base quantities off, RE-242): rvt-rs writes 835, which rvt-ifc --no-base-quantities leaves out
++  Qto_MemberBaseQuantities.Length: 206
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/schema.txt measure-head/spent-bimspeed-vitoria-before-2018/schema.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/schema.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/schema.txt	2026-11-09 07:58:01.068806889 +0000
+@@ -3,2 +3,2 @@
+-  PredefinedType populated: IfcBeam=1, IfcColumn=114, IfcDoor=68, IfcMember=206, IfcSlab=9, IfcWall=256, IfcWindow=70
+-  placement composition: 1520 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
++  PredefinedType populated: IfcBeam=1, IfcColumn=114, IfcDoor=68, IfcMember=206, IfcSlab=9, IfcWall=251, IfcWindow=70
++  placement composition: 1515 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+@@ -10 +10 @@
+-sets 2067 on 919 objects and types
++sets 2340 on 1192 objects and types
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/space_overlaps_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/space_overlaps_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/space_overlaps_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/space_overlaps_vs_ifc.txt	2026-11-09 07:58:01.068806889 +0000
+@@ -1 +1 @@
+-space overlaps: stored solid: 73 rooms; walls: above 0.1% of the area on 36, above 1% on 28, above 5% on 27, largest 100.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
++space overlaps: stored solid: 73 rooms; walls: above 0.1% of the area on 35, above 1% on 27, above 5% on 26, largest 100.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/wall_bodies_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/wall_bodies_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/wall_bodies_vs_ifc.txt	2026-11-09 07:58:02.397797332 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/wall_bodies_vs_ifc.txt	2026-11-09 07:58:01.068806889 +0000
+@@ -1 +1 @@
+-256 walls in the GLB
++251 walls in the GLB
+diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base/spent-bimspeed-vitoria-before-2018/wall_heights_vs_ifc.txt measure-head/spent-bimspeed-vitoria-before-2018/wall_heights_vs_ifc.txt
+--- measure-base/spent-bimspeed-vitoria-before-2018/wall_heights_vs_ifc.txt	2026-11-09 07:58:02.476796763 +0000
++++ measure-head/spent-bimspeed-vitoria-before-2018/wall_heights_vs_ifc.txt	2026-11-09 07:58:01.130806443 +0000
+@@ -18 +18 @@
+-walls in both files: 247 (rvt-rs 256, Revit 251); offset 0.000000 ft
++walls in both files: 247 (rvt-rs 251, Revit 251); offset 0.000000 ft

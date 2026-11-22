@@ -1,0 +1,728 @@
+{
+  "artifact_id": "magnetar-2024-core-interior",
+  "deterministic": true,
+  "input_file": "2024_Core_Interior.rvt",
+  "input_hash_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
+  "input_role": "source",
+  "observation": {
+    "building_elements_with_geometry": 970,
+    "entity_counts": {
+      "IFCAPPLICATION": 1,
+      "IFCARBITRARYCLOSEDPROFILEDEF": 217,
+      "IFCARBITRARYPROFILEDEFWITHVOIDS": 62,
+      "IFCAXIS2PLACEMENT2D": 1033,
+      "IFCAXIS2PLACEMENT3D": 1173,
+      "IFCBUILDING": 1,
+      "IFCBUILDINGSTOREY": 15,
+      "IFCCARTESIANPOINT": 6303,
+      "IFCCARTESIANPOINTLIST3D": 138,
+      "IFCCOLOURRGB": 86,
+      "IFCCOLUMN": 256,
+      "IFCCOLUMNTYPE": 175,
+      "IFCDIRECTION": 1135,
+      "IFCDOOR": 132,
+      "IFCDOORTYPE": 10,
+      "IFCELEMENTQUANTITY": 932,
+      "IFCEXTRUDEDAREASOLID": 1033,
+      "IFCGEOMETRICREPRESENTATIONCONTEXT": 1,
+      "IFCLOCALPLACEMENT": 1188,
+      "IFCMATERIAL": 87,
+      "IFCMATERIALCONSTITUENT": 6,
+      "IFCMATERIALCONSTITUENTSET": 4,
+      "IFCMATERIALLAYER": 9,
+      "IFCMATERIALLAYERSET": 8,
+      "IFCMATERIALLAYERSETUSAGE": 407,
+      "IFCOPENINGELEMENT": 201,
+      "IFCORGANIZATION": 1,
+      "IFCOWNERHISTORY": 1,
+      "IFCPERSON": 1,
+      "IFCPERSONANDORGANIZATION": 1,
+      "IFCPOLYLINE": 341,
+      "IFCPRESENTATIONSTYLEASSIGNMENT": 86,
+      "IFCPRODUCTDEFINITIONSHAPE": 1171,
+      "IFCPROJECT": 1,
+      "IFCPROPERTYSET": 6514,
+      "IFCPROPERTYSINGLEVALUE": 28066,
+      "IFCQUANTITYAREA": 642,
+      "IFCQUANTITYLENGTH": 1346,
+      "IFCQUANTITYVOLUME": 565,
+      "IFCRECTANGLEPROFILEDEF": 754,
+      "IFCRELAGGREGATES": 13,
+      "IFCRELASSOCIATESMATERIAL": 412,
+      "IFCRELCONTAINEDINSPATIALSTRUCTURE": 13,
+      "IFCRELDEFINESBYPROPERTIES": 7042,
+      "IFCRELDEFINESBYTYPE": 315,
+      "IFCRELFILLSELEMENT": 138,
+      "IFCRELVOIDSELEMENT": 201,
+      "IFCSHADINGDEVICE": 20,
+      "IFCSHADINGDEVICETYPE": 2,
+      "IFCSHAPEREPRESENTATION": 1171,
+      "IFCSITE": 1,
+      "IFCSIUNIT": 6,
+      "IFCSLAB": 80,
+      "IFCSLABTYPE": 7,
+      "IFCSPACE": 116,
+      "IFCSPACETYPE": 116,
+      "IFCSTYLEDITEM": 86,
+      "IFCSURFACESTYLE": 86,
+      "IFCSURFACESTYLERENDERING": 86,
+      "IFCTRIANGULATEDFACESET": 138,
+      "IFCUNITASSIGNMENT": 1,
+      "IFCWALL": 360,
+      "IFCWALLTYPE": 4,
+      "IFCWINDOW": 6,
+      "IFCWINDOWTYPE": 1
+    },
+    "exported_building_elements": {
+      "IFCCOLUMN": 256,
+      "IFCDOOR": 132,
+      "IFCSHADINGDEVICE": 20,
+      "IFCSLAB": 80,
+      "IFCSPACE": 116,
+      "IFCWALL": 360,
+      "IFCWINDOW": 6
+    },
+    "material_count": 87,
+    "relations": {
+      "IFCRELFILLSELEMENT": [
+        [
+          "20796",
+          "20827"
+        ],
+        [
+          "20798",
+          "20810"
+        ],
+        [
+          "20798",
+          "20815"
+        ],
+        [
+          "20798",
+          "20829"
+        ],
+        [
+          "20800",
+          "20813"
+        ],
+        [
+          "20800",
+          "20814"
+        ],
+        [
+          "20800",
+          "20830"
+        ],
+        [
+          "20802",
+          "20828"
+        ],
+        [
+          "20803",
+          "20821"
+        ],
+        [
+          "20808",
+          "20818"
+        ],
+        [
+          "20809",
+          "20819"
+        ],
+        [
+          "20817",
+          "20820"
+        ],
+        [
+          "20863",
+          "20865"
+        ],
+        [
+          "20863",
+          "20866"
+        ],
+        [
+          "20897",
+          "20898"
+        ],
+        [
+          "25488",
+          "25947"
+        ],
+        [
+          "25488",
+          "25953"
+        ],
+        [
+          "25488",
+          "25954"
+        ],
+        [
+          "25491",
+          "25952"
+        ],
+        [
+          "25493",
+          "25951"
+        ],
+        [
+          "25495",
+          "25950"
+        ],
+        [
+          "25497",
+          "25949"
+        ],
+        [
+          "25943",
+          "25948"
+        ],
+        [
+          "25957",
+          "25966"
+        ],
+        [
+          "25958",
+          "25965"
+        ],
+        [
+          "25963",
+          "25964"
+        ],
+        [
+          "29853",
+          "29884"
+        ],
+        [
+          "29855",
+          "29867"
+        ],
+        [
+          "29855",
+          "29872"
+        ],
+        [
+          "29855",
+          "29886"
+        ],
+        [
+          "29857",
+          "29870"
+        ],
+        [
+          "29857",
+          "29871"
+        ],
+        [
+          "29857",
+          "29887"
+        ],
+        [
+          "29859",
+          "29885"
+        ],
+        [
+          "29860",
+          "29878"
+        ],
+        [
+          "29865",
+          "29875"
+        ],
+        [
+          "29866",
+          "29876"
+        ],
+        [
+          "29874",
+          "29877"
+        ],
+        [
+          "29920",
+          "29922"
+        ],
+        [
+          "29920",
+          "29923"
+        ],
+        [
+          "55734",
+          "55765"
+        ],
+        [
+          "55736",
+          "55748"
+        ],
+        [
+          "55736",
+          "55753"
+        ],
+        [
+          "55736",
+          "55767"
+        ],
+        [
+          "55738",
+          "55751"
+        ],
+        [
+          "55738",
+          "55752"
+        ],
+        [
+          "55738",
+          "55768"
+        ],
+        [
+          "55740",
+          "55766"
+        ],
+        [
+          "55741",
+          "55759"
+        ],
+        [
+          "55746",
+          "55756"
+        ],
+        [
+          "55747",
+          "55757"
+        ],
+        [
+          "55755",
+          "55758"
+        ],
+        [
+          "55801",
+          "55803"
+        ],
+        [
+          "55801",
+          "55804"
+        ],
+        [
+          "59314",
+          "59345"
+        ],
+        [
+          "59316",
+          "59328"
+        ],
+        [
+          "59316",
+          "59333"
+        ],
+        [
+          "59316",
+          "59347"
+        ],
+        [
+          "59318",
+          "59331"
+        ],
+        [
+          "59318",
+          "59332"
+        ],
+        [
+          "59318",
+          "59348"
+        ],
+        [
+          "59320",
+          "59346"
+        ],
+        [
+          "59321",
+          "59339"
+        ],
+        [
+          "59326",
+          "59336"
+        ],
+        [
+          "59327",
+          "59337"
+        ],
+        [
+          "59335",
+          "59338"
+        ],
+        [
+          "59381",
+          "59383"
+        ],
+        [
+          "59381",
+          "59384"
+        ],
+        [
+          "59415",
+          "59416"
+        ],
+        [
+          "60195",
+          "60226"
+        ],
+        [
+          "60197",
+          "60209"
+        ],
+        [
+          "60197",
+          "60214"
+        ],
+        [
+          "60197",
+          "60228"
+        ],
+        [
+          "60199",
+          "60212"
+        ],
+        [
+          "60199",
+          "60213"
+        ],
+        [
+          "60199",
+          "60229"
+        ],
+        [
+          "60201",
+          "60227"
+        ],
+        [
+          "60202",
+          "60220"
+        ],
+        [
+          "60207",
+          "60217"
+        ],
+        [
+          "60208",
+          "60218"
+        ],
+        [
+          "60216",
+          "60219"
+        ],
+        [
+          "60262",
+          "60264"
+        ],
+        [
+          "60262",
+          "60265"
+        ],
+        [
+          "60296",
+          "60297"
+        ],
+        [
+          "61076",
+          "61107"
+        ],
+        [
+          "61078",
+          "61090"
+        ],
+        [
+          "61078",
+          "61095"
+        ],
+        [
+          "61078",
+          "61109"
+        ],
+        [
+          "61080",
+          "61093"
+        ],
+        [
+          "61080",
+          "61094"
+        ],
+        [
+          "61080",
+          "61110"
+        ],
+        [
+          "61082",
+          "61108"
+        ],
+        [
+          "61083",
+          "61101"
+        ],
+        [
+          "61088",
+          "61098"
+        ],
+        [
+          "61089",
+          "61099"
+        ],
+        [
+          "61097",
+          "61100"
+        ],
+        [
+          "61143",
+          "61145"
+        ],
+        [
+          "61143",
+          "61146"
+        ],
+        [
+          "61177",
+          "61178"
+        ],
+        [
+          "61957",
+          "61988"
+        ],
+        [
+          "61959",
+          "61971"
+        ],
+        [
+          "61959",
+          "61976"
+        ],
+        [
+          "61959",
+          "61990"
+        ],
+        [
+          "61961",
+          "61974"
+        ],
+        [
+          "61961",
+          "61975"
+        ],
+        [
+          "61961",
+          "61991"
+        ],
+        [
+          "61963",
+          "61989"
+        ],
+        [
+          "61964",
+          "61982"
+        ],
+        [
+          "61969",
+          "61979"
+        ],
+        [
+          "61970",
+          "61980"
+        ],
+        [
+          "61978",
+          "61981"
+        ],
+        [
+          "62024",
+          "62026"
+        ],
+        [
+          "62024",
+          "62027"
+        ],
+        [
+          "62058",
+          "62059"
+        ],
+        [
+          "62838",
+          "62869"
+        ],
+        [
+          "62840",
+          "62852"
+        ],
+        [
+          "62840",
+          "62857"
+        ],
+        [
+          "62840",
+          "62871"
+        ],
+        [
+          "62842",
+          "62855"
+        ],
+        [
+          "62842",
+          "62856"
+        ],
+        [
+          "62842",
+          "62872"
+        ],
+        [
+          "62844",
+          "62870"
+        ],
+        [
+          "62845",
+          "62863"
+        ],
+        [
+          "62850",
+          "62860"
+        ],
+        [
+          "62851",
+          "62861"
+        ],
+        [
+          "62859",
+          "62862"
+        ],
+        [
+          "62905",
+          "62907"
+        ],
+        [
+          "62905",
+          "62908"
+        ],
+        [
+          "62939",
+          "62940"
+        ],
+        [
+          "63719",
+          "63750"
+        ],
+        [
+          "63721",
+          "63733"
+        ],
+        [
+          "63721",
+          "63738"
+        ],
+        [
+          "63721",
+          "63752"
+        ],
+        [
+          "63723",
+          "63736"
+        ],
+        [
+          "63723",
+          "63737"
+        ],
+        [
+          "63723",
+          "63753"
+        ],
+        [
+          "63725",
+          "63751"
+        ],
+        [
+          "80747",
+          "80750"
+        ]
+      ]
+    },
+    "storey_count": 15,
+    "storeys": {
+      "IFCBUILDINGSTOREY": [
+        [
+          "Basement 1",
+          "-20.000000"
+        ],
+        [
+          "Basement 2",
+          "-40.000000"
+        ],
+        [
+          "Level 1",
+          "0.000000"
+        ],
+        [
+          "Level 10",
+          "136.000000"
+        ],
+        [
+          "Level 11",
+          "151.000000"
+        ],
+        [
+          "Level 12",
+          "166.000000"
+        ],
+        [
+          "Level 13",
+          "185.500000"
+        ],
+        [
+          "Level 3 - Wall Layouts 1",
+          "31.000000"
+        ],
+        [
+          "Level 4 - Wall Layouts 2",
+          "46.000000"
+        ],
+        [
+          "Level 4 - Wall Layouts 3",
+          "61.000000"
+        ],
+        [
+          "Level 6",
+          "76.000000"
+        ],
+        [
+          "Level 7",
+          "91.000000"
+        ],
+        [
+          "Level 8",
+          "106.000000"
+        ],
+        [
+          "Level 9",
+          "121.000000"
+        ],
+        [
+          "Mez 1-2",
+          "15.000000"
+        ]
+      ]
+    }
+  },
+  "observation_hash_sha256": "8fad05d348dba626d3c5dd5f67a74869cb10eb1ba6d2074dc252098f9a6f7c3a",
+  "schema_version": "1.1.0",
+  "semantic_surface_covered": [
+    "entity_counts",
+    "relations",
+    "storeys"
+  ],
+  "unsupported_entities": [
+    "revit_compound_assemblies_and_walltype_widths",
+    "opening_index_to_ifc_openingelement_host_join",
+    "schema_field_wall_instances",
+    "partial_revit_element_parameters"
+  ],
+  "warnings": [
+    "1 type text parameter(s) (Fire Rating or Manufacturer) are left out because the copies of a family type table's entry, or an entry and the id-first form, give different values (RE-354).",
+    "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
+    "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
+  ],
+  "witness_id": "rvt-rs",
+  "witness_version": "0.16.1"
+}

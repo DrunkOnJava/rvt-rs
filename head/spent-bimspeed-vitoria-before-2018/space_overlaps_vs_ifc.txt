@@ -1,0 +1,10 @@
+space overlaps: stored solid: 73 rooms; walls: above 0.1% of the area on 35, above 1% on 27, above 5% on 26, largest 100.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
+  0nukNgE9Q0t8MR8rphA6pp: stored_solid, up 19.60, floor 19.60, every face 19.60 ft2 (no Revit space), inside walls 19.60 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  1xsC8ZfG6EVulBs5OmaCa9: stored_solid, up 13.07, floor 13.07, every face 13.07 ft2 (no Revit space), inside walls 13.07 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  09bksLAfQ76OZMqtpmb0dT: stored_solid, up 19.58, floor 19.58, every face 19.58 ft2 (no Revit space), inside walls 19.58 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  3m1MHi1_MEcfvEeaVLGH$U: stored_solid, up 13.07, floor 13.07, every face 13.07 ft2 (no Revit space), inside walls 13.07 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  35iGImbUI8pAcvggNPbqNo: stored_solid, up 19.58, floor 19.58, every face 19.58 ft2 (no Revit space), inside walls 19.58 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  15JeIJZW_Cnu4K2JWmfmIK: stored_solid, up 13.07, floor 13.07, every face 13.07 ft2 (no Revit space), inside walls 13.07 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  2DlLXeluM03BMeujHVaDid: stored_solid, up 19.58, floor 19.58, every face 19.58 ft2 (no Revit space), inside walls 19.58 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  2vQCGZEOo3DgG8Rid3dLYO: stored_solid, up 13.08, floor 13.08, every face 13.08 ft2 (no Revit space), inside walls 13.08 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+exit 0

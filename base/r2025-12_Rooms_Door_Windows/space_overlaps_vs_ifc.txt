@@ -1,0 +1,7 @@
+space overlaps: stored solid: 2 rooms; walls: above 0.1% of the area on 0, above 1% on 0, above 5% on 0, largest 0.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
+space overlaps: upward faces, stored solid: 2 paired rooms, area within 0.1% of Revit's on 2
+space overlaps: downward faces, stored solid: 2 paired rooms, area within 0.1% of Revit's on 2
+space overlaps: every face, stored solid: 2 paired rooms, area within 0.1% of Revit's on 2
+  3y_22PKRj7YwVPhMM8m67Y: stored_solid, up 308.69, floor 308.69, every face 308.69 ft2 (Revit up 308.69, floor 308.69, every face 308.69 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  3y_22PKRj7YwVPhMM8m67i: stored_solid, up 308.69, floor 308.69, every face 308.69 ft2 (Revit up 308.69, floor 308.69, every face 308.69 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+exit 0

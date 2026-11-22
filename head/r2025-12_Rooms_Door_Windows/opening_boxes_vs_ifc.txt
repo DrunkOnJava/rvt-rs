@@ -1,0 +1,5 @@
+openings in Revit's export: 4; in rvt-rs's: 4; both: 4
+  IfcDoor within 0.001 ft: 1
+  IfcWindow within 0.001 ft: 3
+unfilled openings in Revit's export: 0; in rvt-rs's: 0; both: 0
+exit 0

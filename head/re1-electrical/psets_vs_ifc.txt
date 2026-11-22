@@ -1,0 +1,24 @@
+Revit values on objects rvt-rs writes: 147; equal: 138; different: 0; missing: 9; rvt-rs values Revit does not write: 0
+  Pset_AirSideSystemInformation.Name: 2, equal 0, different 0, missing 2
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.Reference: 30, equal 30, different 0, missing 0
+  Pset_BuildingStoreyCommon.AboveGround: 2, equal 2, different 0, missing 0
+  Pset_ElectricApplianceTypeCommon.Reference: 2, equal 2, different 0, missing 0
+  Pset_ElectricalDeviceCommon.NumberOfPoles: 4, equal 0, different 0, missing 4
+  Pset_EnvironmentalImpactIndicators.Reference: 49, equal 49, different 0, missing 0
+  Pset_LightFixtureTypeCommon.Reference: 12, equal 12, different 0, missing 0
+  Pset_ManufacturerOccurrence.SerialNumber: 31, equal 31, different 0, missing 0
+  Pset_ManufacturerTypeInformation.Manufacturer: 11, equal 11, different 0, missing 0
+  Pset_ProductRequirements.Name: 2, equal 0, different 0, missing 2
+IFC4 properties IFC2X3's definitions do not have, which Revit's IFC2X3 export cannot write, not scored: 32
+  Pset_BuildingElementProxyCommon.IsExternal: 30
+  Pset_BuildingStoreyCommon.Reference: 2
+IFC2X3 values also in an IFC4 set and scored there, not scored here: 19
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+Revit's most common values where rvt-rs writes none:
+  Pset_ElectricalDeviceCommon.NumberOfPoles: ('IfcInteger', 1) x4; on IfcFlowTerminal x2, IfcLightFixtureType x2
+  Pset_AirSideSystemInformation.Name: ('IfcLabel', 'Level 1') x1, ('IfcLabel', 'Level 2') x1; on IfcBuildingStorey x2
+  Pset_ProductRequirements.Name: ('IfcLabel', 'Level 1') x1, ('IfcLabel', 'Level 2') x1; on IfcBuildingStorey x2
+  Pset_BuildingCommon.NumberOfStoreys: ('IfcInteger', 2) x1; on IfcBuilding x1
+exit 0
