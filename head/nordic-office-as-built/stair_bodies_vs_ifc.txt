@@ -1,0 +1,88 @@
+IfcStairFlight in Revit's export with a body: 35; rvt-rs writes one for 35 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 0 of 35
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 5 of 35
+    1440878: differs, Revit 16 vertices, farthest 0.353 ft, from rvt-rs's surface at most 1.86e-06 ft, volume rvt-rs 6.756787 ft3, Revit 6.756788 ft3, z rvt-rs 180.8727 to 181.6820, Revit 180.8727 to 181.6820
+    1503045: differs, Revit 40 vertices, farthest 0.513 ft, from rvt-rs's surface at most 1.66e-06 ft, volume rvt-rs 38.880709 ft3, Revit 38.880683 ft3, z rvt-rs 193.2415 to 195.4912, Revit 193.2415 to 195.4912
+    2598348: differs, Revit 59 vertices, farthest 0.612 ft, from rvt-rs's surface at most 1.61e-06 ft, volume rvt-rs 32.089281 ft3, Revit 32.089298 ft3, z rvt-rs 169.6194 to 175.5249, Revit 169.6194 to 175.5249
+    2598357: differs, Revit 51 vertices, farthest 0.612 ft, from rvt-rs's surface at most 0.612 ft, volume rvt-rs 28.399211 ft3, Revit 29.520577 ft3, z rvt-rs 176.1811 to 181.4304, Revit 175.5687 to 181.4304
+    2859204: differs, Revit 44 vertices, farthest 0.554 ft, from rvt-rs's surface at most 0.554 ft, volume rvt-rs 21.740763 ft3, Revit 22.960639 ft3, z rvt-rs 182.0866 to 185.6591, Revit 181.5323 to 185.6591
+    2859206: differs, Revit 64 vertices, farthest 0.554 ft, from rvt-rs's surface at most 0.554 ft, volume rvt-rs 31.335123 ft3, Revit 32.545524 ft3, z rvt-rs 186.1694 to 191.2730, Revit 185.6151 to 191.2730
+    2859210: differs, Revit 46 vertices, farthest 0.554 ft, from rvt-rs's surface at most 0.554 ft, volume rvt-rs 21.571483 ft3, Revit 22.781867 ft3, z rvt-rs 191.7833 to 195.3558, Revit 191.2290 to 195.3558
+    2861134: differs, Revit 46 vertices, farthest 0.544 ft, from rvt-rs's surface at most 2.01e-06 ft, volume rvt-rs 20.669716 ft3, Revit 20.669724 ft3, z rvt-rs 169.6194 to 172.8517, Revit 169.6194 to 172.8517
+    2861136: differs, Revit 64 vertices, farthest 0.544 ft, from rvt-rs's surface at most 0.544 ft, volume rvt-rs 29.849574 ft3, Revit 31.135956 ft3, z rvt-rs 173.3134 to 177.9309, Revit 172.7698 to 177.9309
+    2861140: differs, Revit 46 vertices, farthest 0.544 ft, from rvt-rs's surface at most 0.544 ft, volume rvt-rs 20.508775 ft3, Revit 21.795170 ft3, z rvt-rs 178.3926 to 181.6249, Revit 177.8490 to 181.6249
+    2862239: differs, Revit 44 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 21.070872 ft3, Revit 22.336232 ft3, z rvt-rs 195.8661 to 199.2260, Revit 195.3186 to 199.2260
+    2862241: differs, Revit 64 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 30.404936 ft3, Revit 31.660459 ft3, z rvt-rs 199.7059 to 204.5057, Revit 199.1584 to 204.5057
+    2862245: differs, Revit 46 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 20.906808 ft3, Revit 22.162321 ft3, z rvt-rs 204.9857 to 208.3455, Revit 204.4381 to 208.3455
+    2863241: differs, Revit 44 vertices, farthest 0.558 ft, from rvt-rs's surface at most 0.558 ft, volume rvt-rs 22.063114 ft3, Revit 23.263691 ft3, z rvt-rs 221.7848 to 225.4593, Revit 221.2270 to 225.4593
+    2863243: differs, Revit 64 vertices, farthest 0.558 ft, from rvt-rs's surface at most 0.558 ft, volume rvt-rs 31.783846 ft3, Revit 32.975070 ft3, z rvt-rs 225.9843 to 231.2336, Revit 225.4265 to 231.2336
+    2863247: differs, Revit 46 vertices, farthest 0.558 ft, from rvt-rs's surface at most 0.558 ft, volume rvt-rs 21.891325 ft3, Revit 23.082549 ft3, z rvt-rs 231.7585 to 235.4331, Revit 231.2008 to 235.4331
+    2867922: differs, Revit 46 vertices, farthest 0.544 ft, from rvt-rs's surface at most 2.19e-06 ft, volume rvt-rs 20.673587 ft3, Revit 20.673605 ft3, z rvt-rs 169.6194 to 172.8517, Revit 169.6194 to 172.8517
+    2867924: differs, Revit 64 vertices, farthest 0.544 ft, from rvt-rs's surface at most 0.544 ft, volume rvt-rs 29.849574 ft3, Revit 31.135956 ft3, z rvt-rs 173.3134 to 177.9309, Revit 172.7698 to 177.9309
+    2867928: differs, Revit 46 vertices, farthest 0.544 ft, from rvt-rs's surface at most 0.544 ft, volume rvt-rs 20.508775 ft3, Revit 21.795170 ft3, z rvt-rs 178.3926 to 181.6249, Revit 177.8490 to 181.6249
+    2869609: differs, Revit 44 vertices, farthest 0.554 ft, from rvt-rs's surface at most 0.554 ft, volume rvt-rs 21.744834 ft3, Revit 22.964951 ft3, z rvt-rs 182.0866 to 185.6591, Revit 181.5323 to 185.6591
+    2869611: differs, Revit 64 vertices, farthest 0.554 ft, from rvt-rs's surface at most 0.554 ft, volume rvt-rs 31.335123 ft3, Revit 32.545524 ft3, z rvt-rs 186.1694 to 191.2730, Revit 185.6151 to 191.2730
+    2869615: differs, Revit 46 vertices, farthest 0.554 ft, from rvt-rs's surface at most 0.554 ft, volume rvt-rs 21.571483 ft3, Revit 22.781867 ft3, z rvt-rs 191.7833 to 195.3558, Revit 191.2290 to 195.3558
+    2870918: differs, Revit 44 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 21.074818 ft3, Revit 22.340422 ft3, z rvt-rs 195.8661 to 199.2260, Revit 195.3186 to 199.2260
+    2870920: differs, Revit 64 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 30.404936 ft3, Revit 31.660459 ft3, z rvt-rs 199.7059 to 204.5057, Revit 199.1584 to 204.5057
+    2870924: differs, Revit 46 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 20.906808 ft3, Revit 22.162321 ft3, z rvt-rs 204.9857 to 208.3455, Revit 204.4381 to 208.3455
+    2871734: differs, Revit 44 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 21.074818 ft3, Revit 22.340424 ft3, z rvt-rs 208.8255 to 212.1853, Revit 208.2779 to 212.1853
+    2871736: differs, Revit 64 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 30.404936 ft3, Revit 31.660459 ft3, z rvt-rs 212.6653 to 217.4650, Revit 212.1177 to 217.4650
+    2871740: differs, Revit 46 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 20.906808 ft3, Revit 22.162321 ft3, z rvt-rs 217.9450 to 221.3048, Revit 217.3975 to 221.3048
+    2872554: differs, Revit 44 vertices, farthest 0.558 ft, from rvt-rs's surface at most 0.558 ft, volume rvt-rs 22.067246 ft3, Revit 23.268048 ft3, z rvt-rs 221.7848 to 225.4593, Revit 221.2270 to 225.4593
+    2872556: differs, Revit 64 vertices, farthest 0.558 ft, from rvt-rs's surface at most 0.558 ft, volume rvt-rs 31.783846 ft3, Revit 32.975070 ft3, z rvt-rs 225.9843 to 231.2336, Revit 225.4265 to 231.2336
+    2872560: differs, Revit 46 vertices, farthest 0.558 ft, from rvt-rs's surface at most 0.558 ft, volume rvt-rs 21.891325 ft3, Revit 23.082549 ft3, z rvt-rs 231.7585 to 235.4331, Revit 231.2008 to 235.4331
+    2897993: differs, Revit 44 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 21.070872 ft3, Revit 22.336235 ft3, z rvt-rs 208.8255 to 212.1853, Revit 208.2779 to 212.1853
+    2897995: differs, Revit 64 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 30.404936 ft3, Revit 31.660459 ft3, z rvt-rs 212.6653 to 217.4650, Revit 212.1177 to 217.4650
+    2897999: differs, Revit 46 vertices, farthest 0.548 ft, from rvt-rs's surface at most 0.548 ft, volume rvt-rs 20.906808 ft3, Revit 22.162321 ft3, z rvt-rs 217.9450 to 221.3048, Revit 217.3975 to 221.3048
+    3057703: differs, Revit 444 vertices, farthest 13.2 ft, from rvt-rs's surface at most 3.45 ft, volume rvt-rs 1307.118259 ft3, Revit 4.540287 ft3, z rvt-rs 224.3956 to 249.0814, Revit 236.5503 to 248.3907
+IfcStair in Revit's export with a body: 16; rvt-rs writes one for 16 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 0 of 16
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 1 of 16
+    1440837: differs, Revit 16 vertices, farthest 0.353 ft, from rvt-rs's surface at most 1.86e-06 ft, volume rvt-rs 6.756787 ft3, Revit 6.756788 ft3, z rvt-rs 180.8727 to 181.6820, Revit 180.8727 to 181.6820
+    1503002: differs, Revit 896 vertices, farthest 8.75 ft, from rvt-rs's surface at most 8.74 ft, volume rvt-rs 38.880709 ft3, Revit 41.086054 ft3, z rvt-rs 193.2415 to 195.4912, Revit 193.2415 to 199.1470
+    2598347: differs, Revit 1217 vertices, farthest 6.05 ft, from rvt-rs's surface at most 6.05 ft, volume rvt-rs 99.820203 ft3, Revit 101.602758 ft3, z rvt-rs 169.6194 to 181.4304, Revit 169.6194 to 185.3675
+    2859203: differs, Revit 2528 vertices, farthest 3.47 ft, from rvt-rs's surface at most 3.46 ft, volume rvt-rs 111.987261 ft3, Revit 115.430379 ft3, z rvt-rs 182.0866 to 195.3558, Revit 181.5323 to 198.8189
+    2861133: differs, Revit 2530 vertices, farthest 3.46 ft, from rvt-rs's surface at most 3.41 ft, volume rvt-rs 108.367957 ft3, Revit 110.441340 ft3, z rvt-rs 169.6194 to 181.6249, Revit 169.6194 to 185.0394
+    2862238: differs, Revit 2528 vertices, farthest 3.44 ft, from rvt-rs's surface at most 3.43 ft, volume rvt-rs 109.722509 ft3, Revit 113.111702 ft3, z rvt-rs 195.8661 to 208.3455, Revit 195.3186 to 211.7782
+    2863240: differs, Revit 2527 vertices, farthest 3.49 ft, from rvt-rs's surface at most 3.48 ft, volume rvt-rs 113.078177 ft3, Revit 116.556060 ft3, z rvt-rs 221.7848 to 235.4331, Revit 221.2270 to 238.9108
+    2867921: differs, Revit 2530 vertices, farthest 3.46 ft, from rvt-rs's surface at most 3.41 ft, volume rvt-rs 108.375216 ft3, Revit 110.448616 ft3, z rvt-rs 169.6194 to 181.6249, Revit 169.6194 to 185.0394
+    2869608: differs, Revit 2528 vertices, farthest 3.47 ft, from rvt-rs's surface at most 3.46 ft, volume rvt-rs 111.994721 ft3, Revit 115.438089 ft3, z rvt-rs 182.0866 to 195.3558, Revit 181.5323 to 198.8189
+    2870917: differs, Revit 2528 vertices, farthest 3.44 ft, from rvt-rs's surface at most 3.43 ft, volume rvt-rs 109.729843 ft3, Revit 113.119286 ft3, z rvt-rs 195.8661 to 208.3455, Revit 195.3186 to 211.7782
+    2871733: differs, Revit 2528 vertices, farthest 3.44 ft, from rvt-rs's surface at most 3.43 ft, volume rvt-rs 109.729843 ft3, Revit 113.119290 ft3, z rvt-rs 208.8255 to 221.3048, Revit 208.2779 to 224.7375
+    2872553: differs, Revit 2527 vertices, farthest 3.49 ft, from rvt-rs's surface at most 3.48 ft, volume rvt-rs 113.085697 ft3, Revit 116.563809 ft3, z rvt-rs 221.7848 to 235.4331, Revit 221.2270 to 238.9108
+    2897992: differs, Revit 2528 vertices, farthest 3.44 ft, from rvt-rs's surface at most 3.43 ft, volume rvt-rs 109.722509 ft3, Revit 113.111707 ft3, z rvt-rs 208.8255 to 221.3048, Revit 208.2779 to 224.7375
+    3057027: differs, Revit 2121 vertices, farthest 7.24 ft, from rvt-rs's surface at most 3.94 ft, volume rvt-rs 1503.178038 ft3, Revit 7.238467 ft3, z rvt-rs 224.3956 to 249.0814, Revit 236.5503 to 253.0184
+    3317210: differs, Revit 380 vertices, farthest 1.49 ft, from rvt-rs's surface at most 0.082 ft, volume rvt-rs 3.408748 ft3, Revit 0.133215 ft3, z rvt-rs 170.4396 to 173.3924, Revit 170.4396 to 173.3924
+    3317486: differs, Revit 380 vertices, farthest 1.49 ft, from rvt-rs's surface at most 0.082 ft, volume rvt-rs 3.408748 ft3, Revit 0.133215 ft3, z rvt-rs 170.4396 to 173.3924, Revit 170.4396 to 173.3924
+IfcSlab .LANDING. in Revit's export with a body: 27; rvt-rs writes one for 27 of them
+  vertices within 0.001 ft and volume within 0.0001 of Revit's: 5 of 27
+  every vertex of Revit's body within 0.001 ft of rvt-rs's surface: 5 of 27
+    1439250: match, Revit 8 vertices, farthest 2.24e-06 ft, from rvt-rs's surface at most 1.82e-06 ft, volume rvt-rs 146.837378 ft3, Revit 146.837379 ft3, z rvt-rs 181.2664 to 182.0866, Revit 181.2664 to 182.0866
+    1440353: match, Revit 8 vertices, farthest 2e-06 ft, from rvt-rs's surface at most 1.35e-06 ft, volume rvt-rs 39.756585 ft3, Revit 39.756584 ft3, z rvt-rs 181.2664 to 182.0866, Revit 181.2664 to 182.0866
+    1440748: match, Revit 8 vertices, farthest 2e-06 ft, from rvt-rs's surface at most 1.83e-06 ft, volume rvt-rs 125.074374 ft3, Revit 125.074370 ft3, z rvt-rs 181.2664 to 182.0866, Revit 181.2664 to 182.0866
+    1465817: match, Revit 8 vertices, farthest 2.24e-06 ft, from rvt-rs's surface at most 1.9e-06 ft, volume rvt-rs 146.929374 ft3, Revit 146.929415 ft3, z rvt-rs 181.2664 to 182.0866, Revit 181.2664 to 182.0866
+    1676104: match, Revit 8 vertices, farthest 1.41e-06 ft, from rvt-rs's surface at most 1.28e-06 ft, volume rvt-rs 53.082358 ft3, Revit 53.082358 ft3, z rvt-rs 195.0459 to 195.8661, Revit 195.0459 to 195.8661
+    2859208: differs, Revit 22 vertices, farthest 0.829 ft, from rvt-rs's surface at most 0.0804 ft, volume rvt-rs 18.740080 ft3, Revit 18.037807 ft3, z rvt-rs 185.1852 to 186.1694, Revit 185.1047 to 186.1694
+    2859212: differs, Revit 22 vertices, farthest 0.829 ft, from rvt-rs's surface at most 0.0805 ft, volume rvt-rs 18.599812 ft3, Revit 17.897345 ft3, z rvt-rs 190.7991 to 191.7833, Revit 190.7186 to 191.7833
+    2861138: differs, Revit 22 vertices, farthest 0.939 ft, from rvt-rs's surface at most 0.0211 ft, volume rvt-rs 18.740080 ft3, Revit 17.896666 ft3, z rvt-rs 172.3292 to 173.3134, Revit 172.3081 to 173.3134
+    2861142: differs, Revit 22 vertices, farthest 0.939 ft, from rvt-rs's surface at most 0.0211 ft, volume rvt-rs 18.599812 ft3, Revit 17.756388 ft3, z rvt-rs 177.4084 to 178.3926, Revit 177.3873 to 178.3926
+    2862243: differs, Revit 22 vertices, farthest 0.896 ft, from rvt-rs's surface at most 0.0432 ft, volume rvt-rs 18.740080 ft3, Revit 17.949162 ft3, z rvt-rs 198.7217 to 199.7059, Revit 198.6784 to 199.7059
+    2862247: differs, Revit 22 vertices, farthest 0.896 ft, from rvt-rs's surface at most 0.0432 ft, volume rvt-rs 18.599812 ft3, Revit 17.808838 ft3, z rvt-rs 204.0014 to 204.9857, Revit 203.9582 to 204.9857
+    2863245: differs, Revit 22 vertices, farthest 0.8 ft, from rvt-rs's surface at most 0.0984 ft, volume rvt-rs 18.740080 ft3, Revit 18.080861 ft3, z rvt-rs 225.0000 to 225.9843, Revit 224.9016 to 225.9843
+    2863249: differs, Revit 21 vertices, farthest 0.8 ft, from rvt-rs's surface at most 0.0984 ft, volume rvt-rs 18.599812 ft3, Revit 17.940509 ft3, z rvt-rs 230.7743 to 231.7585, Revit 230.6759 to 231.7585
+    2867926: differs, Revit 22 vertices, farthest 0.939 ft, from rvt-rs's surface at most 0.0211 ft, volume rvt-rs 18.743468 ft3, Revit 17.900049 ft3, z rvt-rs 172.3292 to 173.3134, Revit 172.3081 to 173.3134
+    2867930: differs, Revit 22 vertices, farthest 0.939 ft, from rvt-rs's surface at most 0.0211 ft, volume rvt-rs 18.599812 ft3, Revit 17.756388 ft3, z rvt-rs 177.4084 to 178.3926, Revit 177.3873 to 178.3926
+    2869613: differs, Revit 22 vertices, farthest 0.829 ft, from rvt-rs's surface at most 0.0804 ft, volume rvt-rs 18.743468 ft3, Revit 18.041195 ft3, z rvt-rs 185.1852 to 186.1694, Revit 185.1047 to 186.1694
+    2869617: differs, Revit 22 vertices, farthest 0.829 ft, from rvt-rs's surface at most 0.0805 ft, volume rvt-rs 18.599812 ft3, Revit 17.897345 ft3, z rvt-rs 190.7991 to 191.7833, Revit 190.7186 to 191.7833
+    2870922: differs, Revit 22 vertices, farthest 0.896 ft, from rvt-rs's surface at most 0.0432 ft, volume rvt-rs 18.743468 ft3, Revit 17.952543 ft3, z rvt-rs 198.7217 to 199.7059, Revit 198.6784 to 199.7059
+    2870926: differs, Revit 22 vertices, farthest 0.896 ft, from rvt-rs's surface at most 0.0432 ft, volume rvt-rs 18.599812 ft3, Revit 17.808838 ft3, z rvt-rs 204.0014 to 204.9857, Revit 203.9582 to 204.9857
+    2871738: differs, Revit 22 vertices, farthest 0.896 ft, from rvt-rs's surface at most 0.0432 ft, volume rvt-rs 18.743468 ft3, Revit 17.952545 ft3, z rvt-rs 211.6810 to 212.6653, Revit 211.6378 to 212.6653
+    2871742: differs, Revit 22 vertices, farthest 0.896 ft, from rvt-rs's surface at most 0.0432 ft, volume rvt-rs 18.599812 ft3, Revit 17.808838 ft3, z rvt-rs 216.9607 to 217.9450, Revit 216.9175 to 217.9450
+    2872558: differs, Revit 22 vertices, farthest 0.8 ft, from rvt-rs's surface at most 0.0984 ft, volume rvt-rs 18.743468 ft3, Revit 18.084241 ft3, z rvt-rs 225.0000 to 225.9843, Revit 224.9016 to 225.9843
+    2872562: differs, Revit 21 vertices, farthest 0.8 ft, from rvt-rs's surface at most 0.0984 ft, volume rvt-rs 18.599812 ft3, Revit 17.940509 ft3, z rvt-rs 230.7743 to 231.7585, Revit 230.6759 to 231.7585
+    2897997: differs, Revit 22 vertices, farthest 0.896 ft, from rvt-rs's surface at most 0.0432 ft, volume rvt-rs 18.740080 ft3, Revit 17.949165 ft3, z rvt-rs 211.6810 to 212.6653, Revit 211.6378 to 212.6653
+    2898001: differs, Revit 22 vertices, farthest 0.896 ft, from rvt-rs's surface at most 0.0432 ft, volume rvt-rs 18.599812 ft3, Revit 17.808838 ft3, z rvt-rs 216.9607 to 217.9450, Revit 216.9175 to 217.9450
+    3058084: differs, Revit 26 vertices, farthest 0.379 ft, from rvt-rs's surface at most 0.0984 ft, volume rvt-rs 196.059778 ft3, Revit 1.462462 ft3, z rvt-rs 235.9580 to 249.0814, Revit 248.9829 to 249.0814
+    3202702: differs, Revit 21 vertices, farthest 4.46 ft, from rvt-rs's surface at most 0.284 ft, volume rvt-rs 39.331710 ft3, Revit 39.160123 ft3, z rvt-rs 175.1969 to 176.1811, Revit 174.9125 to 176.1811
+exit 0

@@ -1,0 +1,4 @@
+elements: {"GlobalId = Revit's": 854}
+storeys: 15 of 15 equal Revit's
+spaces: 116 of 116 equal one of Revit's
+exit 0

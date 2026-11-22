@@ -1,0 +1,21 @@
+Revit values on objects rvt-rs writes: 205; equal: 183; different: 0; missing: 22; rvt-rs values Revit does not write: 1
+  Pset_AirSideSystemInformation.Name: 2, equal 0, different 0, missing 2
+  Pset_AirTerminalTypeCommon.Reference: 7, equal 7, different 0, missing 0
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 1, different 0, missing 0
+  Pset_BuildingElementProxyCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_BuildingStoreyCommon.AboveGround: 2, equal 2, different 0, missing 0
+  Pset_DuctConnection.ConnectionType: 6, equal 0, different 0, missing 6
+  Pset_DuctFittingTypeCommon.Reference: 32, equal 32, different 0, missing 0
+  Pset_DuctSegmentTypeCommon.Reference: 25, equal 25, different 0, missing 0
+  Pset_DuctSegmentTypeCommon.Shape: 31, equal 25, different 0, missing 6
+  Pset_EnvironmentalImpactIndicators.Reference: 74, equal 74, different 0, missing 0
+  Pset_PipeConnection.ConnectionType: 6, equal 0, different 0, missing 6
+  Pset_PipeFittingTypeCommon.Reference: 3, equal 3, different 0, missing 0
+  Pset_PipeSegmentOccurrence.InvertElevation: 6, equal 6, different 0, missing 0
+  Pset_PipeSegmentTypeCommon.Reference: 6, equal 6, different 0, missing 0
+  Pset_ProductRequirements.Name: 2, equal 0, different 0, missing 2
+IFC2X3 lengths IFC4 holds as quantities, not scored here: 93
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+  Pset_BuildingElementProxyCommon.IsExternal: 1, 0
+exit 0

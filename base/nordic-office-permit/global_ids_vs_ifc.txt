@@ -1,0 +1,4 @@
+elements: {"GlobalId = Revit's": 12711, "not in Revit's export": 1}
+storeys: 10 of 10 equal Revit's
+spaces: 308 of 308 equal one of Revit's
+exit 0

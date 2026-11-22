@@ -1,0 +1,12 @@
+Revit types 25 elements; 25 of them are in ours
+typed in ours: 21 of 25
+  entity agrees: 21 of 21
+  name agrees: 21 of 21
+  tag agrees: 21 of 21
+  global_id agrees: 17 of 21
+typed in ours but not in Revit's export: 0
+untyped in ours, by class: {'IfcStair': 1, 'IfcStairFlight': 1, 'IfcMember': 2}
+disagreements: {('global_id', 'IfcDoor'): 1, ('global_id', 'IfcWindow'): 3}
+TypeName carried: 22 of 25; equal to Revit's type: 22
+type objects in ours: 10
+exit 0

@@ -1,0 +1,4 @@
+pipes in Revit's export with an extruded body: 0; rvt-rs writes one for 0 of them
+rvt-rs profiles on those: {}
+Revit's profiles on those: {}
+exit 0

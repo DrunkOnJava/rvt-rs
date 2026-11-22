@@ -1,0 +1,5 @@
+   1178  ends
+    914  ends within 0.001 ft
+    914  ends within 0.01 ft
+    980  ends within 0.1 ft
+exit 0

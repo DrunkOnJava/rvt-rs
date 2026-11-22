@@ -1,0 +1,4 @@
+854 elements, 0 not on a storey
+against Revit's export:
+    854  same storey as Revit's
+exit 0

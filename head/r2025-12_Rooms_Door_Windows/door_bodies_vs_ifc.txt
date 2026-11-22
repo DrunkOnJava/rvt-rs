@@ -1,0 +1,4 @@
+1 IfcDoor in rvt-rs's file; tolerance 0.01 ft
+      1 mirror rule wrong
+      1 Revit's body off the wall's centre
+exit 0

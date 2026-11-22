@@ -1,0 +1,5 @@
+5 elements, 5 not on a storey
+      5  IfcWall
+against Revit's export:
+      5  on no storey; Revit's is a storey
+exit 0

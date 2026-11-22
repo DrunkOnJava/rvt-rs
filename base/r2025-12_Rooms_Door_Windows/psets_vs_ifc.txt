@@ -1,0 +1,31 @@
+Revit values on objects rvt-rs writes: 101; equal: 68; different: 1; missing: 32; rvt-rs values Revit does not write: 0
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 1, missing 0
+  Pset_BuildingCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.IsExternal: 10, equal 9, different 0, missing 1
+  Pset_BuildingElementProxyCommon.Reference: 10, equal 9, different 0, missing 1
+  Pset_BuildingStoreyCommon.AboveGround: 5, equal 4, different 0, missing 1
+  Pset_BuildingStoreyCommon.Reference: 5, equal 0, different 0, missing 5
+  Pset_BuildingSystemCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_DoorCommon.IsExternal: 1, equal 1, different 0, missing 0
+  Pset_DoorCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_EnvironmentalImpactIndicators.Reference: 19, equal 19, different 0, missing 0
+  Pset_ReinforcementBarPitchOfSlab.Reference: 1, equal 0, different 0, missing 1
+  Pset_ReinforcementBarPitchOfWall.Reference: 5, equal 5, different 0, missing 0
+  Pset_RoofCommon.IsExternal: 1, equal 1, different 0, missing 0
+  Pset_RoofCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_SlabCommon.IsExternal: 1, equal 0, different 0, missing 1
+  Pset_SlabCommon.PitchAngle: 1, equal 0, different 0, missing 1
+  Pset_SlabCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_SpaceCommon.IsExternal: 2, equal 2, different 0, missing 0
+  Pset_SpaceCommon.Reference: 2, equal 2, different 0, missing 0
+  Pset_SpaceHeaterTypeCommon.Reference: 2, equal 0, different 0, missing 2
+  Pset_WallCommon.ExtendToStructure: 5, equal 0, different 0, missing 5
+  Pset_WallCommon.IsExternal: 5, equal 5, different 0, missing 0
+  Pset_WallCommon.LoadBearing: 5, equal 0, different 0, missing 5
+  Pset_WallCommon.Reference: 5, equal 5, different 0, missing 0
+  Pset_WindowCommon.FireRating: 3, equal 0, different 0, missing 3
+  Pset_WindowCommon.IsExternal: 3, equal 0, different 0, missing 3
+  Pset_WindowCommon.Reference: 3, equal 3, different 0, missing 0
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+exit 0

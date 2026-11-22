@@ -1,0 +1,2 @@
+IfcDoor: 5 matched by Tag, OverallWidth and OverallHeight equal 4  differ 0  $ 1
+exit 0

@@ -1,0 +1,8 @@
+the wall Revit fills: 452
+no host; Revit writes no opening: 75
+another wall Revit cuts: 11
+openings with no filler: 44
+openings with no filler voiding Revit's wall: 27
+doors and windows not in Revit's export: 0
+not the wall Revit fills: 1694632 1694633 1728679 1795539 1795540 2597741 3015112 3016449 3020462 3064459 3083445
+exit 0

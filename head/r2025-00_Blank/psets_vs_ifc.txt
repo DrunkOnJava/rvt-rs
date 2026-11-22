@@ -1,0 +1,11 @@
+Revit values on objects rvt-rs writes: 8; equal: 0; different: 0; missing: 8; rvt-rs values Revit does not write: 0
+  Pset_BuildingCommon.IsLandmarked: 1, equal 0, different 0, missing 1
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+  Pset_BuildingCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.IsExternal: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_BuildingStoreyCommon.AboveGround: 1, equal 0, different 0, missing 1
+  Pset_BuildingStoreyCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_BuildingSystemCommon.Reference: 1, equal 0, different 0, missing 1
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+exit 0

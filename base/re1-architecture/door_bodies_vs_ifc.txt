@@ -1,0 +1,5 @@
+5 IfcDoor in rvt-rs's file; tolerance 0.01 ft
+      4 mirror rule gives Revit's
+      1 no host wall in rvt-rs's file
+      4 Revit's body centred on the wall
+exit 0
