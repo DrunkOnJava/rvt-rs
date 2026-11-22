@@ -781,8 +781,11 @@ def main():
             if cc == c:
                 per_graph[graph][kept] += 1
         if per_graph:
+            placements = collections.defaultdict(set)
+            for g, _ in scored:
+                placements[g["graph"]].add(g["owner"])
             print(f"bit 0x{FLAG_BIT:x} on one edge only, stored gaps by graph, {c}: "
-                  + "; ".join(f"{graph}: the other edge's end {k['other']}, the flagged edge's end {k['flagged']}"
+                  + "; ".join(f"{graph} ({len(placements[graph])} placements): the other edge's end {k['other']}, the flagged edge's end {k['flagged']}"
                               for graph, k in sorted(per_graph.items())))
         told = {k: n for (cc, k), n in other_end.items() if cc == c}
         if told:
