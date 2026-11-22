@@ -1,0 +1,76 @@
+door flips: placements: release 2025 probe doors 5 windows 0; the Revit export has 5 doors and windows, the rvt-rs export 5
+door flips: placements: rvt-rs site placement rotation is the identity: yes
+door flips: placements: probe elements 5; in the Revit export 5; not in the Revit export 0; not in the rvt-rs export 0; compared 5
+door flips: placements: IFC class equal to the Revit export 5 of 5
+door flips: placements doors bound to a plain wall: checked 4; same 4; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 1; decoded record carries both flips and the opening facing 4; rvt-rs voids a wall 4; Revit voids a wall 4
+door flips: placements doors bound to a plain wall rule: rvt-rs writes Revit axes for 4 of 4; of those same 4; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements doors bound to a plain wall state 00: n=2; same 2; half turn 0; quarter turn 0; other 0; default axes 0; rvt-rs X against the stored X: same 2
+door flips: placements doors bound to a plain wall state 01: n=1; same 1; half turn 0; quarter turn 0; other 0; default axes 0; rvt-rs X against the stored X: reverse 1
+door flips: placements doors bound to a plain wall state 11: n=1; same 1; half turn 0; quarter turn 0; other 0; default axes 1; rvt-rs X against the stored X: same 1
+door flips: placements doors bound to none: checked 1; same 0; half turn 1; quarter turn 0; other 0; rvt-rs axes are the default axes 1; decoded record carries both flips and the opening facing 1; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements doors bound to none rule: rvt-rs writes Revit axes for 0 of 1; of those same 0; half turn 0; quarter turn 0; other 0; the other 1 same 0; half turn 1; quarter turn 0; other 0
+door flips: placements doors bound to none state 10: n=1; same 0; half turn 1; quarter turn 0; other 0; default axes 1; rvt-rs X against the stored X: reverse 1
+door flips: placements doors no stored transform: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements doors no stored transform rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements doors X direction: Revit +X, rvt-rs +X: n=1
+door flips: placements doors X direction: Revit +Y, rvt-rs +Y: n=2
+door flips: placements doors X direction: Revit -X, rvt-rs +X: n=1
+door flips: placements doors X direction: Revit -Y, rvt-rs -Y: n=1
+door flips: placements doors origin in plan against Revit: within 0.01 ft 0, within 0.5 ft 0, within 3 ft 4, farther 1
+door flips: placements doors rvt-rs Z axis is up: 5 of 5
+door flips: placements windows bound to a plain wall: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements windows bound to a plain wall rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements windows bound to none: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements windows bound to none rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements windows no stored transform: checked 0; same 0; half turn 0; quarter turn 0; other 0; rvt-rs axes are the default axes 0; decoded record carries both flips and the opening facing 0; rvt-rs voids a wall 0; Revit voids a wall 0
+door flips: placements windows no stored transform rule: rvt-rs writes Revit axes for 0 of 0; of those same 0; half turn 0; quarter turn 0; other 0; the other 0 same 0; half turn 0; quarter turn 0; other 0
+door flips: placements windows origin in plan against Revit: within 0.01 ft 0, within 0.5 ft 0, within 3 ft 0, farther 0
+door flips: placements windows rvt-rs Z axis is up: 0 of 0
+door flips: placements all: checked 5; same 4; half turn 1; quarter turn 0; other 0
+door flips: placements rule: written for 4; differ from Revit 0
+door flips: origin: stored transform read 5 of 5 compared; d is Revit origin less the stored origin; the corner of an opening is its lowest corner in Revit axes about the stored origin where the flips are equal, and the negated highest x and y with the lowest z where they differ
+door flips: origin doors bound to a plain wall: checked 4; Revit origin is the stored origin within 0.001 ft 0, 0.01 ft 0, 0.5 ft 0; farther than 0.5 ft 4
+door flips: origin doors bound to a plain wall: Revit export has a meshed opening for 4; rvt-rs export for 4
+door flips: origin doors bound to a plain wall: by type entity: groups 4; one offset in the stored axes 4 of 4, of those with more than one element 0 of 0; one offset in the Revit axes 4 of 4, of those with more than one element 0 of 0
+door flips: origin doors bound to a plain wall: by symbol: groups 3; one offset in the stored axes 2 of 3, of those with more than one element 0 of 1; one offset in the Revit axes 3 of 3, of those with more than one element 1 of 1
+door flips: origin doors bound to a plain wall: by symbol and state: groups 4; one offset in the stored axes 4 of 4, of those with more than one element 0 of 0; one offset in the Revit axes 4 of 4, of those with more than one element 0 of 0
+door flips: origin doors bound to a plain wall: type entities with an opening 4; holding more than one opening bottom height 0
+door flips: origin doors bound to a plain wall: with Revit opening 4 of 4: x of Revit origin is the x of its corner within 0.001 ft 4, 0.01 ft 4, 0.05 ft 4
+door flips: origin doors bound to a plain wall: with Revit opening 4 of 4: y of Revit origin is the y of its corner within 0.001 ft 4, 0.01 ft 4, 0.05 ft 4
+door flips: origin doors bound to a plain wall: with Revit opening 4 of 4: z of Revit origin is the z of its corner within 0.001 ft 4, 0.01 ft 4, 0.05 ft 4
+door flips: origin doors bound to a plain wall: with Revit opening 4: all three axes within 0.001 ft 4, 0.01 ft 4, 0.05 ft 4
+door flips: origin doors bound to a plain wall: with rvt-rs opening 4 of 4: x of Revit origin is the x of its corner within 0.001 ft 4, 0.01 ft 4, 0.05 ft 4
+door flips: origin doors bound to a plain wall: with rvt-rs opening 4 of 4: y of Revit origin is the y of its corner within 0.001 ft 4, 0.01 ft 4, 0.05 ft 4
+door flips: origin doors bound to a plain wall: with rvt-rs opening 4 of 4: z of Revit origin is the z of its corner within 0.001 ft 4, 0.01 ft 4, 0.05 ft 4
+door flips: origin doors bound to a plain wall: with rvt-rs opening 4: all three axes within 0.001 ft 4, 0.01 ft 4, 0.05 ft 4
+door flips: origin doors bound to a plain wall: with no Revit opening 0: Revit origin is the stored origin within 0.001 ft 0, 0.01 ft 0, 0.5 ft 0
+door flips: origin doors bound to a plain wall state 00: n=2; signs of d in the stored axes (-,+,0) 1, (-,-,0) 1; in Revit axes (-,+,0) 1, (-,-,0) 1
+door flips: origin doors bound to a plain wall state 01: n=1; signs of d in the stored axes (+,+,0) 1; in Revit axes (-,-,0) 1
+door flips: origin doors bound to a plain wall state 11: n=1; signs of d in the stored axes (-,+,0) 1; in Revit axes (-,+,0) 1
+door flips: origin doors bound to a plain wall: largest distance of Revit origin from the corner of the Revit opening, per axis x y z: +0.000, +0.000, +0.000 ft over 4
+door flips: origin doors bound to a plain wall: largest distance of Revit origin from the corner of the rvt-rs opening, per axis x y z: +0.000, +0.000, +0.000 ft over 4
+door flips: origin doors bound to none: checked 1; Revit origin is the stored origin within 0.001 ft 1, 0.01 ft 1, 0.5 ft 1; farther than 0.5 ft 0
+door flips: origin doors bound to none: Revit export has a meshed opening for 0; rvt-rs export for 0
+door flips: origin doors bound to none: by type entity: groups 1; one offset in the stored axes 1 of 1, of those with more than one element 0 of 0; one offset in the Revit axes 1 of 1, of those with more than one element 0 of 0
+door flips: origin doors bound to none: by symbol: groups 1; one offset in the stored axes 1 of 1, of those with more than one element 0 of 0; one offset in the Revit axes 1 of 1, of those with more than one element 0 of 0
+door flips: origin doors bound to none: by symbol and state: groups 1; one offset in the stored axes 1 of 1, of those with more than one element 0 of 0; one offset in the Revit axes 1 of 1, of those with more than one element 0 of 0
+door flips: origin doors bound to none: type entities with an opening 0; holding more than one opening bottom height 0
+door flips: origin doors bound to none: with Revit opening 0
+door flips: origin doors bound to none: with rvt-rs opening 0
+door flips: origin doors bound to none: with no Revit opening 1: Revit origin is the stored origin within 0.001 ft 1, 0.01 ft 1, 0.5 ft 1
+door flips: origin doors bound to none state 10: n=1; signs of d in the stored axes (0,0,0) 1; in Revit axes (0,0,0) 1
+door flips: origin by type: door Single-Flush:Single-Flush (type 478291) bound to a plain wall: n=2, type entities 2; offset of Revit origin in Revit axes (-1.230, -0.210, +0.000) x 2
+door flips: origin by type and state: door Single-Flush:Single-Flush (type 478291) bound to a plain wall state 00: n=1; offset in the stored axes (-1.230, -0.210, +0.000) x 1
+door flips: origin by type and state: door Single-Flush:Single-Flush (type 478291) bound to a plain wall state 01: n=1; offset in the stored axes (+1.230, +0.210, +0.000) x 1
+door flips: origin by type: door Door-Curtain-Wall-Double-Glas:69" x 72" (type 480990) bound to none: n=1, type entities 1; offset of Revit origin in Revit axes (+0.000, +0.000, +0.000) x 1
+door flips: origin by type and state: door Door-Curtain-Wall-Double-Glas:69" x 72" (type 480990) bound to none state 10: n=1; offset in the stored axes (+0.000, +0.000, +0.000) x 1
+door flips: origin by type: door Door-Double-Sliding:60" x 94" (type 479427) bound to a plain wall: n=1, type entities 1; offset of Revit origin in Revit axes (-2.460, +0.200, +0.000) x 1
+door flips: origin by type and state: door Door-Double-Sliding:60" x 94" (type 479427) bound to a plain wall state 11: n=1; offset in the stored axes (-2.460, +0.200, +0.000) x 1
+door flips: origin by type: door Door-Double-Sliding:84" x 94" (type 479429) bound to a plain wall: n=1, type entities 1; offset of Revit origin in Revit axes (-3.530, +0.200, +0.000) x 1
+door flips: origin by type and state: door Door-Double-Sliding:84" x 94" (type 479429) bound to a plain wall state 00: n=1; offset in the stored axes (-3.530, +0.200, +0.000) x 1
+row {"binding": "bound to a plain wall", "d_revit": [-3.526903, 0.203412, 0.0], "d_stored": [-3.526903, 0.203412, 0.0], "ftype": 31545, "gaps_ours": [1e-06, 0.0, 0.0], "gaps_theirs": [0.0, 0.0, 0.0], "host": 415431, "id": 416336, "kind": "door", "origin": "farther", "ours_axes": [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], "ours_box": [[-3.526904, 0.203412, 0.0], [3.526902, 0.629921, 7.874016]], "ours_vs_stored": "same", "ours_x": "+Y", "own_revit": [-1e-06, 0.747539, 0.0], "rule": true, "st": "00", "symbol": "479429", "theirs_axes": [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], "theirs_box": [[-3.526903, 0.203412, 0.0], [3.526903, 0.629921, 7.874016]], "theirs_height": 7.874016, "theirs_voids": true, "theirs_width": 7.053806, "theirs_x": "+Y", "type_name": "Door-Double-Sliding:84\" x 94\"", "verdict": "same", "voids": true}
+row {"binding": "bound to a plain wall", "d_revit": [-2.46063, 0.203412, 0.0], "d_stored": [-2.46063, 0.203412, 0.0], "ftype": 31654, "gaps_ours": [1e-06, 1e-06, 0.0], "gaps_theirs": [0.0, 0.0, 0.0], "host": 415911, "id": 416703, "kind": "door", "origin": "within 3 ft", "ours_axes": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "ours_box": [[-2.460629, 0.203413, 0.0], [2.460631, 0.629922, 7.874016]], "ours_vs_stored": "same", "ours_x": "+X", "own_revit": [1e-06, 0.74754, 0.0], "rule": true, "st": "11", "symbol": "479427", "theirs_axes": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "theirs_box": [[-2.46063, 0.203412, 0.0], [2.46063, 0.629921, 7.874016]], "theirs_height": 7.874016, "theirs_voids": true, "theirs_width": 4.92126, "theirs_x": "+X", "type_name": "Door-Double-Sliding:60\" x 94\"", "verdict": "same", "voids": true}
+row {"binding": "bound to a plain wall", "d_revit": [-1.230315, -0.213255, 0.0], "d_stored": [-1.230315, -0.213255, 0.0], "ftype": 31717, "gaps_ours": [1e-06, 0.0, 0.0], "gaps_theirs": [0.0, 0.0, 0.0], "host": 415431, "id": 416909, "kind": "door", "origin": "within 3 ft", "ours_axes": [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], "ours_box": [[-1.230316, -0.213255, 0.0], [1.230314, 0.213255, 7.874016]], "ours_vs_stored": "same", "ours_x": "+Y", "own_revit": [-1e-06, 1.188602, 0.0], "rule": true, "st": "00", "symbol": "478291", "theirs_axes": [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], "theirs_box": [[-1.230315, -0.213255, 0.0], [1.230315, 0.213255, 7.874016]], "theirs_height": 7.874016, "theirs_voids": true, "theirs_width": 2.46063, "theirs_x": "+Y", "type_name": "Single-Flush:Single-Flush", "verdict": "same", "voids": true}
+row {"binding": "bound to a plain wall", "d_revit": [-1.230315, -0.213255, 0.0], "d_stored": [1.230315, 0.213255, 0.0], "ftype": 31781, "gaps_ours": [1e-06, 1e-06, 0.0], "gaps_theirs": [0.0, 0.0, 0.0], "host": 416297, "id": 417097, "kind": "door", "origin": "within 3 ft", "ours_axes": [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], "ours_box": [[-1.230316, -0.213254, 0.0], [1.230314, 0.213256, 7.874016]], "ours_vs_stored": "reverse", "ours_x": "-Y", "own_revit": [-1e-06, 1.188603, 0.0], "rule": true, "st": "01", "symbol": "478291", "theirs_axes": [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]], "theirs_box": [[-1.230315, -0.213255, 0.0], [1.230315, 0.213255, 7.874016]], "theirs_height": 7.874016, "theirs_voids": true, "theirs_width": 2.46063, "theirs_x": "-Y", "type_name": "Single-Flush:Single-Flush", "verdict": "same", "voids": true}
+row {"binding": "bound to none", "d_revit": [0.0, 0.0, 0.0], "d_stored": [0.0, 0.0, 0.0], "ftype": 32153, "host": null, "id": 445975, "kind": "door", "origin": "within 3 ft", "ours_axes": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "ours_vs_stored": "reverse", "ours_x": "+X", "own_revit": [1e-06, 1.585851, -0.006086], "rule": false, "st": "10", "symbol": "480990", "theirs_axes": [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]], "theirs_height": 7.676691, "theirs_voids": false, "theirs_width": 6.010074, "theirs_x": "-X", "type_name": "Door-Curtain-Wall-Double-Glas:69\" x 72\"", "verdict": "half turn", "voids": false}
+exit 0

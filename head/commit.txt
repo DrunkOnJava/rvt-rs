@@ -1,0 +1,1 @@
+6b4058d17c07947543db4b6d2bc4c2e671fcedca research(elements): RE-357 measures where Revit places a door's or window's origin: one offset per type entity, x and z from the opening, y not (#1465)
