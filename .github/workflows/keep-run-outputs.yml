@@ -1,8 +1,8 @@
 # Keep a Measure run's small scored outputs past the 90 days GitHub keeps its artifacts (#2124).
 #
 # The evidence pages cite Measure runs by id. This copies what those citations read from a run's
-# `measure-head`, `measure-base`, `measure-verdict`, `compare-scorer-diff` and `measure-timing`
-# artifacts (scorer outputs, export digests, export diagnostics, timings and the verdict;
+# `measure-head`, `measure-base`, `measure-verdict`, `compare-scorer-diff`, `measure-timing` and
+# `measure-pairs` artifacts (scorer outputs, export digests, export diagnostics, timings and the verdict;
 # tools/ci/keep-run-outputs.py says which and why) into a commit of their own, with no parent, and
 # pushes it to `refs/evidence/<run id>`. A ref outside refs/heads and refs/tags is not fetched by a
 # clone, so the kept outputs cost a clone nothing. A citation links to the kept file that holds its
@@ -76,7 +76,7 @@ jobs:
             exit 1
           fi
           case "$PART" in
-            outputs) ref="refs/evidence/$RUN_ID"; artifacts="measure-head measure-base measure-verdict compare-scorer-diff measure-timing" ;;
+            outputs) ref="refs/evidence/$RUN_ID"; artifacts="measure-head measure-base measure-verdict compare-scorer-diff measure-timing measure-pairs" ;;
             probes) ref="refs/evidence/$RUN_ID-probes"; artifacts="measure-head measure-base" ;;
             holdout) ref="refs/evidence/$RUN_ID-holdout"; artifacts="measure-head measure-base" ;;
             *) echo "::error::part must be outputs, probes or holdout"; exit 1 ;;

@@ -11,9 +11,10 @@ and the run's verdict. `<source>` holds a run's artifacts as `gh run download -n
   can be large and holds a file's coordinates), `ifc.sha256`, `diagnostics.json`, `timings.log` and
   the witness observations (`witness-*.json`), and at the artifact's top the outputs that read
   several models (`areas_across_saves.txt` and the like) and its `commit.txt`;
-- `verdict/`, `compare/` and `timing/`, the whole of `measure-verdict`, `compare-scorer-diff` and
-  `measure-timing` (each model's export time and peak memory on both sides), except that the scorer
-  diff's sections for the models whose folders are left out (below) are left out too.
+- `verdict/`, `compare/`, `timing/` and `pairs/`, the whole of `measure-verdict`, `compare-scorer-diff`,
+  `measure-timing` (each model's export time and peak memory on both sides) and `measure-pairs` (a
+  pair scorer's output on each open model's two exports, #2148), except that the scorer diff's
+  sections for the models whose folders are left out (below) are left out too.
 
 Models are kept only from the folders Measure gives the models anyone can fetch: `core-interior`,
 `einhoven`, `re1-*`, `nordic-*`, `r2025-*`, `sample-*`, `family-*`, and a `spent-*` pair that
@@ -50,7 +51,7 @@ import shutil
 import sys
 
 MODEL_SIDES = {"measure-head": "head", "measure-base": "base"}
-WHOLE = {"measure-verdict": "verdict", "compare-scorer-diff": "compare", "measure-timing": "timing"}
+WHOLE = {"measure-verdict": "verdict", "compare-scorer-diff": "compare", "measure-timing": "timing", "measure-pairs": "pairs"}
 OPEN_FOLDERS = ("core-interior", "einhoven")
 OPEN_PREFIXES = ("re1-", "nordic-", "r2025-", "sample-", "family-")
 LEFT_OUT_PREFIXES = ("holdout-", "racadv-", "bimcollab-")
