@@ -129,6 +129,9 @@
 //!     more_rings=<n> widest_candidate=<ft>: over the file, the stored gaps two rings hold, those
 //!     that meet the candidate and the export's join, those only one ring holds and those more
 //!     than two do;
+//!   pairrings rings_with_gaps=<n> rings_the_join_touches=<n> rings_the_join_closes=<n>: the
+//!     rings with a stored gap of `TOUCHING` or more, those with one the export's join takes
+//!     under 0.0001 ft, and those all of whose such gaps it takes, which it alone can close;
 //!   ownnbr graph=<ElementId> face=<n> loop=<n> at=<k> side=<a|b> order=<prev|next>
 //!     class=<class> poly_p=<ft> poly_q=<ft> end_p=<ft> end_q=<ft>
 //!     shared_p=<ft> shared_q=<ft> join=<ft>: the two edges adjacent to the shared edge in
@@ -2083,6 +2086,8 @@ fn report_orient_pairs() {
     }
     let (mut pairs, mut candidates, mut one, mut more) = (0, 0, 0, 0);
     let (mut exact, mut exact_under) = (0, 0);
+    // Rings by their gaps, and the gaps the export's join takes, to count the rings it closes.
+    let mut taken = BTreeSet::new();
     let mut widest = 0f64;
     for ((graph, _), views) in &by_gap {
         match views.len() {
@@ -2114,6 +2119,9 @@ fn report_orient_pairs() {
                     exact += 1;
                     if a.d.max(b.d) < 1e-4 {
                         exact_under += 1;
+                        for r in [a, b] {
+                            taken.insert((r.graph, r.face, r.loop_index, r.at));
+                        }
                     }
                 }
                 println!(
@@ -2139,7 +2147,22 @@ fn report_orient_pairs() {
             _ => more += 1,
         }
     }
+    // A ring by graph, face and loop: its gaps, and those the join takes.
+    type Ring = (u64, usize, usize);
+    type Taken = (usize, usize);
+    let mut rings: BTreeMap<Ring, Taken> = BTreeMap::new();
+    for r in rows.iter() {
+        let ring = rings.entry((r.graph, r.face, r.loop_index)).or_default();
+        ring.0 += 1;
+        ring.1 += usize::from(taken.contains(&(r.graph, r.face, r.loop_index, r.at)));
+    }
+    let touched = rings.values().filter(|(_, n)| *n > 0).count();
+    let closed = rings.values().filter(|(all, n)| *n > 0 && n == all).count();
     println!(
         "pairorients pairs={pairs} candidate={candidates} exact={exact} exact_under_0.0001ft={exact_under} one_ring={one} more_rings={more} widest_candidate={widest:.9}"
+    );
+    println!(
+        "pairrings rings_with_gaps={} rings_the_join_touches={touched} rings_the_join_closes={closed}",
+        rings.len()
     );
 }
