@@ -1,0 +1,1 @@
+bcb021076bae0df45107cf8756cdbe588e0fb42a fix(ifc): the plan topology's Areas bounded, checked against the lines' arrangement, and counts only from the three.js export (#1261, #1194) (RE-333)
