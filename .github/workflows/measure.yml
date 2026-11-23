@@ -1857,20 +1857,20 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
       # #1541: a scorer the run names, or a probe's scorer, that exits non-zero
-      # fails the run, not only an annotation on a green one (run 45072403351
-      # was green with its one probe scorer exiting 2 on both offices). Each
-      # shard lists them in scorer-failures-<shard>.txt; this is last, so every
-      # upload and the summary are written first.
+      # on the head side fails the run, not only an annotation on a green one
+      # (run 45072403351 was green with its one probe scorer exiting 2 on both
+      # offices). Each shard lists them in scorer-failures-<shard>.txt; the base
+      # side's list is main's, annotated and kept but failing nothing. This is
+      # last, so every upload and the summary are written first.
       - name: A scorer the run names did not fail
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           failed=0
-          for f in measure-head/scorer-failures-*.txt measure-base/scorer-failures-*.txt; do
+          for f in measure-head/scorer-failures-*.txt; do
             [ -f "$f" ] || continue
-            side=${f%%/*}
             while IFS=$'\t' read -r model step status; do
-              echo "::error::${side#measure-}, ${model}: the scorer ${step}, named in this run, ${status}"
+              echo "::error::head, ${model}: the scorer ${step}, named in this run, ${status}"
               failed=1
             done < "$f"
           done
