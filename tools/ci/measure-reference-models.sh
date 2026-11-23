@@ -307,9 +307,15 @@ score() { # name args...
   # `exit N` line already keeps them from being whole.
   if [ "$status" != 0 ] && { [[ "$step" == probe_score* ]] || { [ "${#STEPS[@]}" -gt 0 ] && wanted "$step"; }; }; then
     echo "::error::$(basename "$dir"): the scorer $step, named in this run, exited $status (see its $step.txt)"
-    local model; model=$(basename "$dir")
-    case "$model" in holdout-*|racadv-*|bimcollab-*|spent-*) model="a model kept to counts" ;; esac
-    printf '%s\t%s\texit %s\n' "$model" "$step" "$status" >> "$OUT/scorer-failures-${SHARD:-all}.txt"
+    # The same-project gate has its own verdict: a head-side failure turns the
+    # run red through tools/ci/check-bodies-across-saves.sh and the
+    # `same-project gates` check, and a base-side one is main's (in run
+    # 43330924424 main failed it on six samples that the head fixed).
+    if [ "$step" != bodies_across_saves ]; then
+      local model; model=$(basename "$dir")
+      case "$model" in holdout-*|racadv-*|bimcollab-*|spent-*) model="a model kept to counts" ;; esac
+      printf '%s\t%s\texit %s\n' "$model" "$step" "$status" >> "$OUT/scorer-failures-${SHARD:-all}.txt"
+    fi
   fi
 }
 
