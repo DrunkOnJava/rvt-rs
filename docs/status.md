@@ -473,7 +473,7 @@ window's body, and the opening it fills, is where it was in world
 coordinates, as a saved mesh and as a record box, and its GlobalId, type
 GlobalId and host wall are unchanged, on Core Interior, RE1 Architecture and
 the two office files (`tools/re/placed_bodies_vs_base.py`, runs [42092391898](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42092391898)
-and [42106731054](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106731054)). A door set in a curtain wall, which rvt-rs binds to no wall since Revit's export
+and [42106731054](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106731054); scored again in CI, on the same exports, by Measure runs [45074892701](https://github.com/DrunkOnJava/rvt-rs/actions/runs/45074892701) and [45074900834](https://github.com/DrunkOnJava/rvt-rs/actions/runs/45074900834) (kept: each model's `pairs/placed_bodies_vs_base.txt` in the [file list][kept-43] and the [box-body run's][kept-44])). A door set in a curtain wall, which rvt-rs binds to no wall since Revit's export
 cuts it no opening, is placed the same way, reversed also where its curtain
 wall's `m_isFlipped` is set (RE-474, #1494): 269 of 269 equal to Revit's on
 the BIM4LCA office's four files and RE1 Architecture (Measure run
@@ -2304,3 +2304,5 @@ acceptance limits are 0.3048 mm sampled distance and 0.01% volume error.
 [kept-40]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/e4dee7a0d096743e78a904f20b1ca9dc51e08ebf?recursive=1
 [kept-41]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/85fff80ddfdb56867adec0cd497daff060f5dfad/log/lines.txt
 [kept-42]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/ed933f84fff1da6d9d96ad06f0c5d90c577fd2c3/log/lines.txt
+[kept-43]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/0cd8b9c180475efa54ecafa75c0311d9d4b6ec8b?recursive=1
+[kept-44]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/348187501f1f97da8a417acdf44b26784595a1c9?recursive=1
