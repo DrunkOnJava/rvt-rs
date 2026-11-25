@@ -2802,3 +2802,32 @@ RE-495's shared points between two cylinder faces were refined to 0.00025 ft, a 
 ## Addendum — RE-497 a ring's stored edge ends within 0.00001 ft along the surface are one point (2026-11-21)
 
 Plane and cylinder faces refused as `disconnected UV boundary` have rings already open in the edge points the file stores: on the BIM4LCA housing and office the largest gap is under 0.00001 ft on 134 of 302 and 80 of 123 plane rings and on 39 of 65 and 4 of 12 cylinder rings, many cylinder rings parting only in their angle; those from 0.00001 to 0.0001 ft are not read, and from 0.0001 ft up to 0.0015 ft a piece of edge looks missing. Ends closer than 0.00001 ft along the surface (a chord on a plane, a helix on a cylinder) are now one point; wider gaps stay refused (Griffin, 2026-11-21). On `main` that draws two office curtain mullions within 0.000003 ft of Revit's bodies and gives four walls base quantities equal to Revit's, with nothing newly refused. See [RE-497](../reports/element-framing/RE-497-touching-ring-ends.md).
+
+## Addendum — views, sheets and placed viewports from the native records (#1117, 2026-11-26)
+
+A view is a `DBView*` record on channel 102; a sheet is a `DBViewDrafting` whose
+`m_sheetNumber` is non-empty; a `Viewport` record with `m_ownerDBViewId` names
+the sheet's view and `m_dbViewId` the view it shows, and one with
+`m_ownerDBViewId` unset is the internal viewport every view carries. On a local
+Revit 2024 project this reads 165 views (75 `DBViewPlan`, 39 `DBViewSection`,
+19 `DBView3d`, 14 `DBViewSchedule`, 8 `DBViewDrafting` sheets, 7
+`DBViewLegend`, 2 `DBViewAnonDrafting` and one report), 8 sheets, 161
+`Viewport` records, 22 of them placed on sheets.
+
+The position on the sheet is `m_offset + m_scale * crop centre`, where the crop
+box is the view's `Viewer.m_boundedSpace.m_boundOffset` with its
+`m_boundActive` flags and `m_viewerFlags` bit 0 (the crop region on). One
+viewport of another Revit 2024 model agreed with the API's
+`Viewport.GetBoxCenter()` to the five decimals it printed (#1117); seven of the
+22 placed viewports here have an active crop and a centre, the rest being
+uncropped, schedules or legends.
+
+A 3D view's `Viewer.m_basis` is the view plane's `m_horzDir`, `m_vertDir` and
+reversed `m_viewDir` on all 12 3D views here whose `Viewer` is decoded, so the
+basis is the view's own frame rather than an independent one.
+`m_boundedSpace.m_orig` is the eye and `m_basis` the right, up and looking
+directions. `m_targetPos` is on the looking axis on 9 of the 12; on the other 3
+it is off the axis, so a target is reported only where it lies on it. The
+reader is `rvt::views` (`rvt-views`, `probes/examples/probe_1117_views.rs`);
+the centre rule and the camera are experimental, and the catalog's evidence
+boundary is in `docs/views.md`.

@@ -218,6 +218,10 @@ name = "rvt-capabilities"
 path = "src/bin/rvt_capabilities.rs"
 
 [[bin]]
+name = "rvt-views"
+path = "src/bin/rvt_views.rs"
+
+[[bin]]
 name = "rvt-schedule"
 path = "src/bin/rvt_schedule.rs"
 
