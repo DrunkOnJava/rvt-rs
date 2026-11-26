@@ -353,6 +353,19 @@ jobs:
           RVT_SAMPLES_DIR: ${{ matrix.with_corpus && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           RVT_REQUIRE_CORPUS: ${{ matrix.with_corpus && '1' || '' }}
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast
+      # Exercise the Saved limits tests on the Linux leg in both fast and full CI.
+      # Use Measure's pinned fetcher with only the two projects the tests require.
+      - name: Saved graph budget integration tests on Autodesk 2023 projects
+        if: runner.os == 'Linux' && matrix.label != 'msrv'
+        shell: bash
+        env:
+          RVT_SAMPLE_PROJECTS_DIR: ${{ github.workspace }}/_sample-projects/saved-graph-limits
+        run: |
+          tools/fetch-autodesk-samples.sh "$RVT_SAMPLE_PROJECTS_DIR" 2023 2023 \
+            racbasicsampleproject.rvt rstbasicsampleproject.rvt
+          test -s "$RVT_SAMPLE_PROJECTS_DIR/2023-racbasicsampleproject.rvt"
+          test -s "$RVT_SAMPLE_PROJECTS_DIR/2023-rstbasicsampleproject.rvt"
+          cargo test --locked --profile ci -p rvt --test integration saved_mesh_limits::
       # The MCP server (rvt-mcp/, `rvt-rs-mcp`) is a crate of its own, so the
       # manifest above does not run its test: this does. The end-to-end test
       # starts the built server, drives it over real stdio in both MCP
