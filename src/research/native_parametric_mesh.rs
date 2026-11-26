@@ -565,6 +565,7 @@ fn trim_is_rectangle(
     segments: &[Vec<[f64; 2]>],
     min: [f64; 2],
     max: [f64; 2],
+    try_joined_polygon: bool,
 ) -> Result<bool> {
     use crate::native_parametric_surface::Curve;
     let mut sides: [Vec<[f64; 2]>; 4] = std::array::from_fn(|_| Vec::new());
@@ -589,6 +590,7 @@ fn trim_is_rectangle(
             sides[side].push([a[axis].min(b[axis]), a[axis].max(b[axis])]);
         }
     }
+    let mut use_polygon = false;
     for (side, intervals) in sides.iter_mut().enumerate() {
         let axis = if side % 2 == 0 { 0 } else { 1 };
         if intervals.is_empty() {
@@ -613,17 +615,32 @@ fn trim_is_rectangle(
             continue;
         }
         intervals.sort_by(|a, b| a[0].total_cmp(&b[0]));
+        // Keep the joined polygon for narrow gaps. A full rectangle would
+        // lose the boundaries of its saved edge segments.
+        let within_gap = |a: f64, b: f64| -> Result<bool> {
+            if !try_joined_polygon || a >= b {
+                return Ok(false);
+            }
+            let corner = if matches!(side, 0 | 3) { min } else { max };
+            Ok(surface.hermite_iso_trim_length_within(axis, corner[1 - axis], a, b, 1e-6))
+        };
         let mut end = min[axis];
         for p in intervals {
-            ensure!(
-                (p[0] - end).abs() < 1e-7,
-                "overlapping or incomplete trim perimeter"
-            );
+            if (p[0] - end).abs() >= 1e-7 {
+                ensure!(
+                    within_gap(end, p[0])?,
+                    "overlapping or incomplete trim perimeter"
+                );
+                use_polygon = true;
+            }
             end = p[1];
         }
-        ensure!((end - max[axis]).abs() < 1e-7, "incomplete trim perimeter");
+        if (end - max[axis]).abs() >= 1e-7 {
+            ensure!(within_gap(end, max[axis])?, "incomplete trim perimeter");
+            use_polygon = true;
+        }
     }
-    Ok(true)
+    Ok(!use_polygon)
 }
 
 /// A loop as a closed polygon in the surface's parameters: each edge's samples in the
@@ -1212,7 +1229,12 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         max[0] > min[0] && max[1] > min[1],
         "degenerate parametric domain"
     );
-    let rectangular = loops.len() == 1 && trim_is_rectangle(&surface, &loops[0], min, max)?;
+    let rectangular = loops.len() == 1 && {
+        let try_joined_polygon = matches!(&surface, ParametricSurface::HermiteSurf { .. })
+            && bounds[0] <= 1e-6
+            && std::env::var_os("RVT_2085_HERMITE_PERIMETER").is_some();
+        trim_is_rectangle(&surface, &loops[0], min, max, try_joined_polygon)?
+    };
     // RE-443 measured only rectangular point/arc patches. The general trim
     // reader (RE-430) must not widen that new surface's measured boundary.
     let collapsed = matches!(

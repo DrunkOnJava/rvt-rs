@@ -653,6 +653,55 @@ impl ParametricSurface {
             } => hermite_eval(grid_u, grid_v, nodes, u, v).0,
         })
     }
+    /// Certify that the isoparametric trim between two parameters fits inside
+    /// a model-space length limit. The control polygon bounds arc length for
+    /// each restricted cubic, including segments that cross a grid knot.
+    pub(crate) fn hermite_iso_trim_length_within(
+        &self,
+        axis: usize,
+        fixed: f64,
+        start: f64,
+        end: f64,
+        limit: f64,
+    ) -> bool {
+        let Self::HermiteSurf { u, v, nodes, .. } = self else {
+            return false;
+        };
+        let knots = [u, v][axis];
+        let first = knots.partition_point(|&knot| knot <= start);
+        let last = knots.partition_point(|&knot| knot < end);
+        let at = |parameter| {
+            let uv = if axis == 0 {
+                [parameter, fixed]
+            } else {
+                [fixed, parameter]
+            };
+            let (point, du, dv) = hermite_eval(u, v, nodes, uv[0], uv[1]);
+            (point, [du, dv][axis])
+        };
+        let mut left = start;
+        let (mut point, mut tangent) = at(left);
+        let mut length = 0.;
+        for right in knots[first..last]
+            .iter()
+            .copied()
+            .chain(std::iter::once(end))
+        {
+            let (next_point, next_tangent) = at(right);
+            let tangent_scale = (right - left) / 3.;
+            let start_edge = mul(tangent, tangent_scale);
+            let end_edge = mul(next_tangent, tangent_scale);
+            let middle_edge =
+                std::array::from_fn(|k| next_point[k] - point[k] - start_edge[k] - end_edge[k]);
+            length += len(start_edge) + len(middle_edge) + len(end_edge);
+            if !length.is_finite() || length >= limit {
+                return false;
+            }
+            (left, point, tangent) = (right, next_point, next_tangent);
+        }
+        true
+    }
+
     pub fn normal(&self, u: f64, v: f64) -> Result<Point> {
         let e = self.bounds();
         ensure!(
