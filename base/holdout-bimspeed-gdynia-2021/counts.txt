@@ -1,0 +1,129 @@
+psets: Revit values on objects rvt-rs writes: 1289; equal: 689; different: 18; missing: 582; rvt-rs values Revit does not write: 8
+psets:   Pset_BeamCommon.IsExternal: 15, equal 10, different 0, missing 5
+psets:   Pset_BeamCommon.LoadBearing: 15, equal 15, different 0, missing 0
+psets:   Pset_BeamCommon.Reference: 15, equal 10, different 0, missing 5
+psets:   Pset_BeamCommon.Slope: 10, equal 0, different 0, missing 10
+psets:   Pset_BeamCommon.Span: 10, equal 0, different 0, missing 10
+psets:   Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+psets:   Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingStoreyCommon.AboveGround: 5, equal 5, different 0, missing 0
+psets:   Pset_DoorCommon.IsExternal: 25, equal 0, different 0, missing 25
+psets:   Pset_DoorCommon.Reference: 25, equal 15, different 0, missing 10
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 214, equal 160, different 0, missing 54
+psets:   Pset_ManufacturerTypeInformation.Manufacturer: 21, equal 0, different 0, missing 21
+psets:   Pset_OpeningElementCommon.Reference: 1, equal 0, different 0, missing 1
+psets:   Pset_ReinforcementBarCountOfIndependentFooting.Reference: 11, equal 0, different 0, missing 11
+psets:   Pset_ReinforcementBarPitchOfBeam.Reference: 15, equal 10, different 0, missing 5
+psets:   Pset_ReinforcementBarPitchOfContinuousFooting.Reference: 11, equal 0, different 0, missing 11
+psets:   Pset_ReinforcementBarPitchOfSlab.Reference: 20, equal 8, different 0, missing 12
+psets:   Pset_ReinforcementBarPitchOfWall.Reference: 114, equal 104, different 0, missing 10
+psets:   Pset_RoofCommon.IsExternal: 1, equal 0, different 0, missing 1
+psets:   Pset_RoofCommon.ProjectedArea: 1, equal 0, different 0, missing 1
+psets:   Pset_RoofCommon.Reference: 1, equal 1, different 0, missing 0
+psets:   Pset_RoofCommon.TotalArea: 1, equal 0, different 0, missing 1
+psets:   Pset_SlabCommon.IsExternal: 20, equal 0, different 0, missing 20
+psets:   Pset_SlabCommon.LoadBearing: 8, equal 0, different 0, missing 8
+psets:   Pset_SlabCommon.PitchAngle: 12, equal 8, different 0, missing 4
+psets:   Pset_SlabCommon.Reference: 20, equal 8, different 0, missing 12
+psets:   Pset_SlabCommon.ThermalTransmittance: 14, equal 0, different 0, missing 14
+psets:   Pset_SpaceCommon.Reference: 19, equal 17, different 2, missing 0
+psets:   Pset_StairCommon.IsExternal: 3, equal 0, different 0, missing 3
+psets:   Pset_StairCommon.NumberOfRiser: 3, equal 0, different 0, missing 3
+psets:   Pset_StairCommon.NumberOfTreads: 3, equal 0, different 0, missing 3
+psets:   Pset_StairCommon.Reference: 3, equal 0, different 0, missing 3
+psets:   Pset_StairCommon.RiserHeight: 3, equal 0, different 0, missing 3
+psets:   Pset_StairCommon.TreadLength: 3, equal 0, different 0, missing 3
+psets:   Pset_StairFlightCommon.NosingLength: 4, equal 0, different 0, missing 4
+psets:   Pset_StairFlightCommon.NumberOfRiser: 4, equal 0, different 0, missing 4
+psets:   Pset_StairFlightCommon.NumberOfTreads: 4, equal 0, different 0, missing 4
+psets:   Pset_StairFlightCommon.Reference: 4, equal 0, different 0, missing 4
+psets:   Pset_StairFlightCommon.RiserHeight: 4, equal 0, different 0, missing 4
+psets:   Pset_StairFlightCommon.TreadLength: 4, equal 0, different 0, missing 4
+psets:   Pset_StairFlightCommon.TreadLengthAtInnerSide: 4, equal 0, different 0, missing 4
+psets:   Pset_StairFlightCommon.TreadLengthAtOffset: 4, equal 0, different 0, missing 4
+psets:   Pset_WallCommon.ExtendToStructure: 104, equal 88, different 16, missing 0
+psets:   Pset_WallCommon.IsExternal: 114, equal 104, different 0, missing 10
+psets:   Pset_WallCommon.LoadBearing: 104, equal 0, different 0, missing 104
+psets:   Pset_WallCommon.Reference: 114, equal 104, different 0, missing 10
+psets:   Pset_WallCommon.ThermalTransmittance: 114, equal 0, different 0, missing 114
+psets:   Pset_WindowCommon.IsExternal: 21, equal 0, different 0, missing 21
+psets:   Pset_WindowCommon.Reference: 21, equal 21, different 0, missing 0
+psets:   Pset_WindowCommon.ThermalTransmittance: 21, equal 0, different 0, missing 21
+psets:   Pset_DoorCommon.IsExternal: 1
+psets:   Pset_DoorCommon.Reference: 1
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 10
+psets:   Pset_OpeningElementCommon.Reference: 9
+psets: rvt-rs values Revit does not write, on objects Revit writes and on others:
+psets:   Pset_DoorCommon.Reference: 1, 0
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 0, 2
+psets:   Pset_ReinforcementBarPitchOfWall.Reference: 0, 1
+psets:   Pset_RoofCommon.Reference: 0, 1
+psets:   Pset_WallCommon.ExtendToStructure: 0, 1
+psets:   Pset_WallCommon.IsExternal: 0, 1
+psets:   Pset_WallCommon.Reference: 0, 1
+Revit quantities on objects rvt-rs writes: 0; equal: 0; different: 0; missing: 0; rvt-rs quantities Revit does not write: 0
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 0
+walls whose Length is rvt-rs's curve's: 0; Revit's Axis's: 0; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+exit 0
+names:     104  family instance | IfcWall | Name differs | ObjectType differs
+names:      21  family instance | IfcWindow | Name equal | ObjectType equal
+names:      16  family instance | IfcDoor | Name equal | ObjectType equal
+names:      11  family instance | IfcFooting | Name differs | ObjectType differs
+names:      11  family instance | IfcSlab | Name differs | ObjectType differs
+names:      10  family instance | IfcBeam | Name equal | ObjectType equal
+names:       4  family instance | IfcStairFlight | Name differs | ObjectType differs
+names:       3  family instance | IfcStair | Name differs | ObjectType differs
+names:       1  family instance | IfcRoof | Name differs | ObjectType differs
+layer sets:     214  layer names: Revit's, in Revit's order
+layer sets:       3  layer names: differ from Revit's
+layer sets:     108  layer sets written
+layer sets:     107  positions not comparable
+layer sets:   whole layer sets within 0.001 ft of Revit's: 106 of 107
+layer sets:   whole layer sets within 0.01 ft of Revit's: 106 of 107
+layer sets:   whole layer sets within 0.1 ft of Revit's: 106 of 107
+class sets: Revit's export: 203 paired elements and spaces, 0 untagged and 2 repeated Tags left out
+class sets: rvt-rs's export: 203 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class sets: IfcBeam                              10     10      0      0  
+class sets: IfcDoor                              16     16      0      0  
+class sets: IfcFooting                           12     11      0      1  
+class sets: IfcRoof                               2      1      0      1  
+class sets: IfcSlab                              11     11      0      0  
+class sets: IfcSpace                             19     18      0      1  
+class sets: IfcStair                              3      3      0      0  
+class sets: IfcStairFlight                        4      4      0      0  
+class sets: IfcWall                              26     26      0      0  
+class sets: IfcWallStandardCase                  79      0     78      1  IfcWall 78
+class sets: IfcWindow                            21     21      0      0  
+class sets extra: IfcRoof                               1
+class sets extra: IfcSpace                              1
+class sets extra: IfcStairFlight                        1
+class sets extra: IfcWall                               1
+global ids: elements: {"GlobalId = Revit's": 181, "not in Revit's export": 3}
+global ids: storeys: 0 of 5 equal Revit's
+global ids: storeys whose GlobalId is one of Revit's: 0 of 5
+global ids: IfcProject: 0 of 1 equal Revit's
+global ids: IfcSite: 0 of 1 equal Revit's
+global ids: IfcBuilding: 0 of 1 equal Revit's
+global ids: spaces: 18 of 19 equal one of Revit's
+space profiles: matched by globalid
+space profiles: IfcSpace in rvt-rs 19, in Revit 19, with a body 19 and 19
+space profiles: in both 18, only in rvt-rs 1, only in Revit 1
+space profiles: only in Revit and in rvt-rs without a body 0, paired where the Revit top surface has no area 0
+space profiles: area within 0.1% 18, within 1% 18, off 0
+space profiles: outline within 0.01 ft 0, off 18
+space profiles: vertices within 0.01 ft 0, off 18
+space profiles: boundary within 0.01 ft 0, off 18
+space profiles: area within 0.1% and outline within 0.01 ft 0
+space profiles: rvt-rs room stored solid: 18, area within 0.1% 18, outline within 0.01 ft 0, both 0, boundary within 0.01 ft 0
+space overlaps: upward faces, stored solid: 18 paired rooms, area within 0.1% of Revit's on 18
+space overlaps: downward faces, stored solid: 18 paired rooms, area within 0.1% of Revit's on 18
+space overlaps: every face, stored solid: 18 paired rooms, area within 0.1% of Revit's on 18
+storeys: 184 elements, 18 not on a storey
+storeys:      11  IfcFooting
+storeys:       5  IfcStairFlight
+storeys:       2  IfcSlab
+storeys: against Revit's export:
+storeys:     164  same storey as Revit's
+storeys:      17  on no storey; Revit's is a storey
