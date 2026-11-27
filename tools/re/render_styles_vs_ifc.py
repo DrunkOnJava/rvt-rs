@@ -19,7 +19,7 @@ The rows (#2112, registered before the first run):
 Prints counts only, lines starting `render styles:`.
 
 Usage:
-    python3 tools/re/render_styles_vs_ifc.py probe.txt REVIT.ifc
+    python3 tools/re/render_styles_vs_ifc.py probe.txt REVIT.ifc [--list]
 """
 
 import collections
@@ -67,15 +67,17 @@ def items_of(representation, seen):
 
 
 def main():
-    if len(sys.argv) != 3:
+    # Measure appends `--list` to every probe scorer's arguments; this one lists nothing more.
+    args = [a for a in sys.argv[1:] if a != "--list"]
+    if len(args) != 2:
         print(__doc__)
         return 2
     elements = {}
-    for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    for line in open(args[0], encoding="utf-8", errors="replace"):
         match = ELEMENT.match(line.rstrip("\n"))
         if match:
             elements[match.group(1)] = (match.group(2), match.group(3).split("|") if match.group(3) else [])
-    model = ifcopenshell.open(sys.argv[2])
+    model = ifcopenshell.open(args[1])
     styles_of = collections.defaultdict(list)
     by_name = {}
     for styled in model.by_type("IfcStyledItem"):
