@@ -16,6 +16,10 @@
 //!   styles category=<door|window|light> elements=<n> one_style=<n> several_styles=<n> parts=<n> parts_without_style=<n>
 //!   style class=<record class | none(<id>) | declared, no record | undeclared> ids=<n> parts=<n>
 //!   style material name=<name> parts=<n>   (the 40 with the most parts)
+//!   element tag=<ElementId> category=<door|window|light> parts=<n> materials=<name>|<name>...
+//!     the names of the materials its visible parts' styles are, `?<id>` for a style the file
+//!     names no material for; `tools/re/render_styles_vs_ifc.py` sets them beside the surface
+//!     styles Revit's export gives the element (Revit names a surface style after its material).
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_2112_render_styles -- MODEL.rvt
@@ -90,6 +94,22 @@ fn main() -> Result<()> {
         for part in &parts {
             *style_parts.entry(part.render_style_id).or_default() += 1;
         }
+        let materials: Vec<String> = styles
+            .iter()
+            .map(|id| {
+                u32::try_from(*id)
+                    .ok()
+                    .and_then(|id| names.get(&id))
+                    .cloned()
+                    .unwrap_or_else(|| format!("?{id}"))
+            })
+            .collect();
+        println!(
+            "element tag={} category={cat} parts={} materials={}",
+            element.identity.element_id,
+            parts.len(),
+            materials.join("|")
+        );
     }
     for (cat, [elements, one, several, parts, unstyled]) in &tally {
         println!(
