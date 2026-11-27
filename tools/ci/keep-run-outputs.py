@@ -35,6 +35,12 @@ figures the evidence pages cite keep a source (Griffin, 2026-11-22). Their folde
 and the `rac_advanced` and BIMcollab folders, stay out, and the folder-name scan below allows
 the held-out models' names for this part alone.
 
+With `--part summaries` it keeps each held-out and `rac_advanced` model's `counts.txt` and
+`ifc.sha256`, the summary counts and export digests Measure keeps of them, and `commit.txt`, for a
+commit beside the run's first: the evidence pages cite held-out exports as byte for byte as before
+and the `rac_advanced` pairs' counts (Griffin, 2026-11-27, #2148). The BIMcollab folders stay out,
+and the folder-name scan allows the held-out and `rac_advanced` names for this part alone.
+
 With `--part log --lines <pattern>` it keeps the lines of a run's log that `<pattern>` (a Python
 regular expression, searched in each line's text) finds, for a figure a run prints only to its log,
 such as a viewer test's measurement (#2148). `<source>/run.log` holds the log as `gh run view --log`
@@ -49,7 +55,7 @@ with JSON's doubled backslashes made single (a Windows path in `diagnostics.json
 `C:\\Users\\...`), and the name of any folder left out. The timing table's rows name files, not
 folders, so its rows for a model a held-out list names are left out by name.
 
-    python3 tools/ci/keep-run-outputs.py <source> <out> --run <run id> [--part outputs|probes|holdout|log] [--lines <pattern>] [--root <repository>]
+    python3 tools/ci/keep-run-outputs.py <source> <out> --run <run id> [--part outputs|probes|holdout|summaries|log] [--lines <pattern>] [--root <repository>]
 """
 
 import argparse
@@ -130,9 +136,14 @@ def drop_left_out_sections(path, held, notes):
         notes.add(f"the {dropped} section{'' if dropped == 1 else 's'} of `{os.path.basename(path)}` that diff a left-out folder")
 
 
+SUMMARY_PREFIXES = ("holdout-", "racadv-")
+
+
 def kept_file(name, part):
     if part == "holdout":
         return name == "counts.txt"
+    if part == "summaries":
+        return name in ("counts.txt", "ifc.sha256")
     if PROBE_OUTPUT.fullmatch(name):
         return part == "probes"
     if part == "probes":
@@ -156,16 +167,18 @@ def keep_models(source, out, spent, held, notes, part):
             continue
         if part == "holdout" and top.startswith("holdout-"):
             pass
+        elif part == "summaries" and top.startswith(SUMMARY_PREFIXES):
+            pass
         elif top.startswith(LEFT_OUT_PREFIXES):
             notes.add(f"the {top.split('-', 1)[0]} models' folders, whose outputs Measure keeps to summary counts")
             continue
-        elif part == "holdout":
+        elif part in ("holdout", "summaries"):
             # The other folders' outputs are the run's first kept commit's.
             if not (top in OPEN_FOLDERS or top.startswith(OPEN_PREFIXES) or top.startswith("spent-")):
                 sys.exit(f"{source}: a folder no rule here knows, {top}: say whether its model is one anyone can fetch first")
             continue
-        if part == "holdout":
-            # A held-out folder, let through above: only its `counts.txt` is kept.
+        if part in ("holdout", "summaries"):
+            # A folder let through above: only the files `kept_file` names are kept.
             pass
         elif top.startswith("spent-"):
             name = top[len("spent-"):]
@@ -224,7 +237,7 @@ def main():
     parser.add_argument("source")
     parser.add_argument("out")
     parser.add_argument("--run", required=True)
-    parser.add_argument("--part", choices=("outputs", "probes", "holdout", "log"), default="outputs")
+    parser.add_argument("--part", choices=("outputs", "probes", "holdout", "summaries", "log"), default="outputs")
     parser.add_argument("--lines", help="with --part log: a Python regular expression; the log lines it finds are kept")
     parser.add_argument("--root", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     args = parser.parse_args()
@@ -280,7 +293,7 @@ def main():
                 commit = (handle.read().split() or [""])[0]
     with open(os.path.join(args.out, "KEPT.md"), "w", encoding="utf-8") as handle:
         handle.write(
-            f"# Measure run {args.run}: kept {({'outputs': 'outputs', 'probes': 'probe outputs', 'holdout': 'held-out counts'})[args.part]}\n\n"
+            f"# Measure run {args.run}: kept {({'outputs': 'outputs', 'probes': 'probe outputs', 'holdout': 'held-out counts', 'summaries': 'held-out and rac_advanced counts and digests'})[args.part]}\n\n"
             f"From the artifacts of https://github.com/DrunkOnJava/rvt-rs/actions/runs/{args.run}"
             + (f", whose head side measured `{commit}`" if commit else "")
             + ", by `tools/ci/keep-run-outputs.py` (#2124), which says what is kept and why:\n\n"
@@ -290,7 +303,10 @@ def main():
                 "probes": f"Left out: everything but the probes' own output and `commit.txt`, which `refs/evidence/{args.run}` keeps",
                 "holdout": "Left out: everything but each held-out model's `counts.txt`, the summary counts Measure keeps of it "
                            "(Griffin, 2026-11-22), and `commit.txt`; the held-out folders' other files; and every other "
-                           f"folder, whose outputs `refs/evidence/{args.run}` keeps"}[args.part]
+                           f"folder, whose outputs `refs/evidence/{args.run}` keeps",
+                "summaries": "Left out: everything but each held-out and `rac_advanced` model's `counts.txt` and `ifc.sha256`, "
+                             "the summary counts and export digests Measure keeps of them (Griffin, 2026-11-27, #2148), and "
+                             f"`commit.txt`; the BIMcollab folders; and every other folder, whose outputs `refs/evidence/{args.run}` keeps"}[args.part]
             + "".join(f"; {note}" for note in sorted(notes)) + ".\n"
         )
     return scan(args.out, held, args.part, lines)
@@ -301,9 +317,10 @@ def scan(out, held, part, lines):
     patterns = [re.compile(p) for p in PII]
     # The held-out part keeps held-out folders, so their names are no leak there; the other
     # left-out kinds stay refused.
-    refused = [p for p in LEFT_OUT_PREFIXES if not (part == "holdout" and p == "holdout-")]
+    refused = [p for p in LEFT_OUT_PREFIXES
+               if not (part == "holdout" and p == "holdout-") and not (part == "summaries" and p in SUMMARY_PREFIXES)]
     patterns.append(re.compile(r"(^|[^A-Za-z0-9])(" + "|".join(re.escape(p) for p in refused) + r")[A-Za-z0-9]"))
-    if part != "holdout":
+    if part not in ("holdout", "summaries"):
         patterns += [re.compile(r"(^|[^A-Za-z0-9])" + re.escape(f"spent-{name}") + r"($|[^A-Za-z0-9_.-])") for name in sorted(held)]
     hits = []
     for directory, _, names in os.walk(out):

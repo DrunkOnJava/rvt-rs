@@ -69,6 +69,10 @@ mod element_record_stages;
 mod element_records_2025;
 #[path = "../export_decisions_counts.rs"]
 mod export_decisions_counts;
+#[path = "../family_2014_extrusions.rs"]
+mod family_2014_extrusions;
+#[path = "../family_blends.rs"]
+mod family_blends;
 #[path = "../family_instance_ports.rs"]
 mod family_instance_ports;
 #[path = "../field_type_coverage.rs"]

@@ -8,6 +8,281 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-11-27
+
+0.26.0 draws more of the geometry Revit saves in the file. Faces whose profile
+is a Hermite spline, and cylinder faces bounded by two trim loops, are read and
+drawn from the saved graphics, and two round faces that share an edge now meet
+along it. A stair landing of a monolithic type gets its family and type object,
+a ceiling in pieces gets the area Revit's export gives it, and the value limit
+for reading saved graphics can be raised from Rust and from `rvt-ifc`. A
+research catalog of a file's views, sheets and placed viewports comes with
+it. Thanks to shifatrHtH and zenglanmu for code in this release, and to
+HWT-25, yuriyu-webiya and C00kieMonsta for the reports and measurements behind
+several of these changes.
+
+Not measured, and said in each entry:
+- Most of the bodies newly drawn from saved meshes are on Autodesk's sample projects, which have no Revit export: 17 of the 25 Hermite-profile bodies (#2094) and most of the 1,289 two-loop cylinder bodies (#2102).
+- On Snowdon Towers Architectural more of Revit's vertices lie beyond 0.001 ft of the bodies that #2104 moves; whether that is a worse fit is not shown (#2111).
+- A landing's family word is the one an English Revit writes, which the file does not hold; on Revit 2026 and 2027 the landings' type objects and the spiral rule are measured by the reporter on one model (#2046).
+- Two rules rest on one building, listed in `docs/one-project-rules.md`: a ceiling in pieces takes one piece's area (#1209), and a wall end whose join names an omitted target stops flat (#1814). A ceiling written as a covering whatever its type says rests on one ceiling (#2074).
+- A beam whose record box is more than five times its saved mesh across its line is drawn from the mesh (#2158), a rule that fires on no measured model; whether it reaches the nine beams reported on #2158 is not yet known.
+- The views, sheets and viewports catalog is a research module, and its viewport centre rule rests on one viewport measured against the Revit API (#1117).
+
+Measured against 0.25.0 on every model Measure holds, the 18 held-out files and the `rac_advanced` pairs included (run [46013208552](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46013208552), `main` at 1cf84255). The pull requests merged after it move no export. Their own runs give every export byte-identical to their base: 101 of 101 for #2166 ([46014093032](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46014093032)) and for #2159 ([46016851547](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46016851547)), and 120 of 120, the held-out ones included, for #2164 ([46004282060](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46004282060)). #2165 changes only maintainer tooling. The release adds only its notes, version strings, witness files and fixtures.
+
+- 38 of the 126 exports differ, and 35 of the 102 `diagnostics.json` files. 24 of the 38 have no Revit export on Measure, so no scorer says which of what moved there is Revit's: Autodesk's sample projects of 2023 to 2027 and Snowdon Towers' five; each entry was measured in its own pull request. The other 14 are scored against Revit's own exports: 10 of the 12 BIM4LCA files, three of RE1's four and one of the 18 held-out files (counts only). On them the property, quantity, element name and `PredefinedType` censuses lose no value equal to Revit's and gain none that differs.
+  - Quantities (#1209, #2074, #2085): on six BIM4LCA files the values equal to Revit's rise by 37, with 37 fewer missing, and none differs: 16 coverings' `GrossArea` on the four office files (#1209) and the timber housing ceiling's on its as-built file (#2074), and the five base quantities of 3 walls on the office as built and 1 on the concrete housing at permit (#2085).
+  - Properties (#2046, #2074): the values equal to Revit's rise by 2 and the values Revit does not write fall by 4, all on the timber housing's ceiling, now a covering. Each of the 8 new landing type objects holds a `Pset_SlabCommon.IsExternal` in Revit's export that rvt-rs does not write, so the missing values rise by 8, less the ceiling's 2: 6 in all. None differs.
+  - Types (#2046): each of the eight BIM4LCA building files gains the landing type object Revit's export holds, so its `IfcSlabType`s of `LANDING` number as Revit's do (2 on the housing, 3 on the office), and every landing is typed: 4 more on each concrete housing file, 1 on each timber housing file, 21 on each concrete office file and 17 on each timber office file, each with Revit's entity and Revit's `ObjectType`. The type objects' names differ from Revit's, as every type object's name does (none agrees, before or after), so the type scorer's name disagreements rise by as many.
+  - Bodies (#2085, #2094, #2102, #2104, #2111): 160 bodies on the scored files that were boxes are drawn from their saved meshes. The housing's 4 sauna doors a file and the held-out house's 10 doors are within 1 per cent of Revit's volume and within 0.01 ft (#2102); on the housing the door scorer's boxes equal to Revit's rise by 4 a file and its mirror-rule misses fall from 11 to 7. The timber office's 2 stair flights a file now have every vertex of Revit's body within 0.001 ft of rvt-rs's surface (31 of 31 flights, where 29 were), at 112.116 ft³ against Revit's 112.115 (#2094). The terrain files' ramp is within 1 per cent and 0.001 ft, and their ramp flight within 0.01 ft but at half Revit's volume; none of each file's five ramp flights is within 1 per cent of Revit's volume (#2094). 6 curtain mullions, 2 on each concrete office file and 1 on each timber one, whose oriented boxes were Revit's extents, are within 0.01 ft of Revit's (#2085). The office's 30 grab bars a file are drawn round where Revit's export draws their legs square, at 1.11 of its volume and up to 0.0116 ft off (#2102). Round bodies already outside 1 per cent of Revit's volume move slightly further, and no count moves (#2104, #2111): the BIM4LCA housing's railings from 1.1985 to 1.2005 of Revit's volume, with Revit's farthest vertex from their surface from 0.0079 to 0.0081 ft, RE1's railing from 1.0175 to 1.0181 and its five pipe tees from 1.1433 to 1.1441. On 4 of the housing's stairs a file, Revit's farthest vertex from rvt-rs's surface also goes from 0.0079 to 0.0081 ft, while their volumes move 0.0006 to 0.0009 ft³ closer to Revit's; the stair counts do not move.
+  - Walls (#1814, #2074): on the concrete housing at permit the walls with both ends within 0.001 ft of Revit's rise from 274 to 282 of 345, and no end gets further off. The wall-height scorer reads cuts from rvt-rs's floors, roofs and footings, so on the timber housing as built, whose ceiling is now a covering, its bases "cut and Revit's" fall from 7 to 3 and 4 become "uncut, Revit cuts"; no wall body moves. It fits its plan turn to the walls' box middles, so on the concrete housing at permit the 8 walls' new ends turn the fit by 0.016° and its median wall-middle residual goes from 0.0093 to 0.0131 ft; none of its counts moves there, and the frame scorer's residuals are unchanged.
+  - `diagnostics.json`: the bodies drawn from saved meshes rise by 1,322 on 28 files, and the boxes fall by as many (1,275 record boxes, 41 turned and 6 oriented family boxes). The refusals for two cylinder trim loops fall by 1,289 and for a Hermite profile alone by 104; a body that still fails for something else names that instead, and 48 refusals on four files that said `missing current symbol graphics` now say `not decoded` with the reader's reason (#2085). `exported.total_entities` rises by 17 on 5 files, and `decoded.parameter_value_count` falls by 2 on the timber housing as built, the ceiling's slab values.
+  - Validation: IfcOpenShell's schema and rule checks find nothing new on any file they read. Snowdon Towers Plumbing's export is now over the 120 MB Measure validates, so it was not validated (#2103).
+  - The same-project gates pass on the measured commit; the `rac_advanced` saves of 2025 to 2027 compare 43 beams and landings with the 2024 save, where they compared 42.
+
+### Upgrading from 0.25
+
+- Nothing in the stable API is removed or changed, and the minimum Rust is
+  still 1.87.
+- Exports of models with such faces change: more bodies are drawn from their
+  saved meshes instead of their record boxes (1,289 bodies on the open models
+  from #2102 alone), so those files grow, and where two round faces share an
+  edge they also hold more triangles than 0.25.0 wrote (#2104, #2111). The
+  release notes below give each entry's own measure; no total size change was
+  measured.
+- `rvt::control::Stage` has a new variant, `PartitionRecovery`; the enum is
+  `#[non_exhaustive]`, so a `match` on it already has a wildcard arm.
+
+### Added
+
+- **The progress an open reports covers the recovery over the element
+  records (#1195).** After the last `Partitions/*` stream was inflated, the
+  decoder reported nothing until the saved graphics, and on Core Interior
+  that stretch was most of an open: the viewer's bar swept with "Building the
+  model". A new stage, `partition-recovery`, counts the recovery's steps
+  (`rvt::control::Stage::PartitionRecovery`, printed by `rvt-gltf --progress`
+  and passed to the viewer's `progress` function), and the viewer's card shows
+  it as "Reading element records" with its count. The last stream hands
+  straight over to it, so the card does not name what comes after the streams
+  for an instant. No export changes.
+
+- **A ruled surface or a surface of revolution whose profile is a Hermite
+  spline is read and drawn from the file's saved graphics (#2094, #2082,
+  RE-492).** Such a face failed with `unsupported parametric profile curve
+  GHermiteSpline`, and its body kept its record box. On the BIM4LCA office
+  the timber version's two stair flights are now drawn in both saves. Every
+  vertex of Revit's own body is within 0.000109 ft of rvt-rs's surface, and
+  the volume is 112.116 ft³ against Revit's 112.115. On the terrain files a
+  ramp and its ramp flight are drawn within 0.00088 ft of Revit's. Where a
+  plane meets such a face along an edge that crosses both of its parameters,
+  both faces now draw the edge straight between the points the file saves
+  for it, as Revit's export puts the plane's vertices on the flights, so the
+  two faces meet. In all, 25 bodies on 10 files are newly drawn. The 17 on
+  Autodesk's `rac_advanced` saves and on Snowdon Towers Architectural have
+  no Revit export to score them. Bodies that hold a Hermite profile and
+  something else rvt-rs does not read stay boxes, now refused for that other
+  part: the BIM4LCA office's washbasins and housing's toilets, RE1
+  Electrical's two panels, `rac_basic`'s one and two on Snowdon Towers.
+  Where a ruled face's points cannot go on those lines without a triangle
+  losing its area, they stay on the surface and no diagnostic says so.
+  Reported by yuriyu-webiya (#2082), whose Revit 2024 building-services model
+  kept 2,120 bodies as boxes.
+
+- **A cylinder face bounded by two trim loops on part of a turn is drawn from
+  the file's saved graphics (#2102, RE-494).** A hole inside the other loop
+  and two separate regions are both meshed strip by strip; a full turn and
+  three or more loops are still refused. On the open models 1,289 bodies that
+  were record boxes are drawn from their saved meshes, most of them on
+  Autodesk's samples, which have no Revit export: Snowdon Towers' air
+  terminals, duct fittings and sanitary terminals, and the rme samples' pipe
+  fittings. Of those Revit's exports score, the BIM4LCA housing's sauna doors
+  and the held-out house's doors are within 0.01 ft of Revit's and within 1
+  per cent of its volume. The BIM4LCA office's 30 grab bars a file are drawn
+  round, as the file saves them; Revit's export draws their legs as a square,
+  so their volume is 1.11 of Revit's. Snowdon Towers' Round Tees open 32
+  boundary vertices each up to 0.00158 ft where two cylinders meet.
+
+- **The value limit for reading saved graphics can be raised (#2157,
+  #2166).** It is the most field values one saved-graphics graph may hold,
+  set by `SavedMeshLimits::with_max_graph_values` and
+  `saved_meshes::attach_scoped_with_limits_and_control` for Rust callers, by
+  `ExportOptions::with_saved_mesh_limits` for an export, and by
+  `rvt-ifc --saved-mesh-graph-values`. A graph over it keeps the normal
+  per-element refusal. The default stays 1,000,000, and at the default no
+  export changes. Contributed by shifatrHtH.
+
+### Changed
+
+- **The round faces of a saved mesh that meet along an edge hold fewer
+  triangles (#2111, RE-496).** #2107 closed the cracks between two cylinder
+  faces by giving their shared edge points four times finer than the faces'
+  own 0.001 ft chord; the edge now takes them at half that chord. The cracks
+  stay closed on the 77 files read, and 61 per cent of the triangles #2107
+  added go, counting each graph once (48 to 100 per cent on the 13 files whose
+  totals it raised by more than 10 per cent): on Autodesk's `rme_basic` the 2024 export goes from
+  112.7 to 108.0 MiB (106.0 before #2107). On 147 groups of faces the farthest
+  a round face stands off its true cylinder rises by at most 0.00032 ft, still
+  within 0.001 ft.
+
+### Fixed
+
+- **A ceiling in pieces takes the area of the piece Revit's export names
+  (#1209, RE-486).** Revit's export gives a ceiling sketched in several pieces
+  the area of the piece its body exporter creates last, and rvt-rs wrote none
+  where RE-465's sketch rule cannot tell which piece that is. The saved mesh
+  stores that piece first: the part of its top face that holds the face's
+  first triangle, on all 78 ceilings in pieces of the BIM4LCA office. A ceiling
+  in pieces with no `GrossArea` now takes that part's area, on its own
+  covering: 16 values on the office, 5 cut ceilings among them, all equal to
+  Revit's, and one ceiling of Autodesk's 2024 Snowdon Towers sample, which no
+  Revit export in CI checks, with nothing else moving. The rule rests on one
+  building (`docs/one-project-rules.md`).
+
+- **A wall end whose join step names an omitted target stops flat at its
+  partner's near face (#1814, RE-488).** At a layered butt join, rvt-rs drew
+  the end of a wall that stops to the layer that reaches furthest into its
+  partner, as Revit cleans such a join layer by layer. Where the end's
+  `JoinEndGStep` names an omitted target, Revit's export instead ends the whole
+  wall flat at the partner's near face. Such an end now stops there with every
+  layer, where its record joins no roof or floor to the wall: 8 ends of the
+  BIM4LCA concrete housing at permit, 435 or 390 mm long before, are now
+  Revit's, with nothing else moving. A roof-joined wall is left as it was,
+  since Revit ran one such end on over the height its roof join shapes. The
+  rule rests on one building (`docs/one-project-rules.md`).
+
+- **A stair landing of a monolithic type gets its family and its type
+  object (#2046, RE-491).** rvt-rs named a landing's family only where its
+  landing type is not monolithic (`Non-Monolithic Landing`), so a monolithic
+  landing had no family, and with no family no `ObjectType` and no
+  `IfcSlabType`. Revit 2024's own export of the BIM4LCA office, made by an
+  English Revit, names the family of all 21 of its monolithic landings
+  `Monolithic Landing`, and rvt-rs now writes that word, on Revit 2024 from
+  the landing type's flag and on Revit 2025 to 2027 from its
+  `m_hasMonolithicSupport`. The family words of a stair's parts are the ones
+  an English Revit writes: the file does not hold them, and a Revit in another
+  language writes its own (a Spanish Revit 2027 writes `Descansillo
+  monolítico`), so on such a model the type object is there and its family
+  word differs from that export's. On Revit 2026 and 2027 a landing's
+  `ObjectType` stays empty (#1472), as Revit's own export of the reporter's
+  Revit 2027 model leaves it, and its type object is written: 14 of 14
+  landings there, measured by the reporter. Reported and measured by HWT-25
+  (#1829, #2046).
+
+- **A stair run is called spiral only where its treads lie about one centre
+  (#2046).** rvt-rs wrote `SPIRAL` for a flight, and `SPIRAL_STAIR` for its
+  stair, wherever every tread of the run gives `m_runType` 2. A reporter's
+  Revit 2027 model with no spiral run has three such runs, which Revit's export
+  does not call spiral (their flights' types are `USERDEFINED` with an
+  `ElementType` of `NOTDEFINED`), as revit-ifc gives `NOTDEFINED` for any run
+  whose style is not Straight, Spiral or Winder. Such a run is now a spiral only
+  where its treads pass the spiral test the 2024 spiral treads are drawn with
+  (one centre, one pair of radii, each tread beside and above the one before),
+  and its flight and stair keep `NOTDEFINED` otherwise. On every open model it
+  changes nothing, and both measured spiral runs keep `SPIRAL` (RE-217 §13).
+  On the reporter's model the three now come out `NOTDEFINED`, and its flight
+  types number 3, as many as Revit's export holds, measured by the reporter on a
+  build of this change; Revit writes those types `USERDEFINED` where rvt-rs
+  writes `NOTDEFINED` (#2110).
+
+- **A ceiling whose type says "Export Type to IFC As" `IfcSlabType` is written
+  as a covering, as Revit's export writes it (#2074).** The BIM4LCA timber
+  housing's ceiling type `AK-4.EI60` carries `IfcSlabType` with `USERDEFINED`,
+  and rvt-rs wrote its one ceiling as `IfcSlab` `USERDEFINED` with an
+  `IfcSlabType`. Revit's export ignores both values for a ceiling and writes
+  `IfcCovering` `CEILING`. The ceiling now ignores them too and is written as
+  Revit writes it, with its covering properties and `GrossArea`, all equal to
+  Revit's. Of the 120 exports measured, held-out ones included, it is the only
+  element that moves, so the rule rests on that one ceiling.
+
+- **A body whose shared symbol's graphics are read but not decoded says why
+  (#2085).** Its saved-mesh refusal named such a symbol `missing current
+  symbol graphics`, as if the file did not hold it; it now names it `not
+  decoded` and gives the reader's own reason, such as the graph value budget,
+  so a symbol the file lacks and one it holds but rvt-rs refused read apart.
+
+- **A flat or round face of a saved mesh whose stored edges stop short of each
+  other by less than 0.00001 ft draws (#2085, RE-497).** Revit saves some faces' edges
+  with their ends a hair apart; rvt-rs refused each such face as a disconnected
+  boundary, and with it the body. Ends closer than 0.00001 ft along the surface
+  now count as one point, and no edge is added. On the BIM4LCA offices two
+  curtain mullions now draw from their saved meshes, matching Revit's export to
+  0.000003 ft, and four walls on the BIM4LCA files gain their base quantities,
+  each equal to Revit's. Wider gaps stay refused.
+
+- **A surface of revolution or a cone meets a plane along the edge they share
+  (#2098, RE-493).** Where such a face shares an edge with a plane across both
+  of its parameters, both faces now draw the edge straight between the points
+  the file saves for it, as ruled faces with a spline profile have since #2094.
+  On the open models, boundary vertices more than 0.001 ft from every other
+  face fall from 3,962 to 2,163, and none of those left lies between a plane
+  and a curved face: they are between two curved faces, which this does not
+  touch. No count scored against Revit's exports moves, and no held-out export
+  changes; every body that moves and has a Revit export is one toilet family,
+  on the BIM4LCA office and housing. A ruled face between plain curves is left
+  as it was.
+
+- **Two round faces of a saved mesh meet where they share an edge (#2104,
+  RE-495).** Where two cylinder faces share an edge that runs across both
+  their parameters, as on pipe tees, fittings and fixtures, each put its own
+  points between the edge's saved ones and their boundaries parted, by up to
+  0.0016 ft and on 3,170 vertices over 0.001 ft across the open models.
+  The edge now takes the points where the two cylinders meet, solved onto both
+  and held by both faces, and none is left over 0.001 ft on the 77 files read.
+  With #2111's half-chord bound (RE-496), the cost against the release before,
+  on the files read: the bodies with such faces hold up to 1.13 times the
+  triangles (Snowdon Towers HVAC; exports at most 2.0 MiB larger, on Autodesk's
+  `rme_basic`), and on Snowdon Towers Architectural more of Revit's vertices lie
+  beyond 0.001 ft of the bodies that move (23,243 to 23,427); whether that is a
+  worse fit is not shown (#2111).
+
+- **`rvt-ifc-compare`'s note on spaces says how a room is drawn now.** It
+  said a room whose solid does not close keeps its bounding box. Such a room
+  is read again from its solid's faces or edges; from Revit 2023 a room that
+  none of those reads is drawn from its saved mesh where that mesh decodes
+  whole (#1191), and only otherwise does it keep its box (#2130).
+
+- **A beam whose record box holds more than the beam is drawn from its saved
+  mesh (#2158, #2164).** A beam drawn along its location line takes its
+  section from its record box; where that section is more than five times as
+  wide or as deep as the beam's own saved mesh across the line, and the mesh
+  decodes whole, the beam is drawn from the mesh instead, and its base
+  quantities come from it. On a Revit 2024 project reported on #2158, nine
+  beams were drawn 8.3 m deep, the box's height, as wall-sized sheets. On the
+  101 models Measure reads no beam is over 4.43 times its mesh's depth, so
+  none of them changes, and whether the rule reaches the reported nine is not
+  yet known: the project is private. Reported by C00kieMonsta (#2158).
+
+- **A two-loop cylinder trim whose ring knot is close to a tessellation
+  knot keeps its hole (#2106).** A ring edge counts for a strip only where
+  it crosses the strip's midpoint, so an edge that ends within the endpoint
+  tolerance beside a strip narrower than that tolerance no longer gives the
+  strip an odd crossing count and refuses the face; and each crossing is
+  kept on its edge, which a strip edge the grid joined to a nearby knot can
+  fall just outside. Contributed by shifatrHtH.
+
+- **glTF draws an element made only of transparent materials see-through
+  (#2109).** An element drawn in its category's colour, as one body, whose
+  materials were all read as transparent now takes their alpha, the least
+  transparent one's, in a material named `Category <class> transparent` whose
+  `alphaSource` is `"file"`. One that also holds an opaque material, or a
+  material whose transparency was not read, keeps its category's alpha: drawn
+  at its glass's, a door with a glass panel would look all glass, and which part
+  of a saved mesh is the glass is not read. Windows and curtain panels keep
+  their translucent category colour. Contributed by zenglanmu.
+
+### Research
+
+- **Views, sheets and placed viewports** (research, behind `unstable-research`):
+  `rvt::research::views::read` and the `rvt-views` CLI, which builds only with
+  that feature (`cargo install rvt --features unstable-research`), list every
+  view's name, class, scale, plane and 3D camera,
+  every sheet's number and title-block fields, and every viewport's sheet,
+  view and box centre. The centre rule was measured on one viewport against
+  the Revit API (#1117); the catalog is experimental, and a turned viewport,
+  an uncropped view and a view title's printed position are not read.
+  Contributed by zenglanmu.
+
 ## [0.25.0] — 2026-11-15
 
 0.25.0 ships a security fix and a batch of repairs found by checking 0.24.0 against Revit's own exports: the partition scanner no longer takes unbounded memory from a crafted stream (#1833); beams whose copies in several partitions disagree, hollow rectangular tube beams, wall ends, door openings and axes, ceilings and roof equipment, and the types of Revit 2015 to 2023 doors and windows are read as Revit's export has them; and the columns and footings of a Revit 2027 structural model reach their storeys.

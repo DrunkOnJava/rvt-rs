@@ -59,10 +59,37 @@
 //!       degrees from the nearest plan axis (0 for a beam along X or Y, within (-45, 45]), or `-`
 //!       where the element data holds no line. The record box is the axis-aligned box of the
 //!       body, so on a beam that runs oblique to the plan axes its long axis is not the beam's.
+//!     - `line_low` and `line_high` (#1839, the S6 probe): the same question as `endcol_*`, asked
+//!       along the beam's own line and not along a plan axis, as `<ElementId>:<t>:<extent>:<source>`
+//!       or `-`. The line is the bounded line of the beam's element data, `low` its end with the
+//!       lower coordinate on `axis`. The column is the named one whose outline the line crosses
+//!       nearest that end; `extent` is the chord of the line through that outline, in feet, and `t`
+//!       is where the line ends in it, from the face toward the beam's middle (0) to the face away
+//!       from it (1). The outline is the plan hull of the column's saved mesh where it decodes
+//!       whole (`m`), which is the column's own shape whichever way it is turned; else the section
+//!       the export draws, where that is not the column's record box (`s`); else the record box
+//!       (`b`). S5 on a structure turned about 4 degrees from the plan axes read every extent
+//!       longer than the chord: the export draws a column as its record box, which on a turned
+//!       column is the axis-aligned box around it, and `endcol_*` cuts it along a plan axis at the
+//!       middle of the beam's own axis-aligned box.
 //!   file ... columns_exported=<n> sections=<n> unread=<n> section_centre_offset=<median>/<largest>:
 //!   the `IfcColumn`s the export holds, those whose section is read, and those drawn another way
 //!   (a mapped or solid body, another profile) or not placed, which the probe leaves out; and how
 //!   far the centre of a read section lies from its record box's centre in plan, in feet.
+//!   outlines mesh=<n> section=<n> box=<n>: where each column's outline for `line_*` is from.
+//!   turncheck ...: the probe's own check on a model it turns (#1839, S6). It turns the whole model
+//!   by 4 degrees about its origin (lines, mesh outlines and sections turn as they are; a record
+//!   box becomes the axis-aligned box of the turned one, as a file of a turned structure holds it)
+//!   and reads every end again:
+//!     - `line ends=<n> same=<n> largest_t=<d> largest_extent=<d> mesh=<n>/<n>
+//!       mesh_largest_t=<d> mesh_largest_extent=<d> section=<n>/<n> box=<n>/<n>`: the ends read
+//!       both ways, those with the same column, `t` and `extent` within 1e-6, the largest
+//!       differences over every end with the same column and over the mesh ends alone, and the
+//!       same count over the total by the outline's source. A mesh outline must give the same
+//!       answer however the model is turned; a record box cannot.
+//!     - `s5 extent over the chord: ...`: what `endcol_*` would read as the extent on the turned
+//!       model (the column's turned record box, cut along a plan axis), over the chord `line_*`
+//!       reads from the mesh outline, in the scorer's bins.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1839_beam_column_ends -- MODEL.rvt
@@ -74,6 +101,9 @@ use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::{IfcEntity, ProfileDef};
 use rvt::research::element_record_beam_cuts::beam_column_trims;
+use rvt::research::native_document::Options;
+use rvt::research::native_saved_scene::extract_at_detail;
+use rvt::research::partition_beam_axes::BoundedLine;
 use rvt::research::partition_element_records as per;
 
 type Records = BTreeMap<u32, per::PartitionElementRecord>;
@@ -358,7 +388,7 @@ fn near_face(
 
 /// The beam's plan angle from its bounded line, in degrees from the nearest plan axis, within
 /// (-45, 45]: 0 for a beam along X or Y. `None` for a line with no length in plan.
-fn plan_angle(line: &rvt::research::partition_beam_axes::BoundedLine) -> Option<f64> {
+fn plan_angle(line: &BoundedLine) -> Option<f64> {
     let (start, end) = (line.start(), line.end());
     let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
     let length = dx.hypot(dy);
@@ -440,6 +470,394 @@ fn nearest_column(
     )
 }
 
+/// A plan point, model feet.
+type P2 = [f64; 2];
+
+/// The turn the probe checks itself with, degrees (#1839, S6): the reporter's structure is turned
+/// about this much from the plan axes of the model's own frame.
+const TURN_CHECK_DEGREES: f64 = 4.0;
+
+/// The sine and cosine of no turn.
+const NO_TURN: (f64, f64) = (0.0, 1.0);
+
+/// `p` turned about the model's origin by the angle whose sine and cosine are `turn`.
+fn turned(p: P2, turn: (f64, f64)) -> P2 {
+    let (sin, cos) = turn;
+    [p[0] * cos - p[1] * sin, p[0] * sin + p[1] * cos]
+}
+
+/// The axis-aligned box of `b` turned about the model's origin: what the record of a turned
+/// element holds as its box.
+fn turned_box(b: [f64; 6], turn: (f64, f64)) -> [f64; 6] {
+    let corners = [[b[0], b[1]], [b[3], b[1]], [b[3], b[4]], [b[0], b[4]]].map(|p| turned(p, turn));
+    let xs = corners.map(|p| p[0]);
+    let ys = corners.map(|p| p[1]);
+    let low = |v: [f64; 4]| v.into_iter().fold(f64::INFINITY, f64::min);
+    let high = |v: [f64; 4]| v.into_iter().fold(f64::NEG_INFINITY, f64::max);
+    [low(xs), low(ys), b[2], high(xs), high(ys), b[5]]
+}
+
+/// The convex hull of plan points, counter-clockwise (the monotone chain).
+fn hull(mut points: Vec<P2>) -> Vec<P2> {
+    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+    points.dedup();
+    if points.len() < 3 {
+        return points;
+    }
+    let cross = |o: P2, a: P2, b: P2| (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    let mut lower: Vec<P2> = Vec::new();
+    for p in &points {
+        while lower.len() >= 2 && cross(lower[lower.len() - 2], lower[lower.len() - 1], *p) <= 0.0 {
+            lower.pop();
+        }
+        lower.push(*p);
+    }
+    let mut upper: Vec<P2> = Vec::new();
+    for p in points.iter().rev() {
+        while upper.len() >= 2 && cross(upper[upper.len() - 2], upper[upper.len() - 1], *p) <= 0.0 {
+            upper.pop();
+        }
+        upper.push(*p);
+    }
+    lower.pop();
+    upper.pop();
+    lower.extend(upper);
+    lower
+}
+
+/// The plan outline of each column whose saved mesh decodes whole: the hull of its vertices, in
+/// the document's frame. A column turned from the plan axes has its own outline here, where its
+/// record box is the axis-aligned box around it.
+fn mesh_outlines(rf: &mut RevitFile, columns: &Records) -> BTreeMap<u32, Vec<P2>> {
+    let mut out = BTreeMap::new();
+    if columns.is_empty() {
+        return out;
+    }
+    let options = Options {
+        selected_ids: columns.keys().map(|id| u64::from(*id)).collect(),
+        max_graph_values: 1_000_000,
+        max_graph_objects: 1_000_000,
+        ..Options::default()
+    };
+    let scene = match extract_at_detail(rf, &options, 3) {
+        Ok(scene) => scene,
+        Err(error) => {
+            println!("saved graphics: {error:#}");
+            return out;
+        }
+    };
+    for element in &scene.elements {
+        if !element.meshes.diagnostics.is_empty() || element.meshes.unbounded_faces != 0 {
+            continue;
+        }
+        let points: Vec<P2> = element
+            .meshes
+            .primitives
+            .iter()
+            .filter(|primitive| !primitive.hidden && !primitive.filtered)
+            .flat_map(|primitive| primitive.vertices.iter().map(|v| [v[0], v[1]]))
+            .collect();
+        let outline = hull(points);
+        if let (Ok(id), true) = (u32::try_from(element.id), outline.len() >= 3) {
+            out.insert(id, outline);
+        }
+    }
+    out
+}
+
+/// Whether a section's outline is the plan rectangle of the record box `c`, within a thousandth
+/// of a foot: the export draws a column with no section of its own as that rectangle.
+fn is_box(points: &[P2], c: &[f64; 6]) -> bool {
+    points.len() == 4
+        && points.iter().all(|p| {
+            ((p[0] - c[0]).abs() < 1e-3 || (p[0] - c[3]).abs() < 1e-3)
+                && ((p[1] - c[1]).abs() < 1e-3 || (p[1] - c[4]).abs() < 1e-3)
+        })
+}
+
+/// A column's plan outline with the whole model turned by `turn`, and where it is from: the hull
+/// of its saved mesh (`m`), else the section the export draws where that is not its record box
+/// (`s`), else its record box (`b`). The mesh and the section turn as they are; a record box
+/// becomes the axis-aligned box of the turned one.
+fn column_outline(
+    column: &per::PartitionElementRecord,
+    meshes: &BTreeMap<u32, Vec<P2>>,
+    sections: &BTreeMap<u32, Footprint>,
+    turn: (f64, f64),
+) -> (Footprint, char) {
+    if let Some(outline) = meshes.get(&column.element_id) {
+        let points = outline.iter().map(|p| turned(*p, turn)).collect();
+        return (Footprint::Polygon(points), 'm');
+    }
+    let c = column.bbox_feet;
+    match sections.get(&column.element_id) {
+        Some(Footprint::Circle { centre, radius }) => {
+            let circle = Footprint::Circle {
+                centre: turned(*centre, turn),
+                radius: *radius,
+            };
+            return (circle, 's');
+        }
+        Some(Footprint::Polygon(points)) if !is_box(points, &c) => {
+            let points = points.iter().map(|p| turned(*p, turn)).collect();
+            return (Footprint::Polygon(points), 's');
+        }
+        _ => {}
+    }
+    let b = turned_box(c, turn);
+    let rectangle = vec![[b[0], b[1]], [b[3], b[1]], [b[3], b[4]], [b[0], b[4]]];
+    (Footprint::Polygon(rectangle), 'b')
+}
+
+/// Where the line through `origin` along the unit `direction` enters and leaves an outline, as
+/// distances along it from `origin`, or `None` where it misses.
+fn chord(outline: &Footprint, origin: P2, direction: P2) -> Option<[f64; 2]> {
+    let along = |p: P2| (p[0] - origin[0]) * direction[0] + (p[1] - origin[1]) * direction[1];
+    let side = |p: P2| (p[1] - origin[1]) * direction[0] - (p[0] - origin[0]) * direction[1];
+    match outline {
+        Footprint::Circle { centre, radius } => {
+            let offset = side(*centre);
+            (offset.abs() < *radius).then(|| {
+                let half = (radius * radius - offset * offset).sqrt();
+                [along(*centre) - half, along(*centre) + half]
+            })
+        }
+        Footprint::Polygon(points) => {
+            let mut hits = Vec::new();
+            for (i, p) in points.iter().enumerate() {
+                let q = points[(i + 1) % points.len()];
+                let (a, b) = (side(*p), side(q));
+                // Half open, so that a corner on the line is counted once.
+                if (a <= 0.0 && b > 0.0) || (b <= 0.0 && a > 0.0) {
+                    let t = a / (a - b);
+                    hits.push(along(*p) + t * (along(q) - along(*p)));
+                }
+            }
+            hits.sort_by(f64::total_cmp);
+            Some([*hits.first()?, *hits.last()?])
+        }
+    }
+}
+
+/// One end of a beam by the beam's own line (#1839, S6).
+#[derive(Clone, Copy)]
+struct LineEnd {
+    column: u32,
+    t: f64,
+    extent: f64,
+    source: char,
+}
+
+/// The column `beam` names whose outline its own line crosses nearest its first (`at_start`) or
+/// second end, with the whole model turned by `turn`: the chord of the line through that outline
+/// and where the line ends in it, as [`nearest_column`] gives them along a plan axis.
+fn line_end(
+    beam: &per::PartitionElementRecord,
+    line: &BoundedLine,
+    columns: &Records,
+    meshes: &BTreeMap<u32, Vec<P2>>,
+    sections: &BTreeMap<u32, Footprint>,
+    at_start: bool,
+    turn: (f64, f64),
+) -> Option<LineEnd> {
+    let (start, end) = (line.start(), line.end());
+    let start = turned([start[0], start[1]], turn);
+    let end = turned([end[0], end[1]], turn);
+    let length = (end[0] - start[0]).hypot(end[1] - start[1]);
+    if !length.is_finite() || length <= 1e-6 {
+        return None;
+    }
+    let direction = [(end[0] - start[0]) / length, (end[1] - start[1]) / length];
+    let at = if at_start { 0.0 } else { length };
+    let b = beam.bbox_feet;
+    let mut best: Option<(f64, u32, [f64; 2], char)> = None;
+    for member in columns.values() {
+        let c = member.bbox_feet;
+        if member.element_id == beam.element_id
+            || !beam.references.contains(&u64::from(member.element_id))
+            || !(c[2] < b[5] && b[2] < c[5])
+        {
+            continue;
+        }
+        let (outline, source) = column_outline(member, meshes, sections, turn);
+        let Some(along) = chord(&outline, start, direction) else {
+            continue;
+        };
+        let distance = (along[0] - at).max(at - along[1]).max(0.0);
+        if best.is_none_or(|(nearest, ..)| distance < nearest) {
+            best = Some((distance, member.element_id, along, source));
+        }
+    }
+    let (distance, column, along, source) = best?;
+    let extent = along[1] - along[0];
+    if extent <= 0.0 || distance > extent {
+        return None;
+    }
+    let (near, far) = if at_start {
+        (along[1], along[0])
+    } else {
+        (along[0], along[1])
+    };
+    Some(LineEnd {
+        column,
+        t: (at - near) / (far - near),
+        extent,
+        source,
+    })
+}
+
+fn line_field(end: Option<LineEnd>) -> String {
+    end.map_or_else(
+        || "-".to_string(),
+        |e| format!("{}:{:.4}:{:.4}:{}", e.column, e.t, e.extent, e.source),
+    )
+}
+
+/// What `endcol_*` reads as a column's extent at the low or high end of a beam whose record box
+/// is `b`, where every named column is drawn as its record box (`named`): the box nearest that
+/// end along the box's longer plan axis, at the middle of the beam's box across it.
+fn boxed_extent(b: [f64; 6], named: &[[f64; 6]], low_end: bool) -> Option<f64> {
+    let (along_x, along_y) = (b[3] - b[0], b[4] - b[1]);
+    if along_x == along_y {
+        return None;
+    }
+    let axis = usize::from(along_y > along_x);
+    let across = 1 - axis;
+    let middle = (b[across] + b[across + 3]) / 2.0;
+    let end = if low_end { b[axis] } else { b[axis + 3] };
+    let mut best: Option<(f64, f64)> = None;
+    for c in named {
+        if !(c[across] <= middle && middle <= c[across + 3]) {
+            continue;
+        }
+        let distance = (c[axis] - end).max(end - c[axis + 3]).max(0.0);
+        if best.is_none_or(|(nearest, _)| distance < nearest) {
+            best = Some((distance, c[axis + 3] - c[axis]));
+        }
+    }
+    let (distance, extent) = best?;
+    (extent > 0.0 && distance <= extent).then_some(extent)
+}
+
+/// The probe's check of `line_*` on a model it turns (#1839, S6).
+#[derive(Default)]
+struct TurnCheck {
+    /// Ends read with and without the turn, and those with the same column, `t` and extent.
+    ends: usize,
+    same: usize,
+    largest_t: f64,
+    largest_extent: f64,
+    /// The same, over the ends whose outline is a saved mesh alone: a box has to change.
+    mesh_largest_t: f64,
+    mesh_largest_extent: f64,
+    /// By the outline's source without the turn (`m`, `s`, `b`): same, total.
+    by_source: BTreeMap<char, (usize, usize)>,
+    /// `endcol_*`'s extent on the turned model over the chord of the mesh outline, in the scorer's
+    /// bins: under 0.99, within 1 per cent, 1.01 to 1.1, 1.1 to 1.5, over 1.5; and no extent.
+    s5_bins: [usize; 5],
+    s5_none: usize,
+}
+
+impl TurnCheck {
+    #[allow(clippy::too_many_arguments)]
+    fn read(
+        &mut self,
+        beam: &per::PartitionElementRecord,
+        line: &BoundedLine,
+        columns: &Records,
+        meshes: &BTreeMap<u32, Vec<P2>>,
+        sections: &BTreeMap<u32, Footprint>,
+        turn: (f64, f64),
+    ) {
+        let b = turned_box(beam.bbox_feet, turn);
+        let named: Vec<[f64; 6]> = columns
+            .values()
+            .filter(|member| {
+                let c = member.bbox_feet;
+                member.element_id != beam.element_id
+                    && beam.references.contains(&u64::from(member.element_id))
+                    && c[2] < b[5]
+                    && b[2] < c[5]
+            })
+            .map(|member| turned_box(member.bbox_feet, turn))
+            .collect();
+        let axis = usize::from(b[4] - b[1] > b[3] - b[0]);
+        let (start, end) = (line.start(), line.end());
+        let start = turned([start[0], start[1]], turn);
+        let end = turned([end[0], end[1]], turn);
+        let low_is_start = start[axis] <= end[axis];
+        for at_start in [true, false] {
+            let plain = line_end(beam, line, columns, meshes, sections, at_start, NO_TURN);
+            let again = line_end(beam, line, columns, meshes, sections, at_start, turn);
+            if let (Some(plain), Some(again)) = (plain, again) {
+                let (dt, de) = (
+                    (plain.t - again.t).abs(),
+                    (plain.extent - again.extent).abs(),
+                );
+                let same = plain.column == again.column && dt <= 1e-6 && de <= 1e-6;
+                self.ends += 1;
+                self.same += usize::from(same);
+                let entry = self.by_source.entry(plain.source).or_default();
+                entry.0 += usize::from(same);
+                entry.1 += 1;
+                if plain.column == again.column {
+                    self.largest_t = self.largest_t.max(dt);
+                    self.largest_extent = self.largest_extent.max(de);
+                    if plain.source == 'm' {
+                        self.mesh_largest_t = self.mesh_largest_t.max(dt);
+                        self.mesh_largest_extent = self.mesh_largest_extent.max(de);
+                    }
+                }
+            }
+            let Some(plain) = plain.filter(|end| end.source == 'm') else {
+                continue;
+            };
+            match boxed_extent(b, &named, at_start == low_is_start) {
+                Some(extent) => {
+                    let ratio = extent / plain.extent;
+                    let bin = if ratio < 0.99 {
+                        0
+                    } else if ratio <= 1.01 {
+                        1
+                    } else if ratio <= 1.1 {
+                        2
+                    } else if ratio <= 1.5 {
+                        3
+                    } else {
+                        4
+                    };
+                    self.s5_bins[bin] += 1;
+                }
+                None => self.s5_none += 1,
+            }
+        }
+    }
+
+    fn print(&self) {
+        let of = |source: char| {
+            let (same, total) = self.by_source.get(&source).copied().unwrap_or_default();
+            format!("{same}/{total}")
+        };
+        println!(
+            "turncheck degrees={TURN_CHECK_DEGREES} line ends={} same={} largest_t={:.9} largest_extent={:.9} mesh={} mesh_largest_t={:.9} mesh_largest_extent={:.9} section={} box={}",
+            self.ends,
+            self.same,
+            self.largest_t,
+            self.largest_extent,
+            of('m'),
+            self.mesh_largest_t,
+            self.mesh_largest_extent,
+            of('s'),
+            of('b'),
+        );
+        let [under, within, to_110, to_150, over] = self.s5_bins;
+        println!(
+            "turncheck degrees={TURN_CHECK_DEGREES} s5 extent over the chord: under 0.99 {under}; within 1 per cent {within}; 1.01 to 1.1 {to_110}; 1.1 to 1.5 {to_150}; over 1.5 {over}; no s5 extent {}",
+            self.s5_none
+        );
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
         .skip(1)
@@ -469,6 +887,15 @@ fn main() -> anyhow::Result<()> {
     let trims = beam_column_trims(&beam_list, &column_list);
     let drawn = footprints(&mut rf)?;
     let sections = drawn.read;
+    let meshes = mesh_outlines(&mut rf, columns);
+    let mut sources: BTreeMap<char, usize> = BTreeMap::new();
+    for column in columns.values() {
+        *sources
+            .entry(column_outline(column, &meshes, &sections, NO_TURN).1)
+            .or_default() += 1;
+    }
+    let turn = TURN_CHECK_DEGREES.to_radians().sin_cos();
+    let mut check = TurnCheck::default();
     let offset = centre_offsets(&sections, columns).map_or_else(
         || "-".to_string(),
         |(median, largest)| format!("{median:.4}/{largest:.4}"),
@@ -481,6 +908,12 @@ fn main() -> anyhow::Result<()> {
         drawn.exported,
         sections.len(),
         drawn.unread
+    );
+    println!(
+        "outlines mesh={} section={} box={}",
+        sources.get(&'m').copied().unwrap_or(0),
+        sources.get(&'s').copied().unwrap_or(0),
+        sources.get(&'b').copied().unwrap_or(0),
     );
     for (id, beam) in &beams {
         let b = beam.bbox_feet;
@@ -558,7 +991,26 @@ fn main() -> anyhow::Result<()> {
             nearest_column(beam, columns, &sections, axis, true),
             nearest_column(beam, columns, &sections, axis, false),
         )?;
+        // The same along the beam's own line, by the column's own outline (#1839, S6).
+        let (line_low, line_high) = match lines.get(id) {
+            Some(own) => {
+                let low_is_start = own.start()[axis] <= own.end()[axis];
+                let at = |at_start: bool| {
+                    line_end(beam, own, columns, &meshes, &sections, at_start, NO_TURN)
+                };
+                check.read(beam, own, columns, &meshes, &sections, turn);
+                (at(low_is_start), at(!low_is_start))
+            }
+            None => (None, None),
+        };
+        write!(
+            line,
+            " line_low={} line_high={}",
+            line_field(line_low),
+            line_field(line_high)
+        )?;
         println!("{line}");
     }
+    check.print();
     Ok(())
 }
