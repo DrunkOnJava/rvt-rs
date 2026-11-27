@@ -2043,6 +2043,14 @@ fn trimmed_cells_on(
             continue;
         }
         let middle = (left + right) / 2.0;
+        // Exclude a segment admitted by endpoint tolerance if it does not
+        // cross the interior of this narrow strip.
+        if !active.len().is_multiple_of(2)
+            && right - left < KNOT_TOLERANCE
+            && std::env::var_os("RVT_2085_NARROW_TRIM_STRIP").is_some()
+        {
+            active.retain(|s| s.u0 <= middle && middle < s.u1);
+        }
         active.sort_by(|a, b| a.at(middle).total_cmp(&b.at(middle)));
         ensure!(
             active.len().is_multiple_of(2),
@@ -2511,6 +2519,23 @@ mod tests {
                 .iter()
                 .any(|p| (p[0] - 1.0).abs() < 1e-12 && (p[1] - 1.0).abs() < 1e-12)
         );
+    }
+
+    #[test]
+    fn narrow_trim_strip_uses_only_segments_that_cross_it() {
+        let ring = vec![[0., 0.], [2., 1.], [4., 0.], [4., 3.], [0., 3.]];
+        let left = 2. - 7.5e-10;
+        let u = [0., left, 2., 4.];
+        let v = [0., 3.];
+        if std::env::var_os("RVT_2085_NARROW_TRIM_STRIP").is_none() {
+            assert!(trimmed_cells(&[ring], &u, &v).is_err());
+            return;
+        }
+        let (points, triangles) = check(&[ring], &u, &v, 10.);
+        assert!(triangles.iter().any(|triangle| {
+            triangle.iter().any(|&i| points[i as usize][0] == left)
+                && triangle.iter().any(|&i| points[i as usize][0] == 2.)
+        }));
     }
 
     #[test]
