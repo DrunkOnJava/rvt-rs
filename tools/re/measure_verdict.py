@@ -9,7 +9,10 @@ diff leaves out `ifc.sha256` and `diagnostics.json`. This prints, above that lis
   (each model's `probe.txt`, the `probe: exit N` line it adds to `counts.txt`, and
   `areas_across_saves*.txt`), with the first lines that do;
 - with a probe, the most common lines the probe printed across the models, and
-  the models whose probe did not exit 0.
+  the models whose probe did not exit 0;
+- on each side, how many exports IfcOpenShell's validation and the EXPRESS rules
+  read, which they skipped for size (named; the run otherwise says so only in
+  each model's `schema.txt`) and how many they did not read at all (#2103).
 
 It judges nothing against a pull request's registered rows; those stay the
 reader's. A directory or file that is missing is said to be missing.
@@ -26,6 +29,9 @@ MOST_NAMED = 40
 MOST_LINES = 25
 HEAD_ONLY = re.compile(r"(probe\.txt|areas_across_saves[^ /]*\.txt)$")
 PROBE_EXIT = re.compile(r"^\+?probe: exit (\d+)$")
+# measure-reference-models.sh writes this in `schema.txt`; the held-out scrub keeps it in
+# `counts.txt` with a `schema: ` prefix.
+SKIPPED = re.compile(r"^(?:schema: )?validate: skipped, over (\d+) MB$", re.M)
 
 
 def models(root):
@@ -121,6 +127,81 @@ def scorer_residue(path):
     print("```")
 
 
+FINDINGS = re.compile(r"^findings \d+$", re.M)
+
+
+def validation_state(root, model):
+    """(validation read, rules read, the limit in MB it was skipped over or None, validation run)
+    for one export.
+
+    `schema.txt` holds a `validate:` section and a `rules:` section, each with a `findings N`
+    line when its check read the file; a check that timed out or did not read it leaves none.
+    A held-out model's scrubbed `counts.txt` keeps the same as `schema validate: findings N`
+    and `schema rules: findings N`, or `not read` where the check left no count. A run without
+    the `schema` step, a family, or a model with no export writes neither: the last value says
+    whether the validation was run at all, so one that timed out on an export stands apart."""
+    schema = (read(os.path.join(root, model, "schema.txt")) or b"").decode(errors="replace")
+    counts = (read(os.path.join(root, model, "counts.txt")) or b"").decode(errors="replace")
+    for text in (schema, counts):
+        match = SKIPPED.search(text)
+        if match:
+            return False, False, int(match.group(1)), False
+
+    def section(name, until):
+        """The lines between `name:` and `until:` in `schema.txt`."""
+        lines = schema.splitlines()
+        if f"{name}:" not in lines:
+            return ""
+        out = []
+        for line in lines[lines.index(f"{name}:") + 1:]:
+            if line == f"{until}:":
+                break
+            out.append(line)
+        return "\n".join(out)
+
+    validate = bool(FINDINGS.search(section("validate", "rules"))) or bool(
+        re.search(r"^schema validate: findings \d+$", counts, re.M))
+    rules = bool(FINDINGS.search(section("rules", "property sets"))) or bool(
+        re.search(r"^schema rules: findings \d+$", counts, re.M))
+    # A held-out validation that timed out leaves only the scrub's `schema rules: not read`.
+    ran = "validate:" in schema.splitlines() or bool(re.search(r"^schema (?:validate|rules): ", counts, re.M))
+    return validate, rules, None, ran
+
+
+def validation(head, base):
+    """Say, on each side, how many exports IfcOpenShell's validation and the EXPRESS rules read,
+    which they skipped for size, which the rules did not read, and which nothing validated: a
+    model a check never read must not read as one it passed (#2103)."""
+    for side, root in (("head", head), ("base", base)):
+        names = models(root)
+        if names is None:
+            continue
+        both, rules_missing, unread, skipped, missing = 0, [], [], [], []
+        for model in names:
+            validate, rules, limit, ran = validation_state(root, model)
+            if limit is not None:
+                skipped.append((model, limit))
+            elif validate and rules:
+                both += 1
+            elif validate:
+                rules_missing.append(model)
+            elif ran:
+                unread.append(model)
+            else:
+                missing.append(model)
+        line = f"- Validation (IfcOpenShell and the EXPRESS rules) at {side}: both read on {both} of {len(names)} exports"
+        if rules_missing:
+            line += f"; **the rules not read on {len(rules_missing)}**: {named(rules_missing)}"
+        if unread:
+            line += f"; **the validation not read on {len(unread)}** (it timed out or could not read the file): {named(unread)}"
+        if skipped:
+            over = " or ".join(f"{mb} MB" for mb in sorted({mb for _, mb in skipped}))
+            line += f"; **{len(skipped)} skipped for size (over {over})**: {named([m for m, _ in skipped])}"
+        if missing:
+            line += f"; {len(missing)} not validated (the families, which are not validated, a run without the `schema` step, or no export): {named(missing)}"
+        print(line)
+
+
 def probes(head):
     counts, ran, failed = collections.Counter(), 0, []
     for model in models(head):
@@ -168,6 +249,7 @@ def main(argv):
         compare(head, base, "diagnostics.json", "Diagnostics (`diagnostics.json`)")
         if diff:
             scorer_residue(diff)
+    validation(head, base)
     probes(head)
     print()
 
