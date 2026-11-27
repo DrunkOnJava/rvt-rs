@@ -56,7 +56,7 @@ Of the 552 read, 484 have a complete saved mesh and 68 none.
 - **The pairing holds:** no blend fits only with the offsets exchanged, 0 of 552.
 - **Agreement in full:** 356 of the 484 with a complete mesh agree in volume and corners.
 - **Saves repeat:** the sample projects are a few projects saved by thirteen releases, so a blend is counted once in each save. By project, family and ElementId there are 147 distinct blends: 96 agree in full, 15 have their corners on the mesh and another volume, 10 have no volume to compare, 6 have their corners off the mesh and 20 have no saved mesh. Each comes out the same way in every save.
-- **Not explained:** the 54 whose corners are off the mesh, the 48 whose corners fit and whose volume does not (the vertex correspondence, or a cut by another form), and the 26 with no volume to compare.
+- **Not explained:** the 54 whose corners are off the mesh, the 48 whose corners fit and whose volume does not (the vertex correspondence, or a cut by another form), and the 26 whose corners are on the mesh and that have no volume to compare (14 more with no volume have their corners off it and are among the 54).
 
 Reproduce: `gh workflow run measure.yml --ref main -f ref=3aed43e6f933a194732ec0a8492c584bd161d78c -f base=none -f families=true -f samples=true -f scorers=none -f probe=probe_re490_family_blends`.
 
@@ -64,11 +64,11 @@ Kept output: `refs/evidence/46029833703-probes` (commit `f3266325`), one `probe.
 
 ## Not decided
 
-- Five blends from two families, every section a four-vertex outline of straight edges, in planes parallel to a base plane. Whether the pairing by order holds for a blend whose sketches were created in the other order is not measured.
-- The correspondence is vertex `i` to vertex `i` in the loops' assembled order. Where the two loops start at different vertices the volume would differ; no such blend is in the sample, and the reader does not choose a start.
+- The first measurement was five blends of two families, every section a four-vertex outline. The corpus run above reads 552 blends and finds none that fits only with the offsets exchanged; where neither pairing can be checked (no saved mesh, or corners off the mesh with both), the pairing by order is not measured.
+- The correspondence is vertex `i` to vertex `i` in the loops' assembled order. Where the two loops start at different vertices the volume would differ, and the reader does not choose a start. Whether the corpus run's 48 blends whose corners fit and whose volume does not are such blends is not read.
 - A section with an arc, a hole, a different vertex count or a plane not parallel to the other is refused.
 - `SweptBlendElem` is not read.
-- Both families are Revit 2020 standalone families: no blend of another release is measured, and none in a project's family.
+- The first five are in Revit 2020 standalone families. The corpus run reads blends in the families loaded in Autodesk's sample projects of every release from 2015 to 2027 and in four reference models; the family corpus holds none, so no standalone family of another release is measured.
 
 ## Change
 
