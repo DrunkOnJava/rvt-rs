@@ -3786,12 +3786,16 @@ mod tests {
     }
     // Every point of the true edge between two refined neighbours (v = scale cos u, taken
     // from the formula and not the solver) is within the bound of the chord that joins them.
-    fn assert_chords_hold_the_edge(refined: &[[f64; 2]], scale: f64) {
+    fn assert_chords_hold_the_edge(
+        surface: fn([f64; 2]) -> Result<[f64; 3]>,
+        refined: &[[f64; 2]],
+        scale: f64,
+    ) {
         for pair in refined.windows(2) {
-            let (a, b) = (cylinder(pair[0]).unwrap(), cylinder(pair[1]).unwrap());
+            let (a, b) = (surface(pair[0]).unwrap(), surface(pair[1]).unwrap());
             for step in 0..=400 {
                 let u = pair[0][0] + (pair[1][0] - pair[0][0]) * step as f64 / 400.;
-                let edge = cylinder([u, scale * u.cos()]).unwrap();
+                let edge = surface([u, scale * u.cos()]).unwrap();
                 assert!(
                     distance_to_chord(edge, a, b) <= EDGE_SAGITTA * 1.05 + 1e-9,
                     "{pair:?} at u = {u}"
@@ -3809,7 +3813,7 @@ mod tests {
         for uv in &refined {
             assert!(height_over(plane, cylinder(*uv).unwrap()) < 1e-8, "{uv:?}");
         }
-        assert_chords_hold_the_edge(&refined, 1.);
+        assert_chords_hold_the_edge(cylinder, &refined, 1.);
         // The samples the graph gave are kept, first and last.
         assert_eq!(refined[0], coarse[0]);
         assert_eq!(*refined.last().unwrap(), coarse[1]);
@@ -3844,7 +3848,7 @@ mod tests {
             for uv in &refined {
                 assert!(height_over(plane, cylinder(*uv).unwrap()) < 1e-8, "{uv:?}");
             }
-            assert_chords_hold_the_edge(&refined, 1.);
+            assert_chords_hold_the_edge(cylinder, &refined, 1.);
         }
     }
 
@@ -3859,7 +3863,7 @@ mod tests {
                 .any(|uv| uv[0].abs() < 1e-9 && (uv[1] - 1.).abs() < 1e-9),
             "{refined:?}"
         );
-        assert_chords_hold_the_edge(&refined, 1.);
+        assert_chords_hold_the_edge(cylinder, &refined, 1.);
     }
 
     #[test]
@@ -3872,7 +3876,7 @@ mod tests {
             for uv in &refined {
                 assert!(height_over(plane, cylinder(*uv).unwrap()) < 1e-8, "{uv:?}");
             }
-            assert_chords_hold_the_edge(&refined, 6.);
+            assert_chords_hold_the_edge(cylinder, &refined, 6.);
         }
     }
 
@@ -3881,13 +3885,14 @@ mod tests {
         let plane = slanted_plane();
         let samples = [[0., 10.], [FRAC_PI_2, 0.]];
         let refined = refine_crossing_edge(&wide_cylinder, plane.0, plane.1, &samples).unwrap();
-        assert!(refined.len() > 100);
         for uv in &refined {
             assert!(
                 height_over(plane, wide_cylinder(*uv).unwrap()) < 1e-8,
                 "{uv:?}"
             );
         }
+        // The plane z = 5 + 0.5 (x - 10) cuts the radius-20 cylinder along v = 10 cos u.
+        assert_chords_hold_the_edge(wide_cylinder, &refined, 10.);
     }
 
     #[test]
