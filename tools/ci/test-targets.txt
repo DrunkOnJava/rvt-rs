@@ -131,6 +131,7 @@ contract  ifc_synthetic_project
 contract  ifc_synthetic_structural
 contract  json_schema_contracts
 contract  project_count_fixtures
+contract  saved_shared_plane_boundary
 contract  support_matrix
 contract  witness_registry
 contract  witness_verdict

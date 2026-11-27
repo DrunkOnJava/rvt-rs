@@ -4,6 +4,7 @@ use crate::native_parameters::ObjectGraph;
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FaceMesh {
     pub face_index: usize,
@@ -749,6 +750,229 @@ fn within_envelope(
         .collect()
 }
 
+pub(crate) struct SharedPlaneAnchor {
+    pub sample: usize,
+    pub uv: [f64; 2],
+    pub position: [f64; 3],
+}
+
+/// A saved plane endpoint may anchor a revolution's shared chord if the remaining
+/// paired samples already meet. The caller must use this point on both sides.
+pub(crate) fn saved_plane_anchor(
+    g: &ObjectGraph,
+    curved_face: usize,
+    edge_index: usize,
+    surface: &crate::native_parametric_surface::ParametricSurface,
+    samples: &[[f64; 2]],
+) -> Result<Option<SharedPlaneAnchor>> {
+    if samples.len() < 3 {
+        return Ok(None);
+    }
+    let edge = &g.objects[edge_index];
+    let faces = edge.fields["m_pFace"]
+        .as_array()
+        .context("edge face pair")?;
+    ensure!(faces.len() == 2, "edge face pair length");
+    let curved_side = usize::from(pointer(g, edge_index, &faces[0])? != Some(curved_face));
+    ensure!(
+        pointer(g, edge_index, &faces[curved_side])? == Some(curved_face),
+        "edge does not belong to revolution"
+    );
+    let plane_side = 1 - curved_side;
+    let Some(plane_face) = pointer(g, edge_index, &faces[plane_side])? else {
+        return Ok(None);
+    };
+    let Some(plane_index) = pointer(g, plane_face, &g.objects[plane_face].fields["m_pSurf"])?
+    else {
+        return Ok(None);
+    };
+    let plane = &g.objects[plane_index];
+    if plane.class_name != "Plane" {
+        return Ok(None);
+    }
+    let origin = point::<3>(&plane.fields["m_origin"])?;
+    let x = point::<3>(&plane.fields["m_xVec"])?;
+    let y = point::<3>(&plane.fields["m_yVec"])?;
+    let normal = unit_normal(x, y)?;
+    let ends = edge.fields["m_firstAndLastEdgePnts"]
+        .as_array()
+        .context("edge endpoints")?;
+    ensure!(ends.len() == 2, "edge endpoint count");
+    let inner = edge.fields["m_interiorEdgePnts"]
+        .as_array()
+        .context("edge interior samples")?;
+    ensure!(
+        inner.len() + 2 == samples.len(),
+        "shared edge sample count mismatch"
+    );
+    let saved = std::iter::once(&ends[0])
+        .chain(inner)
+        .chain(std::iter::once(&ends[1]));
+    let mut planar = Vec::with_capacity(samples.len());
+    let mut curved = Vec::with_capacity(samples.len());
+    for (p, &uv) in saved.zip(samples) {
+        let plane_uv = point::<2>(&p["uv"][plane_side])?;
+        planar.push(std::array::from_fn(|k| {
+            origin[k] + plane_uv[0] * x[k] + plane_uv[1] * y[k]
+        }));
+        curved.push(surface.evaluate(uv[0], uv[1])?);
+    }
+    // Experimental limit. The caller still enables the anchor trial explicitly.
+    Ok(
+        single_saved_plane_endpoint(&curved, &planar, normal, PLANE_ANCHOR_LIMIT).map(|sample| {
+            SharedPlaneAnchor {
+                sample,
+                uv: samples[sample],
+                position: planar[sample],
+            }
+        }),
+    )
+}
+
+fn single_saved_plane_endpoint(
+    curved: &[[f64; 3]],
+    planar: &[[f64; 3]],
+    normal: [f64; 3],
+    max_gap: f64,
+) -> Option<usize> {
+    let normal_length = normal.iter().map(|value| value * value).sum::<f64>();
+    if curved.len() != planar.len()
+        || curved.len() < 3
+        || !max_gap.is_finite()
+        || max_gap <= 1e-7
+        || !normal_length.is_finite()
+        || (normal_length - 1.0).abs() > 1e-10
+    {
+        return None;
+    }
+    let mut chosen = None;
+    for (i, (&a, &b)) in curved.iter().zip(planar).enumerate() {
+        let d = crate::vector_math::distance(a, b);
+        if !d.is_finite() {
+            return None;
+        }
+        if d <= 1e-7 {
+            continue;
+        }
+        let normal_gap = (0..3).map(|k| (a[k] - b[k]) * normal[k]).sum::<f64>().abs();
+        if chosen.is_some()
+            || (i != 0 && i + 1 != curved.len())
+            || d >= max_gap
+            || normal_gap <= 1e-7
+        {
+            return None;
+        }
+        chosen = Some(i);
+    }
+    chosen
+}
+
+#[derive(Debug, PartialEq)]
+enum ChordPoint {
+    Stored(usize),
+    Interior([f64; 3]),
+}
+
+// Read the boundary emitted by the trimmed tessellator. Keep the original edge
+// endpoints and samples so connected edges on the plane keep their stored UVs.
+fn subdivide_planar_chord(
+    vertices: &[[f64; 3]],
+    triangles: &[[u32; 3]],
+    saved: &[[f64; 3]],
+    limit: usize,
+) -> Result<Vec<ChordPoint>> {
+    const TOLERANCE: f64 = 1e-7;
+    let point_budget = limit.saturating_add(1).min(EDGE_POINT_BUDGET);
+    ensure!(saved.len() >= 2, "missing saved planar chord");
+    ensure!(saved.len() <= point_budget, PLANAR_BUDGET_EXCEEDED);
+    let work = (triangles.len() as u64)
+        .saturating_mul(3)
+        .saturating_mul((saved.len() - 1) as u64);
+    ensure!(work <= PLANAR_WORK_BUDGET, PLANAR_BUDGET_EXCEEDED);
+
+    let mut points = vec![ChordPoint::Stored(0)];
+    for (span, ends) in saved.windows(2).enumerate() {
+        let [a, b] = [ends[0], ends[1]];
+        let axis: [f64; 3] = std::array::from_fn(|k| b[k] - a[k]);
+        let squared = axis.iter().map(|v| v * v).sum::<f64>();
+        ensure!(
+            squared.is_finite() && squared > TOLERANCE.powi(2),
+            "degenerate saved planar chord"
+        );
+        let slack = TOLERANCE / squared.sqrt();
+        let along = |p: [f64; 3]| -> Option<f64> {
+            let t = (0..3).map(|k| (p[k] - a[k]) * axis[k]).sum::<f64>() / squared;
+            let projected = std::array::from_fn(|k| a[k] + t * axis[k]);
+            ((-slack..=1. + slack).contains(&t) && point_distance(p, projected) <= TOLERANCE)
+                .then_some(t)
+        };
+
+        // An edge used by two triangles is in the face interior, even if it lies
+        // on the line through a trim segment.
+        let mut uses = BTreeMap::new();
+        for &[a, b, c] in triangles {
+            for (i, j) in [(a, b), (b, c), (c, a)] {
+                let p = *vertices
+                    .get(i as usize)
+                    .context("shared chord mesh index")?;
+                let q = *vertices
+                    .get(j as usize)
+                    .context("shared chord mesh index")?;
+                let (Some(s), Some(t)) = (along(p), along(q)) else {
+                    continue;
+                };
+                if (s - t).abs() <= f64::EPSILON {
+                    continue;
+                }
+                let (i, j, start) = if s < t { (i, j, s) } else { (j, i, t) };
+                let (count, _) = uses.entry((i, j)).or_insert((0, start));
+                *count += 1;
+                ensure!(*count <= 2, "nonmanifold shared chord segment");
+                ensure!(uses.len() <= EDGE_POINT_BUDGET, PLANAR_BUDGET_EXCEEDED);
+            }
+        }
+        let mut boundary: Vec<_> = uses
+            .into_iter()
+            .filter_map(|(edge, (count, t))| (count == 1).then_some((t, edge)))
+            .collect();
+        boundary.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+        let &(_, (first, _)) = boundary.first().context("missing shared chord segments")?;
+        let index_point = |i: u32| vertices[i as usize];
+        ensure!(
+            point_distance(index_point(first), a) <= TOLERANCE,
+            "shared chord starts at a different sample"
+        );
+        let mut previous = first;
+        for (segment, &(_, (i, j))) in boundary.iter().enumerate() {
+            ensure!(
+                i == previous,
+                "disconnected or ambiguous shared chord segments"
+            );
+            ensure!(points.len() < point_budget, PLANAR_BUDGET_EXCEEDED);
+            previous = j;
+            if segment + 1 < boundary.len() {
+                points.push(ChordPoint::Interior(index_point(j)));
+            }
+        }
+        ensure!(
+            point_distance(index_point(previous), b) <= TOLERANCE,
+            "shared chord ends at a different sample"
+        );
+        points.push(ChordPoint::Stored(span + 1));
+    }
+    Ok(points)
+}
+
+pub(crate) fn shared_plane_anchor_enabled() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("RVT_2085_SHARED_PLANE_ANCHOR").is_some())
+}
+
+fn shared_chord_subdivisions_enabled() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("RVT_2085_SHARED_CHORD_SUBDIVISIONS").is_some())
+}
+
 // Refine a particular shared edge in its curved surface's parameter domain.
 // The planar side is reconstructed from the same evaluated 3D positions, not
 // from interpolation along the old polygon's chords. `limit` is the most points
@@ -783,6 +1007,8 @@ fn refined_plane_edge(
     // Whether the curved face draws this edge straight between its saved points
     // (`FaceGrid::chord_edges`), which the plane's side then does too.
     let mut saved_chords = false;
+    let mut shared_endpoint = None;
+    let mut chord_mesh = None;
     let (u_values, v_values, evaluate): (Vec<f64>, Vec<f64>, SurfaceEval) = if kind == "CylSurf" {
         let profile = CylinderTessellationProfile::default();
         let mesh = cylinder_face(g, other, profile)?;
@@ -826,6 +1052,16 @@ fn refined_plane_edge(
     } else {
         let grid = crate::native_parametric_mesh::face_grid(g, other)?;
         saved_chords = grid.chord_edges.contains(&edge_index);
+        if let Some(&sample) = grid.anchored_edges.get(&edge_index) {
+            ensure!(
+                saved_chords && !grid.rectangular,
+                "missing shared plane chord"
+            );
+            shared_endpoint = Some(sample);
+            if shared_chord_subdivisions_enabled() {
+                chord_mesh = Some(crate::native_parametric_mesh::mesh_grid(g, other, &grid)?);
+            }
+        }
         (
             grid.u,
             grid.v,
@@ -867,8 +1103,7 @@ fn refined_plane_edge(
         det.is_finite() && det > 1e-24,
         "singular shared plane basis"
     );
-    let project = |uv: [f64; 2]| -> Result<[f64; 2]> {
-        let q = evaluate(uv)?;
+    let project_model = |q: [f64; 3]| -> ([f64; 2], f64) {
         let d = std::array::from_fn(|k| q[k] - origin[k]);
         let dx = dot(d, x);
         let dy = dot(d, y);
@@ -876,6 +1111,10 @@ fn refined_plane_edge(
         let residual = (0..3)
             .map(|k| (origin[k] + p[0] * x[k] + p[1] * y[k] - q[k]).powi(2))
             .sum::<f64>();
+        (p, residual)
+    };
+    let project = |uv: [f64; 2]| -> Result<[f64; 2]> {
+        let (p, residual) = project_model(evaluate(uv)?);
         ensure!(
             residual <= 1e-14,
             "shared curved edge leaves adjacent plane"
@@ -892,6 +1131,10 @@ fn refined_plane_edge(
     // samples between must still lie on the plane.
     let last = samples.len() - 1;
     let anchor = |i: usize| -> Result<Option<[f64; 2]>> {
+        // Only the revolution trim planner supplies a coordinated endpoint.
+        if kind == "SurfRev" && shared_plane_anchor_enabled() {
+            return Ok((shared_endpoint == Some(i)).then_some(original[i]));
+        }
         if project(samples[i]).is_ok() {
             return Ok(None);
         }
@@ -918,6 +1161,26 @@ fn refined_plane_edge(
             close(project(*uv)?, *expected),
             "shared edge surface samples disagree"
         );
+    }
+    if let Some(mesh) = chord_mesh {
+        let saved = original
+            .iter()
+            .map(|uv| std::array::from_fn(|k| origin[k] + uv[0] * x[k] + uv[1] * y[k]))
+            .collect::<Vec<_>>();
+        return subdivide_planar_chord(&mesh.vertices, &mesh.triangles, &saved, limit)?
+            .into_iter()
+            .map(|point| match point {
+                ChordPoint::Stored(i) => Ok(original[i]),
+                ChordPoint::Interior(world) => {
+                    let (uv, residual) = project_model(world);
+                    ensure!(residual <= 1e-14, "shared chord leaves adjacent plane");
+                    Ok(uv)
+                }
+            })
+            .collect();
+    }
+    if shared_endpoint.is_some() {
+        return Ok(original);
     }
     let Some(axis) = axis else {
         // Along an edge that crosses both parameters of a face that draws it straight
