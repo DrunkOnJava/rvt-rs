@@ -540,13 +540,13 @@ def main():
         # (in Windows PowerShell 5, `>` writes UTF-16) has no such counts and still fails.
         with open(args[0], encoding="utf-8", errors="replace") as handle:
             lines = handle.read().splitlines()
-        counts = [line.split() for line in lines if line.startswith("pieces surface=")]
-        if counts and all("gaps=0" in fields for fields in counts):
-            print(f"row 0: no gap on this model ({len(counts)} `pieces` lines, every one gaps=0), nothing to score")
+        piece_rows = [line.split() for line in lines if line.startswith("pieces surface=")]
+        if piece_rows and all("gaps=0" in fields for fields in piece_rows):
+            print(f"row 0: no gap on this model ({len(piece_rows)} `pieces` lines, every one gaps=0), nothing to score")
             return 0
         # A model with no face at all (r2025-00_Blank) prints no `pieces` line; Measure's own
         # `exit 0` after the probe's `graphs read=` line says the output is whole.
-        if not counts and any(line.startswith("graphs read=") for line in lines) and lines and lines[-1] == "exit 0":
+        if not piece_rows and any(line.startswith("graphs read=") for line in lines) and lines and lines[-1] == "exit 0":
             print("row 0: no face on this model, nothing to score")
             return 0
         print("row 0 FAILS: no `piece` line read; the probe output is empty, incomplete or not UTF-8 "
