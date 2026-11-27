@@ -67,7 +67,7 @@ All three are corrected on the pages in the change that records this run.
 | the family corpus and the 6,172 rebuilt extrusions | `-f families=true`, and a probe (RE-327) |
 | 6 of 53 exports move; the default export identical on 34 of 34 and 111 of 111 | a comparison with another commit: `-f base=main` |
 | Core Interior's 17 MB partition against an 8 MiB limit | the limits are tested under `tests/` |
-| a Revit 2018 export that a user posted, Snowdon Towers (local only) and the Areas' `m_area` tolerance | local only, or a tolerance and not a count |
+| a Revit 2018 export that a user posted (fetched by Measure since #2148), Snowdon Towers (local only) and the Areas' `m_area` tolerance | local only, or a tolerance and not a count |
 
 ## Doing it again
 

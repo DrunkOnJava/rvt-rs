@@ -79,6 +79,7 @@ use super::mesh_wall_quantities::{
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
+use std::num::NonZeroUsize;
 
 /// `BodySource` of a body drawn from the element's saved graphics.
 pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
@@ -336,6 +337,30 @@ pub fn default_scope(rf: &mut crate::RevitFile) -> Option<SavedMeshScope> {
         .then_some(SavedMeshScope::All)
 }
 
+/// Resource limits for reading Saved graphics when attaching meshes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SavedMeshLimits {
+    max_graph_values: NonZeroUsize,
+}
+
+impl Default for SavedMeshLimits {
+    fn default() -> Self {
+        Self {
+            max_graph_values: NonZeroUsize::new(1_000_000).unwrap(),
+        }
+    }
+}
+
+impl SavedMeshLimits {
+    /// Set the maximum number of field values read from one Saved graphics
+    /// graph. A graph beyond the limit remains unavailable to the attach pass.
+    /// The object, depth, and file budgets do not depend on this setting.
+    pub fn with_max_graph_values(mut self, maximum: NonZeroUsize) -> Self {
+        self.max_graph_values = maximum;
+        self
+    }
+}
+
 /// Replace each bounding-box body with the element's saved mesh, where the
 /// file holds one and all of it decodes.
 pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result<SavedMeshReport> {
@@ -359,6 +384,19 @@ pub fn attach_scoped_with_control(
     rf: &mut crate::RevitFile,
     model: &mut IfcModel,
     scope: SavedMeshScope,
+    control: &crate::control::WalkerControl,
+) -> anyhow::Result<SavedMeshReport> {
+    attach_scoped_with_limits_and_control(rf, model, scope, SavedMeshLimits::default(), control)
+}
+
+/// Same as [`attach_scoped_with_control`], with a caller-supplied Saved
+/// graphics resource limit. A graph that does not fit keeps the normal
+/// per-element Saved refusal and fallback.
+pub fn attach_scoped_with_limits_and_control(
+    rf: &mut crate::RevitFile,
+    model: &mut IfcModel,
+    scope: SavedMeshScope,
+    limits: SavedMeshLimits,
     control: &crate::control::WalkerControl,
 ) -> anyhow::Result<SavedMeshReport> {
     let mut report = SavedMeshReport::default();
@@ -555,7 +593,7 @@ pub fn attach_scoped_with_control(
             .chain(instances.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
-        max_graph_values: 1_000_000,
+        max_graph_values: limits.max_graph_values.get(),
         max_graph_objects: 1_000_000,
         value_source: Some("saved_graphics"),
         ..Default::default()
@@ -648,21 +686,29 @@ pub fn attach_scoped_with_control(
                     wall_quantities.push((*index, found));
                 }
             }
+            let mut mesh_body: Option<[usize; 1]> = None;
             if let Some([index]) = beam_lines
                 .get(&element.identity.element_id)
                 .map(Vec::as_slice)
             {
-                let found = partial_refusal(&element.meshes)
-                    .is_none()
+                let whole = partial_refusal(&element.meshes).is_none();
+                // #2158: a body many times the beam's own mesh across its line
+                // is a record box that holds more than the beam: drawn from its
+                // mesh, as a box is.
+                if whole
+                    && box_section_holds_more(&model.entities[*index], &element.meshes.primitives)
+                {
+                    report.candidates += 1;
+                    mesh_body = Some([*index]);
+                } else if let Some(found) = whole
                     .then(|| beam_mesh_quantities(&element.meshes.primitives))
-                    .flatten();
-                if let Some(found) = found {
+                    .flatten()
+                {
                     beams.push((*index, found));
                 }
             }
             // #1710: a column whose mesh is a vertical prism of another section
             // than its type's rectangle is drawn from its mesh, as a box is.
-            let mut mesh_body: Option<[usize; 1]> = None;
             if let Some([index]) = column_rectangles
                 .get(&element.identity.element_id)
                 .map(Vec::as_slice)
@@ -936,6 +982,96 @@ fn section_not_rectangle(entity: &IfcEntity, mesh_area: f64) -> bool {
         && area > 0.0
         && mesh_area.is_finite()
         && (mesh_area - area).abs() > COLUMN_SECTION_TOLERANCE * area
+}
+
+/// How many times a beam's body drawn along its line may be as wide or as deep
+/// as its own saved mesh across the line before the record box it was solved
+/// from is taken to hold more than the beam (#2158). The census of
+/// `probe_re328_beam_meshes` over the 101 models Measure reads (Autodesk's
+/// samples of Revit 2015 to 2027, Snowdon Towers, BIM4LCA, RE1 and puzzbobb's
+/// 2025 models; run 45997957951) puts every such body at most 4.425 times its
+/// mesh's depth (16 of Snowdon Towers Structural's 923 beams are over 3, its
+/// other beams and every other model's at most 2.125) and 2.365 times its
+/// width. The nine beams reported on #2158, solved 8.3 m deep from their record
+/// box, are 0.29 to 0.60 m deep by their types' names: 14 to 29 times.
+const BEAM_BOX_SECTION_MESH_RATIO: f64 = 5.0;
+
+/// Whether `entity`, a beam drawn along its line ([`BEAM_AXIS_BODY_SOURCE`]),
+/// is more than [`BEAM_BOX_SECTION_MESH_RATIO`] times as wide or as deep as the
+/// mesh `primitives` across its line (#2158). Its width and depth are its
+/// `SectionWidth` and `SectionDepth`; its line runs along its swept body's
+/// directrix, its I or tube section's extrusion axis, or, for a level
+/// rectangle, at its rotation in plan. False where any of these is missing,
+/// the body is another shape, or the mesh has no extent across the line.
+fn box_section_holds_more(entity: &IfcEntity, primitives: &[Primitive]) -> bool {
+    let IfcEntity::BuildingElement {
+        rotation_radians,
+        solid_shape,
+        property_set: Some(set),
+        ..
+    } = entity
+    else {
+        return false;
+    };
+    let length = |name: &str| {
+        set.properties
+            .iter()
+            .find(|property| property.name == name)
+            .and_then(|property| match property.value {
+                PropertyValue::LengthFeet(value) => Some(value),
+                _ => None,
+            })
+    };
+    let (Some(width), Some(depth)) = (length("SectionWidth"), length("SectionDepth")) else {
+        return false;
+    };
+    let unit = |v: [f64; 3]| {
+        let norm = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+        (norm.is_finite() && norm > 0.0).then(|| [v[0] / norm, v[1] / norm, v[2] / norm])
+    };
+    // A sloped beam is swept along its centreline, an I or tube section is
+    // extruded along its line, and a level rectangle is the extrusion turned
+    // to its line in plan; any other body is not one this solves.
+    let d = match solid_shape {
+        Some(SolidShape::SweptPath {
+            directrix_points_feet,
+            ..
+        }) => match directrix_points_feet.as_slice() {
+            [a, b] => unit([b[0] - a[0], b[1] - a[1], b[2] - a[2]]),
+            _ => None,
+        },
+        Some(SolidShape::PlacedExtrusion { axis, .. }) => unit(*axis),
+        Some(_) => None,
+        None => {
+            let (sin, cos) = rotation_radians.unwrap_or(0.0).sin_cos();
+            Some([cos, sin, 0.0])
+        }
+    };
+    let Some(d) = d else {
+        return false;
+    };
+    let plan = d[0].hypot(d[1]);
+    if !plan.is_finite() || plan <= 0.0 {
+        return false;
+    }
+    // The axes `beam_body` solves the section on: across the line level, and
+    // across it in its vertical plane.
+    let across = [-d[1] / plan, d[0] / plan, 0.0];
+    let up = [-d[2] * d[0] / plan, -d[2] * d[1] / plan, plan];
+    let extent = |axis: [f64; 3]| {
+        let (low, high) = primitives
+            .iter()
+            .flat_map(|primitive| primitive.vertices.iter())
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), v| {
+                let along = v[0] * axis[0] + v[1] * axis[1] + v[2] * axis[2];
+                (low.min(along), high.max(along))
+            });
+        high - low
+    };
+    let exceeds = |size: f64, mesh: f64| {
+        mesh.is_finite() && mesh > 0.0 && size > BEAM_BOX_SECTION_MESH_RATIO * mesh
+    };
+    exceeds(width, extent(across)) || exceeds(depth, extent(up))
 }
 
 /// How far a column's box volume may differ from the volume of the mesh Revit

@@ -62,9 +62,12 @@ only identifiers that exist in `src/`.
 | Autodesk rme_basic sample | 1 |
 | Vitoria spent Revit 2018 project | 1 |
 
-Snowdon Towers and the BIMcollab and MIT models are local only: their Revit
-exports cannot be fetched by Measure, so a rule resting on them is measured on
-this machine and not in CI. The held-out models leave the runner as counts
+Snowdon Towers and the MIT models are local only: their Revit exports cannot
+be fetched by Measure, so a rule resting on them is measured on this machine and
+not in CI. BIMcollab's example is local only too, in that it is never stored or
+committed, but Measure fetches it and its Revit export from their source with
+`-f bimcollab=true` and keeps only summary counts, so a rule resting on it is
+measured in a run. The held-out models leave the runner as counts
 only. A second, redistributable project with Revit's own IFC4 export, saved by
 Revit 2024 or 2025 and holding curtain walls, curved walls, stairs and MEP
 runs, would test the largest share of the rules below.

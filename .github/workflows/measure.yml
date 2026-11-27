@@ -58,6 +58,13 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f racadv=true -f models="racadv-*" -f scorers=space_profiles_vs_ifc
 #
+# A run that measures Autodesk's 2018 rac_basic_sample_project with the default
+# scorers (or one that names spaces_by_globalid_vs_ifc) also pairs its rooms by
+# GlobalId with a forum user's Revit 2018 export of it, when its host answers
+# (research/rac-basic-2018-export.tsv, no licence, #2148): the export is fetched
+# for the run and never stored or cached, and only the counts are written, in
+# the sample's spaces_by_globalid_vs_ifc.txt.
+#
 # With `holdout`, the held-out models (research/holdout-models.tsv, RE-252,
 # and research/holdout-archive-models.tsv, #1261), for checking a rule against
 # files it was not derived on: only their summary counts are uploaded
@@ -89,6 +96,14 @@
 # probe-<probe>.txt and probe_score-<probe>.txt:
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f nordic=true -f models="nordic-office-*" -f scorers=none -f probe="probe_a probe_b" -f probe_scorer="a_vs_ifc -"
+#
+# `pair_scorer` names a tools/re scorer that takes `<base.ifc> <head.ifc>`, such as
+# placed_bodies_vs_base, for a claim that a change moved nothing in an export
+# (#2148). The `pairs` job runs it, from the workflow's ref, on each model that
+# anyone can fetch and both sides exported, and uploads its outputs as
+# `measure-pairs`; it needs `base` and `keep_ifc=true`, and fails on a scorer
+# that exits non-zero. A held-out, `rac_advanced` or BIMcollab model is never
+# given to it: such a scorer prints ElementIds.
 #
 # A scorer or schema step whose every input is as it was in an earlier run is
 # not run again: its output comes from the score cache (tools/ci/measure-cache.py;
@@ -158,6 +173,10 @@ on:
         default: false
       probe_scorer:
         description: tools/re scorer (no .py) for each probe, in the same order ("-" for none), run on its output and Revit's export, from the measured ref; empty for none
+        required: false
+        default: ""
+      pair_scorer:
+        description: tools/re scorer (no .py) taking <base.ifc> <head.ifc>, run on each open model both sides exported, from the workflow's ref; needs base and keep_ifc; empty for none
         required: false
         default: ""
       probe_pair_release:
@@ -1076,6 +1095,21 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # SAMPLE_YEARS is the first and last year.
           tools/fetch-autodesk-samples.sh _samples $SAMPLE_YEARS
+          # #2148: a forum user's Revit 2018 export of rac_basic_sample_project, which the
+          # 2018 save's rooms are paired with by GlobalId, counts only. An unreachable host is
+          # NOT MEASURED, and the shard's results are then not kept for later runs; a file that
+          # no longer matches its pin fails the run. The export itself is never cached.
+          if [ -f _samples/2018-rac_basic_sample_project.rvt ]; then
+            set +e
+            tools/ci/fetch-rac-basic-2018-export.sh _samples/phased
+            status=$?
+            set -e
+            case "$status" in
+              0) ;;
+              2) echo "::warning::the Revit 2018 export of rac_basic_sample_project NOT MEASURED: it could not be downloaded" ; : > "$RUNNER_TEMP/not-measured" ;;
+              *) echo "::error::the Revit 2018 export of rac_basic_sample_project no longer matches its pin (research/rac-basic-2018-export.tsv)"; exit 1 ;;
+            esac
+          fi
       - name: Measure
         if: steps.reuse.outputs.cache-hit != 'true'
         env:
@@ -1420,6 +1454,100 @@ jobs:
               output: {title: .title, summary: (.summary + "\n- " + $from)}}' verdict.json \
             | gh api -X POST "repos/$REPO/check-runs" --input - --jq '"wrote check run \(.id): \(.conclusion)"'
 
+  # #2148: a scorer of the two sides' exports of each model, for a claim that a
+  # change moved nothing, such as RE-347's placed bodies. Its own job, so the
+  # compare job's 15 minutes and its steps are untouched when no pair scorer
+  # is named; the scorer comes from the workflow's ref, as the compare job's
+  # tools do, so the measured code chooses nothing here.
+  pairs:
+    name: Pair scorer
+    needs: [plan, measure]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.measure.result == 'success' && inputs.pair_scorer != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: The pair scorer can run
+        env:
+          PAIR_SCORER: ${{ inputs.pair_scorer }}
+          KEEP_IFC: ${{ inputs.keep_ifc }}
+          BASE: ${{ needs.plan.outputs.base }}
+        run: |
+          if ! [[ "$PAIR_SCORER" =~ ^[a-z0-9_]+$ ]]; then
+            echo "::error::pair_scorer names a tools/re scorer, without .py"
+            exit 1
+          fi
+          if [ "$KEEP_IFC" != true ] || [ "$BASE" != true ]; then
+            echo "::error::pair_scorer reads both sides' exports: dispatch it with -f keep_ifc=true and a base"
+            exit 1
+          fi
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/ci/requirements-ifc.txt
+            tools/re/
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install IfcOpenShell
+        run: python -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-head-*
+          path: measure-head
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-base-*
+          path: measure-base
+          merge-multiple: true
+      - name: Score each model's two exports
+        env:
+          PAIR_SCORER: ${{ inputs.pair_scorer }}
+        shell: bash
+        run: |
+          scorer="tools/re/$PAIR_SCORER.py"
+          if [ ! -f "$scorer" ]; then
+            echo "::error::$scorer is not in the workflow's ref"
+            exit 1
+          fi
+          failed=0 scored=0
+          for base in measure-base/*/model.ifc; do
+            model=$(basename "$(dirname "$base")")
+            # The models anyone can fetch, as tools/ci/keep-run-outputs.py names them.
+            case "$model" in
+              core-interior|einhoven|re1-*|nordic-*|r2025-*|sample-*|family-*) ;;
+              *) continue ;;
+            esac
+            head="measure-head/$model/model.ifc"
+            [ -f "$head" ] || continue
+            mkdir -p "pairs/$model"
+            status=0
+            python "$scorer" "$base" "$head" > "pairs/$model/$PAIR_SCORER.txt" 2>&1 || status=$?
+            echo "exit $status" >> "pairs/$model/$PAIR_SCORER.txt"
+            scored=$((scored + 1))
+            if [ "$status" != 0 ]; then
+              echo "::error::$model: $PAIR_SCORER exited $status (see pairs/$model/$PAIR_SCORER.txt)"
+              failed=1
+            fi
+            echo "$model: exit $status" >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [ "$scored" = 0 ]; then
+            echo "::error::no model anyone can fetch has an export on both sides"
+            exit 1
+          fi
+          exit "$failed"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('pairs/**') != '' }}
+        with:
+          name: measure-pairs
+          path: pairs
+          overwrite: true
+
   compare:
     name: Compare
     needs: [plan, measure]
@@ -1750,6 +1878,25 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
+      # #1541: a scorer the run names, or a probe's scorer, that exits non-zero
+      # on the head side fails the run, not only an annotation on a green one
+      # (run 45072403351 was green with its one probe scorer exiting 2 on both
+      # offices). Each shard lists them in scorer-failures-<shard>.txt; the base
+      # side's list is main's, annotated and kept but failing nothing. This is
+      # last, so every upload and the summary are written first.
+      - name: A scorer the run names did not fail
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          failed=0
+          for f in measure-head/scorer-failures-*.txt; do
+            [ -f "$f" ] || continue
+            while IFS=$'\t' read -r model step status; do
+              echo "::error::head, ${model}: the scorer ${step}, named in this run, ${status}"
+              failed=1
+            done < "$f"
+          done
+          exit "$failed"
 
   # B81: the base and head jobs above run on different runners, so their wall
   # times compare machines as much as code. With `timing`, rvt-ifc is built at

@@ -3,8 +3,8 @@
   "private": true,
   "description": "The command-line tools .devcontainer/provision.sh installs, pinned with their dependencies by package-lock.json",
   "dependencies": {
-    "@anthropic-ai/claude-code": "2.1.323",
-    "@openai/codex": "0.167.2",
+    "@anthropic-ai/claude-code": "2.1.329",
+    "@openai/codex": "0.170.0",
     "pnpm": "12.6.0"
   },
   "allowScripts": {

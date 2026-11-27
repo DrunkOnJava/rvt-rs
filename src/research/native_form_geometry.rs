@@ -32,7 +32,9 @@
 //! separates the marked axis, reads the sweep angles, and projects the saved
 //! family-coordinate curves into a radial/axial profile (RE-391/RE-392).
 
+mod blend;
 mod revolution;
+pub use blend::{Blend, BlendSection, FIRST_OFFSET_PARAMETER, SECOND_OFFSET_PARAMETER};
 pub use revolution::{Revolution, RevolutionMesh};
 
 use crate::graph_value::Fv;
@@ -151,12 +153,19 @@ pub struct Walked {
     pub records: usize,
 }
 
-/// The schema and partitions of a family file. Errs outside the releases the
-/// native record framing is measured on, or where the schema does not parse.
+/// The releases [`open`] reads a standalone family of: Revit 2014 to 2027, the
+/// project releases of [`native_document::NATIVE_RELEASES`] and 2014, whose
+/// plain groups frame the same way and whose extrusions rebuild to the saved
+/// mesh (RE-489). Revit 2013 is not in it: its schema does not parse within
+/// the reader's field budget.
+pub const FAMILY_RELEASES: std::ops::RangeInclusive<u32> = 2014..=2027;
+
+/// The schema and partitions of a family file. Errs outside
+/// [`FAMILY_RELEASES`], or where the schema does not parse.
 pub fn open(file: &mut RevitFile) -> Result<Document> {
     let release = file.layout_release()?;
     ensure!(
-        native_document::NATIVE_RELEASES.contains(&release),
+        FAMILY_RELEASES.contains(&release),
         "native record framing is unvalidated for Revit {release}"
     );
     let registry =
@@ -1403,7 +1412,7 @@ impl FormDocument {
                     self.sketch_curves.entry(sketch).or_default().push(id);
                 }
             }
-            "ExtrusionElem" | "RevolutionElem" | "SketchPlane" | "VarSketch" => {}
+            "ExtrusionElem" | "RevolutionElem" | "BlendElem" | "SketchPlane" | "VarSketch" => {}
             _ => return,
         }
         if self.graphs.contains_key(&id) {

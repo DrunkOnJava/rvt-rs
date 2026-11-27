@@ -251,7 +251,7 @@ wanted() { # step
 # Whether a step is in a scorer list or is one of the steps run by name.
 listed() { # step
   local s
-  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc space_kinds_vs_ifc bodies_across_saves none; do
+  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc space_kinds_vs_ifc bodies_across_saves areas_across_saves none; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
@@ -297,9 +297,21 @@ score() { # name args...
   # A run that names its scorers is run for their answer, and a crash left in
   # the output file reads as a green run (#1541). In the default set a scorer
   # may exit 1 for a finding, so only the named ones are raised, and a probe's
-  # scorer, which is always asked for by name.
+  # scorer, which is always asked for by name. The annotation alone left the
+  # run green (run 45072403351), so each one is also listed in
+  # scorer-failures-<shard>.txt, which the compare job fails the run on, after
+  # its uploads, for the head side: the base side is main, and a finding there
+  # is main's own (in run 43330924424 main failed the same-project gate on six
+  # samples that the head fixed). A model whose results leave the runner only as counts, or a
+  # pair once held out, is not named there: the list is kept with a run's
+  # outputs (tools/ci/keep-run-outputs.py), whose scan refuses those names. A
+  # run that writes it saves no base results for reuse, as its scorer's
+  # `exit N` line already keeps them from being whole.
   if [ "$status" != 0 ] && { [[ "$step" == probe_score* ]] || { [ "${#STEPS[@]}" -gt 0 ] && wanted "$step"; }; }; then
     echo "::error::$(basename "$dir"): the scorer $step, named in this run, exited $status (see its $step.txt)"
+    local model; model=$(basename "$dir")
+    case "$model" in holdout-*|racadv-*|bimcollab-*|spent-*) model="a model kept to counts" ;; esac
+    printf '%s\t%s\texit %s\n' "$model" "$step" "$status" >> "$OUT/scorer-failures-${SHARD:-all}.txt"
   fi
 }
 
@@ -673,6 +685,15 @@ measure_sample() { # sample
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
     # #1437: every space of the sample's export says what it is.
     wanted space_kinds_vs_ifc && score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
+    # #2148: the 2018 save's rooms paired by GlobalId with a forum user's Revit 2018 export of
+    # it (research/rac-basic-2018-export.tsv), counts only: without --list the scorer prints
+    # no GlobalId or name. `score`, not `cscore`: the score cache keeps nothing read from that
+    # export. The counts line is public, as the artifact uploads it, and a reused base side's
+    # results carry it.
+    local phased="${SAMPLE_DIR:-}/phased/rac_basic_sample_project.ifc"
+    if [ "$(basename "$sample")" = 2018-rac_basic_sample_project.rvt ] && [ -s "$phased" ]; then
+      wanted spaces_by_globalid_vs_ifc && score "$dir/spaces_by_globalid_vs_ifc.txt" "$SCORERS/spaces_by_globalid_vs_ifc.py" "$dir/model.ifc" "$phased"
+    fi
   fi
   # The gates job scores these again, from nothing else (#1881).
   if [ -n "${GATE_DIR:-}" ] && [ -s "$dir/model.ifc" ] && gate_sample "$sample"; then
@@ -783,6 +804,24 @@ for s in "${STEPS[@]:-}"; do
   listed "$s" && continue
   if grep -qE '\.py +<probe[- ._a-z0-9]*>' "$SCORERS/$s.py"; then
     echo "::error::$s reads a probe's output: dispatch it with -f probe=<probe> -f probe_scorer=$s, not in scorers" >&2
+    exit 2
+  fi
+  # A scorer of several saves or of a run's two sides, given one model's two
+  # files, prints its usage and exits 2 on every model (runs 44950815664 and
+  # 44953635018 named areas_across_saves, whose gate runs by itself whenever
+  # the samples are in the run, and is listed above for that reason; run
+  # 43649253933 named changed_bodies_vs_ifc, which takes three). Its name says
+  # so, or its usage line takes three files or more outside its [options].
+  usage=$(grep -m1 -E "python3? +tools/re/$s\.py" "$SCORERS/$s.py" | sed -E 's/\[[^]]*\]//g' || true)
+  files=$(grep -o '<[^>]*>' <<< "$usage" | wc -l)
+  case "$s" in
+    *_across_saves) why="it compares several saves: an across-saves gate runs with -f samples=true" ;;
+    *_vs_base) why="it compares a run's two sides: dispatch it with -f pair_scorer=$s" ;;
+    *) why="its usage takes three files or more: run it on the kept exports"
+       [ "$files" -ge 3 ] || why="" ;;
+  esac
+  if [ -n "$why" ]; then
+    echo "::error::$s is not run on one model's export and Revit's: $why" >&2
     exit 2
   fi
 done

@@ -1,0 +1,100 @@
+# The workflow runs the evidence pages cite whose outputs are kept past the 90 days GitHub keeps a
+# run's artifacts (#2124). Each kept run's outputs are in a commit of their own that
+# refs/evidence/<run> points at, made by .github/workflows/keep-run-outputs.yml
+# (tools/ci/keep-run-outputs.py says what it keeps; `kept` is taken from each commit's KEPT.md).
+# A kept file reads as plain text at https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/<commit>/<path>,
+# the form the pages' citations are to link to (Griffin, 2026-11-22). A run whose artifacts were
+# gone before it could be kept has `-` for its commit and says why. These are the runs the five
+# evidence pages cited on 2026-11-22; a run cited later is kept by dispatching the workflow on it.
+# A row named `<run>-probes` or `<run>-holdout` is a commit beside the run's first, holding only its
+# probes' own output (#2143) or its held-out models' summary counts (#2145, Griffin 2026-11-22); one
+# named `<run>-summaries` holds the held-out and `rac_advanced` models' summary counts and export
+# digests (#2148, Griffin 2026-11-27); one named `<run>-log` holds the lines of a run's log a pattern
+# found, for figures it printed only there (#2148).
+run	commit	kept
+40156315852	ad5237bea8d24f9f764471b19b5ae6af4593b1c9	head 1027 files for 31 models; base 1027 files for 31 models
+40927543524	77ccec7682e9774912eefcc0aedbab3d0e8180db	head 1474 files for 101 models
+40932136360	28a2228891e9ce7fd42b738c60bb6c572321deb3	head 26 files for 4 models
+41213779326	1e77c32852bb7b834dedc5d9a20616678805e2c1	head 1360 files for 32 models
+41215480967	8a71a5b142ce76914a37d083406e9ac65dada154	head 10 files for 2 models
+41636859789	67f4cdc23647fffcb1ab616013b7d169de77fc05	head 93 files for 24 models
+41656599871	361695b3cade5d94866eb4f9c4a74bf3c298bd09	head 1360 files for 32 models; base 1360 files for 32 models; compare 1 file
+41658225355	173f691044f90a7f078998deedfaca482962b872	head 2 files for 0 models
+41661841411	-	nothing: a Measure run of 2026-11-03 that measured a held-out model in full while it was briefly spent; its artifacts were deleted (docs/reference-models.md)
+41668542833	-	nothing: as 41661841411
+41671242397	-	nothing: as 41661841411
+41672953553	-	nothing: as 41661841411
+41707934595	056c90ff226be632e9625534b8fdc11fe301ef49	head 46 files for 1 model; base 46 files for 1 model; compare 1 file
+41713761592	342392557f27f04ae485ab7beae78a8387a47a77	head 2 files for 0 models
+41741114199	98575190b4abf9b4500fb2dad130fd6faa2b3b2c	head 1789 files for 93 models; base 1789 files for 93 models; compare 1 file
+41757734285	e45f47949b88222bbb5db2bfe3d1d01843c90b5a	head 1789 files for 93 models; base 1789 files for 93 models; compare 1 file
+41764492879	e79454c17ba940b12875b4e110c8c1bd68ad5771	head 1822 files for 93 models; base 1822 files for 93 models; compare 1 file
+41784044966	62735c2bf5e4aa633e4f05c62a010f3e7c5f1f70	head 1822 files for 93 models; base 1822 files for 93 models; compare 1 file
+41784415396	227e35f9c8776edda133c6e86896c03915314d61	head 25 files for 9 models
+41784419457	88c57a0405a262af3e879849af75e3a83b29e745	head 20 files for 9 models
+41787230413	01f6ab796a3ae5235ddf7c3a2ff6d3fbd0f71a94	head 59 files for 16 models
+41805333248	52302f084af559ccb4a187ffe5c2c7909107f960	head 354 files for 10 models
+41850758987	e1a96fc3ec337ddca4339702096dcd136b2a6ac0	head 1590 files for 35 models
+41850769925	3746f8e083ffe5903330165381baa00817efbffa	head 201 files for 34 models
+41884073888	8f091648bc057074cc6547c2fe4fe669a5cff14c	head 69 files for 34 models; base 69 files for 34 models; compare 1 file
+41884078892	2c8c73fc10ecd59cb4a7e92d07b148b2a32733e8	head 234 files for 34 models; base 234 files for 34 models; compare 1 file
+41884639625	0f354e780db624abcf5d3b0dd0e8b3bcdb8e732c	head 1590 files for 35 models; base 1590 files for 35 models; compare 1 file
+41973316830	a67124b2811811b3c033a347c64683e18c2277e1	head 73 files for 4 models; base 73 files for 4 models; compare 1 file
+41985023986	9b66140f210090ed34f9988d5dbd6a5d054a7249	head 1928 files for 106 models; base 1928 files for 106 models; compare 1 file
+42002548557	d107e97e422b9a52d08be6a7f0a61c374c1fc779	head 1915 files for 93 models; base 1915 files for 93 models; compare 1 file
+42002553349	9d24c47a6add0aac50e75aec6327276dc055ede3	head 13 files for 2 models; base 13 files for 2 models; compare 1 file
+42003913780	720a9a67bcaa94f9f096fcdc323ab325313744a8	head 1915 files for 93 models; base 1915 files for 93 models; compare 1 file
+42017400629	495803393bbe282852893ebf0d75c494bfa014a1	head 1916 files for 93 models; base 1915 files for 93 models; compare 1 file
+42027776156	320903807c665d39e4acf7a83adcbce96d81a26e	head 2009 files for 93 models; base 2008 files for 93 models; compare 1 file
+42035308270	eb124f242dfcd5058c0cd6e8236308089c2c9491	head 2015 files for 93 models; base 2014 files for 93 models; compare 1 file
+42066757105	1af5ed6306795aaf951d303e2042b7a11e95c7c1	head 17 files for 4 models
+42091457764	ee7352fa522eeed8eef5fee3a540193a4e48e22e	head 2018 files for 93 models; base 2017 files for 93 models; compare 1 file
+42092391898	93f7f61980334569f4fcc6061161385e989a8044	head 53 files for 4 models; base 49 files for 4 models; compare 1 file
+42097940515	c4043093e9e9e40068aca75ab2617af406f950d0	head 326 files for 72 models
+42106436497	4591d62de3f1e2d1105706dba2551f7cfbdaa1d7	head 292 files for 58 models
+42106711251	2977cf634d3326a52c1adfd7097ed5b231124c0d	head 1888 files for 60 models; base 1853 files for 60 models; compare 1 file
+42106731054	bf4238722b3059a59225664108cb5092d957d869	head 11 files for 5 models; base 11 files for 5 models; compare 1 file
+42108271073	aefb7f0a7995f758ff31831b4d47dc8404c24538	head 107 files for 21 models
+42109657349	-	nothing: a Viewer tests run of 2026-11-05 that lists no artifact; its log's build line is kept as 42109657349-log
+42125048710	-	nothing: a Viewer tests run of 2026-11-05 that lists no artifact; its log's measurement lines are kept as 42125048710-log
+42127619521	b0b423da0b49c4f21af6ca1a836af645bd75a4d0	head 46 files for 9 models
+42135914864	cc1a09c6b324b739bd5709eb44273a37bd16a141	head 2146 files for 93 models; base 2144 files for 93 models; compare 1 file
+42530216655	e45aad07dac0a6d76082ca3a0d39bd90df1decbb	head 2146 files for 93 models; base 2144 files for 93 models; compare 1 file
+42545885153	30bad05bf2b72d10cea4c7fd6162da6084fa8ab8	head 2152 files for 93 models; base 2150 files for 93 models; compare 1 file
+42554270370	bb535399b1c1f5b7f1c520db07a1f29b573aac1f	head 2152 files for 93 models; base 2150 files for 93 models; compare 1 file
+42556745265	798bf78b6dbbcabeeaa4e75c9ff786c059a16abb	head 501 files for 32 models; base 500 files for 32 models; compare 1 file
+42581222440	0c6e05f11570d760beb6e030f34eb51ce4457a42	head 2152 files for 93 models; base 2150 files for 93 models; compare 1 file
+42596736395	f76fc4b2fef4b5c899b9bc4fae3e617b6856fb52	head 2102 files for 92 models
+42612357300	80fc4179b2668f9d0b6b6d6120364924ab40ae17	head 218 files for 31 models
+43152271314	de01573f90acf15a70681c9fd9c292ba5cee21a0	head 347 files for 76 models; base 345 files for 76 models; compare 1 file; timing 2 files
+43525326226	f44968af85882bdf0ae7831f5e81638274bf8f1d	head 2616 files for 121 models; base 2614 files for 121 models; verdict 1 file; compare 1 file
+43662654246	7a52f2903f28aeafc048083bd38952209c295dfc	head 2559 files for 102 models; base 2557 files for 102 models; verdict 1 file; compare 1 file
+43688985749	830ab42e928997526fbcebbe64957d5747e98c3f	head 71 files for 14 models; verdict 1 file
+45073138078	f1b4fb7991eda6e3fa3fc2f46282da255794a770	head 13 files for 2 models; verdict 1 file
+45074892701	0cd8b9c180475efa54ecafa75c0311d9d4b6ec8b	head 13 files for 4 models; base 13 files for 4 models; verdict 1 file; compare 1 file; pairs 4 files
+45074900834	348187501f1f97da8a417acdf44b26784595a1c9	head 10 files for 3 models; base 10 files for 3 models; verdict 1 file; compare 1 file; pairs 3 files
+41658225355-holdout	6dc275f5853e9b58f19bdded4dd79f4bdcf30d4e	head 7 files for 6 models
+41707934595-holdout	c4c35f110e33945fce97de1414d6f04c25385a29	head 6 files for 5 models; base 6 files for 5 models
+41713761592-holdout	a9e83f090c999806493ed5738f4e954afd08d99f	head 2 files for 1 model
+41741114199-holdout	2a63f5141ed7e3d56ab49f05a16a0db3cac5398c	head 19 files for 18 models; base 19 files for 18 models
+41757734285-holdout	fb7e503d662c81ddaabd9ef98a0d983c4dd4e7a7	head 19 files for 18 models; base 19 files for 18 models
+41764492879-holdout	e9055da97f37fbf5c7e67f7fcf81c2b9a5716318	head 19 files for 18 models; base 19 files for 18 models
+41787230413-probes	5489f767bc5f0d0502bb9ddb5508ed3ca22545f9	head 33 files for 16 models
+42003913780-holdout	52b697b98aae7092fdd4df755ba877c4c6eb6040	head 19 files for 18 models; base 19 files for 18 models
+42027776156-holdout	68a42783041c94c1b73b6e4a4872075a2c85397d	head 19 files for 18 models; base 19 files for 18 models
+42097940515-probes	cffadffd9acfbc5d6a1ec287645ca4f771f627d1	head 73 files for 72 models
+42106436497-probes	e4dee7a0d096743e78a904f20b1ca9dc51e08ebf	head 59 files for 58 models
+42108271073-probes	c636faa7a6694b94234e05b79aeee5f155f57afd	head 22 files for 21 models
+42109657349-log	ed933f84fff1da6d9d96ad06f0c5d90c577fd2c3	log 3 lines from 3 jobs
+42125048710-log	85fff80ddfdb56867adec0cd497daff060f5dfad	log 8 lines from 3 jobs
+42556745265-holdout	b979b8cfce303b87ac1e356bc1a36ca3922b4660	head 19 files for 18 models; base 19 files for 18 models
+41707934595-summaries	6d7bdd702a59fcd4ca26527ec3e20ed4ea783a19	head 11 files for 5 models; base 11 files for 5 models
+41741114199-summaries	71bbb38d45316fb5a943f4467ef9776de88ffe72	head 37 files for 18 models; base 37 files for 18 models
+42017400629-summaries	ee28453ad615df7b3de2f08e7d17d54079958f95	head 49 files for 24 models; base 49 files for 24 models
+42027776156-summaries	ea5ae74efc0d43bb0eccd3879c1015b74a827afa	head 49 files for 24 models; base 49 files for 24 models
+45997957951	ed091e7c18cb78aeda97892cab4ce5a0898079cf	head 466 files for 101 models; verdict 1 file
+45997957951-probes	26613a3ed5bc5d4f6a8011470f62083f9f5a6c3d	head 102 files for 101 models
+46029833703-probes	f3266325a384979f5f3694aa28c86826cf40717b	head 84 files for 83 models
+46013208552	7793aa72ca3f758eed85b5a88430ce18a39896c1	head 2559 files for 102 models; base 2557 files for 102 models; verdict 1 file; compare 1 file
+46013208552-summaries	26d000272a8041c3fe5fc5f149bd43e858fc0a43	head 49 files for 24 models; base 49 files for 24 models
+46053386384	8486ca765b11077d9ad9482662c522cf8d1c1ad7	head 18 files for 3 models; verdict 1 file

@@ -265,15 +265,18 @@ const EDGE_REFINEMENT_DEPTH: u32 = 32;
 /// The most points one edge may be given, so that a hostile file cannot ask for more.
 const EDGE_POINT_BUDGET: usize = 100_000;
 
-/// What a crossing edge's refinement may spend: halvings of one span, and points in all.
+/// What a crossing edge's refinement may spend: halvings of one span, and points in all;
+/// and how far the chord between two neighbouring points may leave the edge.
 struct EdgeLimits {
     depth: u32,
     points: usize,
+    sagitta: f64,
 }
 #[cfg(test)]
 const EDGE_LIMITS: EdgeLimits = EdgeLimits {
     depth: EDGE_REFINEMENT_DEPTH,
     points: EDGE_POINT_BUDGET,
+    sagitta: EDGE_SAGITTA,
 };
 /// The text a crossing edge's refinement is refused with when it would give the edge
 /// more points than its limits allow.
@@ -397,7 +400,7 @@ fn bisect_crossing_edge(
     let chord = point_distance(point_a, point_b);
     ensure!(chord.is_finite(), "edge refinement left the surface");
     // Two samples closer than the bound hold the edge between them within it.
-    if chord <= EDGE_SAGITTA {
+    if chord <= limits.sagitta {
         return Ok(());
     }
     let chord_middle: [f64; 3] = std::array::from_fn(|k| (point_a[k] + point_b[k]) / 2.);
@@ -439,7 +442,7 @@ fn bisect_crossing_edge(
     );
     let deviation = distance_to_chord(point, point_a, point_b);
     ensure!(deviation.is_finite(), "edge refinement left the surface");
-    if deviation <= EDGE_SAGITTA {
+    if deviation <= limits.sagitta {
         return Ok(());
     }
     ensure!(
@@ -493,6 +496,19 @@ fn refined_curved_edge(
     let Some(own_surface) = index.resolve(face, &g.objects[face].fields["m_pSurf"])? else {
         return Ok(original.to_vec());
     };
+    if g.objects[other_surface].class_name == "CylSurf"
+        && g.objects[own_surface].class_name == "CylSurf"
+    {
+        return refined_cylinder_pair_edge(
+            g,
+            edge_index,
+            side,
+            original,
+            own_surface,
+            other_surface,
+            limit,
+        );
+    }
     if g.objects[other_surface].class_name != "Plane"
         || g.objects[own_surface].class_name != "CylSurf"
     {
@@ -522,6 +538,7 @@ fn refined_curved_edge(
     let limits = EdgeLimits {
         depth: EDGE_REFINEMENT_DEPTH,
         points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
+        sagitta: EDGE_SAGITTA,
     };
     let refined = refine_crossing_edge_within(&evaluate, origin, normal, original, &limits)
         .map_err(|error| {
@@ -533,6 +550,176 @@ fn refined_curved_edge(
             }
         })?;
     Ok(within_envelope(refined, original, envelope))
+}
+
+/// A cylinder surface's frame and radius, as `cylinder_face` reads them.
+struct CylinderFrame {
+    center: [f64; 3],
+    x_vec: [f64; 3],
+    y_vec: [f64; 3],
+    z_vec: [f64; 3],
+    radius: f64,
+    envelope: ([f64; 2], [f64; 2]),
+}
+
+impl CylinderFrame {
+    fn read(surface: &crate::native_parameters::GraphObject) -> Result<Self> {
+        Ok(Self {
+            center: point::<3>(&surface.fields["m_center"])?,
+            x_vec: point::<3>(&surface.fields["m_xVec"])?,
+            y_vec: point::<3>(&surface.fields["m_yVec"])?,
+            z_vec: point::<3>(&surface.fields["m_zVec"])?,
+            radius: surface.fields["m_radius"]
+                .as_f64()
+                .context("cylinder radius")?,
+            envelope: cylinder_envelope(&surface.fields["m_Envelope"]["m_corners"])?,
+        })
+    }
+
+    fn evaluate(&self, uv: [f64; 2]) -> [f64; 3] {
+        let (sn, cs) = uv[0].sin_cos();
+        std::array::from_fn(|k| {
+            self.center[k]
+                + self.radius * (cs * self.x_vec[k] + sn * self.y_vec[k])
+                + uv[1] * self.z_vec[k]
+        })
+    }
+
+    /// The point's distance from the axis less the radius: 0 on the surface.
+    fn signed(&self, p: [f64; 3]) -> f64 {
+        let q: [f64; 3] = std::array::from_fn(|k| p[k] - self.center[k]);
+        let along = crate::vector_math::dot(q, self.z_vec);
+        let radial: [f64; 3] = std::array::from_fn(|k| q[k] - along * self.z_vec[k]);
+        crate::vector_math::dot(radial, radial).sqrt() - self.radius
+    }
+
+    /// The point in the surface's parameters, `u` taken on the turn nearest `near`.
+    fn uv_of(&self, p: [f64; 3], near: f64) -> [f64; 2] {
+        let q: [f64; 3] = std::array::from_fn(|k| p[k] - self.center[k]);
+        let v = crate::vector_math::dot(q, self.z_vec);
+        let u =
+            crate::vector_math::dot(q, self.y_vec).atan2(crate::vector_math::dot(q, self.x_vec));
+        let tau = std::f64::consts::TAU;
+        [u + tau * ((near - u) / tau).round(), v]
+    }
+
+    fn holds(&self, uv: [f64; 2]) -> bool {
+        let (low, high) = self.envelope;
+        (0..2).all(|k| uv[k] >= low[k] - 1e-9 && uv[k] <= high[k] + 1e-9)
+    }
+}
+
+/// #2104: the loop of a cylinder takes, along an edge it shares with another cylinder
+/// where both faces' saved samples run across both their parameters, the points where
+/// the two cylinders meet between the samples, as [`refine_crossing_edge_within`] puts
+/// the points where a cylinder meets a plane: bisected in the parameters of the edge's
+/// side 0, each point solved onto the side 1 cylinder, until the chord between
+/// neighbours is within half the faces' own chord (`CylinderTessellationProfile::chord_error`)
+/// of the edge. Side 1 takes the same points in
+/// its own parameters, so both faces hold one list, and every point lies on both
+/// surfaces: neither face's vertices leave its own cylinder (#2107, row 5). A point
+/// beyond either face's envelope is left out by both. Where the samples do not run
+/// across both parameters on both sides, or the two sides' sample counts differ, the
+/// loop keeps the samples the graph stored, and so does a refinement that fails, apart
+/// from the cylinder's point budget, which refuses as it does at a plane.
+fn refined_cylinder_pair_edge(
+    g: &ObjectGraph,
+    edge_index: usize,
+    side: usize,
+    original: &[[f64; 2]],
+    own_surface: usize,
+    other_surface: usize,
+    limit: usize,
+) -> Result<Vec<[f64; 2]>> {
+    let edge = &g.objects[edge_index];
+    let ends = edge.fields["m_firstAndLastEdgePnts"]
+        .as_array()
+        .context("edge endpoints")?;
+    ensure!(ends.len() == 2, "edge endpoint count");
+    let interior = edge.fields["m_interiorEdgePnts"]
+        .as_array()
+        .context("edge interior points")?;
+    let samples = |k: usize| -> Result<Vec<[f64; 2]>> {
+        let mut pts = vec![point::<2>(&ends[0]["uv"][k])?];
+        for p in interior {
+            pts.push(point::<2>(&p["uv"][k])?);
+        }
+        pts.push(point::<2>(&ends[1]["uv"][k])?);
+        Ok(pts)
+    };
+    let (first, second) = (samples(0)?, samples(1)?);
+    if isoparametric_axis(&first).is_some()
+        || isoparametric_axis(&second).is_some()
+        || first.len() != second.len()
+    {
+        return Ok(original.to_vec());
+    }
+    let (s0, s1) = if side == 0 {
+        (own_surface, other_surface)
+    } else {
+        (other_surface, own_surface)
+    };
+    let (c0, c1) = (
+        CylinderFrame::read(&g.objects[s0])?,
+        CylinderFrame::read(&g.objects[s1])?,
+    );
+    let evaluate = |uv: [f64; 2]| -> Result<[f64; 3]> { Ok(c0.evaluate(uv)) };
+    let signed = |p: [f64; 3]| c1.signed(p);
+    let limits = EdgeLimits {
+        depth: EDGE_REFINEMENT_DEPTH,
+        points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
+        // Half the faces' own chord: at the whole chord, two downpipes on each BIM4LCA
+        // housing file part by up to 0.0019 ft between the shared points, past the
+        // 0.001 ft they are held to (#2111, RE-496).
+        sagitta: CylinderTessellationProfile::default().chord_error / 2.,
+    };
+    // Side 0's points, each with the index of the saved sample it is, if it is one.
+    let mut refined = vec![first[0]];
+    let mut saved = vec![Some(0)];
+    for (i, pair) in first.windows(2).enumerate() {
+        let start = refined.len();
+        let bisected = bisect_crossing_edge(
+            &evaluate,
+            &signed,
+            &limits,
+            pair[0],
+            pair[1],
+            0,
+            &mut refined,
+        );
+        if let Err(error) = bisected {
+            if limits.points < EDGE_POINT_BUDGET && error.to_string() == EDGE_POINTS_EXCEEDED {
+                return Err(anyhow!(CYLINDER_BUDGET_EXCEEDED));
+            }
+            return Ok(original.to_vec());
+        }
+        saved.extend(std::iter::repeat_n(None, refined.len() - start));
+        refined.push(pair[1]);
+        saved.push(Some(i + 1));
+    }
+    // Side 1's, the saved samples as stored and the others on the turn of the last sample.
+    let mut near = second[0][0];
+    let mut mapped = Vec::with_capacity(refined.len());
+    for (uv, index) in refined.iter().zip(&saved) {
+        let other = match index {
+            Some(i) => second[*i],
+            None => c1.uv_of(c0.evaluate(*uv), near),
+        };
+        near = other[0];
+        mapped.push(other);
+    }
+    let keep: Vec<bool> = refined
+        .iter()
+        .zip(&mapped)
+        .zip(&saved)
+        .map(|((a, b), index)| index.is_some() || (c0.holds(*a) && c1.holds(*b)))
+        .collect();
+    let mine = if side == 0 { refined } else { mapped };
+    Ok(mine
+        .into_iter()
+        .zip(keep)
+        .filter_map(|(uv, kept)| kept.then_some(uv))
+        .collect())
 }
 
 /// The parameter box of a cylinder surface, from its `m_Envelope` corners.
@@ -722,6 +909,7 @@ fn refined_plane_edge(
         let limits = EdgeLimits {
             depth: EDGE_REFINEMENT_DEPTH,
             points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
+            sagitta: EDGE_SAGITTA,
         };
         let mut refined =
             refine_crossing_edge_within(evaluate.as_ref(), origin, normal, &samples, &limits)
@@ -834,6 +1022,53 @@ fn ring_impl(
     refine: EdgeSide,
     limit: usize,
 ) -> Result<Vec<[f64; 2]>> {
+    let segments = ring_segments(g, index, face, li, refine, limit)?;
+    joined_ring(segments, || step_length(g, index, face))
+}
+/// The length on a plane or cylinder face's surface of a straight step between two points
+/// of its parameters: a chord on a plane, a helix on a cylinder. A step across a cylinder's
+/// seam is so a whole turn long, not the distance between its ends (#2085).
+type StepLength = Box<dyn Fn([f64; 2], [f64; 2]) -> f64>;
+fn step_length(g: &ObjectGraph, index: &PointerIndex<'_>, face: usize) -> Result<StepLength> {
+    let si = index
+        .resolve(face, &g.objects[face].fields["m_pSurf"])?
+        .context("face surface")?;
+    let s = &g.objects[si];
+    match s.class_name.as_str() {
+        "Plane" => {
+            let x = point::<3>(&s.fields["m_xVec"])?;
+            let y = point::<3>(&s.fields["m_yVec"])?;
+            Ok(Box::new(move |a: [f64; 2], b: [f64; 2]| -> f64 {
+                let (du, dv) = (b[0] - a[0], b[1] - a[1]);
+                (0..3)
+                    .map(|k| (du * x[k] + dv * y[k]).powi(2))
+                    .sum::<f64>()
+                    .sqrt()
+            }))
+        }
+        "CylSurf" => {
+            // `cylinder_face` holds the basis orthonormal, so a straight step in the
+            // parameters is a helix of radius `r`.
+            let r = s.fields["m_radius"].as_f64().context("cylinder radius")?;
+            let z = point::<3>(&s.fields["m_zVec"])?;
+            let height = (0..3).map(|k| z[k] * z[k]).sum::<f64>().sqrt();
+            Ok(Box::new(move |a: [f64; 2], b: [f64; 2]| -> f64 {
+                (r * (b[0] - a[0])).hypot(height * (b[1] - a[1]))
+            }))
+        }
+        other => bail!("unsupported surface {other}"),
+    }
+}
+/// The edges of the loop `li` of `face` in the loop's order, each as its points in the
+/// surface's parameters, refined as `refine` says and bounded as [`ring_impl`] says.
+fn ring_segments(
+    g: &ObjectGraph,
+    index: &PointerIndex<'_>,
+    face: usize,
+    li: usize,
+    refine: EdgeSide,
+    limit: usize,
+) -> Result<Vec<Vec<[f64; 2]>>> {
     let l = &g.objects[li];
     ensure!(
         ["EdgeLoop", "EdgeLoopWithChainEnvelopes"].contains(&l.class_name.as_str()),
@@ -905,6 +1140,23 @@ fn ring_impl(
             .resolve(cur, &e.fields["m_next"][side])?
             .context("null next edge")?;
     }
+    Ok(segments)
+}
+/// One ring from a loop's edges, each joined to the ring at whichever of its ends lies
+/// within 1e-7 of the ring's last point in the surface's parameters ([`close`]), and the
+/// last edge's far end back at the first point.
+///
+/// #2085: a ring whose edges do not all meet so joins where every gap's step along the
+/// surface (`length`) is under [`RING_TOUCHING`], each such pair of ends being one point,
+/// the ring's own, as [`close`] makes them: the next edge's stored end is dropped, so its
+/// first span starts up to that distance off it, and no edge is added. Griffin chose to join
+/// no wider gap (2026-11-21). A ring with an edge whose ends lie
+/// within that distance of each other, or of the ring's last point, which could join at
+/// either end, stays refused.
+fn joined_ring(
+    segments: Vec<Vec<[f64; 2]>>,
+    length: impl FnOnce() -> Result<StepLength>,
+) -> Result<Vec<[f64; 2]>> {
     // Saved circular loops can be represented by two connected arc edges
     // (typically two semicircles). A third edge is not a topology invariant;
     // closure, nonzero area, and connected ordering below remain mandatory.
@@ -913,28 +1165,16 @@ fn ring_impl(
         segments.iter().all(|s: &Vec<_>| !s.is_empty()),
         "empty boundary edge"
     );
-    let mut output = None;
-    for reverse in [false, true] {
-        let mut out = segments[0].clone();
-        if reverse {
-            out.reverse()
-        };
-        let mut valid = true;
-        for s in &segments[1..] {
-            let last = *out.last().unwrap();
-            if close(last, s[0]) {
-                out.extend_from_slice(&s[1..])
-            } else if close(last, *s.last().unwrap()) {
-                out.extend(s.iter().rev().skip(1).copied())
-            } else {
-                valid = false;
-                break;
+    let mut output = joined_within(&segments, None);
+    if output.is_none() {
+        // A surface whose steps cannot be measured keeps the strict join's refusal.
+        if let Ok(length) = length() {
+            if segments
+                .iter()
+                .all(|s| length(s[0], s[s.len() - 1]) >= RING_TOUCHING)
+            {
+                output = joined_within(&segments, Some(&*length));
             }
-        }
-        if valid && close(out[0], *out.last().unwrap()) {
-            out.pop();
-            output = Some(out);
-            break;
         }
     }
     let mut out = output.context("disconnected UV boundary")?;
@@ -944,6 +1184,67 @@ fn ring_impl(
         "degenerate boundary"
     );
     Ok(out)
+}
+
+/// Two ends of a ring's edges this close along the surface, in feet, are one point (#2085):
+/// 0.003 mm, which takes in the gaps of the BIM4LCA office mullions (3e-6 ft) and walls
+/// (2e-7 ft) whose bodies and quantities then match Revit's export. Wider gaps stay
+/// refused: from 1e-4 ft up a piece of edge looks missing, and those between 1e-5 and
+/// 1e-4 ft are not read.
+const RING_TOUCHING: f64 = 1e-5;
+/// How a gap's step along the surface is measured, where the ring joins touching ends.
+type Loose<'a> = Option<&'a dyn Fn([f64; 2], [f64; 2]) -> f64>;
+/// The ring `segments` make, each edge joined at its end within 1e-7 of the ring's last
+/// point in the parameters ([`close`]). With `loose`, an edge whose nearer end's step
+/// along the surface is under [`RING_TOUCHING`] joins too, that end taken as the ring's
+/// last point, and so may the last edge's far end and the first point. `None` where
+/// neither way round the first edge closes.
+fn joined_within(segments: &[Vec<[f64; 2]>], loose: Loose<'_>) -> Option<Vec<[f64; 2]>> {
+    for reverse in [false, true] {
+        let mut out = segments[0].clone();
+        if reverse {
+            out.reverse()
+        };
+        let mut valid = true;
+        for s in &segments[1..] {
+            let last = *out.last().unwrap();
+            let tail = *s.last().unwrap();
+            if close(last, s[0]) {
+                out.extend_from_slice(&s[1..])
+            } else if close(last, tail) {
+                out.extend(s.iter().rev().skip(1).copied())
+            } else if let Some(length) = loose {
+                let (head_step, tail_step) = (length(last, s[0]), length(last, tail));
+                if head_step.min(tail_step) >= RING_TOUCHING
+                    || head_step.max(tail_step) < RING_TOUCHING
+                {
+                    valid = false;
+                    break;
+                }
+                if head_step < tail_step {
+                    out.extend_from_slice(&s[1..])
+                } else {
+                    out.extend(s.iter().rev().skip(1).copied())
+                }
+            } else {
+                valid = false;
+                break;
+            }
+        }
+        if !valid {
+            continue;
+        }
+        let (first, last) = (out[0], *out.last().unwrap());
+        if close(first, last) {
+            out.pop();
+            return Some(out);
+        }
+        if loose.is_some_and(|length| length(last, first) < RING_TOUCHING) {
+            out.pop();
+            return Some(out);
+        }
+    }
+    None
 }
 
 fn tessellation_axis(
@@ -1629,13 +1930,39 @@ pub fn cylinder_face(
     let loop_index = index
         .resolve(fi, &face.fields["m_pFirstLoop"])?
         .context("cylinder trim loop")?;
-    ensure!(
-        index
-            .resolve(loop_index, &g.objects[loop_index].fields["m_nextLoop"])?
-            .is_none(),
-        "multiple cylinder trim loops unsupported"
-    );
-    let trim_uv = ring(g, &index, fi, loop_index)?;
+    // Two loops on part of a turn are rings meshed band by band (`band_mesh`), whose
+    // points are all the face's, for its steps and for the plane beside it
+    // (`refined_plane_edge`). Two making a full turn, a tube with no seam edge, are
+    // refused: no saved file read so far has one to check a reader against.
+    let (trim_uv, rings) =
+        match index.resolve(loop_index, &g.objects[loop_index].fields["m_nextLoop"])? {
+            None => (ring(g, &index, fi, loop_index)?, None),
+            Some(second) => {
+                ensure!(
+                    index
+                        .resolve(second, &g.objects[second].fields["m_nextLoop"])?
+                        .is_none(),
+                    "multiple cylinder trim loops unsupported"
+                );
+                ensure!(
+                    (u_range[1] - u_range[0] - std::f64::consts::TAU).abs() > 1e-7,
+                    "two cylinder trim loops on a full turn unsupported"
+                );
+                let pair = [loop_index, second].map(|li| {
+                    ring_impl(
+                        g,
+                        &index,
+                        fi,
+                        li,
+                        EdgeSide::Cylinder,
+                        CYLINDER_RING_POINT_BUDGET / 2,
+                    )
+                });
+                let [first, other] = pair;
+                let pair = vec![first?, other?];
+                (pair.iter().flatten().copied().collect(), Some(pair))
+            }
+        };
     ensure!(!trim_uv.is_empty(), "empty cylinder trim");
     let mut trim_min = [f64::INFINITY; 2];
     let mut trim_max = [f64::NEG_INFINITY; 2];
@@ -1778,6 +2105,21 @@ pub fn cylinder_face(
         u_range,
         v_range,
     });
+    if let Some(rings) = rings {
+        let (vertices, normals, triangles) =
+            band_mesh(&rings, &u_values, orient, handed, eval, [x_vec, y_vec])?;
+        return Ok(FaceMesh {
+            face_index: fi,
+            face_tag: face.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
+            render_style_id: crate::native_metadata::identifier(&face.fields["m_renderStyleId"])?,
+            vertices,
+            triangles,
+            normal: normals[0],
+            normals,
+            analytic_surface,
+            trim_uv,
+        });
+    }
     if !rectangular {
         let (vertices, normals, triangles) = strip_mesh(
             &trim_uv,
@@ -1916,6 +2258,98 @@ fn strip_mesh(
         !triangles.is_empty() && (covered - expected).abs() <= 1e-6 * expected.max(1e-6),
         "self-intersecting cylinder trim"
     );
+    Ok((vertices, normals, triangles))
+}
+
+/// A cylinder face's mesh from several trim rings, strip by strip across U. The steps
+/// fall on every ring point (`tessellation_axis` takes them), so each ring edge crosses
+/// a strip whole or not at all, and the strip is covered between its crossings taken
+/// in pairs by height (even-odd): a hole and separate regions alike.
+fn band_mesh(
+    rings: &[Vec<[f64; 2]>],
+    u_values: &[f64],
+    orient: bool,
+    handed: f64,
+    eval: impl Fn(f64, f64) -> [f64; 3],
+    [x_vec, y_vec]: [[f64; 3]; 2],
+) -> Result<CylinderStrips> {
+    const TOL: f64 = 1e-9;
+    let edges: usize = rings.iter().map(Vec::len).sum();
+    // Each strip reads every edge: bound the work a hostile file can ask.
+    ensure!(
+        u_values.len().saturating_mul(edges) <= 20_000_000,
+        "cylinder trim strip budget exceeded"
+    );
+    let sign = if orient { handed } else { -handed };
+    let mut vertices = Vec::new();
+    let mut normals = Vec::new();
+    let mut triangles = Vec::new();
+    for w in u_values.windows(2) {
+        let (w0, w1) = (w[0], w[1]);
+        let mid = w0 + (w1 - w0) / 2.;
+        let mut crossings: Vec<[f64; 2]> = Vec::new();
+        for ring in rings {
+            for (a, b) in ring
+                .iter()
+                .zip(ring.iter().cycle().skip(1))
+                .take(ring.len())
+            {
+                let (lo, hi) = if a[0] <= b[0] { (*a, *b) } else { (*b, *a) };
+                // Endpoint tolerance checks that the edge spans the strip.
+                // The midpoint keeps nearby edges outside a narrow strip from
+                // contributing a crossing through that tolerance.
+                if lo[0] > w0 + TOL || hi[0] < w1 - TOL || lo[0] >= mid || hi[0] <= mid {
+                    continue;
+                }
+                // A strip edge can fall up to the grid's 1e-12 join outside the ring edge,
+                // which on an edge that narrow in U is a large share of its height: the
+                // crossing is kept on the edge.
+                let at = |u: f64| {
+                    lo[1] + (hi[1] - lo[1]) * ((u - lo[0]) / (hi[0] - lo[0])).clamp(0., 1.)
+                };
+                crossings.push([at(w0), at(w1)]);
+            }
+        }
+        ensure!(
+            crossings.len().is_multiple_of(2),
+            "cylinder trim rings cross a strip an odd number of times"
+        );
+        crossings.sort_by(|a, b| (a[0] + a[1]).total_cmp(&(b[0] + b[1])));
+        for pair in crossings.chunks_exact(2) {
+            let (below, above) = (pair[0], pair[1]);
+            if (above[0] - below[0]).abs() <= TOL && (above[1] - below[1]).abs() <= TOL {
+                continue;
+            }
+            let base = u32::try_from(vertices.len()).context("cylinder vertex count overflow")?;
+            for [u, v] in [
+                [w0, below[0]],
+                [w1, below[1]],
+                [w1, above[1]],
+                [w0, above[0]],
+            ] {
+                vertices.push(eval(u, v));
+                let (s, c) = u.sin_cos();
+                normals.push(std::array::from_fn(|k| {
+                    sign * (c * x_vec[k] + s * y_vec[k])
+                }));
+            }
+            // The corners run counterclockwise in (u, v), as `strip_mesh` keeps them
+            // where the face faces that way.
+            let quad = if orient {
+                [[0, 1, 2], [0, 2, 3]]
+            } else {
+                [[0, 2, 1], [0, 3, 2]]
+            };
+            for t in quad {
+                triangles.push([base + t[0], base + t[1], base + t[2]]);
+            }
+        }
+        ensure!(
+            triangles.len() <= 4_000_000,
+            "cylinder triangle count overflow"
+        );
+    }
+    ensure!(!triangles.is_empty(), "empty cylinder trim");
     Ok((vertices, normals, triangles))
 }
 
@@ -2353,9 +2787,10 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, cross,
-        distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
-        refine_crossing_edge, refine_crossing_edge_within, regions_tile, regions_tile_within,
+        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, RING_TOUCHING,
+        StepLength, area, band_mesh, cross, distance_to_chord, isoparametric_axis, joined_ring,
+        normals_follow_winding, planar_points_with, refine_crossing_edge,
+        refine_crossing_edge_within, regions_tile, regions_tile_within,
         retain_boundary_points_within, ring_points_with, split_pinched_rings, within_envelope,
     };
     use anyhow::Result;
@@ -2824,6 +3259,7 @@ mod tests {
         let limits = EdgeLimits {
             depth: 2,
             points: 1_000,
+            sagitta: EDGE_SAGITTA,
         };
         let error =
             refine_crossing_edge_within(&cylinder, plane.0, plane.1, &cut(2), &limits).unwrap_err();
@@ -2838,6 +3274,7 @@ mod tests {
         let limits = EdgeLimits {
             depth: 32,
             points: 3,
+            sagitta: EDGE_SAGITTA,
         };
         let error =
             refine_crossing_edge_within(&cylinder, plane.0, plane.1, &cut(2), &limits).unwrap_err();
@@ -3117,5 +3554,166 @@ mod tests {
         assert_eq!(error.to_string(), "planar face budget exceeded");
         let rings = split(&[ring]).unwrap();
         assert_eq!(rings.len(), 5);
+    }
+
+    // `band_mesh` (#2102, #2106) is a pure 2D transform of a cylinder face's rings into
+    // strips. The ways its crossing count can fail, each tested below:
+    // - a ring edge that ends within the endpoint tolerance of a strip narrower than that
+    //   tolerance is counted for it, an odd count, and the face is refused;
+    // - a ring edge along a strip's own edge (constant u) is counted as a crossing.
+    // The rings are in the surface's parameters, drawn flat (`eval` is the identity), so
+    // the triangles' area is the area the strips cover.
+    fn band_area(rings: &[Vec<[f64; 2]>], step: f64, end: f64) -> Result<f64> {
+        let mut u_values: Vec<f64> = (0..)
+            .map(|i| f64::from(i) * step)
+            .take_while(|u| *u <= end + 1e-12)
+            .chain(rings.iter().flatten().map(|p| p[0]))
+            .collect();
+        u_values.sort_by(f64::total_cmp);
+        u_values.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
+        let (vertices, _, triangles) = band_mesh(
+            rings,
+            &u_values,
+            true,
+            1.,
+            |u, v| [u, v, 0.],
+            [[1., 0., 0.], [0., 1., 0.]],
+        )?;
+        Ok(triangles
+            .iter()
+            .map(|t| {
+                let [a, b, c] = t.map(|i| vertices[i as usize]);
+                cross([a[0], a[1]], [b[0], b[1]], [c[0], c[1]]).abs() / 2.
+            })
+            .sum())
+    }
+
+    #[test]
+    fn a_ring_knot_beside_a_narrow_strip_keeps_the_hole() {
+        // shifatrHtH's synthetic rings (#2106): the hole's left edges sit 0.3e-9 and
+        // 1.5e-9 before the strip that starts at 0.4999999997 and ends at 0.5.
+        let outer = vec![[0., 0.], [2., 0.], [2., 2.], [0., 2.]];
+        let hole = vec![
+            [0.5 - 1.5e-9, 0.5],
+            [1.5 - 1.5e-9, 0.5],
+            [1.5 - 1.5e-9, 1.5],
+            [0.5 - 0.3e-9, 1.5],
+        ];
+        let covered = band_area(&[outer, hole], 0.125, 2.).unwrap();
+        assert!(
+            (covered - 3.000_000_000_6).abs() < 1e-10,
+            "covered area {covered}"
+        );
+    }
+
+    #[test]
+    fn a_ring_edge_narrower_than_the_tolerance_is_drawn_inside_the_ring() {
+        // Its right edge is 3e-12 wide in U, and its lower knot is joined to the grid's
+        // 1.0, so the strip starts 0.5e-12 before the edge does. The midpoint rule counts
+        // the edge there; a crossing not kept on the edge would put a vertex a sixth of
+        // the edge's height below the ring.
+        let ring = vec![[0., 0.], [1. + 0.5e-12, 0.], [1. + 3.5e-12, 1.], [0., 1.]];
+        let mut u_values: Vec<f64> = [0., 0.5, 1., 1.5, 2.]
+            .into_iter()
+            .chain(ring.iter().map(|p| p[0]))
+            .collect();
+        u_values.sort_by(f64::total_cmp);
+        u_values.dedup_by(|a, b| (*a - *b).abs() <= 1e-12);
+        let (vertices, _, triangles) = band_mesh(
+            std::slice::from_ref(&ring),
+            &u_values,
+            true,
+            1.,
+            |u, v| [u, v, 0.],
+            [[1., 0., 0.], [0., 1., 0.]],
+        )
+        .unwrap();
+        assert!(!triangles.is_empty());
+        assert!(vertices.iter().all(|v| (-1e-9..=1. + 1e-9).contains(&v[1])));
+    }
+
+    #[test]
+    fn a_ring_edge_along_a_strip_edge_is_no_crossing() {
+        let square = vec![[0.5, 0.5], [1.5, 0.5], [1.5, 1.5], [0.5, 1.5]];
+        let covered = band_area(&[square], 0.5, 2.).unwrap();
+        assert!((covered - 1.).abs() < 1e-12, "covered area {covered}");
+    }
+    // #2085's touching join (`joined_ring`, `joined_within`), failure modes first:
+    // a gap at or over `RING_TOUCHING` must stay refused; a step across a seam, whose
+    // ends coincide in space, must stay refused; an edge both of whose ends lie within
+    // the bound of the ring's last point, or shorter than it, must stay refused; and a
+    // touching pair must become one point, not two.
+
+    /// A unit square in a plane's parameters, its four sides as edges, the third edge's
+    /// start moved by `gap` along the side before it.
+    fn square_with_gap(gap: f64) -> Vec<Vec<[f64; 2]>> {
+        vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1. - gap, 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ]
+    }
+
+    fn plane_steps() -> Result<StepLength> {
+        Ok(Box::new(|a: [f64; 2], b: [f64; 2]| -> f64 {
+            (b[0] - a[0]).hypot(b[1] - a[1])
+        }))
+    }
+
+    #[test]
+    fn touching_ends_join_as_one_point() {
+        let ring = joined_ring(square_with_gap(RING_TOUCHING / 2.), plane_steps).unwrap();
+        assert_eq!(ring.len(), 4, "the touching pair is one point: {ring:?}");
+    }
+
+    #[test]
+    fn a_gap_just_over_the_bound_stays_refused() {
+        let error = joined_ring(square_with_gap(RING_TOUCHING * 1.001), plane_steps).unwrap_err();
+        assert_eq!(error.to_string(), "disconnected UV boundary");
+    }
+
+    #[test]
+    fn a_step_across_a_seam_stays_refused() {
+        // On a cylinder of radius 1 the third edge starts at u + 2π: the same point in
+        // space, a whole turn along the surface.
+        let mut segments = square_with_gap(0.);
+        segments[2][0][0] += std::f64::consts::TAU;
+        let helix = || -> Result<StepLength> {
+            Ok(Box::new(|a: [f64; 2], b: [f64; 2]| -> f64 {
+                (b[0] - a[0]).hypot(b[1] - a[1])
+            }))
+        };
+        assert!(joined_ring(segments, helix).is_err());
+    }
+
+    #[test]
+    fn an_edge_within_the_bound_of_the_ring_stays_refused() {
+        // The third edge is shorter than the bound, so either of its ends could join.
+        let short = RING_TOUCHING / 4.;
+        let segments = vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1. - short / 2., 1.], [1. - short, 1.]],
+            vec![[1. - short, 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ];
+        assert!(joined_ring(segments, plane_steps).is_err());
+    }
+
+    #[test]
+    fn an_edge_whose_ends_both_touch_the_ring_stays_refused() {
+        // The third edge (1.125 bounds long) has both ends within the bound of the ring's
+        // last point, (1, 1), its far end the nearer. Taken there, as the nearer end would
+        // be without the guard, its start meets the fourth edge and the ring closes.
+        let d = RING_TOUCHING * 0.75;
+        let segments = vec![
+            vec![[0., 0.], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1. + d, 1.], [1. - d / 2., 1.]],
+            vec![[1. + d, 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ];
+        assert!(joined_ring(segments, plane_steps).is_err());
     }
 }

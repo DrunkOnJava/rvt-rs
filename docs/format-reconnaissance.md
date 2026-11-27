@@ -2786,3 +2786,64 @@ A ruled surface or a surface of revolution whose profile is a `GHermiteSpline` (
 ## Addendum — RE-493 a surface of revolution or a cone meets a plane along the edge's saved points (2026-11-19)
 
 Where a plane shares an edge with a surface of revolution or a cone across both of the curved face's parameters, both faces now draw the edge straight between its saved points, as RE-492 did for ruled faces with a spline profile; a ruled face between plain curves is left as it was. Over the bodies the crack probe meshes on both sides (nordic, r2025, samples), boundary vertices more than 0.001 ft from every other face fall from 3,962 to 2,163, the largest from 0.006017 to 0.002354 ft, and none of those left lies at a plane. No count scored against Revit's exports moves and no held-out export changes; every body that moves and has a Revit export is one toilet family on the BIM4LCA office and housing, which moves by at most 0.00112 ft with its counts against Revit's surface unchanged. See [RE-493](../reports/element-framing/RE-493-saved-points-revolution.md).
+
+## Addendum — RE-494 a cylinder face bounded by two trim loops on part of a turn (2026-11-20)
+
+A cylinder face whose trim is two loops on part of a turn, a hole inside the other loop or two separate regions, is meshed strip by strip between the rings' crossings taken in pairs by height, which does not read the rings' winding. On the office's and the housing's two-loop faces the probe reads a ring whose signed area has the sign of the face's orientation (`m_orientFlag`, flipped by bit 2 of the face's `m_faceFlags_v9`) as an outer boundary, with one face the exception. Two loops making a full turn, and three or more, are still refused. On the open models 1,289 bodies that were record boxes are drawn from their saved meshes, 1,153 of them on Autodesk's samples, which have no Revit export in Measure. The BIM4LCA housing's sauna doors and the held-out house's doors are within 0.01 ft of Revit's export and within 1 per cent of its volume. The BIM4LCA office's grab bars are drawn round, as the file saves them, while Revit's export draws their legs as a square whose corners lie on that round, so their volume is 1.11 of Revit's. See [RE-494](../reports/element-framing/RE-494-cylinder-two-trim-loops.md).
+
+## Addendum — RE-495 two cylinder faces take the points where the two cylinders meet (2026-11-20)
+
+Where two cylinder faces share an edge whose saved samples run across both their parameters, each put its own steps between the saved points on its own surface, and their boundaries parted: 3,170 boundary vertices over 0.001 ft on the open models, up to 0.00158 ft on Snowdon Towers HVAC's tees. The edge's saved points lie on both cylinders within 0.000001 ft on the 2024 samples. The edge now takes the points where the two cylinders meet, bisected between its saved samples onto the other cylinder until each chord is within 0.00025 ft of the edge, and held by both faces' rings. On the 77 files the crack probe reads, none is left over 0.001 ft and no other pair of surfaces parts. Against Revit's exports, more of Revit's vertices lie beyond 0.001 ft of rvt-rs's surface on the Snowdon Towers Architectural bodies that move (23,243 to 23,511); on the bodies read since, that count moved with the triangulation, at a threshold equal to the 0.001 ft chord bound, and one RE1 toilet's move out of the 0.01 ft band was the scorer's vertex sample (#2111). The bodies the probe reads hold up to 1.35 times the triangles on the plumbing and HVAC samples. See [RE-495](../reports/element-framing/RE-495-cylinder-pair-edges.md).
+
+## Addendum — RE-496 the edge two cylinder faces share is refined to half the faces' chord (2026-11-20)
+
+RE-495's shared points between two cylinder faces were refined to 0.00025 ft, a quarter of the 0.001 ft chord the faces are meshed to; on the Snowdon Towers toilet and sink they draw triangles 0.000080 to 0.000098 ft off the cylinder where the coarser mesh before stood 0.000714 to 0.000950 ft off. At the faces' whole chord two downpipes on each BIM4LCA housing file reopen past 0.001 ft; at half the chord every crack stays closed on the 77 files the crack probe reads, and 61 per cent of the cylinder triangles RE-495 added go, each graph counted once (48 to 100 per cent on the 13 files whose totals it raised by more than 10 per cent), while the farthest cylinder standoff rises on 147 graphs by at most 0.000318 ft. See [RE-496](../reports/element-framing/RE-496-pair-edge-half-chord.md).
+
+## Addendum — RE-497 a ring's stored edge ends within 0.00001 ft along the surface are one point (2026-11-21)
+
+Plane and cylinder faces refused as `disconnected UV boundary` have rings already open in the edge points the file stores: on the BIM4LCA housing and office the largest gap is under 0.00001 ft on 134 of 302 and 80 of 123 plane rings and on 39 of 65 and 4 of 12 cylinder rings, many cylinder rings parting only in their angle; those from 0.00001 to 0.0001 ft are not read, and from 0.0001 ft up to 0.0015 ft a piece of edge looks missing. Ends closer than 0.00001 ft along the surface (a chord on a plane, a helix on a cylinder) are now one point; wider gaps stay refused (Griffin, 2026-11-21). On `main` that draws two office curtain mullions within 0.000003 ft of Revit's bodies and gives four walls base quantities equal to Revit's, with nothing newly refused. See [RE-497](../reports/element-framing/RE-497-touching-ring-ends.md).
+
+### Emitted plane/cylinder boundaries (2026-11-26)
+
+`probe_plane_cylinder_shared_boundary` constructs a plane and unit
+cylinder with agreeing stored edge samples. It compares the sorted
+ordered chains extracted from the final triangles. The level cut has
+14 segments on each face. On the oblique cut, both sides have 32
+segments before cylinder strip clipping. The final plane has 32 and
+the cylinder has 44. The result holds after reversing the stored
+samples or swapping the face slots. The disagreement and off-plane
+controls retain their existing refusals.
+
+Run `cargo run --profile ci -p rvt-probes --example probe_plane_cylinder_shared_boundary`
+to print the generated cases. Add `-- --check` to require matching
+emitted chains and check that their vertices lie on the plane. The
+oblique cases currently fail that assertion.
+
+## Addendum — views, sheets and placed viewports from the native records (#1117, 2026-11-26)
+
+A view is a `DBView*` record on channel 102; a sheet is a `DBViewDrafting` whose
+`m_sheetNumber` is non-empty; a `Viewport` record with `m_ownerDBViewId` names
+the sheet's view and `m_dbViewId` the view it shows, and one with
+`m_ownerDBViewId` unset is the internal viewport every view carries. On a local
+Revit 2024 project this reads 165 views (75 `DBViewPlan`, 39 `DBViewSection`,
+19 `DBView3d`, 14 `DBViewSchedule`, 8 `DBViewDrafting` sheets, 7
+`DBViewLegend`, 2 `DBViewAnonDrafting` and one report), 8 sheets, 161
+`Viewport` records, 22 of them placed on sheets.
+
+The position on the sheet is `m_offset + m_scale * crop centre`, where the crop
+box is the view's `Viewer.m_boundedSpace.m_boundOffset` with its
+`m_boundActive` flags and `m_viewerFlags` bit 0 (the crop region on). One
+viewport of another Revit 2024 model agreed with the API's
+`Viewport.GetBoxCenter()` to the five decimals it printed (#1117); seven of the
+22 placed viewports here have an active crop and a centre, the rest being
+uncropped, schedules or legends.
+
+A 3D view's `Viewer.m_basis` is the view plane's `m_horzDir`, `m_vertDir` and
+reversed `m_viewDir` on all 12 3D views here whose `Viewer` is decoded, so the
+basis is the view's own frame rather than an independent one.
+`m_boundedSpace.m_orig` is the eye and `m_basis` the right, up and looking
+directions. `m_targetPos` is on the looking axis on 9 of the 12; on the other 3
+it is off the axis, so a target is reported only where it lies on it. The
+reader is `rvt::research::views` (`rvt-views` with the `unstable-research` feature, and `probes/examples/probe_1117_views.rs`);
+the centre rule and the camera are experimental, and the catalog's evidence
+boundary is in `docs/views.md`.

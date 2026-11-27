@@ -5693,8 +5693,9 @@ pub const SPACE_OUTLINE_STORED_SOLID_EDGES: &str = "stored_solid_edges";
 /// not the space's.
 pub const SPACE_OUTLINE_RECORD_BOX: &str = "record_box";
 
-/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room drawn from the mesh Revit saved
-/// for it (`rvt-ifc --saved-meshes`).
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a space, a room or a family instance
+/// written as one, drawn from the mesh Revit saved for it: by default on Revit
+/// 2023 to 2027 (#1191), and on any release with `rvt-ifc --saved-meshes`.
 pub const SPACE_OUTLINE_SAVED_MESH: &str = "saved_mesh";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area whose boundary is not read, so

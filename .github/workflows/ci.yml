@@ -502,9 +502,9 @@ jobs:
     # pauses, 55 minutes; R2025 downloads three archives, and two at their
     # 900 s limit followed by a third refused on four tries of 900 s is 90
     # minutes; the rest of the job is about 10, and the RE1 fetch (a red failure,
-    # not a warning) is cut off at 15 by its own `timeout 900`, with a curl that
-    # gives up on a stalled transfer, 170 in all. The limit sits above that, so a
-    # dead host stays a warning and never becomes a red timeout.
+    # not a warning) is cut off at 15 by its own `timeout 900`. The two Autodesk
+    # projects have 180 seconds each. The job limit leaves room for these
+    # fetches to report their own status.
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -596,6 +596,43 @@ jobs:
         with:
           path: _r2025
           key: ${{ steps.r2025-cache.outputs.cache-primary-key }}
+      # The Saved graph budget contracts read two public Autodesk 2023
+      # projects. Verify restored files through the same pinned fetcher.
+      # The tier-two integration runner sees them only when both verify.
+      - name: Restore the Autodesk 2023 projects for Saved graph limits
+        id: saved-graph-samples-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _saved_graph_samples
+          key: saved-graph-samples-${{ hashFiles('research/autodesk-sample-projects.tsv', 'tools/fetch-autodesk-samples.sh') }}
+      - name: Fetch the pinned Autodesk 2023 projects for Saved graph limits
+        shell: bash
+        run: |
+          target="${GITHUB_WORKSPACE}/_saved_graph_samples"
+          all_verified=true
+          for sample in racbasicsampleproject.rvt rstbasicsampleproject.rvt; do
+            # A download error for one file must not mask a pin mismatch on the other.
+            status=0
+            timeout 180 tools/fetch-autodesk-samples.sh "$target" 2023 2023 "$sample" || status=$?
+            case "$status" in
+              0) test -s "$target/2023-$sample" ;;
+              1) echo "::error::Autodesk 2023 $sample failed verification against research/autodesk-sample-projects.tsv"; exit 1 ;;
+              5|6|7|16|18|22|28|35|47|52|55|56|60|92|95|96|124)
+                all_verified=false
+                echo "::warning::Autodesk 2023 $sample NOT MEASURED: download failed (status $status), so the Saved graph budget tests skip"
+                ;;
+              *) echo "::error::Autodesk 2023 $sample fetch failed unexpectedly (status $status)"; exit "$status" ;;
+            esac
+          done
+          if [ "$all_verified" = true ]; then
+            echo "RVT_SAMPLE_PROJECTS_DIR=$target" >> "$GITHUB_ENV"
+          fi
+      - name: Save the Autodesk 2023 projects for Saved graph limits
+        if: github.ref == 'refs/heads/main' && steps.saved-graph-samples-cache.outputs.cache-hit != 'true' && env.RVT_SAMPLE_PROJECTS_DIR != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _saved_graph_samples
+          key: ${{ steps.saved-graph-samples-cache.outputs.cache-primary-key }}
       # Five standalone families (four of DynamoRevit's test files, Apache-2.0,
       # and one of magnetar-io's, MIT), pinned in research/family-test-files.tsv,
       # for real-file targets of the family form readers: Revit 2014 families
@@ -1880,6 +1917,8 @@ jobs:
       # docs.
       - name: API docs cite only reported RE findings and no planning labels
         run: python3 tools/ci/api-doc-ids.py
+      - name: Every run the evidence pages cite is kept or recorded (#2124)
+        run: python3 tools/ci/cited-runs-kept.py
       # The saved-graphics pass builds only the fields in SAVED_GRAPHICS_FIELDS
       # (#1694), and a reader that takes another reads it as absent: no export
       # need show it on a route none reads. This keeps the list and the `m_`
@@ -2027,7 +2066,7 @@ jobs:
       # that moves with the image, and actionlint below runs whichever
       # shellcheck it finds first on PATH.
       - name: Install shellcheck
-        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: shellcheck@0.11.0
       - name: ShellCheck .cursor/install.sh and the devcontainer's scripts

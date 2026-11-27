@@ -118,7 +118,7 @@ jobs:
       # `cargo audit bin` and other scanners can check a shipped binary
       # against advisories (C10).
       - name: Install cargo-auditable
-        uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: cargo-auditable@0.7.7
       # The root crate's CLIs and the MCP server (rvt-mcp/, `rvt-rs-mcp`), which
@@ -167,8 +167,12 @@ jobs:
           # Every [[bin]] of the root crate, read from Cargo.toml so a new CLI
           # ships without touching this workflow (awk: jq is not on every
           # runner image), and the MCP server, which is a crate of its own.
-          awk '/^\[\[bin\]\]/ { in_bin = 1; next }
-               in_bin && /^name *=/ { gsub(/^name *= *"|"$/, ""); print; in_bin = 0 }' \
+          # A [[bin]] with required-features (rvt-views needs unstable-research)
+          # is not built by the plain --bins above, so it is left out.
+          awk '/^\[/ { if (name != "" && !gated) print name; name = ""; gated = 0; in_bin = ($0 == "[[bin]]"); next }
+               in_bin && /^name *=/ { name = $0; gsub(/^name *= *"|"$/, "", name) }
+               in_bin && /^required-features *=/ { gated = 1 }
+               END { if (name != "" && !gated) print name }' \
             Cargo.toml > dist/bins.txt
           test -s dist/bins.txt
           echo rvt-rs-mcp >> dist/bins.txt

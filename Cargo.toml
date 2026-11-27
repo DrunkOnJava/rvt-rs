@@ -1,6 +1,6 @@
 [package]
 name = "rvt"
-version = "0.25.0"
+version = "0.26.0"
 edition = "2024"
 rust-version = "1.87"
 license = "Apache-2.0"
@@ -216,6 +216,13 @@ path = "src/bin/rvt_elements.rs"
 [[bin]]
 name = "rvt-capabilities"
 path = "src/bin/rvt_capabilities.rs"
+
+# Reads rvt::research::views, so it builds only with unstable-research and
+# stays out of the release archives and RELEASE.md's stable CLIs (#1117).
+[[bin]]
+name = "rvt-views"
+path = "src/bin/rvt_views.rs"
+required-features = ["unstable-research"]
 
 [[bin]]
 name = "rvt-schedule"
