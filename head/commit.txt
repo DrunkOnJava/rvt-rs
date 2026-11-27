@@ -1,0 +1,1 @@
+04d1b101a30ffb5ddef8d0d37fbffea7b840b7a1 refactor(ifc): the writer and the scorers take an Area from SpaceKind, not from the values of SpaceOutlineSource (#1437)
