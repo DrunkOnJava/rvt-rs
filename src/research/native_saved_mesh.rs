@@ -4397,7 +4397,7 @@ mod tests {
     }
 
     #[test]
-    fn an_approved_gap_at_the_limit_stays_refused() {
+    fn an_approved_gap_just_over_the_limit_stays_refused() {
         let keeps = BTreeMap::from([(2, Keep::Own)]);
         let segments = square_with_gap(COORDINATED_LIMIT * 1.001);
         assert!(joined_ring_keeping(segments, plane_steps, &keeps).is_err());
