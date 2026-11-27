@@ -1053,7 +1053,11 @@ mod tests {
         vertices.push([40.0, 40.0, 40.0]);
         vertices.push([41.0, 41.0, 41.0]);
         vertices.push([42.0, 42.0, 42.0]);
-        triangles.push(BrepTriangle(8, 9, 10));
+        // One more than the cap on planes: were each to add a plane, the box's six
+        // and these would pass it and give no prism at all.
+        for _ in 0..=MAX_PLANES {
+            triangles.push(BrepTriangle(8, 9, 10));
+        }
         assert_close(
             extent_of(&vertices, &triangles, [0.0, 0.0, 1.0]).unwrap(),
             3.0,

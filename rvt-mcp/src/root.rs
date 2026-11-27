@@ -343,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn paths_inside_are_taken_from_the_root_and_cleaned_of_dots() {
+    fn paths_inside_are_taken_from_the_root_however_many_dots_they_hold() {
         assert_eq!(
             located("x.rvt").unwrap(),
             PathBuf::from("/work/project/x.rvt")

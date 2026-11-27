@@ -762,6 +762,15 @@ mod tests {
             0.0,
             8.0
         ));
+        // One that spans the face but stops short of its height explains none of it.
+        assert!(!prism_less_openings(
+            &[face],
+            false,
+            &on_the_axes(),
+            &[on_axes([0.0, 0.0, 0.0, 4.0, 1.0, 2.5])],
+            0.0,
+            8.0
+        ));
         // One that spans the face and ends at its height is the face's.
         assert!(prism_less_openings(
             &[face],
