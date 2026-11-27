@@ -8,7 +8,9 @@
 # evidence pages cited on 2026-11-22; a run cited later is kept by dispatching the workflow on it.
 # A row named `<run>-probes` or `<run>-holdout` is a commit beside the run's first, holding only its
 # probes' own output (#2143) or its held-out models' summary counts (#2145, Griffin 2026-11-22); one
-# named `<run>-log` holds the lines of a run's log a pattern found, for figures it printed only there (#2148).
+# named `<run>-summaries` holds the held-out and `rac_advanced` models' summary counts and export
+# digests (#2148, Griffin 2026-11-27); one named `<run>-log` holds the lines of a run's log a pattern
+# found, for figures it printed only there (#2148).
 run	commit	kept
 40156315852	ad5237bea8d24f9f764471b19b5ae6af4593b1c9	head 1027 files for 31 models; base 1027 files for 31 models
 40927543524	77ccec7682e9774912eefcc0aedbab3d0e8180db	head 1474 files for 101 models
@@ -93,3 +95,5 @@ run	commit	kept
 45997957951	ed091e7c18cb78aeda97892cab4ce5a0898079cf	head 466 files for 101 models; verdict 1 file
 45997957951-probes	26613a3ed5bc5d4f6a8011470f62083f9f5a6c3d	head 102 files for 101 models
 46029833703-probes	f3266325a384979f5f3694aa28c86826cf40717b	head 84 files for 83 models
+46013208552	7793aa72ca3f758eed85b5a88430ce18a39896c1	head 2559 files for 102 models; base 2557 files for 102 models; verdict 1 file; compare 1 file
+46013208552-summaries	26d000272a8041c3fe5fc5f149bd43e858fc0a43	head 49 files for 24 models; base 49 files for 24 models
