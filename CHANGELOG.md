@@ -14,19 +14,42 @@ fragments a release moves into this file.
 is a Hermite spline, and cylinder faces bounded by two trim loops, are read and
 drawn from the saved graphics, and two round faces that share an edge now meet
 along it. A stair landing of a monolithic type gets its family and type object,
-a ceiling in pieces gets the area Revit's export gives it, and Rust callers can
-raise the value limit for reading saved graphics. Thanks to shifatrHtH and
-zenglanmu for code in this release, and to HWT-25 and yuriyu-webiya for the
-reports and measurements behind several of these changes.
+a ceiling in pieces gets the area Revit's export gives it, and the value limit
+for reading saved graphics can be raised from Rust and from `rvt-ifc`. A
+research catalog of a file's views, sheets and placed viewports comes with
+it. Thanks to shifatrHtH and zenglanmu for code in this release, and to
+HWT-25 and yuriyu-webiya for the reports and measurements behind several of
+these changes.
+
+Not measured, and said in each entry:
+- Most of the bodies newly drawn from saved meshes are on Autodesk's sample projects, which have no Revit export: 17 of the 25 Hermite-profile bodies (#2094) and most of the 1,289 two-loop cylinder bodies (#2102).
+- On Snowdon Towers Architectural more of Revit's vertices lie beyond 0.001 ft of the bodies that #2104 moves; whether that is a worse fit is not shown (#2111).
+- A landing's family word is the one an English Revit writes, which the file does not hold; on Revit 2026 and 2027 the landings' type objects and the spiral rule are measured by the reporter on one model (#2046).
+- Two rules rest on one building, listed in `docs/one-project-rules.md`: a ceiling in pieces takes one piece's area (#1209), and a wall end whose join names an omitted target stops flat (#1814). A ceiling written as a covering whatever its type says rests on one ceiling (#2074).
+- The views, sheets and viewports catalog is a research module, and its viewport centre rule rests on one viewport measured against the Revit API (#1117).
+
+Measured against 0.25.0 on every model Measure holds, the 18 held-out files and the `rac_advanced` pairs included (run [46013208552](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46013208552), `main` at 1cf84255). The two pull requests merged after it move no export: their own runs give 101 of 101 exports byte-identical to their base, #2166's ([46014093032](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46014093032)) and #2159's ([46016851547](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46016851547)). The release adds only its notes, version strings, witness files and fixtures.
+
+- 38 of the 126 exports differ, and 35 of the 102 `diagnostics.json` files. 24 of the 38 have no Revit export on Measure, so no scorer says which of what moved there is Revit's: Autodesk's sample projects of 2023 to 2027 and Snowdon Towers' five; each entry was measured in its own pull request. The other 14 are scored against Revit's own exports: the 10 BIM4LCA building and terrain files, three of RE1's four and one of the 18 held-out files (counts only). On them the property, quantity, type, name and `PredefinedType` censuses lose no value equal to Revit's and gain none that differs.
+  - Quantities (#1209, #2074, #2085): on six BIM4LCA files the values equal to Revit's rise by 37, with 37 fewer missing, and none differs: 16 coverings' `GrossArea` on the four office files (#1209) and the timber housing ceiling's on its as-built file (#2074), and the five base quantities of 3 walls on the office as built and 1 on the concrete housing at permit (#2085).
+  - Properties (#2046, #2074): the values equal to Revit's rise by 2 and the values Revit does not write fall by 4, all on the timber housing's ceiling, now a covering. Each of the 8 new landing type objects holds a `Pset_SlabCommon.IsExternal` in Revit's export that rvt-rs does not write, so the missing values rise by 8, less the ceiling's 2: 6 in all. None differs.
+  - Types (#2046): each of the eight BIM4LCA building files gains the landing type object Revit's export holds, so its `IfcSlabType`s of `LANDING` number as Revit's do (2 on the housing, 3 on the office), and every landing is typed: 4 more on each concrete housing file, 1 on each timber housing file, 21 on each concrete office file and 17 on each timber office file, each with Revit's entity and Revit's `ObjectType`.
+  - Bodies (#2085, #2094, #2102, #2104, #2111): 160 bodies on the scored files that were boxes are drawn from their saved meshes. The housing's 4 sauna doors a file and the held-out house's 10 doors are within 1 per cent of Revit's volume and within 0.01 ft (#2102); on the housing the door scorer's boxes equal to Revit's rise by 4 a file and its mirror-rule misses fall from 11 to 7. The timber office's 2 stair flights a file now have every vertex of Revit's body within 0.001 ft of rvt-rs's surface (31 of 31 flights, where 29 were), at 112.116 ft³ against Revit's 112.115 (#2094). The terrain files' ramp is within 1 per cent and 0.001 ft, and their ramp flight within 0.01 ft at half Revit's volume, as their four other ramp flights already are (#2094). 6 curtain mullions, 2 on each concrete office file and 1 on each timber one, whose oriented boxes were Revit's extents, are within 0.01 ft of Revit's (#2085). The office's 30 grab bars a file are drawn round where Revit's export draws their legs square, at 1.11 of its volume and up to 0.0116 ft off (#2102). On RE1 no count moves; a railing and four pipe tees already outside 1 per cent of Revit's volume move slightly further (1.0175 to 1.0181, and 1.1433 to 1.1441), and on the BIM4LCA housing the farthest of one stair's Revit vertices from rvt-rs's surface goes from 0.0079 to 0.0081 ft, with its counts unchanged (#2104, #2111).
+  - Walls (#1814, #2074): on the concrete housing at permit the walls with both ends within 0.001 ft of Revit's rise from 274 to 282 of 345, and no end gets further off. The wall-height scorer reads cuts from rvt-rs's floors, roofs and footings, so on the timber housing as built, whose ceiling is now a covering, its bases "cut and Revit's" fall from 7 to 3 and 4 become "uncut, Revit cuts"; no wall body moves.
+  - `diagnostics.json`: the bodies drawn from saved meshes rise by 1,322 on 28 files, and the boxes fall by as many (1,275 record boxes, 41 turned and 6 oriented family boxes). The refusals for two cylinder trim loops fall by 1,289 and for a Hermite profile alone by 104; a body that still fails for something else names that instead, and 48 refusals on four files that said `missing current symbol graphics` now say `not decoded` with the reader's reason (#2085). `exported.total_entities` rises by 17 on 5 files, and `decoded.parameter_value_count` falls by 2 on the timber housing as built, the ceiling's slab values.
+  - Validation: IfcOpenShell's schema and rule checks find nothing new on any file they read. Snowdon Towers Plumbing's export is now over the 120 MB Measure validates, so it was not validated (#2103).
+  - The same-project gates pass on the measured commit; the `rac_advanced` saves of 2025 to 2027 compare 43 beams and landings with the 2024 save, where they compared 42.
 
 ### Upgrading from 0.25
 
 - Nothing in the stable API is removed or changed, and the minimum Rust is
   still 1.87.
 - Exports of models with such faces change: more bodies are drawn from their
-  saved meshes instead of their record boxes, and files with round faces that
-  share an edge hold more triangles than 0.25.0 wrote, at most 2.0 MiB more on
-  Autodesk's `rme_basic` (see #2104 and #2111 below).
+  saved meshes instead of their record boxes (1,289 bodies on the open models
+  from #2102 alone), so those files grow, and where two round faces share an
+  edge they also hold more triangles than 0.25.0 wrote (#2104, #2111). The
+  release notes below give each entry's own measure; no total size change was
+  measured.
 - `rvt::control::Stage` has a new variant, `PartitionRecovery`; the enum is
   `#[non_exhaustive]`, so a `match` on it already has a wildcard arm.
 
@@ -79,12 +102,14 @@ reports and measurements behind several of these changes.
   so their volume is 1.11 of Revit's. Snowdon Towers' Round Tees open 32
   boundary vertices each up to 0.00158 ft where two cylinders meet.
 
-- **The value limit for reading saved graphics can be raised by Rust callers
-  (#2157).** `SavedMeshLimits::with_max_graph_values` and
-  `saved_meshes::attach_scoped_with_limits_and_control` set the most field
-  values one saved-graphics graph may hold; a graph over it keeps the normal
-  per-element refusal. Every existing call keeps the default of 1,000,000, and
-  no export changes. Contributed by shifatrHtH.
+- **The value limit for reading saved graphics can be raised (#2157,
+  #2166).** It is the most field values one saved-graphics graph may hold,
+  set by `SavedMeshLimits::with_max_graph_values` and
+  `saved_meshes::attach_scoped_with_limits_and_control` for Rust callers, by
+  `ExportOptions::with_saved_mesh_limits` for an export, and by
+  `rvt-ifc --saved-mesh-graph-values`. A graph over it keeps the normal
+  per-element refusal. The default stays 1,000,000, and at the default no
+  export changes. Contributed by shifatrHtH.
 
 ### Changed
 
@@ -233,6 +258,17 @@ reports and measurements behind several of these changes.
   at its glass's, a door with a glass panel would look all glass, and which part
   of a saved mesh is the glass is not read. Windows and curtain panels keep
   their translucent category colour. Contributed by zenglanmu.
+
+### Research
+
+- **Views, sheets and placed viewports** (research, behind `unstable-research`):
+  `rvt::research::views::read` and the `rvt-views` CLI, which builds only with
+  that feature (`cargo install rvt --features unstable-research`), list every
+  view's name, class, scale, plane and 3D camera,
+  every sheet's number and title-block fields, and every viewport's sheet,
+  view and box centre. The centre rule was measured on one viewport against
+  the Revit API (#1117); the catalog is experimental, and a turned viewport,
+  an uncropped view and a view title's printed position are not read.
 
 ## [0.25.0] — 2026-11-15
 
