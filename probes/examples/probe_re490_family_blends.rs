@@ -20,7 +20,7 @@
 //!
 //! Output, one record per line (differences and counts only, no coordinate,
 //! area or volume of the model):
-//!   file <path> release <layout release>
+//!   file <file name> release <layout release>
 //!   native: <error>
 //!   blend <document> <id> void <b> vertices <n>+<n> mesh <complete|partial|none>
 //!        volume_rel <difference> corners <feet> exchanged <feet> verdict <..>
@@ -309,7 +309,11 @@ fn main() -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("usage: probe_re490_family_blends FILE"))?;
     let mut rf = RevitFile::open(&path)?;
     let release = rf.layout_release()?;
-    println!("file {path} release {release}");
+    // The name only: a path names the machine's folders, which kept evidence must not.
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned());
+    println!("file {name} release {release}");
     let runs = if path.ends_with(".rfa") {
         standalone(&mut rf)
     } else {
