@@ -2853,15 +2853,3 @@ boundary is in `docs/views.md`.
 The `piecenbr` diagnostic in `probe_2085_trim_breaks` places neighbouring loop edges through a plane or cylinder. The `ownnbr` diagnostic uses the cached evaluator for the neighbouring face itself, including supported parametric surfaces. It reports distances from each adjacent edge to the gap's two ends and the separation of the nearest endpoints of the shared and adjacent edges in that face's loop.
 
 On the BIM4LCA Office Concrete As-Built model, the probe adds 228 readable neighbour rows across 73 gaps, with 30 gap sides read through parametric evaluators. All 1,752 previous rows match the baseline. At the `1e-7` ft bound, 10 scored sides have an adjacent endpoint that joins the shared edge and coincides with one gap end, where Revit's raw IFC vertices contain only one of those ends. Revit keeps that same end on seven sides and the other end on three. The join distance is a diagnostic for the stored loop. See [#2085](https://github.com/DrunkOnJava/rvt-rs/issues/2085).
-
-### Hermite perimeter gaps (2026-11-26)
-
-With `RVT_2085_HERMITE_PERIMETER=1`, a single loop on a Hermite surface
-can keep its joined polygon across a positive perimeter gap whose
-surface length has an upper bound smaller than 0.000001 ft. The bound sums the
-Bézier control-polygon lengths of the isoparametric cubic spans
-between saved endpoints. It rejects a close endpoint pair when the
-curve between them makes a longer excursion. The existing overlap
-and loop checks still apply. The generated
-`saved_hermite_perimeter` contract compares switch-off and switch-on
-behavior through the face grid and mesh entry points.

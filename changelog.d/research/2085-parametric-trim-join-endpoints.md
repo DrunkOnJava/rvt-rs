@@ -1,4 +1,5 @@
-- **A near parametric trim join uses one point (#2085).** On the chair research
-  branch, a bounded join reconciles its two UV endpoints before strip cutting.
-  The point is checked against both ends in model space and included in the
-  U knots for the repaired loop.
+- **A trim loop the coordinated join closes meets at one point (#2085).** Where
+  the coordinated join takes a stored gap of a parametric face's trim loop, the
+  two ends' parameters are reconciled to one point before the face is cut into
+  strips. The point is checked against both ends in model space and added to
+  the U knots of the repaired loop.
