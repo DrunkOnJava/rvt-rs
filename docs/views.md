@@ -1,8 +1,9 @@
 # Views, sheets and placed viewports
 
 `rvt::research::views::read` lists a project's views from the file's own
-records, and `probes/examples/probe_1117_views.rs` prints the catalog's counts,
-sheets, placed viewports and 3D cameras. It is the reader behind #1117: before
+records, `rvt-views` prints the catalog as JSON, and
+`probes/examples/probe_1117_views.rs` prints its counts, sheets, placed
+viewports and 3D cameras. It is the reader behind #1117: before
 it, a view's name, a sheet's number and a viewport's position on its sheet
 could not be read through the API. It is a research module, behind the
 `unstable-research` feature, so it can still change between releases: the
@@ -60,6 +61,15 @@ for sheet in &catalog.sheets {
     }
 }
 ```
+
+```bash
+cargo install rvt --features unstable-research
+rvt-views project.rvt
+rvt-views large-project.rvt --large-model > views.json
+```
+
+`probes/examples/probe_1117_views.rs` prints the same catalog as counts and
+one line per sheet, placed viewport and 3D camera:
 
 ```bash
 cargo run --profile ci -p rvt-probes --example probe_1117_views -- project.rvt
