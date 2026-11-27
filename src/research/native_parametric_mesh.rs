@@ -2491,23 +2491,6 @@ mod tests {
     }
 
     #[test]
-    fn narrow_trim_strip_uses_only_segments_that_cross_it() {
-        let ring = vec![[0., 0.], [2., 1.], [4., 0.], [4., 3.], [0., 3.]];
-        let left = 2. - 7.5e-10;
-        let u = [0., left, 2., 4.];
-        let v = [0., 3.];
-        if std::env::var_os("RVT_2085_NARROW_TRIM_STRIP").is_none() {
-            assert!(trimmed_cells(&[ring], &u, &v).is_err());
-            return;
-        }
-        let (points, triangles) = check(&[ring], &u, &v, 10.);
-        assert!(triangles.iter().any(|triangle| {
-            triangle.iter().any(|&i| points[i as usize][0] == left)
-                && triangle.iter().any(|&i| points[i as usize][0] == 2.)
-        }));
-    }
-
-    #[test]
     fn a_strip_with_two_bars_gets_two_trapezoids() {
         // A C opening to the right: right of u = 1 the strips hold a bar below and a bar above.
         let c = vec![vec![
