@@ -157,6 +157,8 @@ mod rvt_inspect_cli;
 mod rvt_schedule_cli;
 #[path = "../samples.rs"]
 mod samples;
+#[path = "../saved_hermite_perimeter.rs"]
+mod saved_hermite_perimeter;
 #[path = "../saved_mesh_limits.rs"]
 mod saved_mesh_limits;
 #[path = "../schema_bbox_marker.rs"]

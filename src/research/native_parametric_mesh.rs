@@ -76,6 +76,8 @@ fn keeps_saved_chords(surface: &ParametricSurface) -> bool {
             profile1, profile2, ..
         } => matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. }),
         ParametricSurface::SurfRev { .. } | ParametricSurface::ConeSurf { .. } => true,
+        // Not measured at a plane on this branch (#1941 predates #2099).
+        ParametricSurface::HermiteSurf { .. } => false,
     }
 }
 
@@ -312,6 +314,248 @@ fn loop_closes(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resul
     Ok(false)
 }
 
+/// #2085, on `research/2085-chairs` only: where a loop's edges stop joining, as
+/// `loop_closes` reads them.
+#[derive(Debug, Clone)]
+pub struct TrimBreak {
+    /// The loop's place in its face, 0 for the first.
+    pub loop_index: usize,
+    /// The loop's edges.
+    pub edges: usize,
+    /// The edges the attempt that joined the most joined before it broke; `edges` where
+    /// only the step back to the first point fails.
+    pub chained: usize,
+    /// From the last joined point to the nearer end of the next edge, or back to the first
+    /// point where every edge joined, in model coordinates.
+    pub gap: f64,
+    /// Whether an edge of the loop not yet joined, other than the next, has an end within
+    /// 1e-7 of the last joined point.
+    pub other_meets: bool,
+    /// The larger of the two parameters' differences across that gap.
+    pub param_gap: f64,
+    /// The smallest of `JOIN_BOUNDS` within which the whole loop joins, each edge at its
+    /// nearer end and back to the first point, either way round; `None` within none.
+    pub joins_within: Option<f64>,
+    /// The shortest edge's span between its two ends, in model coordinates: an edge shorter
+    /// than a bound has both ends within it of the same point.
+    pub shortest_edge: f64,
+    /// At the bound the loop joins within: each join's parameter gap over the surface's
+    /// parameter range, the largest of those that are not a pole or a seam.
+    pub small_gap: f64,
+    /// Joins whose parameters jump by more than `JUMP` of their range where the point halfway
+    /// between them in the parameters is the same point too (a side that collapses: a pole).
+    pub pole_joins: usize,
+    /// Joins whose parameters jump by more than `JUMP` of their range where the point halfway
+    /// between them is not the same point (a seam or another jump).
+    pub seam_joins: usize,
+}
+
+/// #2085: a join's parameter gap over the surface's range above which it is a jump (a pole
+/// or a seam) rather than an edge's end read a little off.
+pub const JUMP: f64 = 1e-2;
+
+/// The joins of a loop at `bound`, as `joins_within` makes them on the first way round that
+/// joins: the largest relative parameter gap that is not a jump, the pole joins and the
+/// seam joins.
+fn join_kinds(
+    at: &impl Fn([f64; 2]) -> Result<[f64; 3]>,
+    segments: &[Vec<[f64; 2]>],
+    env: [[f64; 2]; 2],
+    bound: f64,
+) -> Result<(f64, usize, usize)> {
+    let range = [
+        (env[1][0] - env[0][0]).abs().max(1e-12),
+        (env[1][1] - env[0][1]).abs().max(1e-12),
+    ];
+    let relative = |p: [f64; 2], q: [f64; 2]| {
+        ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1])
+    };
+    for reverse in [false, true] {
+        let (first, mut last) = if reverse {
+            (*segments[0].last().unwrap(), segments[0][0])
+        } else {
+            (segments[0][0], *segments[0].last().unwrap())
+        };
+        let mut pairs = Vec::new();
+        let mut joined = true;
+        for seg in &segments[1..] {
+            let p = at(last)?;
+            let (a, b) = (seg[0], *seg.last().unwrap());
+            let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+            let (gap, near, other) = if da <= db { (da, a, b) } else { (db, b, a) };
+            if gap >= bound {
+                joined = false;
+                break;
+            }
+            pairs.push((last, near));
+            last = other;
+        }
+        if !joined || distance(at(first)?, at(last)?) >= bound {
+            continue;
+        }
+        pairs.push((last, first));
+        let (mut small, mut poles, mut seams) = (0.0_f64, 0, 0);
+        for (p, q) in pairs {
+            let gap = relative(p, q);
+            if gap <= JUMP {
+                small = small.max(gap);
+                continue;
+            }
+            let half = [(p[0] + q[0]) / 2., (p[1] + q[1]) / 2.];
+            if distance(at(half)?, at(p)?) < bound {
+                poles += 1;
+            } else {
+                seams += 1;
+            }
+        }
+        return Ok((small, poles, seams));
+    }
+    Ok((f64::NAN, 0, 0))
+}
+
+/// #2085: the bounds `TrimBreak::joins_within` tries, in model units (feet).
+pub const JOIN_BOUNDS: [f64; 4] = [1e-6, 1e-5, 1e-4, 1e-3];
+
+/// Whether the loop's edges join end to end within `bound` in model coordinates, each edge
+/// at its nearer end, and close, either way round.
+fn joins_within(
+    at: &impl Fn([f64; 2]) -> Result<[f64; 3]>,
+    segments: &[Vec<[f64; 2]>],
+    bound: f64,
+) -> Result<bool> {
+    for reverse in [false, true] {
+        let (first, mut last) = if reverse {
+            (*segments[0].last().unwrap(), segments[0][0])
+        } else {
+            (segments[0][0], *segments[0].last().unwrap())
+        };
+        let mut joined = true;
+        for seg in &segments[1..] {
+            let p = at(last)?;
+            let (a, b) = (seg[0], *seg.last().unwrap());
+            let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+            let (gap, other) = if da <= db { (da, b) } else { (db, a) };
+            if gap >= bound {
+                joined = false;
+                break;
+            }
+            last = other;
+        }
+        if joined && distance(at(first)?, at(last)?) < bound {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// #2085, on `research/2085-chairs` only: the face's surface class and, for each loop of
+/// the face whose edges do not join end to end within 1e-7 in model coordinates, where
+/// they stop, on the attempt (the first edge either way round) that joins the most.
+pub fn trim_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<TrimBreak>)> {
+    use crate::native_saved_mesh::pointer;
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
+    let class = g.objects[si].class_name.to_string();
+    let surface = ParametricSurface::read(g, si)?;
+    let env = surface.bounds();
+    let saved_chords = keeps_saved_chords(&surface);
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    let mut breaks = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
+    let mut loop_index = 0;
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "trim loop cycle");
+        ensure!(loop_index < MAX_TRIM_LOOPS, "too many trim loops");
+        let least = if loop_index == 0 { 2 } else { 1 };
+        let (segments, _) = loop_segments(g, fi, li, env, least, saved_chords)?;
+        if !loop_closes(&surface, &segments)? {
+            let mut best: Option<TrimBreak> = None;
+            for reverse in [false, true] {
+                let (first, mut last) = if reverse {
+                    (*segments[0].last().unwrap(), segments[0][0])
+                } else {
+                    (segments[0][0], *segments[0].last().unwrap())
+                };
+                let mut chained = 1;
+                let mut gap = None;
+                for seg in &segments[1..] {
+                    let p = at(last)?;
+                    let (a, b) = (seg[0], *seg.last().unwrap());
+                    let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+                    if da < 1e-7 {
+                        last = b;
+                    } else if db < 1e-7 {
+                        last = a;
+                    } else {
+                        let near = if da <= db { a } else { b };
+                        let param_gap = (near[0] - last[0]).abs().max((near[1] - last[1]).abs());
+                        gap = Some((da.min(db), param_gap));
+                        break;
+                    }
+                    chained += 1;
+                }
+                let p = at(last)?;
+                let (gap, param_gap) = match gap {
+                    Some(gap) => gap,
+                    None => (
+                        distance(at(first)?, p),
+                        (first[0] - last[0]).abs().max((first[1] - last[1]).abs()),
+                    ),
+                };
+                let mut other_meets = false;
+                for seg in segments.iter().skip(chained + 1) {
+                    if distance(p, at(seg[0])?) < 1e-7
+                        || distance(p, at(*seg.last().unwrap())?) < 1e-7
+                    {
+                        other_meets = true;
+                    }
+                }
+                let found = TrimBreak {
+                    loop_index,
+                    edges: segments.len(),
+                    chained,
+                    gap,
+                    other_meets,
+                    param_gap,
+                    joins_within: None,
+                    shortest_edge: 0.,
+                    small_gap: f64::NAN,
+                    pole_joins: 0,
+                    seam_joins: 0,
+                };
+                if best.as_ref().is_none_or(|b| {
+                    found.chained > b.chained || (found.chained == b.chained && found.gap < b.gap)
+                }) {
+                    best = Some(found);
+                }
+            }
+            if let Some(mut b) = best {
+                for bound in JOIN_BOUNDS {
+                    if joins_within(&at, &segments, bound)? {
+                        b.joins_within = Some(bound);
+                        break;
+                    }
+                }
+                let mut shortest = f64::INFINITY;
+                for seg in &segments {
+                    shortest = shortest.min(distance(at(seg[0])?, at(*seg.last().unwrap())?));
+                }
+                b.shortest_edge = shortest;
+                if let Some(bound) = b.joins_within {
+                    (b.small_gap, b.pole_joins, b.seam_joins) =
+                        join_kinds(&at, &segments, env, bound)?;
+                }
+                breaks.push(b);
+            }
+        }
+        loop_index += 1;
+        next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    Ok((class, breaks))
+}
+
 /// Whether the one loop of a face is the rectangle `min`..`max` of its own
 /// parameters: every edge along one of its sides, and the sides covered whole (a
 /// revolution's side may collapse to a pole). `Ok(false)` where an edge crosses
@@ -321,6 +565,7 @@ fn trim_is_rectangle(
     segments: &[Vec<[f64; 2]>],
     min: [f64; 2],
     max: [f64; 2],
+    try_joined_polygon: bool,
 ) -> Result<bool> {
     use crate::native_parametric_surface::Curve;
     let mut sides: [Vec<[f64; 2]>; 4] = std::array::from_fn(|_| Vec::new());
@@ -345,6 +590,7 @@ fn trim_is_rectangle(
             sides[side].push([a[axis].min(b[axis]), a[axis].max(b[axis])]);
         }
     }
+    let mut use_polygon = false;
     for (side, intervals) in sides.iter_mut().enumerate() {
         let axis = if side % 2 == 0 { 0 } else { 1 };
         if intervals.is_empty() {
@@ -369,26 +615,75 @@ fn trim_is_rectangle(
             continue;
         }
         intervals.sort_by(|a, b| a[0].total_cmp(&b[0]));
+        // Keep the joined polygon for narrow gaps. A full rectangle would
+        // lose the boundaries of its saved edge segments.
+        let within_gap = |a: f64, b: f64| -> Result<bool> {
+            if !try_joined_polygon || a >= b {
+                return Ok(false);
+            }
+            let corner = if matches!(side, 0 | 3) { min } else { max };
+            Ok(surface.hermite_iso_trim_length_within(axis, corner[1 - axis], a, b, 1e-6))
+        };
         let mut end = min[axis];
         for p in intervals {
-            ensure!(
-                (p[0] - end).abs() < 1e-7,
-                "overlapping or incomplete trim perimeter"
-            );
+            if (p[0] - end).abs() >= 1e-7 {
+                ensure!(
+                    within_gap(end, p[0])?,
+                    "overlapping or incomplete trim perimeter"
+                );
+                use_polygon = true;
+            }
             end = p[1];
         }
-        ensure!((end - max[axis]).abs() < 1e-7, "incomplete trim perimeter");
+        if (end - max[axis]).abs() >= 1e-7 {
+            ensure!(within_gap(end, max[axis])?, "incomplete trim perimeter");
+            use_polygon = true;
+        }
     }
-    Ok(true)
+    Ok(!use_polygon)
 }
 
 /// A loop as a closed polygon in the surface's parameters: each edge's samples in the
 /// direction that continues the one before, and the last point (the first again)
-/// dropped. A join that meets in model coordinates but not in the parameters (the
-/// seam of a revolution, a pole) is refused.
-fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<Vec<[f64; 2]>> {
+/// dropped. At `STRICT_JOIN`, a join that meets in model coordinates but not in the
+/// parameters (the seam of a revolution, a pole) is refused. At a looser `bound`
+/// (#2085 candidate), edges join at their nearer end within it, and where the
+/// parameters do not meet the polygon steps across the gap only where it is within
+/// `JUMP` of the surface's parameter range; a pole and a seam are still refused.
+fn loop_polygon(
+    surface: &ParametricSurface,
+    segments: &[Vec<[f64; 2]>],
+    bound: f64,
+    keeps: &Keeps,
+) -> Result<Vec<[f64; 2]>> {
+    if bound > STRICT_JOIN {
+        return loop_polygon_within(surface, segments, bound, keeps);
+    }
     let same =
         |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
+    // #2085 candidate: two ends that meet within 1e-7 in model coordinates join as one
+    // point where their parameters are within `STRICT_PARAMETER_GAP` of the surface's
+    // range, the point halfway between them, checked against both ends. A wider gap
+    // (a pole, a seam) is still refused.
+    let env = surface.bounds();
+    let range = [
+        (env[1][0] - env[0][0]).abs().max(1e-12),
+        (env[1][1] - env[0][1]).abs().max(1e-12),
+    ];
+    let near = |p: [f64; 2], q: [f64; 2]| parameters_join(p, q, range, STRICT_JOIN);
+    let meet = |p: [f64; 2], q: [f64; 2]| -> Result<[f64; 2]> {
+        if same(p, q) {
+            return Ok(p);
+        }
+        let middle = [p[0].midpoint(q[0]), p[1].midpoint(q[1])];
+        let point = surface.evaluate(middle[0], middle[1])?;
+        ensure!(
+            distance(point, surface.evaluate(p[0], p[1])?) < STRICT_JOIN
+                && distance(point, surface.evaluate(q[0], q[1])?) < STRICT_JOIN,
+            "merged trim join exceeds model-space bound"
+        );
+        Ok(middle)
+    };
     for reverse in [false, true] {
         let mut ring: Vec<[f64; 2]> = if reverse {
             segments[0].iter().rev().copied().collect()
@@ -401,16 +696,18 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
             let p = surface.evaluate(last[0], last[1])?;
             let (a, b) = (seg[0], *seg.last().unwrap());
             if distance(p, surface.evaluate(a[0], a[1])?) < 1e-7 {
-                if !same(last, a) {
+                if !near(last, a) {
                     joined = false;
                     break;
                 }
+                *ring.last_mut().unwrap() = meet(last, a)?;
                 ring.extend(seg.iter().skip(1).copied());
             } else if distance(p, surface.evaluate(b[0], b[1])?) < 1e-7 {
-                if !same(last, b) {
+                if !near(last, b) {
                     joined = false;
                     break;
                 }
+                *ring.last_mut().unwrap() = meet(last, b)?;
                 ring.extend(seg.iter().rev().skip(1).copied());
             } else {
                 joined = false;
@@ -421,13 +718,364 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
             continue;
         }
         let (first, last) = (ring[0], *ring.last().unwrap());
-        if same(first, last)
+        if near(first, last)
             && distance(
                 surface.evaluate(first[0], first[1])?,
                 surface.evaluate(last[0], last[1])?,
             ) < 1e-7
         {
+            ring[0] = meet(first, last)?;
             ring.pop();
+            ensure!(ring.len() >= 3, "a trim loop needs three points");
+            return Ok(ring);
+        }
+    }
+    anyhow::bail!("a trim loop does not close in the surface's parameters")
+}
+
+/// The join of the strict path, in model units (feet).
+const STRICT_JOIN: f64 = 1e-7;
+
+/// #2085 candidate: the largest parameter gap, over the surface's range on its axis, across
+/// which the strict path's polygon joins two ends that meet in model coordinates. On the
+/// open models every failing join is under 6e-5 of the range or a jump of 1 per cent or
+/// more, and on shifatrHtH's save every one is under 1e-4 (#2085).
+const STRICT_PARAMETER_GAP: f64 = 1e-4;
+
+/// Whether the polygon may join `p` and `q` in the parameters, on the path a loop's
+/// `bound` puts it on: the same point there, or a gap over the surface's `range` within
+/// `STRICT_PARAMETER_GAP` on the strict path and within `JUMP` on the bounded one. The
+/// polygon and the probe's replay of it (`polygon_breaks`) both ask this.
+fn parameters_join(p: [f64; 2], q: [f64; 2], range: [f64; 2], bound: f64) -> bool {
+    if (p[0] - q[0]).abs() <= 1e-9 && (p[1] - q[1]).abs() <= 1e-9 {
+        return true;
+    }
+    let gap = ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1]);
+    gap <= if bound > STRICT_JOIN {
+        JUMP
+    } else {
+        STRICT_PARAMETER_GAP
+    }
+}
+
+/// #2085, on `research/2085-chairs` only: where a loop's polygon in the surface's
+/// parameters fails, on the attempt (first edge either way round) that gets furthest.
+#[derive(Debug, Clone)]
+pub struct PolygonBreak {
+    /// The loop's place in its face, 0 for the first.
+    pub loop_index: usize,
+    /// The loop's edges.
+    pub edges: usize,
+    /// The edges joined before the join that fails; `edges` where it is the closing step.
+    pub joined: usize,
+    /// Whether the loop joins only within a bound looser than 1e-7 (the candidate's path).
+    pub bounded: bool,
+    /// Whether the two points meet in model coordinates within the loop's bound; where
+    /// they do not, the polygon fails as `loop_closes` would.
+    pub meets: bool,
+    /// The larger of the two parameters' differences across the failing join.
+    pub param_gap: f64,
+    /// That difference over the surface's parameter range on its axis.
+    pub relative_gap: f64,
+    /// Whether the point halfway across the join in the parameters is the same point in
+    /// model coordinates, within the loop's bound (a side that collapses).
+    pub halfway_same: bool,
+}
+
+/// #2085, on `research/2085-chairs` only: the face's surface class and, for each loop of
+/// the face whose polygon in the parameters fails (as `face_grid` builds it), where.
+/// #2085, on the research branches only: for a face whose surface keeps saved chords at a
+/// plane, how many ends of its chord edges (edges drawn straight to a plane) its polygon
+/// holds, how many of those a merged join moved off the edge's own end (the plane beside it
+/// keeps that end), and the largest such move in model coordinates.
+pub fn merged_chord_ends(g: &ObjectGraph, fi: usize) -> Result<(String, usize, usize, f64)> {
+    use crate::native_saved_mesh::pointer;
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
+    let class = g.objects[si].class_name.to_string();
+    let surface = ParametricSurface::read(g, si)?;
+    let env = surface.bounds();
+    let saved_chords = keeps_saved_chords(&surface);
+    let (mut ends, mut moved, mut largest) = (0usize, 0usize, 0.0_f64);
+    if !saved_chords {
+        return Ok((class, ends, moved, largest));
+    }
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    let mut seen = std::collections::BTreeSet::new();
+    let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
+    let mut loop_index = 0;
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "trim loop cycle");
+        ensure!(loop_index < MAX_TRIM_LOOPS, "too many trim loops");
+        let least = if loop_index == 0 { 2 } else { 1 };
+        let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
+        let bound = if loop_closes(&surface, &segments)? {
+            Some(STRICT_JOIN)
+        } else {
+            loop_join_bound(&surface, &segments)?
+        };
+        if let Some(ring) =
+            bound.and_then(|b| loop_polygon(&surface, &segments, b, &Keeps::new()).ok())
+        {
+            for (seg, edge) in segments.iter().zip(&edges) {
+                if edge.is_none() {
+                    continue;
+                }
+                for end in [seg[0], *seg.last().unwrap()] {
+                    ends += 1;
+                    let nearest = ring
+                        .iter()
+                        .copied()
+                        .min_by(|a, b| {
+                            let da = (a[0] - end[0]).hypot(a[1] - end[1]);
+                            let db = (b[0] - end[0]).hypot(b[1] - end[1]);
+                            da.total_cmp(&db)
+                        })
+                        .context("empty polygon")?;
+                    if (nearest[0] - end[0]).hypot(nearest[1] - end[1]) > 1e-12 {
+                        moved += 1;
+                        largest = largest.max(distance(at(nearest)?, at(end)?));
+                    }
+                }
+            }
+        }
+        loop_index += 1;
+        next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    Ok((class, ends, moved, largest))
+}
+
+pub fn polygon_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<PolygonBreak>)> {
+    use crate::native_saved_mesh::pointer;
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
+    let class = g.objects[si].class_name.to_string();
+    let surface = ParametricSurface::read(g, si)?;
+    let env = surface.bounds();
+    let range = [
+        (env[1][0] - env[0][0]).abs().max(1e-12),
+        (env[1][1] - env[0][1]).abs().max(1e-12),
+    ];
+    let saved_chords = keeps_saved_chords(&surface);
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    let mut breaks = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
+    let mut loop_index = 0;
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "trim loop cycle");
+        ensure!(loop_index < MAX_TRIM_LOOPS, "too many trim loops");
+        let least = if loop_index == 0 { 2 } else { 1 };
+        let (segments, _) = loop_segments(g, fi, li, env, least, saved_chords)?;
+        let strict = loop_closes(&surface, &segments)?;
+        let bound = if strict {
+            Some(STRICT_JOIN)
+        } else {
+            loop_join_bound(&surface, &segments)?
+        };
+        let failing = match bound {
+            Some(bound) => loop_polygon(&surface, &segments, bound, &Keeps::new())
+                .is_err()
+                .then_some(bound),
+            None => None,
+        };
+        if let Some(bound) = failing {
+            // Where the attempt that gets furthest fails, judged as the polygon judges a
+            // join on its path, as `parameters_join` judges it.
+            let mut best: Option<PolygonBreak> = None;
+            for reverse in [false, true] {
+                let (first, mut last) = if reverse {
+                    (*segments[0].last().unwrap(), segments[0][0])
+                } else {
+                    (segments[0][0], *segments[0].last().unwrap())
+                };
+                let mut joined = 1;
+                let mut failed: Option<([f64; 2], [f64; 2], bool)> = None;
+                for seg in &segments[1..] {
+                    let p = at(last)?;
+                    let (a, b) = (seg[0], *seg.last().unwrap());
+                    let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+                    let (gap, near, other) = if da <= db { (da, a, b) } else { (db, b, a) };
+                    let ok = gap < bound && parameters_join(last, near, range, bound);
+                    if !ok {
+                        failed = Some((last, near, gap < bound));
+                        break;
+                    }
+                    last = other;
+                    joined += 1;
+                }
+                let (p, q, meets) = match failed {
+                    Some(f) => f,
+                    None => (last, first, distance(at(first)?, at(last)?) < bound),
+                };
+                let param_gap = (p[0] - q[0]).abs().max((p[1] - q[1]).abs());
+                let relative_gap =
+                    ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1]);
+                let half = [(p[0] + q[0]) / 2., (p[1] + q[1]) / 2.];
+                let halfway_same = distance(at(half)?, at(p)?) < bound.max(1e-7);
+                let found = PolygonBreak {
+                    loop_index,
+                    edges: segments.len(),
+                    joined,
+                    bounded: !strict,
+                    meets,
+                    param_gap,
+                    relative_gap,
+                    halfway_same,
+                };
+                // The attempt the polygon fails on is one whose edges meet up to there: the
+                // wrong way round breaks at the first join, apart in model coordinates.
+                if best
+                    .as_ref()
+                    .is_none_or(|b| (found.meets, found.joined) > (b.meets, b.joined))
+                {
+                    best = Some(found);
+                }
+            }
+            breaks.extend(best);
+        }
+        loop_index += 1;
+        next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    Ok((class, breaks))
+}
+
+/// The bounds a trim loop's near ends may join within, in model coordinates: under
+/// 0.00001 ft, where two ends count as one point, the bound Griffin chose for a plane's or
+/// cylinder's ring (2026-11-21, #2085, RE-497). `JOIN_BOUNDS` keeps the wider ones for the
+/// probe's census of where loops would join.
+const LOOP_JOIN_BOUNDS: [f64; 2] = [1e-6, 1e-5];
+
+/// #2085 candidate: the smallest of `LOOP_JOIN_BOUNDS` within which the loop's edges join
+/// whole, each at its nearer end; `None` where none does, or where an edge is shorter
+/// than that bound, so that either of its ends would join.
+fn loop_join_bound(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<Option<f64>> {
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    for bound in LOOP_JOIN_BOUNDS {
+        if joins_within(&at, segments, bound)? {
+            for seg in segments {
+                if distance(at(seg[0])?, at(*seg.last().unwrap())?) < bound {
+                    return Ok(None);
+                }
+            }
+            return Ok(Some(bound));
+        }
+    }
+    Ok(None)
+}
+
+/// #2085, research branch only: the gaps of a loop the coordinated join takes, by where each is
+/// in the loop (0 the closing gap), and whether it keeps Q, the next edge's end, or P, the
+/// loop's own last point ([`crate::native_saved_mesh::coordinated_join_keeps`]).
+type Keeps = BTreeMap<usize, bool>;
+
+/// `loop_polygon` at a bound looser than `STRICT_JOIN` (#2085 candidate). A gap at or over
+/// `bound` that `keeps` names, under the coordinated join's limit, keeps the end it names
+/// instead of the point halfway; a step across a seam or to a pole is still refused.
+fn loop_polygon_within(
+    surface: &ParametricSurface,
+    segments: &[Vec<[f64; 2]>],
+    bound: f64,
+    keeps: &Keeps,
+) -> Result<Vec<[f64; 2]>> {
+    let limit = crate::native_saved_mesh::COORDINATED_LIMIT;
+    let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+    let env = surface.bounds();
+    let range = [
+        (env[1][0] - env[0][0]).abs().max(1e-12),
+        (env[1][1] - env[0][1]).abs().max(1e-12),
+    ];
+    let same =
+        |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
+    // Whether the polygon may step from `p` to `q` in the parameters: the same point
+    // there, or a gap within `JUMP` of the range. A pole and a seam are refused, as on
+    // the strict path.
+    let steps = |p: [f64; 2], q: [f64; 2]| -> Result<bool> {
+        if same(p, q) {
+            return Ok(true);
+        }
+        let gap = ((p[0] - q[0]).abs() / range[0]).max((p[1] - q[1]).abs() / range[1]);
+        Ok(gap <= JUMP)
+    };
+    // A loose join contributes one vertex. Keeping both ends can leave the
+    // adjacent segments crossing inside a strip.
+    let meet = |p: [f64; 2], q: [f64; 2]| -> Result<[f64; 2]> {
+        if same(p, q) {
+            return Ok(p);
+        }
+        let middle = [p[0].midpoint(q[0]), p[1].midpoint(q[1])];
+        let point = at(middle)?;
+        ensure!(
+            distance(point, at(p)?) < bound && distance(point, at(q)?) < bound,
+            "merged trim join exceeds model-space bound"
+        );
+        Ok(middle)
+    };
+    for reverse in [false, true] {
+        let mut ring: Vec<[f64; 2]> = if reverse {
+            segments[0].iter().rev().copied().collect()
+        } else {
+            segments[0].clone()
+        };
+        let mut joined = true;
+        for (k, seg) in segments.iter().enumerate().skip(1) {
+            let last = *ring.last().unwrap();
+            let p = at(last)?;
+            let (a, b) = (seg[0], *seg.last().unwrap());
+            let (da, db) = (distance(p, at(a)?), distance(p, at(b)?));
+            let forward = da <= db;
+            let (gap, near) = if forward { (da, a) } else { (db, b) };
+            // With no keeps this is the loose join's own test, unchanged. As on a cylinder, an
+            // approved gap is taken only where the edge's far end is at least the limit away, so
+            // that its near end is the only one that could join.
+            let keep = keeps
+                .get(&k)
+                .copied()
+                .filter(|_| gap >= bound && gap < limit && da.max(db) >= limit);
+            if (gap >= bound && keep.is_none()) || !steps(last, near)? {
+                joined = false;
+                break;
+            }
+            let skip = match keep {
+                None => {
+                    *ring.last_mut().unwrap() = meet(last, near)?;
+                    1
+                }
+                // P, the loop's own point, stays, and the next edge's near end is dropped.
+                Some(false) => 1,
+                // Q stays: the loop's last point gives way to the next edge's near end.
+                Some(true) => {
+                    ring.pop();
+                    0
+                }
+            };
+            if forward {
+                ring.extend(seg.iter().skip(skip).copied());
+            } else {
+                ring.extend(seg.iter().rev().skip(skip).copied());
+            }
+        }
+        if !joined {
+            continue;
+        }
+        let (first, last) = (ring[0], *ring.last().unwrap());
+        let closing = distance(at(first)?, at(last)?);
+        if closing < bound && steps(last, first)? {
+            ring[0] = meet(first, last)?;
+            ring.pop();
+            ensure!(ring.len() >= 3, "a trim loop needs three points");
+            return Ok(ring);
+        }
+        // The closing gap: P is the loop's last point and Q its first.
+        let wide = closing >= bound && closing < limit;
+        if let (Some(&keep_q), true) = (keeps.get(&0), wide && steps(last, first)?) {
+            if keep_q {
+                ring.pop();
+            } else {
+                ring.remove(0);
+            }
             ensure!(ring.len() >= 3, "a trim loop needs three points");
             return Ok(ring);
         }
@@ -516,16 +1164,48 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     let saved_chords = keeps_saved_chords(&surface);
     let mut chord_edges = std::collections::BTreeSet::new();
     let mut chords = Vec::new();
+    let mut bounds = Vec::new();
+    let mut keeps = Vec::new();
     let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
     while let Some(li) = next {
         ensure!(seen_loops.insert(li), "trim loop cycle");
         ensure!(loops.len() < MAX_TRIM_LOOPS, "too many trim loops");
         let least = if loops.is_empty() { 2 } else { 1 };
         let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
-        ensure!(
-            loop_closes(&surface, &segments)?,
-            "disconnected parametric trim in model coordinates"
-        );
+        // #2085 (candidate, `research/2085-chairs` only): a loop that does not join within
+        // 1e-7 joins at the smallest of `LOOP_JOIN_BOUNDS` that closes it whole; a loop that
+        // already closes keeps the strict path unchanged.
+        let (bound, keep) = if loop_closes(&surface, &segments)? {
+            (STRICT_JOIN, Keeps::new())
+        } else if let Some(bound) = loop_join_bound(&surface, &segments)? {
+            (bound, Keeps::new())
+        } else if crate::native_saved_mesh::coordinated_join() {
+            // #2085, research branch only: the gaps the coordinated join takes; the polygon
+            // still refuses the loop if any other gap is at or over the touching bound.
+            let keep: Keeps = crate::native_saved_mesh::coordinated_join_keeps(g, fi, li)?
+                .into_iter()
+                .map(|(at, keep_q, _)| (at, keep_q))
+                .collect();
+            ensure!(
+                !keep.is_empty(),
+                "disconnected parametric trim in model coordinates"
+            );
+            // `loop_join_bound`'s guard, kept: an edge shorter than the bound could join at
+            // either end, so the loop stays refused.
+            let at = |p: [f64; 2]| surface.evaluate(p[0], p[1]);
+            for seg in &segments {
+                ensure!(
+                    distance(at(seg[0])?, at(*seg.last().unwrap())?)
+                        >= LOOP_JOIN_BOUNDS[LOOP_JOIN_BOUNDS.len() - 1],
+                    "disconnected parametric trim in model coordinates"
+                );
+            }
+            (LOOP_JOIN_BOUNDS[LOOP_JOIN_BOUNDS.len() - 1], keep)
+        } else {
+            anyhow::bail!("disconnected parametric trim in model coordinates")
+        };
+        bounds.push(bound);
+        keeps.push(keep);
         // The spans come from the clamped samples the loop's polygon is made of, so
         // that a vertex the cells put on one lies on it exactly.
         for (points, edge) in segments.iter().zip(&edges) {
@@ -549,7 +1229,12 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         max[0] > min[0] && max[1] > min[1],
         "degenerate parametric domain"
     );
-    let rectangular = loops.len() == 1 && trim_is_rectangle(&surface, &loops[0], min, max)?;
+    let rectangular = loops.len() == 1 && {
+        let try_joined_polygon = matches!(&surface, ParametricSurface::HermiteSurf { .. })
+            && bounds[0] <= 1e-6
+            && std::env::var_os("RVT_2085_HERMITE_PERIMETER").is_some();
+        trim_is_rectangle(&surface, &loops[0], min, max, try_joined_polygon)?
+    };
     // RE-443 measured only rectangular point/arc patches. The general trim
     // reader (RE-430) must not widen that new surface's measured boundary.
     let collapsed = matches!(
@@ -571,10 +1256,12 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     } else {
         loops
             .iter()
-            .map(|segments| loop_polygon(&surface, segments))
+            .zip(bounds.iter().zip(&keeps))
+            .map(|(segments, (bound, keep))| loop_polygon(&surface, segments, *bound, keep))
             .collect::<Result<Vec<_>>>()?
     };
     const CHORD: f64 = 0.001;
+    const HERMITE_CHORD: f64 = 0.0005;
     let length = |p: [f64; 3]| p.iter().map(|x| x * x).sum::<f64>().sqrt();
     let angular = |r: f64| {
         (4. * (CHORD / (2. * r.max(CHORD))).min(1.).sqrt().asin()).min(std::f64::consts::FRAC_PI_2)
@@ -621,6 +1308,9 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             let far = min[1].abs().max(max[1].abs());
             (angular(far * half_angle.sin()), 1.)
         }
+        // One step across the face: its grid is the knots added below, every node
+        // parameter in it and the cuts the curvature of its patches asks for (RE-460).
+        ParametricSurface::HermiteSurf { .. } => (max[0] - min[0], max[1] - min[1]),
         ParametricSurface::RuledSurf {
             profile1, profile2, ..
         } => {
@@ -785,12 +1475,30 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         a.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         Ok(a)
     };
-    let trim_u: Vec<f64> = trim.iter().map(|p| p[0]).collect();
+    // A Hermite face's grid holds the knots of its patches too (RE-460), cut at half the
+    // chord the other surfaces keep: the patch lies within 0.001 ft of Revit's own points
+    // on every edge sample measured, and the other half of the bar is left to the mesh.
+    let [hermite_u, hermite_v] = surface
+        .hermite_knots([min, max], HERMITE_CHORD)?
+        .unwrap_or_default();
+    let trim_u: Vec<f64> = trim
+        .iter()
+        .map(|p| p[0])
+        .chain(
+            // Every polygon's, since the strict path merges joins too (#2085 candidate);
+            // a point not merged is a segment's own, already in `trim`.
+            polygons.iter().flatten().map(|p| p[0]),
+        )
+        .chain(hermite_u.iter().copied())
+        .collect();
     let trim_v: Vec<f64> = if rectangular {
-        trim.iter().map(|p| p[1]).collect()
+        trim.iter().map(|p| p[1]).collect::<Vec<_>>()
     } else {
         trim_steps(&polygons)
-    };
+    }
+    .into_iter()
+    .chain(hermite_v.iter().copied())
+    .collect();
     Ok(FaceGrid {
         u: axis(0, du, &trim_u)?,
         v: axis(1, dv, &trim_v)?,
@@ -1335,6 +2043,14 @@ fn trimmed_cells_on(
             continue;
         }
         let middle = (left + right) / 2.0;
+        // Exclude a segment admitted by endpoint tolerance if it does not
+        // cross the interior of this narrow strip.
+        if !active.len().is_multiple_of(2)
+            && right - left < KNOT_TOLERANCE
+            && std::env::var_os("RVT_2085_NARROW_TRIM_STRIP").is_some()
+        {
+            active.retain(|s| s.u0 <= middle && middle < s.u1);
+        }
         active.sort_by(|a, b| a.at(middle).total_cmp(&b.at(middle)));
         ensure!(
             active.len().is_multiple_of(2),
@@ -1573,10 +2289,10 @@ fn tessellate_trimmed(
 #[cfg(test)]
 mod tests {
     use super::{
-        CUT_BUDGET, CUT_BUDGET_EXCEEDED, inside_polygon, keep_triangle, profile_reach, trim_steps,
-        trimmed_cells,
+        CUT_BUDGET, CUT_BUDGET_EXCEEDED, Keeps, inside_polygon, keep_triangle, loop_polygon_within,
+        profile_reach, trim_steps, trimmed_cells,
     };
-    use crate::native_parametric_surface::Curve;
+    use crate::native_parametric_surface::{Curve, ParametricSurface};
 
     // How a trimmed face's cutting can run away: many trapezoids each scanning every knot
     // of v, though no knot lies inside any of them and no triangle is made; the count of
@@ -1747,6 +2463,37 @@ mod tests {
     }
 
     #[test]
+    fn a_near_trim_join_does_not_leave_two_crossing_segments() {
+        let surface = ParametricSurface::RuledSurf {
+            envelope: [[0., 0.], [1., 1.]],
+            orient: true,
+            profile1: Curve::line([0., 0., 0.], [1., 0., 0.], [0., 1.]),
+            profile2: Curve::line([0., 1., 0.], [1., 0., 0.], [0., 1.]),
+        };
+        // On the two sloping edges of the trim, the first ends to the right of
+        // where the next begins. Keeping both points makes the edges cross.
+        let apex = 0.5 + 2e-7;
+        let left = 0.5 - 2e-7;
+        let mut segments = vec![
+            vec![[0., 0.], [apex, apex]],
+            vec![[left, apex], [1., 0.]],
+            vec![[1., 0.], [1., 1.]],
+            vec![[1., 1.], [0., 1.]],
+            vec![[0., 1.], [0., 0.]],
+        ];
+        for _ in 0..2 {
+            let ring = loop_polygon_within(&surface, &segments, 1e-6, &Keeps::new()).unwrap();
+            let mut knots = vec![0., 0.25, left, apex, 0.75, 1.];
+            knots.extend(ring.iter().map(|p| p[0]));
+            knots.sort_by(f64::total_cmp);
+            knots.dedup();
+            check(&[ring], &knots, &[0., 1.], 1. - apex / 2.);
+            // The same near join is now the closing step.
+            segments.rotate_left(1);
+        }
+    }
+
+    #[test]
     fn a_hole_is_left_out_whichever_way_it_turns() {
         let outer = vec![[0., 0.], [3., 0.], [3., 3.], [0., 3.]];
         let against = vec![[1., 1.], [1., 2.], [2., 2.], [2., 1.]];
@@ -1772,6 +2519,23 @@ mod tests {
                 .iter()
                 .any(|p| (p[0] - 1.0).abs() < 1e-12 && (p[1] - 1.0).abs() < 1e-12)
         );
+    }
+
+    #[test]
+    fn narrow_trim_strip_uses_only_segments_that_cross_it() {
+        let ring = vec![[0., 0.], [2., 1.], [4., 0.], [4., 3.], [0., 3.]];
+        let left = 2. - 7.5e-10;
+        let u = [0., left, 2., 4.];
+        let v = [0., 3.];
+        if std::env::var_os("RVT_2085_NARROW_TRIM_STRIP").is_none() {
+            assert!(trimmed_cells(&[ring], &u, &v).is_err());
+            return;
+        }
+        let (points, triangles) = check(&[ring], &u, &v, 10.);
+        assert!(triangles.iter().any(|triangle| {
+            triangle.iter().any(|&i| points[i as usize][0] == left)
+                && triangle.iter().any(|&i| points[i as usize][0] == 2.)
+        }));
     }
 
     #[test]
