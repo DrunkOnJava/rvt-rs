@@ -4,6 +4,7 @@ use crate::native_parameters::ObjectGraph;
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FaceMesh {
     pub face_index: usize,
@@ -1080,15 +1081,28 @@ fn ring_impl(
 ) -> Result<Vec<[f64; 2]>> {
     let segments = ring_segments(g, index, face, li, refine, limit)?;
     // A loop whose neighbours cannot be read joins as before: the coordinated join fails closed.
-    let keeps = coordinated_keeps(g, index, face, li)
-        .map(|keeps| {
-            keeps
-                .into_iter()
-                .map(|(at, (keep, _))| (at, keep))
-                .collect()
-        })
-        .unwrap_or_default();
+    let keeps = if coordinated_join() {
+        coordinated_keeps(g, index, face, li)
+            .map(|keeps| {
+                keeps
+                    .into_iter()
+                    .map(|(at, (keep, _))| (at, keep))
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        BTreeMap::new()
+    };
     joined_ring_keeping(segments, || step_length(g, index, face), &keeps)
+}
+
+/// #2085: set `RVT_2085_COORDINATED_JOIN` to join the stored gaps two rings hold where a
+/// contributor's chair save says which end Revit keeps. It was fitted to that one save, which
+/// Measure does not hold, and its default is not decided, so it is off unless set: off, every
+/// export is as before.
+pub(crate) fn coordinated_join() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("RVT_2085_COORDINATED_JOIN").is_some())
 }
 
 /// The widest gap the coordinated join takes, in feet: just over the widest of the 40 chair
@@ -1369,7 +1383,7 @@ fn coordinated_keeps(
     Ok(keeps)
 }
 
-/// #2085, research branch only: the gaps of the loop `li` of face `fi` that the coordinated
+/// #2085, with `RVT_2085_COORDINATED_JOIN` set: the gaps of the loop `li` of face `fi` that the coordinated
 /// join takes, whether or not it is switched on, each as where it is in the loop (0 the closing
 /// gap), whether it keeps Q (the next edge's end) and its width in the join's own measure. The
 /// export's revolved faces and the #2085 probe call this, so all three read the same rule.
@@ -1529,7 +1543,7 @@ fn joined_ring(
     joined_ring_keeping(segments, length, &BTreeMap::new())
 }
 
-/// [`joined_ring`], with the gaps the coordinated join takes (#2085, research branch only).
+/// [`joined_ring`], with the gaps the coordinated join takes (#2085, with `RVT_2085_COORDINATED_JOIN` set).
 fn joined_ring_keeping(
     segments: Vec<Vec<[f64; 2]>>,
     length: impl FnOnce() -> Result<StepLength>,
@@ -2183,8 +2197,8 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             CylinderTessellationProfile::default(),
         )?));
     }
-    // `HermiteSurf` (RE-460) is read on the research branch only: on `main` such a face is refused
-    // as an unsupported surface until its bodies are measured against Revit's exports (#2085).
+    // `HermiteSurf` (RE-460) is not routed here: such a face is refused as an unsupported
+    // surface until its bodies are measured against Revit's exports (#2085).
     if matches!(p.class_name.as_str(), "SurfRev" | "RuledSurf" | "ConeSurf") {
         return Ok(Some(crate::native_parametric_mesh::face(g, fi)?));
     }
@@ -4363,7 +4377,7 @@ mod tests {
         assert!(joined_ring(segments, plane_steps).is_err());
     }
 
-    // #2085's coordinated join (research branch only), failure modes first: a gap at or over
+    // #2085's coordinated join (`RVT_2085_COORDINATED_JOIN`), failure modes first: a gap at or over
     // `RING_TOUCHING` joins only where it is approved, never at `COORDINATED_LIMIT` or over,
     // and it keeps the end it is told to, at an inner gap and at the closing one.
 

@@ -314,7 +314,7 @@ fn loop_closes(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resul
     Ok(false)
 }
 
-/// #2085, on `research/2085-chairs` only: where a loop's edges stop joining, as
+/// #2085, for `probe_2085_trim_breaks`: where a loop's edges stop joining, as
 /// `loop_closes` reads them.
 #[derive(Debug, Clone)]
 pub struct TrimBreak {
@@ -448,7 +448,7 @@ fn joins_within(
     Ok(false)
 }
 
-/// #2085, on `research/2085-chairs` only: the face's surface class and, for each loop of
+/// #2085, for `probe_2085_trim_breaks`: the face's surface class and, for each loop of
 /// the face whose edges do not join end to end within 1e-7 in model coordinates, where
 /// they stop, on the attempt (the first edge either way round) that joins the most.
 pub fn trim_breaks(g: &ObjectGraph, fi: usize) -> Result<(String, Vec<TrimBreak>)> {
@@ -732,7 +732,7 @@ fn parameters_join(p: [f64; 2], q: [f64; 2], range: [f64; 2], bound: f64) -> boo
     }
 }
 
-/// #2085, on `research/2085-chairs` only: where a loop's polygon in the surface's
+/// #2085, for `probe_2085_trim_breaks`: where a loop's polygon in the surface's
 /// parameters fails, on the attempt (first edge either way round) that gets furthest.
 #[derive(Debug, Clone)]
 pub struct PolygonBreak {
@@ -756,9 +756,9 @@ pub struct PolygonBreak {
     pub halfway_same: bool,
 }
 
-/// #2085, on `research/2085-chairs` only: the face's surface class and, for each loop of
+/// #2085, for `probe_2085_trim_breaks`: the face's surface class and, for each loop of
 /// the face whose polygon in the parameters fails (as `face_grid` builds it), where.
-/// #2085, on the research branches only: for a face whose surface keeps saved chords at a
+/// #2085, for `probe_2085_trim_breaks`: for a face whose surface keeps saved chords at a
 /// plane, how many ends of its chord edges (edges drawn straight to a plane) its polygon
 /// holds, how many of those a merged join moved off the edge's own end (the plane beside it
 /// keeps that end), and the largest such move in model coordinates.
@@ -940,7 +940,7 @@ fn loop_join_bound(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> R
     Ok(None)
 }
 
-/// #2085, research branch only: the gaps of a loop the coordinated join takes, by where each is
+/// #2085, with `RVT_2085_COORDINATED_JOIN` set: the gaps of a loop the coordinated join takes, by where each is
 /// in the loop (0 the closing gap), and whether it keeps Q, the next edge's end, or P, the
 /// loop's own last point ([`crate::native_saved_mesh::coordinated_join_keeps`]).
 type Keeps = BTreeMap<usize, bool>;
@@ -1146,16 +1146,13 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         ensure!(loops.len() < MAX_TRIM_LOOPS, "too many trim loops");
         let least = if loops.is_empty() { 2 } else { 1 };
         let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
-        // #2085 (candidate, `research/2085-chairs` only): a loop that does not join within
-        // 1e-7 joins at the smallest of `LOOP_JOIN_BOUNDS` that closes it whole; a loop that
-        // already closes keeps the strict path unchanged.
-        // The loop join (`LOOP_JOIN_BOUNDS`) stays on the research branch: on `main` a loop that
-        // does not close within `STRICT_JOIN` goes to the coordinated join or is refused (#2085).
+        // A loop that does not close within `STRICT_JOIN` is refused, unless
+        // `RVT_2085_COORDINATED_JOIN` is set and the coordinated join takes its gaps (#2085).
         let (bound, keep) = if loop_closes(&surface, &segments)? {
             (STRICT_JOIN, Keeps::new())
-        } else {
-            // #2085: the gaps the coordinated join takes; the polygon
-            // still refuses the loop if any other gap is at or over the touching bound.
+        } else if crate::native_saved_mesh::coordinated_join() {
+            // The gaps the coordinated join takes; the polygon still refuses the loop if any
+            // other gap is at or over the touching bound.
             let keep: Keeps = crate::native_saved_mesh::coordinated_join_keeps(g, fi, li)?
                 .into_iter()
                 .map(|(at, keep_q, _)| (at, keep_q))
@@ -1175,6 +1172,8 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 );
             }
             (LOOP_JOIN_BOUNDS[LOOP_JOIN_BOUNDS.len() - 1], keep)
+        } else {
+            anyhow::bail!("disconnected parametric trim in model coordinates")
         };
         bounds.push(bound);
         keeps.push(keep);
