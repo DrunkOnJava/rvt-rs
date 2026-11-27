@@ -1099,14 +1099,19 @@ line names what to fix (its rulesets check needs an admin token). The list:
 2. No stale branches remain on the remote (`delete_branch_on_merge` is on; a
    branch of a closed pull request is deleted with a note where its commits
    stay reachable from the pull request's head). A research or Measure branch
-   with no pull request is kept while its issue is open; once its finding has
-   landed or been superseded, its tip is pushed to `refs/archive/<date>/` on
-   GitHub, which keeps it off the branch list, and into a git bundle the
-   maintainer keeps, with a list of its commits, and the branch is then
-   deleted. The audit lists such a branch once its last commit is more than
-   14 days old, unless its name carries the number of an open issue or a
-   report's reproduce commands dispatch from it (`--ref <branch>`; a dispatch
-   needs a branch or tag). A commit a report's reproduce commands cite (`-f ref=<sha>`)
+   with no pull request is kept while an open issue, an open pull request or a
+   discussion names it, since someone may have been pointed at it to run a probe
+   or fetch a build, and while a report names it in backticks or its reproduce
+   commands dispatch from it (`--ref <branch>`; a dispatch needs a branch or
+   tag). Otherwise, a week after its last commit, its tip is pushed to
+   `refs/archive/<date>/` on GitHub, which keeps it off the branch list, and into
+   a git bundle the maintainer keeps, with a list of its commits, and the branch
+   is then deleted; a new branch from the archive ref brings it back. The audit
+   lists such a branch once its last commit is more than 7 days old. Before
+   archiving one by hand, search the open threads for its name as the audit does.
+   Until 2026-11-27 the audit kept every branch whose name carried an open
+   issue's number (#1525); on that day that covered 13 branches no open thread
+   named, 10 of them `measure/*` scaffolds of runs already read. A commit a report's reproduce commands cite (`-f ref=<sha>`)
    that no branch, archive ref or pull request head reaches, such as the head
    of a branch rebuilt before it landed, is pushed by hand to
    `refs/archive/<date>/cited/<first 12 characters of the sha>` so GitHub

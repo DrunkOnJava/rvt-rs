@@ -187,10 +187,13 @@ mod typed_no_geometry_types;
 mod unfilled_openings;
 #[path = "../value_sources_offsets.rs"]
 mod value_sources_offsets;
+#[path = "../views.rs"]
+mod views;
 #[path = "../walker_to_ifc_integration.rs"]
 mod walker_to_ifc_integration;
 #[path = "../wall_profile_openings.rs"]
 mod wall_profile_openings;
+
 #[path = "../witness_registry.rs"]
 mod witness_registry;
 #[path = "../witness_verdict.rs"]

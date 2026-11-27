@@ -438,6 +438,19 @@ pub(crate) struct Preamble {
     es_catalog:
         std::result::Result<(crate::native_extensible_storage::Catalog, serde_json::Value), String>,
 }
+/// Every class name the file's embedded schema declares, in the schema's
+/// own order. A reader that selects records by class name (the views reader
+/// takes every `DBView*`) asks the file rather than carrying a list that can
+/// fall behind a release.
+pub(crate) fn class_names(file: &mut RevitFile) -> Result<Vec<String>> {
+    let registry = schema_registry::parse(&read_single(file, "Formats/Latest")?)?;
+    Ok(registry
+        .classes
+        .iter()
+        .map(|class| class.name.clone())
+        .collect())
+}
+
 /// The preamble of `file` and the number of deferred history episode pointers
 /// it read. With `deferred` unset (every reader of the export path) a history
 /// that holds any fails the preamble, whatever the phase, parameter and

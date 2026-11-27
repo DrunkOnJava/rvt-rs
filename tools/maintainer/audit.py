@@ -25,10 +25,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_LIMIT_BYTES = 10 * 1024**3
-# A research or Measure branch with no pull request is kept while its issue is
-# open; one whose name carries no open issue's number and whose last commit is
-# older than this is stale (docs/maintaining.md).
-BRANCH_STALE_DAYS = 14
+# A research or Measure branch with no pull request is stale once its last commit
+# is older than this, unless a report names it or dispatches from it, or an open
+# issue, an open pull request or a discussion names it (docs/maintaining.md).
+BRANCH_STALE_DAYS = 7
 # Directories with a lockfile that Dependabot deliberately does not update, and why
 # (docs/maintaining.md says the same).
 # The 1.0 release decision; every open issue under the 1.0.0 milestone serves one of
@@ -127,26 +127,43 @@ def release_criteria(repo):
     return problems
 
 
-@check(f"no remote branch but main, open pull requests' heads, branches active in the last {BRANCH_STALE_DAYS} days, those of an open issue and those a report dispatches from")
+def open_thread_text(repo):
+    """The bodies and last 100 comments of open issues, open pull requests and every discussion: a branch named there
+    is one someone may have been pointed at, to run a probe or fetch a build. #1525 kept such branches by the issue
+    number in their name, which on 2026-11-27 also covered 13 branches no open thread named, 10 of them measure/*
+    scaffolds of runs already read."""
+    owner, name = repo.split("/")
+    texts = []
+    for field, states in (("issues", "states: OPEN, "), ("pullRequests", "states: OPEN, "), ("discussions", "")):
+        query = (
+            "query($o: String!, $n: String!, $endCursor: String) { repository(owner: $o, name: $n) { "
+            + field + "(" + states + "first: 50, after: $endCursor) { pageInfo { hasNextPage endCursor } "
+            + "nodes { body comments(last: 100) { nodes { body } } } } } }"
+        )
+        p = subprocess.run(
+            ["gh", "api", "graphql", "--paginate", "-f", f"query={query}", "-F", f"o={owner}", "-F", f"n={name}",
+             "--jq", f".data.repository.{field}.nodes[] | .body, .comments.nodes[].body"],
+            capture_output=True, text=True,
+        )
+        if p.returncode != 0:
+            raise RuntimeError(p.stderr.strip().splitlines()[0][:160] if p.stderr.strip() else "gh graphql failed")
+        texts.append(p.stdout)
+    return "\n".join(texts)
+
+
+@check(f"no remote branch but main, open pull requests' heads, branches active in the last {BRANCH_STALE_DAYS} days, those an open thread names and those a report names or dispatches from")
 def branches(repo):
     open_heads = {p["head"]["ref"] for p in pages(f"repos/{repo}/pulls?state=open&per_page=100")}
     # A workflow dispatch needs a branch or tag, so a report's reproduce command can need one.
     reports = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "reports").rglob("*.md"))
+    threads = open_thread_text(repo)
     problems = []
     for b in pages(f"repos/{repo}/branches?per_page=100"):
         if b["name"] == "main" or b["name"] in open_heads:
             continue
-        if f"--ref {b['name']} " in reports:
+        if f"--ref {b['name']} " in reports or f"`{b['name']}`" in reports:
             continue
-        number = re.search(r"(?:^|/)(\d{2,5})(?:-|$)", b["name"])
-        issue = None
-        if number:
-            try:
-                issue = gh(f"repos/{repo}/issues/{number[1]}")
-            except RuntimeError:  # a number with no issue behind it is an ordinary branch
-                issue = None
-        # The issues endpoint also answers for pull requests.
-        if issue and issue.get("state") == "open" and "pull_request" not in issue:
+        if b["name"] in threads:
             continue
         commit = gh(f"repos/{repo}/commits/{b['commit']['sha']}")
         stamp = commit["commit"]["committer"]["date"]
