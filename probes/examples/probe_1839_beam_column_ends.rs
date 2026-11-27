@@ -72,11 +72,21 @@
 //!       longer than the chord: the export draws a column as its record box, which on a turned
 //!       column is the axis-aligned box around it, and `endcol_*` cuts it along a plan axis at the
 //!       middle of the beam's own axis-aligned box.
+//!     - `mesh_low` and `mesh_high` (#1839, the S7 probe): where the beam's own saved mesh ends in
+//!       the same chord as `line_*`, as `t` on the same scale, or `-` where `line_*` is `-` or the
+//!       beam's saved mesh does not decode whole. The mesh's end is where the beam's middle line in
+//!       plan leaves the plan hull of the mesh's visible vertices: the line along the beam's line
+//!       through the middle of the mesh across it, as the scorer sets Revit's end on Revit's beam,
+//!       so a beam whose line is justified to one side, or an end cut obliquely, reads where Revit's
+//!       does. Revit saves the beam as it draws it, so where this
+//!       agrees with Revit's export the saved mesh says where Revit cut the end, on releases with no
+//!       export to read; the scorer measures both against the export in millimetres.
 //!   file ... columns_exported=<n> sections=<n> unread=<n> section_centre_offset=<median>/<largest>:
 //!   the `IfcColumn`s the export holds, those whose section is read, and those drawn another way
 //!   (a mapped or solid body, another profile) or not placed, which the probe leaves out; and how
 //!   far the centre of a read section lies from its record box's centre in plan, in feet.
 //!   outlines mesh=<n> section=<n> box=<n>: where each column's outline for `line_*` is from.
+//!   beammeshes whole=<n> beams=<n>: the beams whose saved mesh decodes whole, for `mesh_*` (S7).
 //!   turncheck ...: the probe's own check on a model it turns (#1839, S6). It turns the whole model
 //!   by 4 degrees about its origin (lines, mesh outlines and sections turn as they are; a record
 //!   box becomes the axis-aligned box of the turned one, as a file of a turned structure holds it)
@@ -525,16 +535,24 @@ fn hull(mut points: Vec<P2>) -> Vec<P2> {
     lower
 }
 
-/// The plan outline of each column whose saved mesh decodes whole: the hull of its vertices, in
-/// the document's frame. A column turned from the plan axes has its own outline here, where its
-/// record box is the axis-aligned box around it.
-fn mesh_outlines(rf: &mut RevitFile, columns: &Records) -> BTreeMap<u32, Vec<P2>> {
+/// The saved meshes that decode whole, in one pass over the file: the plan outline of each column,
+/// the hull of its vertices in the document's frame (a column turned from the plan axes has its
+/// own outline here, where its record box is the axis-aligned box around it), and the plan points
+/// of each beam's visible primitives (S7).
+type SavedMeshes = (BTreeMap<u32, Vec<P2>>, BTreeMap<u32, Vec<P2>>);
+
+fn saved_meshes(rf: &mut RevitFile, columns: &Records, beams: &Records) -> SavedMeshes {
     let mut out = BTreeMap::new();
+    let mut beam_points = BTreeMap::new();
     if columns.is_empty() {
-        return out;
+        return (out, beam_points);
     }
     let options = Options {
-        selected_ids: columns.keys().map(|id| u64::from(*id)).collect(),
+        selected_ids: columns
+            .keys()
+            .chain(beams.keys())
+            .map(|id| u64::from(*id))
+            .collect(),
         max_graph_values: 1_000_000,
         max_graph_objects: 1_000_000,
         ..Options::default()
@@ -543,7 +561,7 @@ fn mesh_outlines(rf: &mut RevitFile, columns: &Records) -> BTreeMap<u32, Vec<P2>
         Ok(scene) => scene,
         Err(error) => {
             println!("saved graphics: {error:#}");
-            return out;
+            return (out, beam_points);
         }
     };
     for element in &scene.elements {
@@ -557,12 +575,52 @@ fn mesh_outlines(rf: &mut RevitFile, columns: &Records) -> BTreeMap<u32, Vec<P2>
             .filter(|primitive| !primitive.hidden && !primitive.filtered)
             .flat_map(|primitive| primitive.vertices.iter().map(|v| [v[0], v[1]]))
             .collect();
+        let Ok(id) = u32::try_from(element.id) else {
+            continue;
+        };
+        if beams.contains_key(&id) {
+            if !points.is_empty() {
+                beam_points.insert(id, points);
+            }
+            continue;
+        }
         let outline = hull(points);
-        if let (Ok(id), true) = (u32::try_from(element.id), outline.len() >= 3) {
+        if outline.len() >= 3 {
             out.insert(id, outline);
         }
     }
-    out
+    (out, beam_points)
+}
+
+/// Where the beam's own saved mesh ends in the chord of `end` (S7): where its middle line in plan
+/// (along the line, through the middle of the mesh across it) leaves the plan hull of its visible
+/// points, at the first end for `at_start`, as `t` on the scale of [`LineEnd`].
+fn mesh_end(points: &[P2], line: &BoundedLine, end: LineEnd, at_start: bool) -> Option<f64> {
+    let (start, stop) = (line.start(), line.end());
+    let (dx, dy) = (stop[0] - start[0], stop[1] - start[1]);
+    let length = dx.hypot(dy);
+    if !length.is_finite() || length <= 1e-6 || end.far == end.near {
+        return None;
+    }
+    let direction = [dx / length, dy / length];
+    let across = [-direction[1], direction[0]];
+    let side = |p: &P2| (p[0] - start[0]) * across[0] + (p[1] - start[1]) * across[1];
+    let (low, high) = points
+        .iter()
+        .map(side)
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| {
+            (lo.min(v), hi.max(v))
+        });
+    if !(low.is_finite() && high.is_finite()) {
+        return None;
+    }
+    // Shifted across the line only, so a distance along it from here is one from the line's start.
+    let shift = (low + high) / 2.0;
+    let origin = [start[0] + shift * across[0], start[1] + shift * across[1]];
+    let outline = Footprint::Polygon(hull(points.to_vec()));
+    let [first, last] = chord(&outline, origin, direction)?;
+    let at = if at_start { first } else { last };
+    Some((at - end.near) / (end.far - end.near))
 }
 
 /// Whether a section's outline is the plan rectangle of the record box `c`, within a thousandth
@@ -646,6 +704,10 @@ struct LineEnd {
     t: f64,
     extent: f64,
     source: char,
+    /// The chord's face toward the beam's middle and the face away from it, as distances along
+    /// the line from its start: `t` is 0 at the first and 1 at the second.
+    near: f64,
+    far: f64,
 }
 
 /// The column `beam` names whose outline its own line crosses nearest its first (`at_start`) or
@@ -703,6 +765,8 @@ fn line_end(
         t: (at - near) / (far - near),
         extent,
         source,
+        near,
+        far,
     })
 }
 
@@ -887,7 +951,7 @@ fn main() -> anyhow::Result<()> {
     let trims = beam_column_trims(&beam_list, &column_list);
     let drawn = footprints(&mut rf)?;
     let sections = drawn.read;
-    let meshes = mesh_outlines(&mut rf, columns);
+    let (meshes, beam_meshes) = saved_meshes(&mut rf, columns, &beams);
     let mut sources: BTreeMap<char, usize> = BTreeMap::new();
     for column in columns.values() {
         *sources
@@ -914,6 +978,11 @@ fn main() -> anyhow::Result<()> {
         sources.get(&'m').copied().unwrap_or(0),
         sources.get(&'s').copied().unwrap_or(0),
         sources.get(&'b').copied().unwrap_or(0),
+    );
+    println!(
+        "beammeshes whole={} beams={}",
+        beam_meshes.len(),
+        beams.len()
     );
     for (id, beam) in &beams {
         let b = beam.bbox_feet;
@@ -992,22 +1061,35 @@ fn main() -> anyhow::Result<()> {
             nearest_column(beam, columns, &sections, axis, false),
         )?;
         // The same along the beam's own line, by the column's own outline (#1839, S6).
-        let (line_low, line_high) = match lines.get(id) {
+        let (line_low, line_high, mesh_low, mesh_high) = match lines.get(id) {
             Some(own) => {
                 let low_is_start = own.start()[axis] <= own.end()[axis];
                 let at = |at_start: bool| {
                     line_end(beam, own, columns, &meshes, &sections, at_start, NO_TURN)
                 };
+                // The beam's own saved mesh in the same chord (S7).
+                let mesh_at = |end: Option<LineEnd>, at_start: bool| {
+                    mesh_end(beam_meshes.get(id)?, own, end?, at_start)
+                };
                 check.read(beam, own, columns, &meshes, &sections, turn);
-                (at(low_is_start), at(!low_is_start))
+                let (low, high) = (at(low_is_start), at(!low_is_start));
+                (
+                    low,
+                    high,
+                    mesh_at(low, low_is_start),
+                    mesh_at(high, !low_is_start),
+                )
             }
-            None => (None, None),
+            None => (None, None, None, None),
         };
+        let t_field = |t: Option<f64>| t.map_or_else(|| "-".to_string(), |t| format!("{t:.4}"));
         write!(
             line,
-            " line_low={} line_high={}",
+            " line_low={} line_high={} mesh_low={} mesh_high={}",
             line_field(line_low),
-            line_field(line_high)
+            line_field(line_high),
+            t_field(mesh_low),
+            t_field(mesh_high)
         )?;
         println!("{line}");
     }

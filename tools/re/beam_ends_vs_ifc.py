@@ -111,6 +111,14 @@ end it does not cut, and says how many of Revit's ends lie at the column's near 
 and within 1 mm, and how far from it in millimetres, short of the face and inside the column apart (a fixed setback
 would gather in one bin); for the outlines from a column's saved mesh it splits them by how many of the beam's named columns
 hold the end (the probe's `held_*`, from their record boxes), which is what an exporter can test from the file.
+
+S7 (#1839) reads the probe's `mesh_low` and `mesh_high`, where the beam's own saved mesh ends in the same chord as
+`line_*`. For each end it places, it gives in millimetres Revit's end from rvt-rs's line end (within 1 mm, the end
+Revit leaves uncut), Revit's end from the saved mesh's end (within 1 mm on every end, the saved mesh says where Revit
+cuts, with no export to read) and the mesh's end from the line's end, each nearer the beam's middle or farther from
+it, by where the outline is from and where the line ends. Each is measured from the column's near face, the probe's
+on its chord and Revit's on the middle line, so only the ends whose two chords agree within 1 per cent are measured,
+and the others are counted.
 """
 
 import collections
@@ -713,6 +721,7 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
     joint = collections.defaultdict(collections.Counter)
     middle_ends = collections.defaultdict(collections.Counter)  # (stands, where[, width, turn]) -> (line, Revit)
     middle_rows = collections.defaultdict(collections.Counter)  # (where, line_at[, width, turn]) -> counts
+    mesh_rows = collections.defaultdict(collections.Counter)  # S7: (where, line_at) -> counts
     middle_seen = collections.Counter()
     outlines = {}
     seen = collections.Counter()
@@ -778,6 +787,25 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
                         middle_rows[key]["near face within 1 mm"] += abs(offset) * factor <= TOLERANCE_FEET
                         middle_rows[key]["Revit's end read in the middle line's vertical plane"] += by_plane
                         middle_rows[key][distance_bin(offset * factor)] += 1
+                    # S7 (#1839): Revit's end beside rvt-rs's line end and the beam's own saved mesh, each
+                    # from the column's near face in feet (the probe's on its chord, Revit's on its middle
+                    # line), on the ends whose two chords agree within 1 per cent, so the faces agree.
+                    mesh_t = fields.get(f"mesh_{end}", "-")
+                    for key in ((where, "all"), (where, line_at)):
+                        row = mesh_rows[key]
+                        row["ends"] += 1
+                        if middle_ratio != "within 1 per cent":
+                            row["chords differ"] += 1
+                            continue
+                        revit_from = offset * factor
+                        row["line " + side_bin(revit_from - t_line * extent)] += 1
+                        if mesh_t == "-":
+                            row["no whole beam mesh"] += 1
+                            continue
+                        row["mesh ends"] += 1
+                        mesh_from = float(mesh_t) * extent
+                        row["mesh " + side_bin(revit_from - mesh_from)] += 1
+                        row["mesh from line " + side_bin(mesh_from - t_line * extent)] += 1
             crossing = chord(meshes[column][2], caps[0], axis)
             if crossing is None:
                 seen["of those, ends whose line crosses no face of Revit's column"] += 1
@@ -853,6 +881,36 @@ def print_line_fractions(meshes, by_tag, beams, stands_by_tag, factor):
             )
     print_middle_ends(middle_ends, middle_seen, order)
     print_middle_rows(middle_rows)
+    print_mesh_rows(mesh_rows)
+
+
+def print_mesh_rows(mesh_rows):
+    """Print S7 (#1839): for each outline source and where rvt-rs's line ends, Revit's end from the line's
+    end, and on the ends whose beam saved mesh decodes whole, Revit's end from the mesh's end and the mesh's
+    end from the line's end, each in millimetres, nearer the beam's middle or farther from it. Ends whose
+    chord through the column differs between the probe and Revit's middle line by over 1 per cent are counted
+    apart, since their near faces may not agree. Nothing is printed for a probe output without `mesh_*`."""
+    if not mesh_rows:
+        return
+    for where in LINE_SOURCES.values():
+        for line_at in ("all", *LINE_GROUPS):
+            row = mesh_rows.get((where, line_at))
+            if not row:
+                continue
+            label = "every end" if line_at == "all" else f"the line ending {line_at}"
+            head = f"beam ends:   S7, outline from the {where}, {label}"
+            print(
+                f"{head}, {row['ends']} ends ({row['chords differ']} with the chords over 1 per cent apart, "
+                f"{row['no whole beam mesh']} more with no whole beam mesh, {row['mesh ends']} with one)"
+            )
+            for prefix, what in (
+                ("line ", "Revit's end from the line's end"),
+                ("mesh ", "Revit's end from the beam mesh's end"),
+                ("mesh from line ", "the beam mesh's end from the line's end"),
+            ):
+                cells = "; ".join(f"{name} {row[prefix + name]}" for name in SIDE_NAMES if row[prefix + name])
+                if cells:
+                    print(f"{head}, {what}: {cells}")
 
 
 MIDDLE_END_NONE = "ends whose middle line and its vertical plane cross no face of Revit's beam"
@@ -870,6 +928,21 @@ ROW_COUNTS = (
 # the face would gather in one bin, where the fraction bins move with the column's size.
 DISTANCE_BINS = ((1.0, "within 1 mm"), (5.0, "1 to 5 mm"), (15.0, "5 to 15 mm"), (50.0, "15 to 50 mm"), (math.inf, "over 50 mm"))
 DISTANCE_NAMES = ["within 1 mm"] + [f"{side} {name}" for side in ("short of the face", "inside the column") for _, name in DISTANCE_BINS[1:]]
+
+
+def side_bin(feet):
+    """The bin of a signed distance along the beam in feet: negative toward the beam's middle."""
+    mm = abs(feet) * 304.8
+    name = next(name for top, name in DISTANCE_BINS if mm <= top)
+    if name == "within 1 mm":
+        return name
+    return f"{'nearer the beam middle' if feet < 0 else 'farther from the middle'} {name}"
+
+
+SIDE_NAMES = ["within 1 mm"] + [
+    f"{side} {name}" for side in ("nearer the beam middle", "farther from the middle") for _, name in DISTANCE_BINS[1:]
+]
+
 
 
 def distance_bin(feet):
@@ -1095,7 +1168,7 @@ def main():
 
     # S6: the probe's own account of where the outlines are from, and its check on the model it turns.
     for line in open(args[0], encoding="utf-8", errors="replace"):
-        if line.startswith(("outlines ", "turncheck ")):
+        if line.startswith(("outlines ", "beammeshes ", "turncheck ")):
             print(f"beam ends: the probe's {line.rstrip()}")
 
     table = collections.Counter()
