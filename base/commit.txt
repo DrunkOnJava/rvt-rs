@@ -1,0 +1,1 @@
+f8612274dbc4528fcd3cbf40f1a4fecb55cc7acd fix(ifc): exports hold every EXPRESS rule: swept solids, USERDEFINED types, material associations (#1430) (#1432)

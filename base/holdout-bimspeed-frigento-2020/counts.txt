@@ -1,0 +1,178 @@
+psets: Revit values on objects rvt-rs writes: 993; equal: 497; different: 0; missing: 496; rvt-rs values Revit does not write: 18
+psets:   Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+psets:   Pset_BuildingCommon.NumberOfStoreys: 1, equal 1, different 0, missing 0
+psets:   Pset_BuildingCommon.Reference: 1, equal 0, different 0, missing 1
+psets:   Pset_BuildingStoreyCommon.AboveGround: 4, equal 4, different 0, missing 0
+psets:   Pset_BuildingStoreyCommon.Reference: 4, equal 0, different 0, missing 4
+psets:   Pset_DoorCommon.IsExternal: 29, equal 0, different 0, missing 29
+psets:   Pset_DoorCommon.Reference: 29, equal 18, different 0, missing 11
+psets:   Pset_DoorCommon.ThermalTransmittance: 23, equal 0, different 0, missing 23
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 177, equal 124, different 0, missing 53
+psets:   Pset_ManufacturerTypeInformation.Manufacturer: 25, equal 0, different 0, missing 25
+psets:   Pset_ReinforcementBarPitchOfSlab.Reference: 24, equal 15, different 0, missing 9
+psets:   Pset_ReinforcementBarPitchOfWall.Reference: 95, equal 64, different 0, missing 31
+psets:   Pset_RoofCommon.IsExternal: 2, equal 0, different 0, missing 2
+psets:   Pset_RoofCommon.Reference: 2, equal 2, different 0, missing 0
+psets:   Pset_RoofCommon.ThermalTransmittance: 2, equal 0, different 0, missing 2
+psets:   Pset_SlabCommon.IsExternal: 24, equal 0, different 0, missing 24
+psets:   Pset_SlabCommon.LoadBearing: 16, equal 0, different 0, missing 16
+psets:   Pset_SlabCommon.PitchAngle: 18, equal 10, different 0, missing 8
+psets:   Pset_SlabCommon.Reference: 24, equal 15, different 0, missing 9
+psets:   Pset_SlabCommon.ThermalTransmittance: 17, equal 0, different 0, missing 17
+psets:   Pset_WallCommon.ExtendToStructure: 77, equal 77, different 0, missing 0
+psets:   Pset_WallCommon.IsExternal: 95, equal 77, different 0, missing 18
+psets:   Pset_WallCommon.LoadBearing: 77, equal 0, different 0, missing 77
+psets:   Pset_WallCommon.Reference: 95, equal 64, different 0, missing 31
+psets:   Pset_WallCommon.ThermalTransmittance: 73, equal 0, different 0, missing 73
+psets:   Pset_WindowCommon.IsExternal: 29, equal 0, different 0, missing 29
+psets:   Pset_WindowCommon.Reference: 29, equal 25, different 0, missing 4
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 2
+psets:   Pset_OpeningElementCommon.Reference: 2
+psets: rvt-rs values Revit does not write, on objects Revit writes and on others:
+psets:   Pset_EnvironmentalImpactIndicators.Reference: 0, 6
+psets:   Pset_ReinforcementBarPitchOfWall.Reference: 0, 6
+psets:   Pset_WallCommon.Reference: 0, 6
+Revit quantities on objects rvt-rs writes: 0; equal: 0; different: 0; missing: 0; rvt-rs quantities Revit does not write: 0
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 0
+walls whose Length is rvt-rs's curve's: 0; Revit's Axis's: 0; neither: 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+exit 0
+names:      64  system family | IfcWall | Name equal | ObjectType equal
+names:      25  family instance | IfcWindow | Name equal | ObjectType equal
+names:      18  family instance | IfcDoor | Name equal | ObjectType equal
+names:      15  system family | IfcSlab | Name equal | ObjectType equal
+names:      13  system family | IfcWall | Name differs | ObjectType differs
+names:       9  family instance | IfcDoor | Name differs | ObjectType differs
+names:       4  family instance | IfcWindow | Name differs | ObjectType differs
+names:       2  system family | IfcRoof | Name equal | ObjectType equal
+names:       1  system family | IfcSlab | Name differs | ObjectType differs
+layer sets:      15  layer names: Revit's, in Revit's order
+layer sets:      10  layer sets written
+layer sets:      10  positions not comparable
+layer sets:      10  set name = Revit's Family:Type
+layer sets:   whole layer sets within 0.001 ft of Revit's: 10 of 10
+layer sets:   whole layer sets within 0.01 ft of Revit's: 10 of 10
+layer sets:   whole layer sets within 0.1 ft of Revit's: 10 of 10
+class sets: Revit's export: 151 paired elements and spaces, 0 untagged and 20 repeated Tags left out
+class sets: rvt-rs's export: 173 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class sets: IfcDoor                              27     27      0      0  
+class sets: IfcRoof                               2      2      0      0  
+class sets: IfcSlab                              16     16      0      0  
+class sets: IfcWall                              77     77      0      0  
+class sets: IfcWindow                            29     29      0      0  
+class sets extra: IfcColumn                             3
+class sets extra: IfcRailing                            7
+class sets extra: IfcStair                              3
+class sets extra: IfcStairFlight                        3
+class sets extra: IfcWall                               6
+global ids: elements: {"not in Revit's export": 22, "GlobalId = Revit's": 145, 'differs': 6}
+global ids: storeys: 0 of 4 equal Revit's
+global ids: storeys whose GlobalId is one of Revit's: 0 of 4
+global ids: IfcProject: 0 of 1 equal Revit's
+global ids: IfcSite: 0 of 1 equal Revit's
+global ids: IfcBuilding: 0 of 1 equal Revit's
+global ids: spaces: 0 of 0 equal one of Revit's
+space profiles: matched by centroid
+space profiles: IfcSpace in rvt-rs 0, in Revit 0, with a body 0 and 0
+space profiles: in both 0, only in rvt-rs 0, only in Revit 0
+space profiles: only in Revit and in rvt-rs without a body 0, paired where the Revit top surface has no area 0
+space profiles: area within 0.1% 0, within 1% 0, off 0
+space profiles: outline within 0.01 ft 0, off 0
+space profiles: vertices within 0.01 ft 0, off 0
+space profiles: boundary within 0.01 ft 0, off 0
+space profiles: area within 0.1% and outline within 0.01 ft 0
+space profiles: lowest and highest vertex within 0.01 ft 0, off 0
+mesh bodies: saved_graphics_mesh bodies scored: 0; in Revit's export 0
+box bodies: record-box bodies: 90; fill = Revit's body volume / its bounding box
+box bodies: IfcWindow                         29       0       0      17      12       0       0    0.512
+box bodies: IfcDoor                           27       1       0       0      26       0       0    0.101
+box bodies: IfcSlab                           16       0       0      11       5       0       0    0.571
+box bodies: IfcRailing                         7       0       0       0       0       0       7      nan
+box bodies: IfcColumn                          3       0       0       0       0       0       3      nan
+box bodies: IfcStair                           3       0       0       0       0       0       3      nan
+box bodies: IfcStairFlight                     3       0       0       0       0       0       3      nan
+box bodies: IfcRoof                            2       0       0       0       2       0       0    0.065
+box bodies: total                             90       1       0      28      45       0      16
+saved meshes: total                            0         0       0       0      0       0
+mcp answers: consistency basis: the export of this run
+mcp answers: consistency protocol: 5 compared, 0 differ
+mcp answers: consistency counts: 35 compared, 0 differ
+mcp answers: elements the export folds into the body of another element, not rows: 0
+mcp answers: rows that are opening elements, which the diagnostics do not count as building elements: 0
+mcp answers: IfcColumn: 3 rows
+mcp answers: IfcDoor: 27 rows
+mcp answers: IfcRailing: 7 rows
+mcp answers: IfcRoof: 2 rows
+mcp answers: IfcSlab: 16 rows
+mcp answers: IfcStair: 3 rows
+mcp answers: IfcStairFlight: 3 rows
+mcp answers: IfcWall: 83 rows
+mcp answers: IfcWindow: 29 rows
+mcp answers: rows listed: 173
+mcp answers: consistency parameter values: 1 compared, 0 differ
+mcp answers: consistency element membership: 173 compared, 0 differ
+mcp answers: consistency element entities: 173 compared, 0 differ
+mcp answers: consistency element names: 173 compared, 0 differ
+mcp answers: consistency element long names: 173 compared, 0 differ
+mcp answers: consistency element ids: 173 compared, 0 differ
+mcp answers: consistency element predefined types: 173 compared, 0 differ
+mcp answers: consistency element storeys: 173 compared, 0 differ
+mcp answers: IFC openings the writer cuts for doors and windows, in no row: 56
+mcp answers: IFC elements and spaces: 229
+mcp answers: consistency levels: 4 compared, 0 differ
+mcp answers: consistency rooms: 0 compared, 0 differ
+mcp answers: rooms: 0
+mcp answers: rooms with an area: 0
+mcp answers: rooms without an area: 0
+mcp answers: consistency details: 36 compared, 0 differ
+mcp answers: consistency type objects: 36 compared, 0 differ
+mcp answers: consistency type object sets: 36 compared, 0 differ
+mcp answers: get_element property and quantity sets compared: 172
+mcp answers: consistency diagnostics: 1 compared, 0 differ
+mcp answers: consistency export hash: 1 compared, 0 differ
+mcp answers: classes: Revit export, elements and spaces paired: 151
+mcp answers: classes: Revit export, elements left out for no Tag: 0
+mcp answers: classes: Revit export, elements left out for a repeated Tag: 20
+mcp answers: classes: the answers, elements and spaces paired: 173
+mcp answers: classes: the answers, rows left out for no Tag: 0
+mcp answers: classes: the answers, rows left out for a repeated Tag: 0
+mcp answers: class IfcDoor: revit 27, same 27, other 0, absent 0
+mcp answers: class IfcRoof: revit 2, same 2, other 0, absent 0
+mcp answers: class IfcSlab: revit 16, same 16, other 0, absent 0
+mcp answers: class IfcWall: revit 77, same 77, other 0, absent 0
+mcp answers: class IfcWindow: revit 29, same 29, other 0, absent 0
+mcp answers: class extra IfcColumn: 3
+mcp answers: class extra IfcRailing: 7
+mcp answers: class extra IfcStair: 3
+mcp answers: class extra IfcStairFlight: 3
+mcp answers: class extra IfcWall: 6
+mcp answers: consistency class sets: 173 compared, 0 differ
+mcp answers: storeys: rows the answers and Revit export share: 151
+mcp answers: storeys: rows on a different storey from Revit: 6
+mcp answers: storeys: rows on the same storey as in Revit: 145
+mcp answers: rooms: in the answers: 0
+mcp answers: rooms: Revit spaces with a body: 0
+mcp answers: rooms: paired by GlobalId: 0
+mcp answers: rooms: paired with an area in the answers: 0
+mcp answers: rooms: paired without an area in the answers: 0
+mcp answers: rooms: area within 0.1% of Revit: 0
+mcp answers: rooms: area within 1% of Revit: 0
+mcp answers: rooms: area more than 1% from Revit: 0
+mcp answers: values: sampled rows the answers and Revit export share: 22
+mcp answers: values: property values equal to Revit: 61
+mcp answers: values: property values in the answers: 61
+mcp answers: values: property or quantity values Revit writes that the answers lack: 57
+mcp answers: values: quantity values Revit export does not write: 10
+mcp answers: values: quantity values in the answers: 10
+mcp answers: consistency PASS: every check equal
+mcp answers: exit 0
+storeys: 173 elements, 4 not on a storey
+storeys:       3  IfcStairFlight
+storeys:       1  IfcRailing
+storeys: against Revit's export:
+storeys:     145  same storey as Revit's
+storeys:       6  a different storey from Revit's
+storeys:   different, by type: IfcWall 6
+schema validate: findings 0
+schema rules: findings 0
