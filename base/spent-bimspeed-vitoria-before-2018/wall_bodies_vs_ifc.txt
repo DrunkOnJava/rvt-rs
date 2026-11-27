@@ -1,0 +1,8 @@
+251 walls in the GLB
+     48  compared, angled
+    199  compared, axis-parallel
+faces (across), axis-parallel: 199 walls; within 0.001 ft: 199 0.01 ft: 199 0.1 ft: 199 1.0 ft: 199; max 0.000 ft
+faces (across), angled: 48 walls; within 0.001 ft: 1 0.01 ft: 1 0.1 ft: 10 1.0 ft: 13; max 9.666 ft
+ends (along), axis-parallel: 199 walls; within 0.001 ft: 160 0.01 ft: 160 0.1 ft: 172 1.0 ft: 199; max 0.952 ft
+ends (along), angled: 48 walls; within 0.001 ft: 4 0.01 ft: 6 0.1 ft: 8 1.0 ft: 48; max 0.893 ft
+exit 0

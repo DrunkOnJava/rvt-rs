@@ -1,0 +1,1 @@
+18d37a148473f7d897af0f53179e83624f5ca293 feat(saved-graphics): the join branch's strict trim path is main's again, so ends that meet in model coordinates but not in the parameters stay refused unless the coordinated join takes their gap (#2085)

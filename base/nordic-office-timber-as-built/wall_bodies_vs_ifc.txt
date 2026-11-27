@@ -1,0 +1,5 @@
+611 walls in the GLB
+    611  compared, axis-parallel
+faces (across), axis-parallel: 611 walls; within 0.001 ft: 611 0.01 ft: 611 0.1 ft: 611 1.0 ft: 611; max 0.000 ft
+ends (along), axis-parallel: 611 walls; within 0.001 ft: 400 0.01 ft: 400 0.1 ft: 408 1.0 ft: 565; max 5.955 ft
+exit 0

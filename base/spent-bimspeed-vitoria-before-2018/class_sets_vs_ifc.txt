@@ -1,0 +1,40 @@
+Revit's export: 1394 paired elements and spaces, 0 untagged and 6 repeated Tags left out
+rvt-rs's export: 1387 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcBeam                               1      1      0      0  
+IfcBuildingElementProxy              43     43      0      0  
+IfcColumn                           114    114      0      0  
+IfcCurtainWall                        9      5      4      0  IfcWall 4
+IfcDoor                              68     68      0      0  
+IfcElementAssembly                    3      0      0      3  
+IfcFlowFitting                      202      0    202      0  IfcCableCarrierFitting 74, IfcPipeFitting 128
+IfcFlowSegment                      244      2    242      0  IfcCableCarrierSegment 102, IfcPipeSegment 140
+IfcMember                           206    206      0      0  
+IfcPlate                             67     67      0      0  
+IfcRailing                           14     14      0      0  
+IfcRoof                               8      8      0      0  
+IfcSlab                               9      9      0      0  
+IfcSpace                             73     73      0      0  
+IfcStair                              6      6      0      0  
+IfcStairFlight                        6      6      0      0  
+IfcWall                              12     12      0      0  
+IfcWallStandardCase                 239      0    235      4  IfcWall 235
+IfcWindow                            70     70      0      0  
+written as another class, by Revit's category and export value, and rvt-rs's:
+       4  IfcCurtainWall -> IfcWall  Revit '-' '-' PredefinedType - type IfcCurtainWallType NOTDEFINED  rvt-rs 'Walls' '-'  e.g. 643672
+     128  IfcFlowFitting -> IfcPipeFitting  Revit '-' '-' PredefinedType - type IfcPipeFittingType NOTDEFINED  rvt-rs 'Pipe Fittings' '-'  e.g. 726078
+      74  IfcFlowFitting -> IfcCableCarrierFitting  Revit '-' '-' PredefinedType - type IfcCableCarrierFittingType NOTDEFINED  rvt-rs 'Conduit Fittings' '-'  e.g. 745566
+     140  IfcFlowSegment -> IfcPipeSegment  Revit '-' '-' PredefinedType - type IfcPipeSegmentType NOTDEFINED  rvt-rs 'Pipes' '-'  e.g. 725899
+     102  IfcFlowSegment -> IfcCableCarrierSegment  Revit '-' '-' PredefinedType - type IfcCableCarrierSegmentType NOTDEFINED  rvt-rs 'Conduits' '-'  e.g. 745533
+     235  IfcWallStandardCase -> IfcWall  Revit '-' '-' PredefinedType - type IfcWallType STANDARD  rvt-rs 'Walls' '-'  e.g. 529332
+extra in rvt-rs's export, by class:
+missing IfcElementAssembly (3):
+  737286  'Montaje Pilares estructurales:Pilares estructurales 001:737286'  'Montaje Pilares estructurales:Pilares estructurales 001'  storey 'P0'  category '-'  export as '-'
+  737381  'Montaje Pilares estructurales:Pilares estructurales 002:737381'  'Montaje Pilares estructurales:Pilares estructurales 002'  storey 'P0'  category '-'  export as '-'
+  770542  'Montaje Tuberías:Tuberías 001:770542'  'Montaje Tuberías:Tuberías 001'  storey 'P0'  category '-'  export as '-'
+missing IfcWallStandardCase (4):
+  643779  'Muro básico:LKS_T4B 15.8cm:643779'  'Muro básico:LKS_T4B 15.8cm'  storey 'P1'  category '-'  export as '-'
+  647385  'Muro básico:LKS_T4B 15.8cm:647385'  'Muro básico:LKS_T4B 15.8cm'  storey 'P2'  category '-'  export as '-'
+  647580  'Muro básico:LKS_T4B 15.8cm:647580'  'Muro básico:LKS_T4B 15.8cm'  storey 'P4'  category '-'  export as '-'
+  1823393  'Muro básico:LKS_T4B 15.8cm:1823393'  'Muro básico:LKS_T4B 15.8cm'  storey 'P1'  category '-'  export as '-'
+exit 0

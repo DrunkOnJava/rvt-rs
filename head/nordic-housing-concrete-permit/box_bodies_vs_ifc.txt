@@ -1,0 +1,24 @@
+record-box bodies: 54; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcSanitaryTerminal               40       0       0       0      29       0      11    0.136
+        11  Suihku 1:SU-1
+         7  Allas:PA-1
+         6  seinäwc-istuin:WC-2
+IfcDoor                            7       0       0       0       7       0       0    0.156
+         6  UO-5:UO-5.12x23v
+         1  UO-5:UO-5.12x21o
+IfcStair                           7       0       0       0       0       0       7      nan
+total                             54       0       0       0      36       0      18
+box bodies by class and reason (SavedMeshRefusal, #1645): 54 of 54 have one
+IfcSanitaryTerminal               40
+        11  no_saved_mesh
+        11  partial: scaled instance mode is not qualified
+         7  partial: unsupported surface HermiteSurf
+         6  partial: unsupported parametric profile curve GNurbSpline
+         5  partial: current symbol graphics ####### not decoded: graph HermiteSurf starts#######: HermiteSurf.m_NodeArray at #######: SplineSrfNode.m_iTangent at #######: native field value budget exceeded (#######)
+IfcDoor                            7
+         7  partial: current symbol graphics ####### not decoded: graph GLine starts#######: GLine.m_dirVec at #######: native field value budget exceeded (#######)
+IfcStair                           7
+         7  not_a_candidate: whole_drawn_by_its_parts
+fill ARK_NordicLCA_Housing_Concrete_BuildingPermit_Revit.ifc: IfcOpenShell cannot process 5 Body items of 5 parts, which their meshes leave out (#2133): IfcTriangulatedFaceSet: Failed to process shape 5
+exit 0

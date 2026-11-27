@@ -1,0 +1,45 @@
+| level | set | equal | other set | differ | not written | Revit's, not written by rvt-rs |
+|---|---|---:|---:|---:|---:|---:|
+| instance | Constraints | 0 | 0 | 0 | 0 | 108 |
+| instance | Construction | 7 | 0 | 0 | 0 | 4 |
+| instance | Cross-Section Definition | 0 | 0 | 0 | 0 | 5 |
+| instance | Dimensions | 6 | 0 | 18 | 0 | 47 |
+| instance | Graphics | 6 | 0 | 0 | 0 | 3 |
+| instance | Identity Data | 0 | 0 | 0 | 0 | 4 |
+| instance | Materials and Finishes | 12 | 0 | 0 | 0 | 0 |
+| instance | Other | 101 | 0 | 0 | 0 | 11 |
+| instance | Phasing | 0 | 0 | 0 | 0 | 19 |
+| instance | Structural | 0 | 0 | 0 | 0 | 10 |
+| type | Analytical Properties | 0 | 0 | 0 | 0 | 20 |
+| type | Constraints | 0 | 0 | 0 | 0 | 9 |
+| type | Construction | 21 | 0 | 0 | 0 | 26 |
+| type | Dimensions | 32 | 0 | 0 | 0 | 15 |
+| type | Graphics | 3 | 0 | 0 | 0 | 6 |
+| type | Identity Data | 22 | 0 | 0 | 0 | 16 |
+| type | Materials and Finishes | 20 | 0 | 0 | 0 | 0 |
+| type | Other | 38 | 0 | 3 | 0 | 0 |
+
+written by rvt-rs: 289; equal 268, other set 0, differ 21, not written by Revit 0; Revit's not written by rvt-rs: 303
+differ where Revit's value is rvt-rs's divided by 304.8 squared: 21
+row	12540	instance	Dimensions	Width	0.5334	5.741469816272966e-06
+row	12540	instance	Dimensions	Height	0.8382	9.022309711286088e-06
+row	12541	instance	Dimensions	Opening Height	0.9144	9.84251968503937e-06
+row	12541	instance	Dimensions	Opening Width	0.6096	6.561679790026247e-06
+row	12542	instance	Dimensions	Opening Height	0.9144	9.84251968503937e-06
+row	12542	instance	Dimensions	Opening Width	0.6096	6.561679790026247e-06
+row	12562	instance	Dimensions	Width	0.5334	5.741469816272966e-06
+row	12562	instance	Dimensions	Height	0.8382	9.022309711286088e-06
+row	12563	instance	Dimensions	Opening Height	0.9144	9.84251968503937e-06
+row	12563	instance	Dimensions	Opening Width	0.6096	6.561679790026247e-06
+row	12564	instance	Dimensions	Opening Height	0.9144	9.84251968503937e-06
+row	12564	instance	Dimensions	Opening Width	0.6096	6.561679790026247e-06
+row	12575	instance	Dimensions	Width	0.5334	5.741469816272966e-06
+row	12575	instance	Dimensions	Height	0.8382	9.022309711286088e-06
+row	12576	instance	Dimensions	Opening Height	0.9144	9.84251968503937e-06
+row	12576	instance	Dimensions	Opening Width	0.6096	6.561679790026247e-06
+row	12577	instance	Dimensions	Opening Height	0.9144	9.84251968503937e-06
+row	12577	instance	Dimensions	Opening Width	0.6096	6.561679790026247e-06
+row	12538	type	Other	Default Sill Height	0.9144	9.84251968503937e-06
+row	12560	type	Other	Default Sill Height	0.9144	9.84251968503937e-06
+row	12573	type	Other	Default Sill Height	0.9144	9.84251968503937e-06
+exit 0

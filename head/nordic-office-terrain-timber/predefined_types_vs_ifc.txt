@@ -1,0 +1,18 @@
+IfcBuildingElementProxyType PredefinedType: rvt-rs {'USERDEFINED': 1}, Revit {'USERDEFINED': 1}
+IfcGeographicElementType PredefinedType: rvt-rs {'USERDEFINED': 1}, Revit {'TERRAIN': 4, 'USERDEFINED': 5}
+IfcRailingType PredefinedType: rvt-rs {'GUARDRAIL': 1}, Revit {}
+IfcRampType PredefinedType: rvt-rs {'STRAIGHT_RUN_RAMP': 2}, Revit {'STRAIGHT_RUN_RAMP': 1}
+IfcWallType PredefinedType: rvt-rs {'SOLIDWALL': 2}, Revit {'SOLIDWALL': 2}
+IfcWasteTerminalType PredefinedType: rvt-rs {'GULLYSUMP': 1}, Revit {'GULLYSUMP': 1, 'WASTEDISPOSALUNIT': 1}
+IfcSpace PredefinedType, all: rvt-rs {'PARKING': 2, 'SPACE': 7}, Revit {'PARKING': 2, 'SPACE': 7}
+IfcSpace: 2 in both; same 2, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'PARKING': 2}
+other classes (every IfcElement class with a PredefinedType not read above):
+IfcBuildingElementProxy: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'USERDEFINED': 1}
+IfcGeographicElement: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'USERDEFINED': 1}
+IfcOpeningElement: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'OPENING': 1}
+IfcRailing: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'GUARDRAIL': 1}
+IfcRamp: 6 in both; same 6, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'STRAIGHT_RUN_RAMP': 6}
+IfcWall: 2 in both; same 2, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'SOLIDWALL': 2}
+IfcWasteTerminal: 11 in both; same 11, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'GULLYSUMP': 11}
+  not paired by Tag: in Revit's only {'IfcGeographicElement': 104, 'IfcRampFlight': 5, 'IfcWasteTerminal': 6}, in rvt-rs's only {}
+exit 0

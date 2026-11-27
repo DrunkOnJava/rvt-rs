@@ -1,0 +1,11 @@
+Revit's ports on pipes rvt-rs draws as a cylinder: 62 on 31 pipes
+  index 0: first end 31
+  index 1: second end 31
+  port Z axis against the pipe at that end: outward 35, inward 27
+  In/Out by index: 0 - 3, 0 In 18, 0 Out 10, 1 - 6, 1 In 9, 1 Out 16
+  Z axis by In/Out: - outward 9, In inward 27, Out outward 26
+rvt-rs's ports on those pipes: placed within 0.01 ft of Revit's 62, Z axis as Revit's (In) 27, Z axis as Revit's (Out) 26, Z axis as Revit's (-) 9
+Revit's ports joined to a segment's port: at the segment port, same axis 53, at the segment port, opposite axis 6
+rvt-rs's ports joined to a segment's port: placed within 0.01 ft of Revit's 59, Z axis as Revit's 59
+rvt-rs's ports no segment's port joins: placed within 0.01 ft of Revit's 29, Z axis as Revit's (In) 14, Z axis as Revit's (Out) 14, Z axis as Revit's (-) 1
+exit 0

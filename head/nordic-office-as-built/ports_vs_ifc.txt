@@ -1,0 +1,17 @@
+Revit's export: 67 ports, 0 port-to-port connections, 0 involving a duct or pipe
+rvt-rs: 67 ports, 0 port-to-port connections, 0 involving a duct or pipe
+0 of Revit's 0 connections involving a duct or pipe are written (0.0%), 0 are not
+0 of all 0 of Revit's connections are written (0.0%), 0 are not
+0 connections written are not in Revit's export
+0 of rvt-rs's 67 ports are not tied to the element their name gives
+schema validation of rvt-rs's file: 0 findings, 0 about the port entities
+ports in both exports: 67
+  FlowDirection: 67 equal of 67
+    Revit SOURCEANDSINK, rvt-rs SOURCEANDSINK: 67
+  PredefinedType: 67 equal of 67
+    Revit CABLE, rvt-rs CABLE: 43
+    Revit PIPE, rvt-rs PIPE: 24
+  SystemType: 24 equal of 67
+    Revit ELECTRICAL, rvt-rs None: 43
+    Revit HEATING, rvt-rs HEATING: 24
+exit 0

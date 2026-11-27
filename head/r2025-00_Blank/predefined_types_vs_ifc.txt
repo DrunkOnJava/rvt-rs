@@ -1,0 +1,3 @@
+other classes (every IfcElement class with a PredefinedType not read above):
+  not paired by Tag: in Revit's only {}, in rvt-rs's only {}
+exit 0

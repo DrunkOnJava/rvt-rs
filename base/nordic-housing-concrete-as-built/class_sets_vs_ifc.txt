@@ -1,0 +1,43 @@
+Revit's export: 1575 paired elements and spaces, 0 untagged and 3 repeated Tags left out
+rvt-rs's export: 1586 paired elements and spaces, 0 untagged and 3 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcBeam                              22     22      0      0  
+IfcBuildingElementProxy               3      3      0      0  
+IfcColumn                             7      7      0      0  
+IfcCovering                          88     88      0      0  
+IfcCurtainWall                       20     20      0      0  
+IfcDoor                              74     74      0      0  
+IfcElectricAppliance                 41     41      0      0  
+IfcFlowSegment                        3      3      0      0  
+IfcFurniture                        107    107      0      0  
+IfcMember                           356    356      0      0  
+IfcPlate                             78     78      0      0  
+IfcRailing                           43     43      0      0  
+IfcRamp                               1      1      0      0  
+IfcRoof                               4      4      0      0  
+IfcSanitaryTerminal                  43     43      0      0  
+IfcSlab                              42     42      0      0  
+IfcSolarDevice                        1      1      0      0  
+IfcSpace                            145    145      0      0  
+IfcStair                             38     38      0      0  
+IfcStairFlight                       11     11      0      0  
+IfcTransportElement                   1      1      0      0  
+IfcWall                             369    369      0      0  
+IfcWasteTerminal                     14     14      0      0  
+IfcWindow                            64     64      0      0  
+written as another class, by Revit's category and export value, and rvt-rs's:
+extra in rvt-rs's export, by class:
+IfcSanitaryTerminal                  11
+extra IfcSanitaryTerminal (11):
+  1533071  'Suihku 2:SU-2:1533071'  'Suihku 2:SU-2'  storey 'Level_02'  category 'Plumbing Fixtures'  export as '-'
+  1551323  'Suihku 2:SU-2:1551323'  'Suihku 2:SU-2'  storey 'Level_03'  category 'Plumbing Fixtures'  export as '-'
+  1551381  'Suihku 2:SU-2:1551381'  'Suihku 2:SU-2'  storey 'Level_03'  category 'Plumbing Fixtures'  export as '-'
+  1567050  'Suihku 2:SU-2:1567050'  'Suihku 2:SU-2'  storey 'Level_04'  category 'Plumbing Fixtures'  export as '-'
+  1567096  'Suihku 2:SU-2:1567096'  'Suihku 2:SU-2'  storey 'Level_04'  category 'Plumbing Fixtures'  export as '-'
+  1716675  'Suihku 2:SU-2:1716675'  'Suihku 2:SU-2'  storey 'Basement'  category 'Plumbing Fixtures'  export as '-'
+  1716829  'Suihku 2:SU-2:1716829'  'Suihku 2:SU-2'  storey 'Basement'  category 'Plumbing Fixtures'  export as '-'
+  1961432  'Suihku 2:SU-2:1961432'  'Suihku 2:SU-2'  storey 'Level_02'  category 'Plumbing Fixtures'  export as '-'
+  1969138  'Suihku 2:SU-2:1969138'  'Suihku 2:SU-2'  storey 'Level_02'  category 'Plumbing Fixtures'  export as '-'
+  1974895  'Suihku 2:SU-2:1974895'  'Suihku 2:SU-2'  storey 'Level_03'  category 'Plumbing Fixtures'  export as '-'
+  1975383  'Suihku 2:SU-2:1975383'  'Suihku 2:SU-2'  storey 'Level_04'  category 'Plumbing Fixtures'  export as '-'
+exit 0

@@ -1,0 +1,104 @@
+IfcMember: 414 bodies, 300 scored by the smallest CRC-32 of their Tag
+saved_graphics_mesh bodies scored: 356; in Revit's export 356
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcMember                       300     300      300      300      300         300  1.0000
+      288     288      288      288      288         288  Rectangular Mullion:Rima 22 x 50 mm
+       12      12       12       12       12          12  Rectangular Mullion:50 x 50 mm
+IfcWasteTerminal                 25      25        0       25        0          25  1.0016
+        1       1        0        1        0           1  RK6:RK-1
+        1       1        0        1        0           1  RK1:RK-1
+        1       1        0        1        0           1  RK2:RK-1
+        1       1        0        1        0           1  RK3:RK-1
+        1       1        0        1        0           1  RK4:RK-1
+        1       1        0        1        0           1  RK5:RK-1
+IfcGeographicElement             21      12        1       12        1           2  1.0053
+        7       7        0        7        0           0  T600129:T600129 Penkki
+        3       0        0        0        0           0  RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso
+        2       0        0        0        0           0  RPC Lehtipuu:PUU-3.Säilytettävä.verivaahtera.11m
+        2       0        0        0        0           0  RPC Lehtipuu:PUU-5.Uusi.lehtipuu.pieni
+        2       2        0        2        0           0  T600127:T600127 Kalusteryhmä
+        1       0        0        0        0           0  RPC Lehtipuu:PUU-2.Säilytettävä.vaahtera.6m
+IfcFlowTerminal                   3       3        0        3        0           3  1.0021
+        1       1        0        1        0           1  MLK:MLK-1
+        1       1        0        1        0           1  MLK1:MLK-1
+        1       1        0        1        0           1  MLK2:MLK
+IfcRailing                        2       0        0        2        0           0  1.0895
+        2       0        0        2        0           0  Railing:KD-1
+IfcSlab                           2       1        1        2        2           2  0.7500
+        1       1        1        1        1           1  Floor:AP-3.jätepiste
+        1       0        0        1        1           1  Basic Roof:VK-1.pelti
+IfcBuildingElementProxy           1       1        1        1        1           1  1.0000
+        1       1        1        1        1           1  Kohdistuskappale:3x2x1
+IfcRampFlight                     1       0        0        1        0           0  0.5020
+        1       0        0        1        0           0  Ramp:AP-2.ulkoluiska
+IfcColumn                         1       1        1        1        1           1  1.0000
+        1       1        1        1        1           1  Puupilari:PI-1.100x50
+  1393550 IfcGeographicElement 'RPC Lehtipuu:PUU-1.Säilytettävä.kuusi.15m': volume ratio 66.5643, Revit's vertices to rvt-rs's surface 49.54 ft, rvt-rs's to Revit's 0.02082 ft
+  1393298 IfcGeographicElement 'RPC Lehtipuu:PUU-3.Säilytettävä.verivaahtera.11m': volume ratio 1.6623, Revit's vertices to rvt-rs's surface 36.42 ft, rvt-rs's to Revit's 0.02082 ft
+  1393277 IfcGeographicElement 'RPC Lehtipuu:PUU-3.Säilytettävä.verivaahtera.11m': volume ratio 1.6623, Revit's vertices to rvt-rs's surface 36.42 ft, rvt-rs's to Revit's 0.02082 ft
+  1414315 IfcGeographicElement 'RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso': volume ratio 1.3229, Revit's vertices to rvt-rs's surface 24.93 ft, rvt-rs's to Revit's 0.005228 ft
+  1414169 IfcGeographicElement 'RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso': volume ratio 1.3229, Revit's vertices to rvt-rs's surface 24.93 ft, rvt-rs's to Revit's 0.005228 ft
+  1414066 IfcGeographicElement 'RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso': volume ratio 1.3229, Revit's vertices to rvt-rs's surface 24.93 ft, rvt-rs's to Revit's 0.005228 ft
+  1393347 IfcGeographicElement 'RPC Lehtipuu:PUU-2.Säilytettävä.vaahtera.6m': volume ratio 1.1142, Revit's vertices to rvt-rs's surface 23.29 ft, rvt-rs's to Revit's 0.02082 ft
+  1414298 IfcGeographicElement 'RPC Lehtipuu:PUU-5.Uusi.lehtipuu.pieni': volume ratio 1.1275, Revit's vertices to rvt-rs's surface 16.73 ft, rvt-rs's to Revit's 0.004999 ft
+  1414250 IfcGeographicElement 'RPC Lehtipuu:PUU-5.Uusi.lehtipuu.pieni': volume ratio 1.1275, Revit's vertices to rvt-rs's surface 16.73 ft, rvt-rs's to Revit's 0.004999 ft
+  1354471 IfcRailing 'Railing:KD-1': volume ratio 1.0895, Revit's vertices to rvt-rs's surface 0.006539 ft, rvt-rs's to Revit's 0.006601 ft
+  1354425 IfcRampFlight 'Ramp:AP-2.ulkoluiska': volume ratio 0.5020, Revit's vertices to rvt-rs's surface 0.006539 ft, rvt-rs's to Revit's 0.006601 ft
+  1388793 IfcRailing 'Railing:KD-1': volume ratio 1.0895, Revit's vertices to rvt-rs's surface 0.006539 ft, rvt-rs's to Revit's 0.006601 ft
+  1405092 IfcGeographicElement 'T210001:LE-1.keinu': volume ratio 1.0015, Revit's vertices to rvt-rs's surface 0.003517 ft, rvt-rs's to Revit's 0.006307 ft
+  1423780 IfcGeographicElement 'T600127:T600127 Kalusteryhmä': volume ratio 1.0051, Revit's vertices to rvt-rs's surface 0.001191 ft, rvt-rs's to Revit's 0.003358 ft
+  1435138 IfcGeographicElement 'T600127:T600127 Kalusteryhmä': volume ratio 1.0051, Revit's vertices to rvt-rs's surface 0.001191 ft, rvt-rs's to Revit's 0.003358 ft
+  volume 1388793 IfcRailing 'Railing:KD-1': volume ratio 1.0895, farthest vertex 0.006601 ft
+    rvt-rs shells 11, signed volumes (cubic ft): 0.1570 0.1570 0.1061 0.1061 0.0175 0.0175 0.0175 0.0175
+    Revit shells 11, signed volumes (cubic ft): 0.1303 0.1303 0.1061 0.1061 0.0175 0.0175 0.0175 0.0175
+  volume 1354471 IfcRailing 'Railing:KD-1': volume ratio 1.0895, farthest vertex 0.006601 ft
+    rvt-rs shells 11, signed volumes (cubic ft): 0.1570 0.1570 0.1061 0.1061 0.0175 0.0175 0.0175 0.0175
+    Revit shells 11, signed volumes (cubic ft): 0.1303 0.1303 0.1061 0.1061 0.0175 0.0175 0.0175 0.0175
+  volume 1393347 IfcGeographicElement 'RPC Lehtipuu:PUU-2.Säilytettävä.vaahtera.6m': volume ratio 1.1142, farthest vertex 23.29 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 2184.0330
+    Revit shells 4, signed volumes (cubic ft): 2179.2907 -195.1181 -24.1052 0.0723
+  volume 1414298 IfcGeographicElement 'RPC Lehtipuu:PUU-5.Uusi.lehtipuu.pieni': volume ratio 1.1275, farthest vertex 16.73 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 621.1882
+    Revit shells 4, signed volumes (cubic ft): 620.6495 -61.6041 -8.4141 0.3037
+  volume 1414250 IfcGeographicElement 'RPC Lehtipuu:PUU-5.Uusi.lehtipuu.pieni': volume ratio 1.1275, farthest vertex 16.73 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 621.1882
+    Revit shells 4, signed volumes (cubic ft): 620.6495 -61.6041 -8.4141 0.3037
+  volume 1414315 IfcGeographicElement 'RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso': volume ratio 1.3229, farthest vertex 24.93 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 970.6402
+    Revit shells 4, signed volumes (cubic ft): 969.9380 -209.5967 -28.3861 1.7627
+  volume 1414066 IfcGeographicElement 'RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso': volume ratio 1.3229, farthest vertex 24.93 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 970.6402
+    Revit shells 4, signed volumes (cubic ft): 969.9380 -209.5967 -28.3861 1.7627
+  volume 1414169 IfcGeographicElement 'RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso': volume ratio 1.3229, farthest vertex 24.93 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 970.6402
+    Revit shells 4, signed volumes (cubic ft): 969.9380 -209.5967 -28.3861 1.7627
+  volume 1354425 IfcRampFlight 'Ramp:AP-2.ulkoluiska': volume ratio 0.5020, farthest vertex 0.006601 ft
+    rvt-rs shells 23, signed volumes (cubic ft): 174.9354 0.1570 0.1570 0.1570 0.1570 0.1061 0.1061 0.1061
+    Revit shells 23, signed volumes (cubic ft): 349.8707 0.1303 0.1303 0.1303 0.1303 0.1061 0.1061 0.1061
+  volume 1473225 IfcSlab 'Basic Roof:VK-1.pelti': volume ratio 0.5000, farthest vertex 3.683e-06 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 2.6360
+    Revit shells 1, signed volumes (cubic ft): 5.2719
+  volume 1393298 IfcGeographicElement 'RPC Lehtipuu:PUU-3.Säilytettävä.verivaahtera.11m': volume ratio 1.6623, farthest vertex 36.42 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 2184.0330
+    Revit shells 4, signed volumes (cubic ft): 2179.2907 -772.2970 -93.8753 0.7784
+  volume 1393277 IfcGeographicElement 'RPC Lehtipuu:PUU-3.Säilytettävä.verivaahtera.11m': volume ratio 1.6623, farthest vertex 36.42 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 2184.0330
+    Revit shells 4, signed volumes (cubic ft): 2179.2907 -772.2970 -93.8753 0.7784
+  volume 1393550 IfcGeographicElement 'RPC Lehtipuu:PUU-1.Säilytettävä.kuusi.15m': volume ratio 66.5643, farthest vertex 49.54 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 2184.0330
+    Revit shells 4, signed volumes (cubic ft): 2179.2907 -1976.2281 -238.4360 2.5626
+shell readings: 13 volume outliers read shell by shell: 0 explained by inscribed end faces, 2 explained by faces Revit's export holds twice, 11 another reason, 0 unread
+  reading 1354425 IfcRampFlight 'Ramp:AP-2.ulkoluiska': volume ratio 0.5020, doubled: doubled 1 (volume ratio 1.0006..1.0006, 8 triangles of Revit's repeat another)
+  reading 1354471 IfcRailing 'Railing:KD-1': volume ratio 1.0895, other: equal 9, other 2 (volume ratio 1.2046..1.2046, end-face area ratio 1.2023..1.2023: the end faces' area ratios disagree)
+  reading 1388793 IfcRailing 'Railing:KD-1': volume ratio 1.0895, other: equal 9, other 2 (volume ratio 1.2046..1.2046, end-face area ratio 1.2023..1.2023: the end faces' area ratios disagree)
+  reading 1393277 IfcGeographicElement 'RPC Lehtipuu:PUU-3.Säilytettävä.verivaahtera.11m': volume ratio 1.6623, other: equal 1, no partner: rvt-rs 0, Revit 3
+  reading 1393298 IfcGeographicElement 'RPC Lehtipuu:PUU-3.Säilytettävä.verivaahtera.11m': volume ratio 1.6623, other: equal 1, no partner: rvt-rs 0, Revit 3
+  reading 1393347 IfcGeographicElement 'RPC Lehtipuu:PUU-2.Säilytettävä.vaahtera.6m': volume ratio 1.1142, other: equal 1, no partner: rvt-rs 0, Revit 3
+  reading 1393550 IfcGeographicElement 'RPC Lehtipuu:PUU-1.Säilytettävä.kuusi.15m': volume ratio 66.5643, other: equal 1, no partner: rvt-rs 0, Revit 3
+  reading 1414066 IfcGeographicElement 'RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso': volume ratio 1.3229, other: equal 1, no partner: rvt-rs 0, Revit 3
+  reading 1414169 IfcGeographicElement 'RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso': volume ratio 1.3229, other: equal 1, no partner: rvt-rs 0, Revit 3
+  reading 1414250 IfcGeographicElement 'RPC Lehtipuu:PUU-5.Uusi.lehtipuu.pieni': volume ratio 1.1275, other: equal 1, no partner: rvt-rs 0, Revit 3
+  reading 1414298 IfcGeographicElement 'RPC Lehtipuu:PUU-5.Uusi.lehtipuu.pieni': volume ratio 1.1275, other: equal 1, no partner: rvt-rs 0, Revit 3
+  reading 1414315 IfcGeographicElement 'RPC Lehtipuu:PUU-4.Uusi.lehtipuu.iso': volume ratio 1.3229, other: equal 1, no partner: rvt-rs 0, Revit 3
+  reading 1473225 IfcSlab 'Basic Roof:VK-1.pelti': volume ratio 0.5000, doubled: doubled 1 (volume ratio 1.0000..1.0000, 24 triangles of Revit's repeat another)
+exit 0

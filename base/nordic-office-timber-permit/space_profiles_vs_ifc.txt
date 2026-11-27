@@ -1,0 +1,46 @@
+space profiles: matched by globalid
+space profiles: IfcSpace in rvt-rs 305, in Revit 306, with a body 305 and 306
+space profiles: in both 305, only in rvt-rs 0, only in Revit 1
+space profiles: only in Revit and in rvt-rs without a body 0, paired where the Revit top surface has no area 0
+space profiles: area within 0.1% 305, within 1% 305, off 0
+space profiles: outline within 0.01 ft 284, off 21
+space profiles: vertices within 0.01 ft 122, off 183
+space profiles: boundary within 0.01 ft 305, off 0
+space profiles: area within 0.1% and outline within 0.01 ft 284
+space profiles: lowest and highest vertex within 0.01 ft 305, off 0
+space profiles: rvt-rs area area plan topology: 28, area within 0.1% 28, outline within 0.01 ft 28, both 28, boundary within 0.01 ft 28
+space profiles: rvt-rs area area plan topology unchecked: 2, area within 0.1% 2, outline within 0.01 ft 2, both 2, boundary within 0.01 ft 2
+space profiles: rvt-rs family instance saved mesh: 44, area within 0.1% 44, outline within 0.01 ft 43, both 43, boundary within 0.01 ft 44
+space profiles: rvt-rs room saved mesh: 1, area within 0.1% 1, outline within 0.01 ft 1, both 1, boundary within 0.01 ft 1
+space profiles: rvt-rs room stored solid: 228, area within 0.1% 228, outline within 0.01 ft 208, both 208, boundary within 0.01 ft 228
+space profiles: rvt-rs room stored solid edges: 1, area within 0.1% 1, outline within 0.01 ft 1, both 1, boundary within 0.01 ft 1
+space profiles: rvt-rs room stored solid faces: 1, area within 0.1% 1, outline within 0.01 ft 1, both 1, boundary within 0.01 ft 1
+space profiles: rvt-rs area area plan topology height: 28, lowest and highest vertex within 0.01 ft 28
+space profiles: rvt-rs area area plan topology unchecked height: 2, lowest and highest vertex within 0.01 ft 2
+space profiles: rvt-rs family instance saved mesh height: 44, lowest and highest vertex within 0.01 ft 44
+space profiles: rvt-rs room saved mesh height: 1, lowest and highest vertex within 0.01 ft 1
+space profiles: rvt-rs room stored solid height: 228, lowest and highest vertex within 0.01 ft 228
+space profiles: rvt-rs room stored solid edges height: 1, lowest and highest vertex within 0.01 ft 1
+space profiles: rvt-rs room stored solid faces height: 1, lowest and highest vertex within 0.01 ft 1
+  0x2YWQZaL7RuBo3f9SkzJQ: area 9.07 vs 9.07 ft2 (0.00%), vertices 0.418 ft, outline 0.085 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  2EmhthfYTF$hx0gAAa2KtI: area 1402.52 vs 1402.52 ft2 (0.00%), vertices 13.449 ft, outline 0.079 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  1BI3W4_qjCRul28Xx_mEDH: area 11.10 vs 11.10 ft2 (0.00%), vertices 0.748 ft, outline 0.399 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  1BI3W4_qjCRul28Xx_mFxY: area 10.86 vs 10.86 ft2 (0.00%), vertices 0.454 ft, outline 0.217 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  1d5Bmt5s12axuaGQA2o2sr: area 1862.50 vs 1862.50 ft2 (0.00%), vertices 10.715 ft, outline 1.312 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  1CEwDhGXz6rf1qZbuMomS3: area 286.22 vs 286.22 ft2 (0.00%), vertices 4.466 ft, outline 0.417 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 1 in rvt-rs, 1 and 1 in Revit, centroids 0.000 ft apart
+  3eHc4RiQ5C9u5ExHSqeXsn: area 286.48 vs 286.48 ft2 (0.00%), vertices 6.586 ft, outline 0.417 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 1 in rvt-rs, 1 and 1 in Revit, centroids 0.000 ft apart
+  3H2AkZFqzChQTN2UOTW$7V: area 346.73 vs 346.73 ft2 (0.00%), vertices 4.740 ft, outline 0.417 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 1 in rvt-rs, 1 and 1 in Revit, centroids 0.000 ft apart
+  1xBFBS5N18MfdblikYnUB3: area 346.73 vs 346.73 ft2 (0.00%), vertices 7.096 ft, outline 0.417 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 1 in rvt-rs, 1 and 1 in Revit, centroids 0.000 ft apart
+  3xtnrBUgHBCwRh$xfyB8zE: area 3141.89 vs 3141.89 ft2 (0.00%), vertices 23.463 ft, outline 0.075 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  3jzuKaCoj7duM8YUpx6IdZ: area 1028.03 vs 1028.03 ft2 (0.00%), vertices 9.478 ft, outline 0.423 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  36Blhdds16DOgkiAVsPwfN: area 351.78 vs 351.78 ft2 (0.00%), vertices 13.123 ft, outline 2.531 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  2Ab53HB9b2wfqHriZIzvtu: area 36.65 vs 36.65 ft2 (0.00%), vertices 0.906 ft, outline 0.633 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  0tWM7C8ybBZQ4c5DL1$lwj: area 3002.23 vs 3002.23 ft2 (0.00%), vertices 4.881 ft, outline 0.032 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  2T7gRjEFvBgRaNLZHAfEyu: area 777.32 vs 777.32 ft2 (0.00%), vertices 12.205 ft, outline 2.359 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 1 in rvt-rs, 1 and 1 in Revit, centroids 0.000 ft apart
+  2yC6uZ1Mj3WfWcT4GmORMG: area 13847.81 vs 13847.81 ft2 (0.00%), vertices 0.000 ft, outline 20.961 ft, boundary 0.000 ft, family instance, rvt-rs outline from saved_mesh, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  36Blhdds16DOgkiAVsPxcV: area 104.95 vs 104.95 ft2 (0.00%), vertices 4.578 ft, outline 2.841 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  2iOIITjL90wPZVGpFrW07z: area 104.95 vs 104.95 ft2 (0.00%), vertices 4.578 ft, outline 2.841 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  2gcNnmocjA5uvLJTxY_5Hg: area 15.50 vs 15.50 ft2 (0.00%), vertices 0.733 ft, outline 0.415 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  2gcNnmocjA5uvLJTxY_5Hp: area 15.50 vs 15.50 ft2 (0.00%), vertices 0.733 ft, outline 0.415 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+  3xtnrBUgHBCwRh$xfyB626: area 5154.05 vs 5154.05 ft2 (0.00%), vertices 10.762 ft, outline 0.131 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 12 in rvt-rs, 1 and 12 in Revit, centroids 0.000 ft apart
+exit 0

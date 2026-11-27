@@ -1,0 +1,5 @@
+345 walls in the GLB
+    345  compared, axis-parallel
+faces (across), axis-parallel: 345 walls; within 0.001 ft: 345 0.01 ft: 345 0.1 ft: 345 1.0 ft: 345; max 0.000 ft
+ends (along), axis-parallel: 345 walls; within 0.001 ft: 282 0.01 ft: 282 0.1 ft: 288 1.0 ft: 333; max 1.870 ft
+exit 0

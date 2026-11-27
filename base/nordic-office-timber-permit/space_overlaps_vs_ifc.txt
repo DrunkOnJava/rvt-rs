@@ -1,0 +1,23 @@
+space overlaps: stored solid: 228 rooms; walls: above 0.1% of the area on 57, above 1% on 38, above 5% on 13, largest 14.98%; other rooms: above 0.1% on 9, above 1% on 9, above 5% on 9, largest 99.54%
+space overlaps: stored solid faces: 1 rooms; walls: above 0.1% of the area on 0, above 1% on 0, above 5% on 0, largest 0.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
+space overlaps: stored solid edges: 1 rooms; walls: above 0.1% of the area on 0, above 1% on 0, above 5% on 0, largest 0.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
+space overlaps: upward faces, stored solid: 228 paired rooms, area within 0.1% of Revit's on 228
+space overlaps: upward faces, stored solid faces: 1 paired rooms, area within 0.1% of Revit's on 1
+space overlaps: upward faces, stored solid edges: 1 paired rooms, area within 0.1% of Revit's on 1
+space overlaps: downward faces, stored solid: 228 paired rooms, area within 0.1% of Revit's on 228
+space overlaps: downward faces, stored solid faces: 1 paired rooms, area within 0.1% of Revit's on 1
+space overlaps: downward faces, stored solid edges: 1 paired rooms, area within 0.1% of Revit's on 1
+space overlaps: every face, stored solid: 228 paired rooms, area within 0.1% of Revit's on 228
+space overlaps: every face, stored solid faces: 1 paired rooms, area within 0.1% of Revit's on 1
+space overlaps: every face, stored solid edges: 1 paired rooms, area within 0.1% of Revit's on 1
+  0Q4MSUQx531vKL_w06AgEp: stored_solid_edges, up 2055.37, floor 2055.37, every face 2055.37 ft2 (Revit up 2055.37, floor 2055.37, every face 2055.37 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  2T7gRjEFvBgRaNLZHAfEyt: stored_solid_faces, up 338.31, floor 338.31, every face 338.31 ft2 (Revit up 338.31, floor 338.31, every face 338.31 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  2HM8XWPUz6WgsmzelJ_fNE: stored_solid, up 56.18, floor 56.18, every face 56.18 ft2 (Revit up 56.18, floor 56.18, every face 56.18 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 55.92 ft2 (99.54%)
+  1CEwDhGXz6rf1qZbuMomxT: stored_solid, up 56.40, floor 56.40, every face 56.40 ft2 (Revit up 56.40, floor 56.40, every face 56.40 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 56.01 ft2 (99.31%)
+  3JI0SE8z59FBfLCYYLZpFk: stored_solid, up 349.29, floor 349.29, every face 349.29 ft2 (Revit up 349.29, floor 349.29, every face 349.29 ft2), inside walls 9.57 ft2 (2.74%), inside other rooms 55.79 ft2 (15.97%)
+  3H2AkZFqzChQTN2UOTW$62: stored_solid, up 346.73, floor 346.73, every face 346.73 ft2 (Revit up 346.73, floor 346.73, every face 346.73 ft2), inside walls 6.29 ft2 (1.81%), inside other rooms 55.79 ft2 (16.09%)
+  1xBFBS5N18MfdblikYnUB3: stored_solid, up 346.73, floor 346.73, every face 346.73 ft2 (Revit up 346.73, floor 346.73, every face 346.73 ft2), inside walls 6.32 ft2 (1.82%), inside other rooms 55.57 ft2 (16.03%)
+  3H2AkZFqzChQTN2UOTW$7V: stored_solid, up 346.73, floor 346.73, every face 346.73 ft2 (Revit up 346.73, floor 346.73, every face 346.73 ft2), inside walls 6.32 ft2 (1.82%), inside other rooms 55.57 ft2 (16.03%)
+  0Q4MSUQx531vKL_w06AgFJ: stored_solid, up 338.87, floor 338.87, every face 338.87 ft2 (Revit up 338.87, floor 338.87, every face 338.87 ft2), inside walls 4.49 ft2 (1.32%), inside other rooms 55.57 ft2 (16.40%)
+  0Q4MSUQx531vKL_w06AgFD: stored_solid, up 343.52, floor 343.52, every face 343.52 ft2 (Revit up 343.52, floor 343.52, every face 343.52 ft2), inside walls 4.98 ft2 (1.45%), inside other rooms 55.79 ft2 (16.24%)
+exit 0

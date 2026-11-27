@@ -1,0 +1,8 @@
+arity:
+  schema: IFC4
+  PredefinedType populated: none of the required types are present
+  placement composition: 3237 swept solid(s) carry a Position distinct from their product placement, 0 pinned probe(s) matched
+validate: skipped, over 120 MB
+property sets:
+sets 13587 on 6265 objects and types
+findings 0

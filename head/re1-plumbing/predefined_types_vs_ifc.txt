@@ -1,0 +1,2 @@
+Revit's export is IFC2X3, which has no PredefinedType on these classes: not scored
+exit 0

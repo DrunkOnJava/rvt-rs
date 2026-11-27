@@ -1,0 +1,5 @@
+16 walls in the GLB
+     16  compared, axis-parallel
+faces (across), axis-parallel: 16 walls; within 0.001 ft: 16 0.01 ft: 16 0.1 ft: 16 1.0 ft: 16; max 0.000 ft
+ends (along), axis-parallel: 16 walls; within 0.001 ft: 16 0.01 ft: 16 0.1 ft: 16 1.0 ft: 16; max 0.000 ft
+exit 0
