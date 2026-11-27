@@ -212,7 +212,7 @@ def triangles(text, path, fine=False):
 def score(ours, ref):
     """(volume ratio, Revit's vertices to rvt-rs's surface, rvt-rs's to Revit's), feet."""
     ratio = M.volume(ours) / M.volume(ref)
-    return ratio, M.surface_distance(M.sample(ref), ours), M.surface_distance(M.sample(ours), ref)
+    return ratio, M.surface_distance(M.vertices(ref), ours), M.surface_distance(M.vertices(ours), ref)
 
 
 def circle_body(radius, form, phase, pieces=2):

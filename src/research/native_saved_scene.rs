@@ -38,6 +38,8 @@ pub const SAVED_GRAPHICS_FIELDS: &[&str] = &[
     "m_Envelope",
     "m_GInfo",
     "m_GRepId",
+    "m_NodeArray",
+    "m_Periodic",
     "m_Point1",
     "m_Point2",
     "m_Trf",
@@ -58,6 +60,9 @@ pub const SAVED_GRAPHICS_FIELDS: &[&str] = &[
     "m_flags",
     "m_forbiddenTarget",
     "m_halfAngle",
+    "m_iParametr",
+    "m_iPoint",
+    "m_iTangent",
     "m_id",
     "m_instanceInfo",
     "m_interiorEdgePnts",
@@ -222,6 +227,29 @@ fn mesh_elements(
                     .clone()
                     .unwrap_or_else(|| "graphics graph unavailable".into()),
             )
+        }
+        // #2085: a symbol whose record was read but whose graph was refused (over
+        // the graph value budget, say) is not missing from the file; say why it
+        // is not there, so the two read apart.
+        const MISSING: &str = "missing current symbol graphics ";
+        for diagnostic in &mut meshes.diagnostics {
+            let Some(at) = diagnostic.find(MISSING) else {
+                continue;
+            };
+            let digits: String = diagnostic[at + MISSING.len()..]
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect();
+            let Ok(symbol) = digits.parse::<u64>() else {
+                continue;
+            };
+            if let Some(record) = records.get(symbol).filter(|record| record.graph.is_none()) {
+                *diagnostic = format!(
+                    "{}current symbol graphics {symbol} not decoded: {}",
+                    &diagnostic[..at],
+                    record.diagnostic.as_deref().unwrap_or("graph unavailable")
+                );
+            }
         }
         let refs: BTreeSet<_> = meshes
             .primitives

@@ -375,7 +375,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     # type, are dropped (RE-329).
     for f in "$dir"mesh_bodies_vs_ifc.txt; do
       [ -f "$f" ] || continue
-      grep -E "^(saved_graphics_mesh bodies scored: [0-9]+; in Revit's export [0-9]+|Ifc[A-Za-z0-9]+: [0-9]+ bodies, every [0-9]+th scored|Ifc[A-Za-z0-9]+ +[0-9]+( +[0-9]+){5} +([0-9]+\.[0-9]+|nan|-)( +[0-9]+)?|decided by the fine tessellation \(both files write true curves\): [0-9]+ of [0-9]+ bodies)$" "$f" | sed 's/^/mesh bodies: /' || true
+      grep -E "^(saved_graphics_mesh bodies scored: [0-9]+; in Revit's export [0-9]+|Ifc[A-Za-z0-9]+: [0-9]+ bodies, [0-9]+ scored by the smallest CRC-32 of their Tag|Ifc[A-Za-z0-9]+ +[0-9]+( +[0-9]+){5} +([0-9]+\.[0-9]+|nan|-)( +[0-9]+)?|decided by the fine tessellation \(both files write true curves\): [0-9]+ of [0-9]+ bodies)$" "$f" | sed 's/^/mesh bodies: /' || true
       grep -E "^(fine tessellation: IfcOpenShell mesher-linear-deflection [0-9.e-]+ m \(1e-5 ft\) and mesher-angular-deflection [0-9.]+ rad, both files; [0-9]+ of [0-9]+ bodies meshed in both, [0-9]+ of them meshed differently|fine (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){8}  ([0-9]+\.[0-9]+|nan|inf) [0-9]+\.[0-9]+|fine change (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){9}|fine bodies that miss 'ref on ours': [0-9]+)$" "$f" | sed 's/^/mesh bodies: /' || true
       grep -E "^shell readings: [0-9]+ volume outliers read shell by shell: [0-9]+ explained by inscribed end faces, [0-9]+ explained by faces Revit's export holds twice, [0-9]+ another reason, [0-9]+ unread$" "$f" | sed 's/^/mesh bodies: /' || true
     done

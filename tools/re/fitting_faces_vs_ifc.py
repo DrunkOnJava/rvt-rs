@@ -7,10 +7,13 @@ meshed in document feet as `tri <id> L<n> <oi>.<face>.<surface> x y z ...`.
 This reads those at detail level 3 and the body Revit's export writes for the
 same Tag, both in Revit's internal feet, and prints per element the volumes
 (about each body's own centre, because a mesh with cracks between faces has
-a volume that depends on where its origin is), then per face how far its
-vertices lie from Revit's surface and how many of its triangles are wound the
-way the nearest triangle of Revit's body is, and Revit's vertices that lie
-more than 0.002 ft from the mesh with the face nearest each.
+a volume that depends on where its origin is), then per face how far the
+farthest of its vertices lies from Revit's surface and how many of its
+triangles are wound the way the nearest triangle of Revit's body is, and
+Revit's vertices that lie more than 0.002 ft from the mesh with the face
+nearest each. Every vertex and every triangle of a face is tested (#2114): a
+stride let the farthest vertex go untested, and moved both columns when a face
+only gained triangles.
 
 Needs IfcOpenShell and numpy.
 
@@ -116,11 +119,9 @@ def main():
         for label, tris in sorted(faces.items(), key=lambda kv: kv[0]):
             centroids = tris.mean(axis=1)
             vertices = np.unique(tris.reshape(-1, 3), axis=0)
-            vertex_step = max(1, -(-len(vertices) // 600))
-            d_vertices, _ = nearest(vertices[::vertex_step], theirs)
-            d_centroids, which = nearest(centroids[:: max(1, -(-len(centroids) // 600))], theirs)
-            sample = tris[:: max(1, -(-len(tris) // 600))]
-            normals = np.cross(sample[:, 1] - sample[:, 0], sample[:, 2] - sample[:, 0])
+            d_vertices, _ = nearest(vertices, theirs)
+            d_centroids, which = nearest(centroids, theirs)
+            normals = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
             lengths = np.linalg.norm(normals, axis=1)
             keep = (lengths > 1e-12) & (d_centroids < 0.03)
             agree = (np.einsum("ij,ij->i", normals[keep] / lengths[keep][:, None], ref_normals[which[keep]]) > 0).sum()

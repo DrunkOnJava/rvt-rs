@@ -31,8 +31,9 @@ tessellation. When any element is so decided a line says how many and the
 table gains a last column, `fine`, how many of each class were; when none is,
 the output is what it was before #1365.
 
-With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) it then meshes an even stride of at
-most 300 of each class's paired elements again in both files at one equal, fine
+With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) it then meshes at most 300 of each
+class's paired elements, those whose Tag has the smallest CRC-32
+(`ifc_common.tag_sample`, #2114), again in both files at one equal, fine
 deflection (fine_mesh.py) and prints, after the table above, `fine` rows for
 them: the same buckets, with one for a box within 0.001 ft, beside the count
 within 0.001 ft in the default tessellation for the same elements, both with
@@ -63,7 +64,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fine_mesh  # noqa: E402
 import true_curves  # noqa: E402
-from ifc_common import mesh_parts, site_frame  # noqa: E402
+from ifc_common import mesh_parts, site_frame, tag_sample  # noqa: E402
 
 FT = 0.3048
 
@@ -141,7 +142,7 @@ def box_error(box, other, offset):
 
 
 def fine_table(args, wanted, frames, to_shared, ours, ref, offset):
-    """The `fine` rows (#1355): an even stride of at most FINE_CAP paired elements of each class,
+    """The `fine` rows (#1355): at most FINE_CAP paired elements of each class (`tag_sample`),
     meshed again in both files at the fine deflection."""
     paired = collections.defaultdict(list)
     for tag, (cls, _, _) in ours.items():
@@ -149,8 +150,7 @@ def fine_table(args, wanted, frames, to_shared, ours, ref, offset):
             paired[cls].append(tag)
     sample = set()
     for tags in paired.values():
-        tags = sorted(tags, key=lambda t: (len(t), t))
-        sample.update(tags[:: max(1, -(-len(tags) // FINE_CAP))])
+        sample.update(tag_sample(tags, FINE_CAP))
     settings = fine_mesh.settings()
     ours_fine = world_boxes(args.ours, tags=sample, transform=None if frames else to_shared, wanted=wanted, frame=frames, settings=settings)
     ref_fine = world_boxes(args.reference, tags=set(ours_fine), frame=frames, settings=settings)

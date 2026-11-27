@@ -2778,3 +2778,43 @@ The standard ArcWall pattern (RE-14.3, RE-15) matches 24 records in `Revit_IFC5_
 ## Addendum — RE-450 a Revit 2015 to 2023 door's or window's symbol saves its cut loop (2026-11-13)
 
 On Revit 2015 to 2023, as on 2024, a door's or window's `FamilyInstance` record holds an `InstanceInfo` whose `m_symbolId` names the symbol that draws it, saved as the 4-byte `{"m_id":{"m_id":n}}` (RE-280), and whose `m_Trf` is its transform (`m_3x3` applied to the symbol's coordinates, then `m_or`); the symbol's `FamilySymbol` record holds its cut loop in `m_pCutLoops` (RE-215). On Autodesk's `rac_advanced` and `rac_basic`, saved by 2015, 2023 and 2024, all 124 and 33 transforms are read and 107 and 23 loops, each loop the 2024 save's for the same ElementId; placed by the transform (#227), each opening is the 2024 save's, but for 24 `rac_advanced` windows whose 2015 transform lies 0.0075 m from the 2024 one. [RE-450](../reports/element-framing/RE-450-opening-cut-loop-pre2024.md); probe `probe_re450_door_cut_loops`.
+
+## Addendum — RE-492 a Hermite spline profile is read and drawn, and a plane meets such a ruled face along the edge's saved points (2026-11-19)
+
+A ruled surface or a surface of revolution whose profile is a `GHermiteSpline` (RE-311's layout) is evaluated and its grid cut to the profile's curvature, so a body refused for that curve alone is drawn from its saved graphics: 25 more bodies on 10 files. Of those Revit's export holds, the BIM4LCA timber office's two stair flights have every Revit vertex within 0.000109 ft of rvt-rs's surface and their volume within 0.0013 ft³ of Revit's, and the terrain files' ramp flight is within 0.00088 ft of Revit's body. Where a plane shares an edge with such a ruled face, and the edge crosses both of its parameters, both faces draw the edge straight between the points the file saves for it: the plane, drawn through the curve it cuts from the surface, left two of Revit's vertices a flight 0.00103 and 0.00125 ft off, on the straight line between two saved points, and the ruled face's side, straight in its own parameters, parted from the plane by up to 0.0027 ft. The rule is measured on one building. Report: `reports/element-framing/RE-492-hermite-spline-profiles-drawn.md`.
+
+## Addendum — RE-493 a surface of revolution or a cone meets a plane along the edge's saved points (2026-11-19)
+
+Where a plane shares an edge with a surface of revolution or a cone across both of the curved face's parameters, both faces now draw the edge straight between its saved points, as RE-492 did for ruled faces with a spline profile; a ruled face between plain curves is left as it was. Over the bodies the crack probe meshes on both sides (nordic, r2025, samples), boundary vertices more than 0.001 ft from every other face fall from 3,962 to 2,163, the largest from 0.006017 to 0.002354 ft, and none of those left lies at a plane. No count scored against Revit's exports moves and no held-out export changes; every body that moves and has a Revit export is one toilet family on the BIM4LCA office and housing, which moves by at most 0.00112 ft with its counts against Revit's surface unchanged. See [RE-493](../reports/element-framing/RE-493-saved-points-revolution.md).
+
+## Addendum — RE-494 a cylinder face bounded by two trim loops on part of a turn (2026-11-20)
+
+A cylinder face whose trim is two loops on part of a turn, a hole inside the other loop or two separate regions, is meshed strip by strip between the rings' crossings taken in pairs by height, which does not read the rings' winding. On the office's and the housing's two-loop faces the probe reads a ring whose signed area has the sign of the face's orientation (`m_orientFlag`, flipped by bit 2 of the face's `m_faceFlags_v9`) as an outer boundary, with one face the exception. Two loops making a full turn, and three or more, are still refused. On the open models 1,289 bodies that were record boxes are drawn from their saved meshes, 1,153 of them on Autodesk's samples, which have no Revit export in Measure. The BIM4LCA housing's sauna doors and the held-out house's doors are within 0.01 ft of Revit's export and within 1 per cent of its volume. The BIM4LCA office's grab bars are drawn round, as the file saves them, while Revit's export draws their legs as a square whose corners lie on that round, so their volume is 1.11 of Revit's. See [RE-494](../reports/element-framing/RE-494-cylinder-two-trim-loops.md).
+
+## Addendum — RE-495 two cylinder faces take the points where the two cylinders meet (2026-11-20)
+
+Where two cylinder faces share an edge whose saved samples run across both their parameters, each put its own steps between the saved points on its own surface, and their boundaries parted: 3,170 boundary vertices over 0.001 ft on the open models, up to 0.00158 ft on Snowdon Towers HVAC's tees. The edge's saved points lie on both cylinders within 0.000001 ft on the 2024 samples. The edge now takes the points where the two cylinders meet, bisected between its saved samples onto the other cylinder until each chord is within 0.00025 ft of the edge, and held by both faces' rings. On the 77 files the crack probe reads, none is left over 0.001 ft and no other pair of surfaces parts. Against Revit's exports, more of Revit's vertices lie beyond 0.001 ft of rvt-rs's surface on the Snowdon Towers Architectural bodies that move (23,243 to 23,511); on the bodies read since, that count moved with the triangulation, at a threshold equal to the 0.001 ft chord bound, and one RE1 toilet's move out of the 0.01 ft band was the scorer's vertex sample (#2111). The bodies the probe reads hold up to 1.35 times the triangles on the plumbing and HVAC samples. See [RE-495](../reports/element-framing/RE-495-cylinder-pair-edges.md).
+
+## Addendum — RE-496 the edge two cylinder faces share is refined to half the faces' chord (2026-11-20)
+
+RE-495's shared points between two cylinder faces were refined to 0.00025 ft, a quarter of the 0.001 ft chord the faces are meshed to; on the Snowdon Towers toilet and sink they draw triangles 0.000080 to 0.000098 ft off the cylinder where the coarser mesh before stood 0.000714 to 0.000950 ft off. At the faces' whole chord two downpipes on each BIM4LCA housing file reopen past 0.001 ft; at half the chord every crack stays closed on the 77 files the crack probe reads, and 61 per cent of the cylinder triangles RE-495 added go, each graph counted once (48 to 100 per cent on the 13 files whose totals it raised by more than 10 per cent), while the farthest cylinder standoff rises on 147 graphs by at most 0.000318 ft. See [RE-496](../reports/element-framing/RE-496-pair-edge-half-chord.md).
+
+## Addendum — RE-497 a ring's stored edge ends within 0.00001 ft along the surface are one point (2026-11-21)
+
+Plane and cylinder faces refused as `disconnected UV boundary` have rings already open in the edge points the file stores: on the BIM4LCA housing and office the largest gap is under 0.00001 ft on 134 of 302 and 80 of 123 plane rings and on 39 of 65 and 4 of 12 cylinder rings, many cylinder rings parting only in their angle; those from 0.00001 to 0.0001 ft are not read, and from 0.0001 ft up to 0.0015 ft a piece of edge looks missing. Ends closer than 0.00001 ft along the surface (a chord on a plane, a helix on a cylinder) are now one point; wider gaps stay refused (Griffin, 2026-11-21). On `main` that draws two office curtain mullions within 0.000003 ft of Revit's bodies and gives four walls base quantities equal to Revit's, with nothing newly refused. See [RE-497](../reports/element-framing/RE-497-touching-ring-ends.md).
+
+### Emitted plane/cylinder boundaries (2026-11-26)
+
+`probe_plane_cylinder_shared_boundary` constructs a plane and unit
+cylinder with agreeing stored edge samples. It compares the sorted
+ordered chains extracted from the final triangles. The level cut has
+14 segments on each face. On the oblique cut, both sides have 32
+segments before cylinder strip clipping. The final plane has 32 and
+the cylinder has 44. The result holds after reversing the stored
+samples or swapping the face slots. The disagreement and off-plane
+controls retain their existing refusals.
+
+Run `cargo run --profile ci -p rvt-probes --example probe_plane_cylinder_shared_boundary`
+to print the generated cases. Add `-- --check` to require matching
+emitted chains and check that their vertices lie on the plane. The
+oblique cases currently fail that assertion.

@@ -47,6 +47,7 @@ fn range_steps(curve: &Curve) -> f64 {
         Curve::Ellipse { x_len, y_len, .. } => {
             ((r[1] - r[0]).abs() / angular(x_len.max(*y_len))).ceil()
         }
+        Curve::Hermite { .. } => curve.spline_steps(r[0], r[1], CHORD) as f64,
     }
 }
 
@@ -67,6 +68,11 @@ fn kind(curve: &Curve) -> String {
             ..
         } => format!(
             "ellipse {x_len:.2} by {y_len:.2} over {:.3} rad",
+            (range[1] - range[0]).abs()
+        ),
+        Curve::Hermite { nodes, range } => format!(
+            "hermite spline of {} nodes over {:.3}",
+            nodes.len(),
             (range[1] - range[0]).abs()
         ),
     }

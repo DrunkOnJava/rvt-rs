@@ -87,7 +87,9 @@ einhovenTest(
         const body = note.locator('#scaffold-note-body');
         await expect(body).toContainText(/Revit_IFC5_Einhoven\.rvt \(\d+(\.\d)? KiB\)/);
         await expect(body).toContainText('would not give this tab more than');
-        await expect(body).toContainText(/, while (reading partition streams|building the model),/);
+        await expect(body).toContainText(
+          /, while (reading partition streams|reading element records|building the model),/,
+        );
         await expect(body).toContainText('needs more');
         await expect(body).toContainText('16 MiB');
         // What reads a larger file, as the code takes it: --large-model on the
@@ -195,27 +197,26 @@ function sameReport(a: Report, b: Report): boolean {
   );
 }
 
-// The stretch after the last partition stream is inflated: the decoder reports
-// nothing until it has built the model, and the card names it "Building the
-// model" (load-progress.spec.ts). A stop there must say so. Where in the open
-// the memory grows is the allocator's, and it has moved between stretches
-// without the peak changing (#1374: on Core Interior the wasm memory is 275.4
-// MiB at the last stream, 309.1 MiB at the end of the walk and 325.4 MiB at
-// the end of the open. Before #1370 the last 16.3 MiB were taken before the
-// saved graphics were reported; after it they are taken inside the saved
-// meshes, and a cap tuned to the old profile, 310 MiB, then stopped in the
-// meshes: the viewer measurement of Deploy viewer runs 41870855196 at
-// f1f80d9e and 41885589164 at 0ca59127). So the cap is not tuned: the test
-// opens the model once at the real ceiling to measure its profile, and puts
-// the cap between the memory at the first report that leaves the card on
-// "Building the model" and the memory at the first report after those. The
-// allocation that crosses the cap is then in the stretch, whatever the
-// profile, and the capped open must have stopped there: its reports are the
-// measured ones up to the last, which still reads "Building the model". The
-// profile, the cap and the capped open's reports are written to
-// memory-ceiling-cap-core-interior.json in the measurement artifact.
+// Late in the open, after the last partition stream is inflated, the decoder
+// counts the recovery over the element records ("Reading element records",
+// #1195) and then reports nothing until the saved graphics, while the card
+// names the stretch "Building the model". A stop in either must say where it
+// stopped. Where in the open the memory grows is the allocator's, and it has
+// moved between stretches without the peak changing (#1374: a cap tuned to one
+// profile, 310 MiB on Core Interior, then stopped in the saved meshes instead,
+// Deploy viewer runs 41870855196 at f1f80d9e and 41885589164 at 0ca59127; and
+// with the recovery counted, the stretch after it no longer grows the memory at
+// all). So the cap is not tuned: the test opens the model once at the real
+// ceiling to measure its profile, takes the two consecutive reports between the
+// first one of the recovery and the first of the saved graphics with the
+// largest growth between them, and puts the cap halfway. The allocation that
+// crosses the cap is then between those two reports, whatever the profile, and
+// the capped open must have stopped there: its reports are the measured ones up
+// to the first of the two, and the note names that report's step. The profile,
+// the cap, the growth of the uncounted stretch and the capped open's reports are
+// written to memory-ceiling-cap-core-interior.json in the measurement artifact.
 coreInteriorTest(
-  'a stop in the stretch the decoder reports nothing in says it was building the model',
+  'a stop late in the open says which step it was in',
   async ({ baseURL }) => {
     test.setTimeout(600_000);
     const wasmPages = 65_536;
@@ -230,18 +231,33 @@ coreInteriorTest(
       profile = await decoderReports(page);
       record({ profile });
     });
-    const start = profile.findIndex((report) => report.card.step === BUILDING);
-    expect(start, `a report left the card on "${BUILDING}"`).toBeGreaterThanOrEqual(0);
-    const end = profile.findIndex((report, i) => i > start && report.card.step !== BUILDING);
-    expect(end, `a report follows the ones on "${BUILDING}"`).toBeGreaterThan(start);
+    const first = profile.findIndex((report) => report.stage === 'partition-recovery');
+    expect(first, 'the recovery over the element records is reported').toBeGreaterThanOrEqual(0);
+    let last = profile.findIndex((report) => report.stage === 'saved-graphics');
+    if (last < 0) last = profile.length - 1;
+    expect(last, 'a report follows the recovery').toBeGreaterThan(first);
+    let start = first;
+    for (let i = first; i < last; i++) {
+      const grows = profile[i + 1].memoryBytes - profile[i].memoryBytes;
+      if (grows > profile[start + 1].memoryBytes - profile[start].memoryBytes) start = i;
+    }
+    const end = start + 1;
     const before = profile[start];
     const after = profile[end];
     const grown = after.memoryBytes - before.memoryBytes;
+    // What the stretch the decoder reports nothing in still grows: kept, not judged.
+    const building = profile.findIndex((report) => report.card.step === BUILDING);
+    const afterBuilding = profile.findIndex((report, i) => i > building && report.card.step !== BUILDING);
+    const uncountedGrowth =
+      building >= 0 && afterBuilding > building
+        ? profile[afterBuilding].memoryBytes - profile[building].memoryBytes
+        : null;
+    record({ profile, before, after, uncountedGrowth });
     expect(
       grown,
       `the open grows the wasm memory between its report of ${before.stage} ${before.done}/${before.total} ` +
         `(${(before.memoryBytes / MIB).toFixed(1)} MiB) and its report of ${after.stage} ` +
-        `${after.done}/${after.total} (${(after.memoryBytes / MIB).toFixed(1)} MiB), the stretch it reports nothing in; ` +
+        `${after.done}/${after.total} (${(after.memoryBytes / MIB).toFixed(1)} MiB), the largest step late in the open; ` +
         'with no growth there is nothing for a cap to stop in',
     ).toBeGreaterThanOrEqual(MIB);
     const capPages = Math.floor((before.memoryBytes + grown / 2) / PAGE_BYTES);
@@ -256,18 +272,17 @@ coreInteriorTest(
       // The open followed its measured profile up to the stop, and the last
       // thing the decoder reported was in the stretch.
       const stopped = await decoderReports(page);
-      record({ before, after, capBytes, profile, stopped });
+      record({ before, after, capBytes, profile, stopped, uncountedGrowth });
       expect(stopped.length, 'reports before the stop').toBeGreaterThan(start);
       expect(stopped.length, 'reports before the stop').toBeLessThanOrEqual(end);
       stopped.forEach((report, i) => {
         expect(sameReport(report, profile[i]), `report ${i}: ${JSON.stringify(report)}`).toBe(true);
         expect(report.memoryBytes).toBeLessThanOrEqual(capBytes);
       });
-      const last = stopped[stopped.length - 1];
-      expect(last.card.step).toBe(BUILDING);
+      const reached = stopped[stopped.length - 1];
+      expect(sameReport(reached, before), 'the stop came after the first of the two reports').toBe(true);
       const body = page.locator('#scaffold-note-body');
-      await expect(body).toContainText(', while building the model,');
-      await expect(body).toContainText(`, while ${last.card.step.toLowerCase()},`);
+      await expect(body).toContainText(`, while ${reached.card.step.toLowerCase()},`);
       await expect(body).not.toContainText('saved meshes');
       await expect.poll(() => page.workers().length, 'the worker is ended').toBe(0);
     });

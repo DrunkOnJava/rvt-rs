@@ -409,8 +409,8 @@ where CI and Measure run, only when it is ready to release.
    v0.15.0 or older has no preflight (and the old publish workflow, without
    its re-run and concurrency fixes) unless the branch carries `publish.yml`,
    `release-binaries.yml`, the local actions they use
-   (`.github/actions/wait-for-check`, `setup-rust`, `fetch-corpus` and
-   `wasm-tools` today) and `tools/ci/release_preflight.py` from `main`; copy
+   (`.github/actions/wait-for-check`, `setup-rust`, `fetch-corpus`,
+   `fetch-re1` and `wasm-tools` today) and `tools/ci/release_preflight.py` from `main`; copy
    them in the step 3 commit. Then close the review-only pull request unmerged and delete
    `review/vX.Y.Z-base`.
 7. **Bring `main` up to it** through a pull request, as merging the
