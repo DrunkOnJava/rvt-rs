@@ -10,9 +10,9 @@ diff leaves out `ifc.sha256` and `diagnostics.json`. This prints, above that lis
   `areas_across_saves*.txt`), with the first lines that do;
 - with a probe, the most common lines the probe printed across the models, and
   the models whose probe did not exit 0;
-- the exports whose IfcOpenShell validation and EXPRESS rules were skipped for
-  their size, on each side, which the run otherwise says only in each model's
-  `schema.txt` (#2103).
+- on each side, how many exports IfcOpenShell's validation and the EXPRESS rules
+  read, which they skipped for size (named; the run otherwise says so only in
+  each model's `schema.txt`) and how many they did not read at all (#2103).
 
 It judges nothing against a pull request's registered rows; those stay the
 reader's. A directory or file that is missing is said to be missing.
@@ -127,33 +127,46 @@ def scorer_residue(path):
     print("```")
 
 
-def skipped_validation(root):
-    """(model, the limit in MB it was over) of each export whose validation was skipped for its size."""
-    out = []
-    for model in models(root) or []:
-        for name in ("schema.txt", "counts.txt"):
-            text = read(os.path.join(root, model, name))
-            match = SKIPPED.search((text or b"").decode(errors="replace"))
-            if match:
-                out.append((model, int(match.group(1))))
-                break
-    return out
+VALIDATED = re.compile(r"^validate:\nfindings \d+$|^schema validate: findings \d+$", re.M)
+
+
+def validation_state(root, model):
+    """`validated`, `skipped` (with the limit in MB it was over) or `not validated`: a run with
+    `scorers=none`, a check that did not run, or a model with no export writes no line."""
+    for name in ("schema.txt", "counts.txt"):
+        text = (read(os.path.join(root, model, name)) or b"").decode(errors="replace")
+        match = SKIPPED.search(text)
+        if match:
+            return "skipped", int(match.group(1))
+        if VALIDATED.search(text):
+            return "validated", None
+    return "not validated", None
 
 
 def validation(head, base):
-    """Say which exports were not validated: a model a check never reads must not read as
-    one it passed (#2103)."""
+    """Say which exports were validated, which were skipped for size and which were not
+    validated at all, on each side: a model a check never read must not read as one it
+    passed (#2103)."""
     for side, root in (("head", head), ("base", base)):
-        if models(root) is None:
+        names = models(root)
+        if names is None:
             continue
-        skipped = skipped_validation(root)
+        validated, skipped, missing = 0, [], []
+        for model in names:
+            state, limit = validation_state(root, model)
+            if state == "validated":
+                validated += 1
+            elif state == "skipped":
+                skipped.append((model, limit))
+            else:
+                missing.append(model)
+        line = f"- Validation (IfcOpenShell and the EXPRESS rules) at {side}: {validated} of {len(names)} exports validated"
         if skipped:
-            limits = sorted({mb for _, mb in skipped})
-            over = " or ".join(f"{mb} MB" for mb in limits)
-            print(f"- Validation (IfcOpenShell and the EXPRESS rules): **skipped on {len(skipped)} export{'' if len(skipped) == 1 else 's'} over {over}** "
-                  f"at {side}: {named([m for m, _ in skipped])}")
-        else:
-            print(f"- Validation (IfcOpenShell and the EXPRESS rules): no export skipped for size at {side}")
+            over = " or ".join(f"{mb} MB" for mb in sorted({mb for _, mb in skipped}))
+            line += f"; **{len(skipped)} skipped for size (over {over})**: {named([m for m, _ in skipped])}"
+        if missing:
+            line += f"; {len(missing)} not validated (the families, which are not validated, a run without the `schema` step, or no export): {named(missing)}"
+        print(line)
 
 
 def probes(head):
