@@ -2518,8 +2518,19 @@ mod tests {
     #[test]
     fn a_rectangle_is_cut_at_every_knot() {
         let r = vec![vec![[0., 0.], [3., 0.], [3., 2.], [0., 2.]]];
-        let (_, triangles) = check(&r, &[0., 1., 2., 3.], &[0., 1., 2.], 6.0);
-        assert_eq!(triangles.len(), 12);
+        let (points, _) = check(&r, &[0., 1., 2., 3.], &[0., 1., 2.], 6.0);
+        // Every crossing of a u knot and a v knot is a vertex: how each cell is then split
+        // into triangles is not what the name promises.
+        for u in [0., 1., 2., 3.] {
+            for v in [0., 1., 2.] {
+                assert!(
+                    points
+                        .iter()
+                        .any(|p| (p[0] - u).abs() < 1e-12 && (p[1] - v).abs() < 1e-12),
+                    "no vertex at ({u}, {v}): {points:?}"
+                );
+            }
+        }
     }
 
     #[test]
