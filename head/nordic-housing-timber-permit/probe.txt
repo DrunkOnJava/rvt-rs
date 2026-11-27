@@ -1,0 +1,34 @@
+release 2024
+layout_supported true
+streams_not_read 0
+beams 41
+targets 28
+controls 13
+census 13 section_ratio_max depth 1.000 width 1.000
+census section_ratio depth <=1.01 13
+census section_ratio width <=1.01 13
+control level_on_axis 13
+control level_on_axis body section equal ends equal 11
+control level_on_axis body section equal ends mesh_inside 2
+control level_on_axis body_overshoot 0 11
+control level_on_axis body_overshoot <=1e0 2
+control level_on_axis box_vs_mesh equal 11
+control level_on_axis box_vs_mesh mesh_inside 2
+control level_on_axis mesh whole 13
+target open_closure level_on_axis rotation_zero 19
+target open_closure level_on_axis rotation_zero box_vs_mesh equal 13
+target open_closure level_on_axis rotation_zero box_vs_mesh mesh_inside 6
+target open_closure level_on_axis rotation_zero free section equal ends equal 13
+target open_closure level_on_axis rotation_zero free section equal ends mesh_inside 6
+target open_closure level_on_axis rotation_zero mesh whole 19
+target open_closure level_on_axis rotation_zero rule body_overshoot 0 13
+target open_closure level_on_axis rotation_zero rule body_overshoot <=1e0 6
+target open_closure level_on_axis rotation_zero rule box_overshoot 0 13
+target open_closure level_on_axis rotation_zero rule box_overshoot <=1e0 6
+target open_closure level_on_axis rotation_zero rule section equal ends equal 13
+target open_closure level_on_axis rotation_zero rule section equal ends mesh_inside 6
+target open_closure sloped rotation_zero 9
+target open_closure sloped rotation_zero box_vs_mesh mesh_inside 9
+target open_closure sloped rotation_zero free section equal ends equal 9
+target open_closure sloped rotation_zero mesh whole 9
+exit 0

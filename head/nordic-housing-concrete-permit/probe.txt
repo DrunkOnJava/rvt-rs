@@ -1,0 +1,30 @@
+release 2024
+layout_supported true
+streams_not_read 0
+beams 22
+targets 1
+controls 21
+census 21 section_ratio_max depth 1.000 width 1.000
+census section_ratio depth <=1.01 21
+census section_ratio width <=1.01 21
+control level_on_axis 12
+control level_on_axis body section equal ends equal 11
+control level_on_axis body section equal ends mesh_inside 1
+control level_on_axis body_overshoot 0 11
+control level_on_axis body_overshoot <=1e1 1
+control level_on_axis box_vs_mesh equal 11
+control level_on_axis box_vs_mesh mesh_inside 1
+control level_on_axis mesh whole 12
+control sloped 9
+control sloped body section equal ends equal 9
+control sloped body_overshoot 0 9
+control sloped box_vs_mesh mesh_inside 9
+control sloped mesh whole 9
+target open_closure level_on_axis rotation_zero 1
+target open_closure level_on_axis rotation_zero box_vs_mesh equal 1
+target open_closure level_on_axis rotation_zero free section equal ends equal 1
+target open_closure level_on_axis rotation_zero mesh whole 1
+target open_closure level_on_axis rotation_zero rule body_overshoot 0 1
+target open_closure level_on_axis rotation_zero rule box_overshoot 0 1
+target open_closure level_on_axis rotation_zero rule section equal ends equal 1
+exit 0

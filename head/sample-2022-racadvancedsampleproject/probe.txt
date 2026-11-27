@@ -1,0 +1,3 @@
+release 2022
+layout_supported false
+exit 0

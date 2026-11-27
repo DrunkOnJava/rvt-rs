@@ -1,0 +1,15 @@
+release 2024
+layout_supported true
+streams_not_read 0
+beams 8
+targets 0
+controls 8
+census 8 section_ratio_max depth 1.000 width 1.000
+census section_ratio depth <=1.01 8
+census section_ratio width <=1.01 8
+control level_on_axis 8
+control level_on_axis body section equal ends equal 8
+control level_on_axis body_overshoot 0 8
+control level_on_axis box_vs_mesh equal 8
+control level_on_axis mesh whole 8
+exit 0

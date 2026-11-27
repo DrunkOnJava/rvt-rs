@@ -1,0 +1,8 @@
+release 2026
+layout_supported true
+streams_not_read 0
+beams 0
+targets 0
+controls 0
+census 0 section_ratio_max depth 0.000 width 0.000
+exit 0

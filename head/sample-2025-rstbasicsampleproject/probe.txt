@@ -1,0 +1,46 @@
+release 2025
+layout_supported true
+streams_not_read 0
+beams 370
+targets 25
+controls 345
+census 345 section_ratio_max depth 2.125 width 1.013
+census section_ratio depth <=1.01 170
+census section_ratio depth <=1.1 96
+census section_ratio depth <=1.5 65
+census section_ratio depth <=3 14
+census section_ratio width <=1.01 249
+census section_ratio width <=1.1 96
+control level_on_axis 331
+control level_on_axis body section equal ends equal 27
+control level_on_axis body section equal ends mesh_inside 239
+control level_on_axis body section mesh_inside ends mesh_inside 65
+control level_on_axis body_overshoot 0 27
+control level_on_axis body_overshoot <=1e0 304
+control level_on_axis box_vs_mesh equal 27
+control level_on_axis box_vs_mesh mesh_inside 304
+control level_on_axis mesh whole 331
+control sloped 14
+control sloped body section mesh_inside ends mesh_past 14
+control sloped body_overshoot 0 14
+control sloped box_vs_mesh mesh_inside 14
+control sloped mesh whole 14
+target open_closure level_on_axis rotation_zero 9
+target open_closure level_on_axis rotation_zero box_vs_mesh equal 3
+target open_closure level_on_axis rotation_zero box_vs_mesh mesh_inside 6
+target open_closure level_on_axis rotation_zero free section equal ends equal 3
+target open_closure level_on_axis rotation_zero free section equal ends mesh_inside 6
+target open_closure level_on_axis rotation_zero mesh whole 9
+target open_closure level_on_axis rotation_zero rule body_overshoot 0 3
+target open_closure level_on_axis rotation_zero rule body_overshoot <=1e-1 4
+target open_closure level_on_axis rotation_zero rule body_overshoot <=1e0 2
+target open_closure level_on_axis rotation_zero rule box_overshoot 0 3
+target open_closure level_on_axis rotation_zero rule box_overshoot <=1e-1 4
+target open_closure level_on_axis rotation_zero rule box_overshoot <=1e0 2
+target open_closure level_on_axis rotation_zero rule section equal ends equal 3
+target open_closure level_on_axis rotation_zero rule section equal ends mesh_inside 6
+target open_closure sloped rotation_other 16
+target open_closure sloped rotation_other box_vs_mesh mesh_inside 16
+target open_closure sloped rotation_other free section mesh_inside ends mesh_inside 16
+target open_closure sloped rotation_other mesh whole 16
+exit 0
