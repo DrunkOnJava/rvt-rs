@@ -21,12 +21,10 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.26.0: IFC geometry and element data
+### 0.27.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
-| [#2069](https://github.com/DrunkOnJava/rvt-rs/issues/2069) | Ordinary walls' Length before Revit 2024: 8 walls of one held-out Revit 2021 project are written and nothing checks them; score them against Revit's Axis |
-| [#2046](https://github.com/DrunkOnJava/rvt-rs/issues/2046) | Revit 2027: stair landings are written with no IfcSlabType where Revit types them LANDING (CHL, 14 landings) |
 | [#2007](https://github.com/DrunkOnJava/rvt-rs/issues/2007) | IfcRampFlight: Revit's export writes one under a ramp it exports as a container, and rvt-rs writes none (RE-467) |
 | [#1987](https://github.com/DrunkOnJava/rvt-rs/issues/1987) | Opening Reference, sloped floor PitchAngle and door FireRating write values Revit leaves out on the BIM4LCA housing (RE-381, RE-384, RE-354) |
 | [#1977](https://github.com/DrunkOnJava/rvt-rs/issues/1977) | Multistory stairs: Revit writes the stair once per storey (a ":2" copy with its flights, stringers, landing and railings), rvt-rs writes it once |
@@ -40,14 +38,12 @@ milestone is for.
 | [#1829](https://github.com/DrunkOnJava/rvt-rs/issues/1829) | Report: Revit 2027 structural model (CHL), compared element by element with Revit's IFC4 export and run through a clash engine |
 | [#1824](https://github.com/DrunkOnJava/rvt-rs/issues/1824) | Revit 2015 to 2023 exports read every wall record twice for its top join, and GStyleElem twice for category materials |
 | [#1814](https://github.com/DrunkOnJava/rvt-rs/issues/1814) | Concrete housing at permit: wall ends 1.28 to 1.38 ft short where the box's join trim meets a partner whose join decides no reach; an end whose join step names an omitted target stops flat at the partner's near face (RE-488), and the issue's own six ends stay open |
-| [#1808](https://github.com/DrunkOnJava/rvt-rs/issues/1808) | saved_meshes::attach on 0.14: owner graphs are the peak holder (request for a 0.14-compatible fix) |
 | [#1798](https://github.com/DrunkOnJava/rvt-rs/issues/1798) | Mullion NetSurfaceArea: 120 mullions of the concrete office and 127 of the timber office, as built, are still without a value after RE-441 |
 | [#1712](https://github.com/DrunkOnJava/rvt-rs/issues/1712) | volume_readings: a round bar cut at a slant has elliptical end faces, which the shell reading leaves as another reason |
 | [#1706](https://github.com/DrunkOnJava/rvt-rs/issues/1706) | Snowdon Towers Architectural: roofs 1916596 and 964559 stay level blocks (a plane edge across a curved face that is not isoparametric; a cylinder face with several trim loops) |
 | [#1698](https://github.com/DrunkOnJava/rvt-rs/issues/1698) | Beams: a body that is not Revit's solid (the concrete housing's 20 of 22 beams and the timber housing's 10 of 41; the office's 8 hollow tubes are Revit's since RE-470) |
 | [#1635](https://github.com/DrunkOnJava/rvt-rs/issues/1635) | Railings are written as record boxes, about a thousand times Revit's volume, and now sit inside their stairs |
 | [#1589](https://github.com/DrunkOnJava/rvt-rs/issues/1589) | research(rooms): read the height a room's area is taken at, so stepped rooms get their section's outline (follow-up of #90, RE-374) |
-| [#1507](https://github.com/DrunkOnJava/rvt-rs/issues/1507) | W7: windows' Pset_WindowCommon.FireRating is read from family-parameter table entries (R2025 models 12 to 17, held-out models) |
 | [#1495](https://github.com/DrunkOnJava/rvt-rs/issues/1495) | Snowdon wall 1996083 ends 1.03 ft short of Revit's export, and nothing marks it |
 | [#1478](https://github.com/DrunkOnJava/rvt-rs/issues/1478) | Walls under a read roof: cut along its sloped underside, as Revit does (RE-351 follow-up) |
 | [#1474](https://github.com/DrunkOnJava/rvt-rs/issues/1474) | Walls 2056705 and 2056770: Revit cuts their ends back above 182.087 ft and steps them, and neither office file draws that |
@@ -74,6 +70,13 @@ milestone is for.
 | [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155) | RE: Decode parameter-store wire formats and exact Revit unit encodings |
 | [#96](https://github.com/DrunkOnJava/rvt-rs/issues/96) | CLASS-16: MEP: the duct family, sloped runs, fittings and route geometry left after pipes and ducts |
 | [#94](https://github.com/DrunkOnJava/rvt-rs/issues/94) | CLASS-14: structural framing sections still not drawn: 6 channels, 25 angles, one HSS column, 17 I beams |
+| [#2168](https://github.com/DrunkOnJava/rvt-rs/issues/2168) | Blends: 6 whose corners miss the saved mesh, 15 with another volume and 10 with no volume to compare (RE-490 follow-up) |
+| [#2148](https://github.com/DrunkOnJava/rvt-rs/issues/2148) | Evidence-page figures that no kept run output holds: re-measure each with a scorer that prints it, or reword it |
+| [#2112](https://github.com/DrunkOnJava/rvt-rs/issues/2112) | glTF: an element with a glass part is drawn in one alpha, as which part of a saved mesh is the glass is not read (#2109) |
+| [#2111](https://github.com/DrunkOnJava/rvt-rs/issues/2111) | Saved meshes: with the shared points between two cylinders (#2107), 45 of 62 moved bodies fit Revit's export worse on Snowdon Towers Architectural, and one toilet on RE1 |
+| [#2104](https://github.com/DrunkOnJava/rvt-rs/issues/2104) | Saved-graphics bodies part by up to 0.0024 ft where two curved faces share an edge, and at one ruled face |
+| [#2103](https://github.com/DrunkOnJava/rvt-rs/issues/2103) | Measure skips validating exports over 120 MiB, and Snowdon plumbing passes that once #2102 lands |
+| [#2096](https://github.com/DrunkOnJava/rvt-rs/issues/2096) | Columns turned off the model's axes are drawn unturned: at their section's size, or too big where only the record box is known (read from the code, unmeasured) |
 
 ### 1.0.0: first-class utility
 

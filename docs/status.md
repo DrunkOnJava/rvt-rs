@@ -1870,12 +1870,37 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.25.0** (2026-11-15) is the latest release: crates.io (`rvt` and
+- **v0.26.0** (2026-11-27) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the container
   image, each checked from its published artifacts ([`install.md`](install.md));
   docs.rs had built `rvt` when they were checked (`rvt-rs-mcp` is a binary crate
-  with no documentation there). It fixes a way to take unbounded memory with a
+  with no documentation there). It draws more of the geometry Revit saves in the
+  file: faces whose profile is a Hermite spline (#2094, RE-492) and cylinder
+  faces bounded by two trim loops (#2102, RE-494) are drawn from the saved
+  graphics, and two round faces that share an edge meet along it (#2104,
+  #2111). A monolithic landing gets its family and type object (#2046); a
+  ceiling in pieces takes the area of the piece Revit's export names (#1209,
+  RE-486); a ceiling is written as a covering whatever its type says, as
+  Revit's export writes it (#2074); a wall end whose join step names an omitted
+  target stops flat at its partner's near face (#2068, RE-488); a beam whose
+  record box is more than five times its saved mesh across its line is drawn
+  from the mesh (#2164); the saved-graphics value limit can be raised from Rust
+  and from `rvt-ifc --saved-mesh-graph-values` (#2157, #2166); and a research
+  catalog reads a file's views, sheets and placed viewports (`rvt-views`, built
+  only with `unstable-research`, #2159). Against 0.25.0, 38 of the 126 measured
+  exports differ, and 35 of the 102 `diagnostics.json` files; 24 of the 38 have
+  no Revit export on Measure, and on the other 14, scored against Revit's own
+  exports, the property, quantity, element name and `PredefinedType` censuses
+  lose no value equal to Revit's and gain none that differs. What it does not
+  measure: most of the newly drawn bodies are on Autodesk's samples, which no
+  Revit export checks; the BIM4LCA office's grab bars are drawn round where
+  Revit's export draws their legs square (1.11 of its volume); the beam rule
+  fires on no measured model; two rules rest on one building and one on one
+  ceiling. `[0.26.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each change
+  measures and what it does not.
+- **v0.25.0** (2026-11-15): published on every channel, each checked from its
+  published artifacts. It fixes a way to take unbounded memory with a
   crafted stream (`ScanOptions::default()` stops at 16,777,216 candidates and
   sets `PartitionScan::truncated`, #1833) and writes more of what Revit's own
   export writes: beams whose copies in several partitions disagree get `Length`,
@@ -2220,7 +2245,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.25.0 has, and is ahead of it by the fragments
+- `main` has everything v0.26.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
