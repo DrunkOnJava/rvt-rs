@@ -14,7 +14,9 @@ and the run's verdict. `<source>` holds a run's artifacts as `gh run download -n
 - `verdict/`, `compare/`, `timing/` and `pairs/`, the whole of `measure-verdict`, `compare-scorer-diff`,
   `measure-timing` (each model's export time and peak memory on both sides) and `measure-pairs` (a
   pair scorer's output on each open model's two exports, #2148), except that the scorer diff's
-  sections for the models whose folders are left out (below) are left out too.
+  sections for the models whose folders are left out (below) are left out too, and so are the
+  verdict's lines with such a folder in a path, while a list of models there names each such model
+  only as `a left-out model`.
 
 Models are kept only from the folders Measure gives the models anyone can fetch: `core-interior`,
 `einhoven`, `re1-*`, `nordic-*`, `r2025-*`, `sample-*`, `family-*`, and a `spent-*` pair that
@@ -137,6 +139,34 @@ def drop_left_out_sections(path, held, notes):
 
 
 SUMMARY_PREFIXES = ("holdout-", "racadv-")
+
+
+def drop_left_out_lines(path, held, notes):
+    """In a Markdown summary such as the verdict: drop the lines that hold a left-out model's folder in a
+    path (its scorer differences), and write each left-out model in a list of models as `a left-out
+    model`. A run whose held-out export moved names it in the verdict's list of exports that differ,
+    and the folder-name scan refused the whole run's outputs (run 46013208552, 2026-11-27)."""
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().splitlines(keepends=True)
+    names = "|".join(re.escape(p) for p in left_out_names(held))
+    in_path = re.compile(r"/(" + names + r")")
+    token = re.compile(r"(?<![A-Za-z0-9])(?:" + names + r")[A-Za-z0-9._-]*")
+    out, dropped, renamed = [], 0, 0
+    for line in lines:
+        if in_path.search(line):
+            dropped += 1
+            continue
+        line, n = token.subn("a left-out model", line)
+        renamed += n
+        out.append(line)
+    if dropped or renamed:
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.writelines(out)
+        base = os.path.basename(path)
+        if dropped:
+            notes.add(f"the {dropped} line{'' if dropped == 1 else 's'} of `{base}` with a left-out folder in a path")
+        if renamed:
+            notes.add(f"the name{'' if renamed == 1 else 's'} of {renamed} left-out model{'' if renamed == 1 else 's'} in `{base}`, written as `a left-out model`")
 
 
 def kept_file(name, part):
@@ -281,6 +311,7 @@ def main():
                         drop_left_out_sections(os.path.join(directory, name), held, notes)
                     if name.endswith(".md"):
                         drop_held_out_rows(os.path.join(directory, name), held, notes)
+                        drop_left_out_lines(os.path.join(directory, name), held, notes)
             count = sum(len(f) for _, _, f in os.walk(os.path.join(args.out, side)))
             lines.append(f"- `{side}/`, from `{artifact}`: {count} file{'' if count == 1 else 's'}")
     if not lines:
