@@ -21,7 +21,7 @@
 use std::collections::BTreeMap;
 
 use rvt::RevitFile;
-use rvt::views::ViewCatalog;
+use rvt::research::views::ViewCatalog;
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
@@ -53,14 +53,14 @@ fn main() -> anyhow::Result<()> {
     for view in &catalog.views {
         *kinds
             .entry(match view.kind {
-                rvt::views::ViewKind::Plan => "plan",
-                rvt::views::ViewKind::ThreeD => "three_d",
-                rvt::views::ViewKind::Section => "section",
-                rvt::views::ViewKind::Drafting => "drafting",
-                rvt::views::ViewKind::Sheet => "sheet",
-                rvt::views::ViewKind::Legend => "legend",
-                rvt::views::ViewKind::Schedule => "schedule",
-                rvt::views::ViewKind::Other => "other",
+                rvt::research::views::ViewKind::Plan => "plan",
+                rvt::research::views::ViewKind::ThreeD => "three_d",
+                rvt::research::views::ViewKind::Section => "section",
+                rvt::research::views::ViewKind::Drafting => "drafting",
+                rvt::research::views::ViewKind::Sheet => "sheet",
+                rvt::research::views::ViewKind::Legend => "legend",
+                rvt::research::views::ViewKind::Schedule => "schedule",
+                rvt::research::views::ViewKind::Other => "other",
             })
             .or_default() += 1;
     }

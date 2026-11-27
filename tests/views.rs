@@ -2,15 +2,19 @@
 //! native records, and every placed viewport names a sheet and a view the
 //! catalog holds.
 //!
-//! Runs against `RVT_NORDIC_LCA_DIR`'s as-built office, the model #1117's
-//! probe measured 21 placed viewports on 19 sheets on. Skips when the model
-//! is absent. What is checked is the catalog's own consistency and the
-//! counts the probe published; the box-centre rule itself was measured on
-//! one viewport against `Viewport.GetBoxCenter()` and is not re-measured
-//! here, so a count is not a comparison with Revit.
+//! Runs against `RVT_NORDIC_LCA_DIR`'s as-built office, where #1117's probe
+//! (`probe_1117_viewports` at 97532493, refs/archive/2026-11-11/research/1117-viewports)
+//! reads 21 placed viewports on 18 sheets: three on one sheet, two on
+//! another. Measure runs 45997381985 (that probe) and 45997375058 (this
+//! reader's `probe_1117_views`) agree on every viewport's sheet and view on
+//! the six BIM4LCA office files. #1117's comment of 30 October said 19
+//! sheets; that was a miscount. Skips when the model is absent. What is
+//! checked is the catalog's own consistency and those counts; the box-centre
+//! rule itself was measured on one viewport against `Viewport.GetBoxCenter()`
+//! and is not re-measured here, so a count is not a comparison with Revit.
 
 use rvt::RevitFile;
-use rvt::views::{ViewCatalog, ViewKind};
+use rvt::research::views::{ViewCatalog, ViewKind};
 use std::path::PathBuf;
 
 fn office() -> Option<PathBuf> {
@@ -51,8 +55,8 @@ fn office_views_sheets_and_viewports_are_read() {
         .filter(|sheet| catalog.viewports_on(sheet.id).next().is_some())
         .count();
     assert_eq!(
-        sheets_with_viewports, 19,
-        "the probe's 19 sheets with placed viewports (#1117)"
+        sheets_with_viewports, 18,
+        "the probe's 18 sheets with placed viewports (#1117)"
     );
     assert!(catalog.sheets.len() >= sheets_with_viewports);
     assert!(
@@ -81,9 +85,11 @@ fn office_views_sheets_and_viewports_are_read() {
             );
         }
     }
+    // Every sheet has a number. Not every one has a name: the office's sheet
+    // O-00 reads with an empty `m_viewName` on four of its six files, and
+    // whether Revit shows a name there is not checked.
     for sheet in &catalog.sheets {
         assert!(!sheet.number.is_empty(), "sheet {} has a number", sheet.id);
-        assert!(!sheet.name.is_empty(), "sheet {} has a name", sheet.id);
     }
     let cameras = catalog
         .views

@@ -1,5 +1,5 @@
-- **Views, sheets and placed viewports**: `rvt::views::read` and the
-  `rvt-views` CLI list every view's name, class, scale, plane and 3D camera,
+- **Views, sheets and placed viewports** (research, behind `unstable-research`):
+  `rvt::research::views::read` lists every view's name, class, scale, plane and 3D camera,
   every sheet's number and title-block fields, and every viewport's sheet,
   view and box centre. The centre rule was measured on one viewport against
   the Revit API (#1117); the catalog is experimental, and a turned viewport,

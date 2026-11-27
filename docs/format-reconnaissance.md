@@ -2828,6 +2828,6 @@ basis is the view's own frame rather than an independent one.
 `m_boundedSpace.m_orig` is the eye and `m_basis` the right, up and looking
 directions. `m_targetPos` is on the looking axis on 9 of the 12; on the other 3
 it is off the axis, so a target is reported only where it lies on it. The
-reader is `rvt::views` (`rvt-views`, `probes/examples/probe_1117_views.rs`);
+reader is `rvt::research::views` (`probes/examples/probe_1117_views.rs`);
 the centre rule and the camera are experimental, and the catalog's evidence
 boundary is in `docs/views.md`.

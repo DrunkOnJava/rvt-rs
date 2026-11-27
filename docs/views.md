@@ -1,9 +1,12 @@
 # Views, sheets and placed viewports
 
-`rvt::views::read` lists a project's views from the file's own records, and
-`rvt-views` prints the catalog as JSON. It is the reader behind #1117: before
+`rvt::research::views::read` lists a project's views from the file's own
+records, and `probes/examples/probe_1117_views.rs` prints the catalog's counts,
+sheets, placed viewports and 3D cameras. It is the reader behind #1117: before
 it, a view's name, a sheet's number and a viewport's position on its sheet
-could not be read through the public API.
+could not be read through the API. It is a research module, behind the
+`unstable-research` feature, so it can still change between releases: the
+box-centre rule rests on one viewport (below).
 
 ## What is read
 
@@ -44,8 +47,9 @@ the turn and the uncropped extent are not measured.
 ## Usage
 
 ```rust
+// Cargo.toml: rvt = { version = "...", features = ["unstable-research"] }
 use rvt::RevitFile;
-use rvt::views::ViewCatalog;
+use rvt::research::views::ViewCatalog;
 
 let mut file = RevitFile::open("project.rvt")?;
 let catalog = ViewCatalog::read(&mut file)?;
@@ -58,15 +62,15 @@ for sheet in &catalog.sheets {
 ```
 
 ```bash
-rvt-views project.rvt
-rvt-views large-project.rvt --large-model > views.json
+cargo run --profile ci -p rvt-probes --example probe_1117_views -- project.rvt
 ```
 
 ## Evidence boundary
 
 - The box-centre rule is measured on **one** viewport of one Revit 2024
   project, against the Revit API (#1117). It is not re-measured on the office
-  model's 21 viewports, because no Revit API dump of that model is here.
+  model's 21 viewports (on 18 sheets), because no Revit API dump of that model
+  is here.
 - The reader is measured on a local Revit 2024 project (`rmeadvancedsampleproject`):
   165 views (75 plans, 39 sections, 19 3D views, 14 schedules, 8 sheets,
   7 legends, 2 drafting views and 1 report), 8 sheets, 161 viewport records,

@@ -805,8 +805,8 @@
       "area": "document",
       "name": "Views, sheets and the viewports placed on them",
       "status": "experimental",
-      "evidence": "#1117's comparison of one viewport with Viewport.GetBoxCenter(); rvt::views::read and rvt-views on a local Revit 2024 project (165 views, 8 sheets, 22 placed viewports, 12 3D cameras); tests/views.rs on the BIM4LCA office under RVT_NORDIC_LCA_DIR (skipped when unset)",
-      "notes": "Reads DBView*, Viewer and Viewport records on channel 102. A viewport's centre is m_offset + m_scale * crop centre, and only where the viewport is not turned and its crop is active. Not read: visibility/graphics overrides (#1973), view title position, a turned viewport's placement, an uncropped view's extent, sheet size. The comparison is one viewport of one Revit 2024 project; the office model's 21 placed viewports are counted, not compared with Revit.",
+      "evidence": "#1117's comparison of one viewport with Viewport.GetBoxCenter(); rvt::research::views::read on a local Revit 2024 project (165 views, 8 sheets, 22 placed viewports, 12 3D cameras); tests/views.rs on the BIM4LCA office under RVT_NORDIC_LCA_DIR (skipped when unset)",
+      "notes": "Reads DBView*, Viewer and Viewport records on channel 102. A viewport's centre is m_offset + m_scale * crop centre, and only where the viewport is not turned and its crop is active. Not read: visibility/graphics overrides (#1973), view title position, a turned viewport's placement, an uncropped view's extent, sheet size. The comparison is one viewport of one Revit 2024 project; the office model's 21 placed viewports, on 18 sheets, are counted, not compared with Revit; the reader is a research module behind unstable-research.",
       "user_impact": "Consumers can list a project's views, sheets and viewport placements without Revit; the browser viewer, Python bindings and MCP server do not expose them yet."
     }
   ],
