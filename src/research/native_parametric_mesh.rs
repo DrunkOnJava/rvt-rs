@@ -1187,11 +1187,12 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             if let Some(edge) = edge {
                 chord_edges.insert(*edge);
                 chords.extend(points.windows(2).map(|w| [w[0], w[1]]));
-                if use_anchors
-                    && let Some(anchor) = crate::native_saved_mesh::saved_plane_anchor(
-                        g, fi, *edge, &surface, points,
-                    )?
-                {
+                let anchor = if use_anchors {
+                    crate::native_saved_mesh::saved_plane_anchor(g, fi, *edge, &surface, points)?
+                } else {
+                    None
+                };
+                if let Some(anchor) = anchor {
                     let key = uv_knot_key(anchor.uv);
                     let position = anchor.position;
                     if let Some(other) = plane_anchors.get(&key) {
