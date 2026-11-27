@@ -962,8 +962,9 @@ const BEAM_BOX_SECTION_MESH_RATIO: f64 = 5.0;
 /// is more than [`BEAM_BOX_SECTION_MESH_RATIO`] times as wide or as deep as the
 /// mesh `primitives` across its line (#2158). Its width and depth are its
 /// `SectionWidth` and `SectionDepth`; its line runs along its swept body's
-/// directrix, or, level, at its rotation in plan. False where any of these is
-/// missing or the mesh has no extent across the line.
+/// directrix, its I or tube section's extrusion axis, or, for a level
+/// rectangle, at its rotation in plan. False where any of these is missing,
+/// the body is another shape, or the mesh has no extent across the line.
 fn box_section_holds_more(entity: &IfcEntity, primitives: &[Primitive]) -> bool {
     let IfcEntity::BuildingElement {
         rotation_radians,
@@ -986,25 +987,30 @@ fn box_section_holds_more(entity: &IfcEntity, primitives: &[Primitive]) -> bool 
     let (Some(width), Some(depth)) = (length("SectionWidth"), length("SectionDepth")) else {
         return false;
     };
+    let unit = |v: [f64; 3]| {
+        let norm = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+        (norm.is_finite() && norm > 0.0).then(|| [v[0] / norm, v[1] / norm, v[2] / norm])
+    };
+    // A sloped beam is swept along its centreline, an I or tube section is
+    // extruded along its line, and a level rectangle is the extrusion turned
+    // to its line in plan; any other body is not one this solves.
     let d = match solid_shape {
         Some(SolidShape::SweptPath {
             directrix_points_feet,
             ..
         }) => match directrix_points_feet.as_slice() {
-            [a, b] => {
-                let delta = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
-                let norm = (delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]).sqrt();
-                if !norm.is_finite() || norm <= 0.0 {
-                    return false;
-                }
-                [delta[0] / norm, delta[1] / norm, delta[2] / norm]
-            }
-            _ => return false,
+            [a, b] => unit([b[0] - a[0], b[1] - a[1], b[2] - a[2]]),
+            _ => None,
         },
-        _ => {
+        Some(SolidShape::PlacedExtrusion { axis, .. }) => unit(*axis),
+        Some(_) => None,
+        None => {
             let (sin, cos) = rotation_radians.unwrap_or(0.0).sin_cos();
-            [cos, sin, 0.0]
+            Some([cos, sin, 0.0])
         }
+    };
+    let Some(d) = d else {
+        return false;
     };
     let plan = d[0].hypot(d[1]);
     if !plan.is_finite() || plan <= 0.0 {
