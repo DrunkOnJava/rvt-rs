@@ -61,6 +61,7 @@ only identifiers that exist in `src/`.
 | named in the report | 1 |
 | Autodesk rme_basic sample | 1 |
 | Vitoria spent Revit 2018 project | 1 |
+| a contributor's chair family (not in Measure) | 1 |
 
 Snowdon Towers and the MIT models are local only: their Revit exports cannot
 be fetched by Measure, so a rule resting on them is measured on this machine and
@@ -226,6 +227,7 @@ runs, would test the largest share of the rules below.
 | [RE-393](../reports/element-framing/RE-393-shared-family-profile-reader.md) | `sketch_curves`, `point_at`, `revolution_ids` | synthetic fixtures | 2020 | no, it names this model only | "Measured: the six standalone Revit 2020 rectangular and circular fixtures from RE-391/RE-392." |
 | [RE-394](../reports/element-framing/RE-394-analytic-family-revolutions.md) | `IfcBuildingElementProxy`, `IfcRevolvedAreaSolid`, `PlacedRevolvedArea` | synthetic fixtures | 2020 | no, it names this model only | "Export coverage is REV-A, REV-B, REV-BT and ARC-A, confirmed by Revit's own IFC; ARC-B and ARC-BT remain reader research evidence and are not exported; mixed line/arc profiles, project instances and other releases are unmeasured." |
 | [RE-477](../reports/element-framing/RE-477-pre-2024-window-and-door-types-from-the-native-record.md) | `native_instance_types`, `in_group`, `ElementGroupMembership`, `TYPE_FROM_NATIVE_RECORD_FIELD` | Vitoria spent Revit 2018 project | 2015 to 2023 | no, it names this model only | "The group rule rests on 2 doors of one project; it is listed in `docs/one-project-rules.md`." |
+| [RE-498](../reports/element-framing/RE-498-coordinated-join-and-plane-anchor.md) | `coordinated_keeps`, `COORDINATED_LIMIT`, `refined_plane_edge`, `PLANE_ANCHOR_LIMIT` | a contributor's chair family (not in Measure) | 2024 | yes | "Both are fitted to one family on one save" |
 
 
 ### Measured on another project, and wrong there: rules to fix or narrow
