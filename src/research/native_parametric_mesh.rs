@@ -1263,7 +1263,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             // A spline profile (RE-311) is cut into the equal steps its largest
             // second difference asks for, and a step around the axis takes the
             // farthest the profile reaches.
-            Curve::Hermite { .. } => {
+            Curve::Hermite { .. } | Curve::Nurbs { .. } => {
                 let steps = profile.spline_steps(min[1], max[1], CHORD);
                 let speed = profile.speed(min[1], max[1]);
                 (
@@ -1338,7 +1338,9 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                             Curve::Ellipse { x_len, y_len, .. } => {
                                 ((r[1] - r[0]).abs() / angular(x_len.max(*y_len))).ceil()
                             }
-                            Curve::Hermite { .. } => c.spline_steps(r[0], r[1], CHORD) as f64,
+                            Curve::Hermite { .. } | Curve::Nurbs { .. } => {
+                                c.spline_steps(r[0], r[1], CHORD) as f64
+                            }
                         };
                         (chord, steps)
                     };
@@ -1371,7 +1373,9 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                         Curve::Ellipse { x_len, y_len, .. } => {
                             ((r[1] - r[0]).abs() / angular(x_len.max(*y_len))).ceil()
                         }
-                        Curve::Hermite { .. } => c.spline_steps(r[0], r[1], CHORD) as f64,
+                        Curve::Hermite { .. } | Curve::Nurbs { .. } => {
+                            c.spline_steps(r[0], r[1], CHORD) as f64
+                        }
                     }
                 };
                 let corner = |u: f64, v: f64| surface.evaluate(u, v);
