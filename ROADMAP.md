@@ -387,6 +387,23 @@ the four levels a file can reach are in the
   ceiling's piece `GrossArea` rests on one building, a multistory stair's
   copies are inferred from three groups of one building, and `[0.24.0]` in
   [`CHANGELOG.md`](CHANGELOG.md) lists what each change does not measure.
+- **0.26.0, 2026-11-27.** It draws more of the geometry Revit saves in the
+  file: faces whose profile is a Hermite spline (#2094) and cylinder faces
+  bounded by two trim loops (#2102) are drawn from the saved graphics, and round
+  faces that share an edge meet (#2104, #2111). It reads more of what Revit's
+  own export has: a monolithic landing's family and type object (#2046), the
+  area of a ceiling in pieces (#1209), a ceiling written as a covering (#2074)
+  and a wall end whose join names an omitted target (#2068); a beam whose record
+  box holds far more than the beam is drawn from its saved mesh (#2164); the
+  saved-graphics value limit can be raised (#2157, #2166); and a research
+  catalog reads views, sheets and placed viewports (#2159). Against 0.25.0, 38
+  of the 126 measured exports differ, and 35 of the 102 `diagnostics.json`
+  files; 24 of the 38 have no Revit export on Measure, and on the other 14 the
+  property, quantity, element name and `PredefinedType` censuses lose no value
+  equal to Revit's and gain none that differs. Most newly drawn bodies are on
+  Autodesk's samples, which no Revit export checks, the beam rule fires on no
+  measured model, and `[0.26.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists what
+  each change does not measure.
 - **0.25.0, 2026-11-15.** It fixes a way to take unbounded memory with a crafted
   stream (the partition scanner stops at 16,777,216 candidates, #1833) and reads
   more of what Revit's own export has: beams whose copies in several partitions
@@ -414,10 +431,10 @@ the four levels a file can reach are in the
   version it records. It is not the latest release, which stays 0.25.0, and it
   was not run on the reporter's own model before it shipped.
 
-### 0.26.0: IFC geometry and element data
+### 0.27.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.25.0, moved from the
-0.25.0 milestone when 0.25.0 shipped. Each
+The geometry and element-data work that continues after 0.26.0, moved from the
+0.26.0 milestone when 0.26.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
