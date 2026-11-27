@@ -2483,15 +2483,15 @@ mod tests {
         let triangle = vec![vec![[0., 0.], [2., 0.], [0., 2.]]];
         let (points, _) = check(&triangle, &[0., 1., 2.], &[0., 1., 2.], 2.0);
         // The diagonal crosses u = 1 at v = 1 and v = 1 at u = 1: one point, not two.
-        assert!(
-            points
-                .iter()
-                .any(|p| (p[0] - 1.0).abs() < 1e-12 && (p[1] - 1.0).abs() < 1e-12)
-        );
+        let at_the_crossing = points
+            .iter()
+            .filter(|p| (p[0] - 1.0).abs() < 1e-12 && (p[1] - 1.0).abs() < 1e-12)
+            .count();
+        assert_eq!(at_the_crossing, 1, "{points:?}");
     }
 
     #[test]
-    fn a_strip_with_two_bars_gets_two_trapezoids() {
+    fn a_strip_with_two_bars_is_covered_without_its_notch() {
         // A C opening to the right: right of u = 1 the strips hold a bar below and a bar above.
         let c = vec![vec![
             [0., 0.],
@@ -2518,8 +2518,19 @@ mod tests {
     #[test]
     fn a_rectangle_is_cut_at_every_knot() {
         let r = vec![vec![[0., 0.], [3., 0.], [3., 2.], [0., 2.]]];
-        let (_, triangles) = check(&r, &[0., 1., 2., 3.], &[0., 1., 2.], 6.0);
-        assert_eq!(triangles.len(), 12);
+        let (points, _) = check(&r, &[0., 1., 2., 3.], &[0., 1., 2.], 6.0);
+        // Every crossing of a u knot and a v knot is a vertex: how each cell is then split
+        // into triangles is not what the name promises.
+        for u in [0., 1., 2., 3.] {
+            for v in [0., 1., 2.] {
+                assert!(
+                    points
+                        .iter()
+                        .any(|p| (p[0] - u).abs() < 1e-12 && (p[1] - v).abs() < 1e-12),
+                    "no vertex at ({u}, {v}): {points:?}"
+                );
+            }
+        }
     }
 
     #[test]
