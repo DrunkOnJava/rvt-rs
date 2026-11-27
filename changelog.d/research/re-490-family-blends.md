@@ -12,4 +12,4 @@
   Not read: arcs in a section, holes, sections of different vertex counts
   or not in parallel planes, a swept blend, and the corner-to-corner
   correspondence where the loops start at different vertices (measured only
-  where the loops' order matches).
+  where the loops' order matches). Contributed by mageaustralia.
