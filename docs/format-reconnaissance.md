@@ -2818,3 +2818,32 @@ Run `cargo run --profile ci -p rvt-probes --example probe_plane_cylinder_shared_
 to print the generated cases. Add `-- --check` to require matching
 emitted chains and check that their vertices lie on the plane. The
 oblique cases currently fail that assertion.
+
+## Addendum — views, sheets and placed viewports from the native records (#1117, 2026-11-26)
+
+A view is a `DBView*` record on channel 102; a sheet is a `DBViewDrafting` whose
+`m_sheetNumber` is non-empty; a `Viewport` record with `m_ownerDBViewId` names
+the sheet's view and `m_dbViewId` the view it shows, and one with
+`m_ownerDBViewId` unset is the internal viewport every view carries. On a local
+Revit 2024 project this reads 165 views (75 `DBViewPlan`, 39 `DBViewSection`,
+19 `DBView3d`, 14 `DBViewSchedule`, 8 `DBViewDrafting` sheets, 7
+`DBViewLegend`, 2 `DBViewAnonDrafting` and one report), 8 sheets, 161
+`Viewport` records, 22 of them placed on sheets.
+
+The position on the sheet is `m_offset + m_scale * crop centre`, where the crop
+box is the view's `Viewer.m_boundedSpace.m_boundOffset` with its
+`m_boundActive` flags and `m_viewerFlags` bit 0 (the crop region on). One
+viewport of another Revit 2024 model agreed with the API's
+`Viewport.GetBoxCenter()` to the five decimals it printed (#1117); seven of the
+22 placed viewports here have an active crop and a centre, the rest being
+uncropped, schedules or legends.
+
+A 3D view's `Viewer.m_basis` is the view plane's `m_horzDir`, `m_vertDir` and
+reversed `m_viewDir` on all 12 3D views here whose `Viewer` is decoded, so the
+basis is the view's own frame rather than an independent one.
+`m_boundedSpace.m_orig` is the eye and `m_basis` the right, up and looking
+directions. `m_targetPos` is on the looking axis on 9 of the 12; on the other 3
+it is off the axis, so a target is reported only where it lies on it. The
+reader is `rvt::research::views` (`rvt-views` with the `unstable-research` feature, and `probes/examples/probe_1117_views.rs`);
+the centre rule and the camera are experimental, and the catalog's evidence
+boundary is in `docs/views.md`.

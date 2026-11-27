@@ -65,7 +65,7 @@ rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json
 rvt-elements model.rvt --counts
 ```
 
-`rvt-info` reads the file's release, metadata and previews, `rvt-ifc` writes IFC4 and a diagnostics file that says what the export approximated or left out, and `rvt-elements --counts` counts the recovered elements by class as JSON. The same from Python, on a project file:
+`rvt-info` reads the file's release, metadata and previews, `rvt-ifc` writes IFC4 and a diagnostics file that says what the export approximated or left out, and `rvt-elements --counts` counts the recovered elements by class as JSON. `rvt-views`, built with `cargo install rvt --features unstable-research`, lists a project's views, sheets and the viewports placed on them as JSON, including each 3D view's camera and a placed viewport's box centre where its crop is active ([`docs/views.md`](docs/views.md)). The same from Python, on a project file:
 
 ```python
 import rvt
@@ -104,7 +104,7 @@ The full list, with each gap's status and evidence, is in [`docs/evidence.md`](d
 
 ## Command-line tools
 
-Rust 2024 edition (MSRV 1.87). **Nineteen CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `gen-fixture`) plus the reproducible probes under `probes/examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (so the core `rvt` crate can stay unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
+Rust 2024 edition (MSRV 1.87). **Twenty CLIs ship** (`rvt-analyze`, `rvt-info`, `rvt-inspect`, `rvt-schema`, `rvt-history`, `rvt-diff`, `rvt-corpus`, `rvt-dump`, `rvt-doc`, `rvt-ifc`, `rvt-ifc-compare`, `rvt-write`, `rvt-gltf`, `rvt-sheet`, `rvt-elem-table`, `rvt-elements`, `rvt-capabilities`, `rvt-schedule`, `rvt-views`, `gen-fixture`; `rvt-views` builds only with the `unstable-research` feature, so the release archives leave it out) plus the reproducible probes under `probes/examples/`, one or more per format finding. Python bindings via pyo3+maturin in the `rvt-py` workspace member (so the core `rvt` crate can stay unconditionally `#![forbid(unsafe_code)]`) — `pip install rvt`.
 
 `rvt-analyze --redact path/to/your.rfa` prints a file report: identity, upgrade history, format anchors, the schema table, the schema-to-data link histogram, content metadata and a disclosure scan. Every command with an example, the Rust library's modules and the research probes are in [`docs/library.md`](docs/library.md).
 
