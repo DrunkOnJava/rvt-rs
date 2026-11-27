@@ -18,17 +18,18 @@ a ceiling in pieces gets the area Revit's export gives it, and the value limit
 for reading saved graphics can be raised from Rust and from `rvt-ifc`. A
 research catalog of a file's views, sheets and placed viewports comes with
 it. Thanks to shifatrHtH and zenglanmu for code in this release, and to
-HWT-25 and yuriyu-webiya for the reports and measurements behind several of
-these changes.
+HWT-25, yuriyu-webiya and C00kieMonsta for the reports and measurements behind
+several of these changes.
 
 Not measured, and said in each entry:
 - Most of the bodies newly drawn from saved meshes are on Autodesk's sample projects, which have no Revit export: 17 of the 25 Hermite-profile bodies (#2094) and most of the 1,289 two-loop cylinder bodies (#2102).
 - On Snowdon Towers Architectural more of Revit's vertices lie beyond 0.001 ft of the bodies that #2104 moves; whether that is a worse fit is not shown (#2111).
 - A landing's family word is the one an English Revit writes, which the file does not hold; on Revit 2026 and 2027 the landings' type objects and the spiral rule are measured by the reporter on one model (#2046).
 - Two rules rest on one building, listed in `docs/one-project-rules.md`: a ceiling in pieces takes one piece's area (#1209), and a wall end whose join names an omitted target stops flat (#1814). A ceiling written as a covering whatever its type says rests on one ceiling (#2074).
+- A beam whose record box is more than five times its saved mesh across its line is drawn from the mesh (#2158), a rule that fires on no measured model; whether it reaches the nine beams reported on #2158 is not yet known.
 - The views, sheets and viewports catalog is a research module, and its viewport centre rule rests on one viewport measured against the Revit API (#1117).
 
-Measured against 0.25.0 on every model Measure holds, the 18 held-out files and the `rac_advanced` pairs included (run [46013208552](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46013208552), `main` at 1cf84255). The two pull requests merged after it move no export: their own runs give 101 of 101 exports byte-identical to their base, #2166's ([46014093032](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46014093032)) and #2159's ([46016851547](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46016851547)). The release adds only its notes, version strings, witness files and fixtures.
+Measured against 0.25.0 on every model Measure holds, the 18 held-out files and the `rac_advanced` pairs included (run [46013208552](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46013208552), `main` at 1cf84255). The pull requests merged after it move no export. Their own runs give every export byte-identical to their base: 101 of 101 for #2166 ([46014093032](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46014093032)) and for #2159 ([46016851547](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46016851547)), and 120 of 120, the held-out ones included, for #2164 ([46004282060](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46004282060)). #2165 changes only maintainer tooling. The release adds only its notes, version strings, witness files and fixtures.
 
 - 38 of the 126 exports differ, and 35 of the 102 `diagnostics.json` files. 24 of the 38 have no Revit export on Measure, so no scorer says which of what moved there is Revit's: Autodesk's sample projects of 2023 to 2027 and Snowdon Towers' five; each entry was measured in its own pull request. The other 14 are scored against Revit's own exports: 10 of the 12 BIM4LCA files, three of RE1's four and one of the 18 held-out files (counts only). On them the property, quantity, element name and `PredefinedType` censuses lose no value equal to Revit's and gain none that differs.
   - Quantities (#1209, #2074, #2085): on six BIM4LCA files the values equal to Revit's rise by 37, with 37 fewer missing, and none differs: 16 coverings' `GrossArea` on the four office files (#1209) and the timber housing ceiling's on its as-built file (#2074), and the five base quantities of 3 walls on the office as built and 1 on the concrete housing at permit (#2085).
@@ -240,6 +241,17 @@ Measured against 0.25.0 on every model Measure holds, the 18 held-out files and 
   is read again from its solid's faces or edges; from Revit 2023 a room that
   none of those reads is drawn from its saved mesh where that mesh decodes
   whole (#1191), and only otherwise does it keep its box (#2130).
+
+- **A beam whose record box holds more than the beam is drawn from its saved
+  mesh (#2158, #2164).** A beam drawn along its location line takes its
+  section from its record box; where that section is more than five times as
+  wide or as deep as the beam's own saved mesh across the line, and the mesh
+  decodes whole, the beam is drawn from the mesh instead, and its base
+  quantities come from it. On a Revit 2024 project reported on #2158, nine
+  beams were drawn 8.3 m deep, the box's height, as wall-sized sheets. On the
+  101 models Measure reads no beam is over 4.43 times its mesh's depth, so
+  none of them changes, and whether the rule reaches the reported nine is not
+  yet known: the project is private. Reported by C00kieMonsta (#2158).
 
 - **A two-loop cylinder trim whose ring knot is close to a tessellation
   knot keeps its hole (#2106).** A ring edge counts for a strip only where
