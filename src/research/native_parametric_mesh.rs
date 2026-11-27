@@ -55,6 +55,8 @@ pub struct FaceGrid {
     /// Each span between two saved points of those edges, in the surface's parameters:
     /// a trimmed face's vertices along one lie on the line between its ends.
     pub chords: Vec<[[f64; 2]; 2]>,
+    pub(crate) anchored_edges: BTreeMap<usize, usize>,
+    plane_anchors: BTreeMap<[i64; 2], [f64; 3]>,
 }
 
 /// Whether a face on `surface` and a plane draw an edge they share that crosses both
@@ -1138,6 +1140,10 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     let saved_chords = keeps_saved_chords(&surface);
     let mut chord_edges = std::collections::BTreeSet::new();
     let mut chords = Vec::new();
+    let use_anchors = matches!(&surface, ParametricSurface::SurfRev { .. })
+        && crate::native_saved_mesh::shared_plane_anchor_enabled();
+    let mut anchored_edges = BTreeMap::new();
+    let mut plane_anchors = BTreeMap::new();
     let mut bounds = Vec::new();
     let mut keeps = Vec::new();
     let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
@@ -1181,6 +1187,23 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             if let Some(edge) = edge {
                 chord_edges.insert(*edge);
                 chords.extend(points.windows(2).map(|w| [w[0], w[1]]));
+                if use_anchors
+                    && let Some(anchor) = crate::native_saved_mesh::saved_plane_anchor(
+                        g, fi, *edge, &surface, points,
+                    )?
+                {
+                    let key = uv_knot_key(anchor.uv);
+                    let position = anchor.position;
+                    if let Some(other) = plane_anchors.get(&key) {
+                        ensure!(
+                            distance(*other, position) < 1e-7,
+                            "competing shared plane anchors"
+                        );
+                    } else {
+                        plane_anchors.insert(key, position);
+                    }
+                    anchored_edges.insert(*edge, anchor.sample);
+                }
             }
         }
         loops.push(segments);
@@ -1478,15 +1501,17 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         loops: polygons,
         chord_edges,
         chords,
+        anchored_edges,
+        plane_anchors,
     })
 }
 
-pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
-    let grid = face_grid(g, fi)?;
-    let f = &g.objects[fi];
-    let flags = f.fields["m_faceFlags_v9"].as_u64().context("face flags")?;
+pub(crate) fn mesh_grid(g: &ObjectGraph, fi: usize, grid: &FaceGrid) -> Result<ParametricMesh> {
+    let flags = g.objects[fi].fields["m_faceFlags_v9"]
+        .as_u64()
+        .context("face flags")?;
     let orient = flags & 2 == 0;
-    let mesh = if grid.rectangular {
+    if grid.rectangular {
         tessellate_uv(
             &grid.surface,
             &grid.u,
@@ -1494,18 +1519,33 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
             grid.bounds,
             orient,
             2_000_000,
-        )?
+        )
     } else {
         tessellate_trimmed(
             &grid.surface,
             &grid.loops,
-            &grid.u,
-            &grid.v,
+            [&grid.u, &grid.v],
             &grid.chords,
+            &grid.plane_anchors,
             orient,
             2_000_000,
-        )?
-    };
+        )
+    }
+}
+
+pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
+    let grid = face_grid(g, fi)?;
+    let mesh = mesh_grid(g, fi, &grid)?;
+    face_from_mesh(g, fi, grid.trim, mesh)
+}
+
+pub(crate) fn face_from_mesh(
+    g: &ObjectGraph,
+    fi: usize,
+    trim_uv: Vec<[f64; 2]>,
+    mesh: ParametricMesh,
+) -> Result<FaceMesh> {
+    let f = &g.objects[fi];
     Ok(FaceMesh {
         face_index: fi,
         face_tag: f.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
@@ -1515,7 +1555,7 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
         normals: mesh.normals,
         triangles: mesh.triangles,
         analytic_surface: None,
-        trim_uv: grid.trim,
+        trim_uv,
     })
 }
 
@@ -2116,6 +2156,9 @@ fn trimmed_cells_on(
 fn knot_key(x: f64) -> i64 {
     (x * 1e9).round() as i64
 }
+fn uv_knot_key(p: [f64; 2]) -> [i64; 2] {
+    p.map(knot_key)
+}
 
 /// `vertices`, the model points of a trimmed face's `points`, with every point tagged
 /// with a span of `spans` (`trimmed_cells_on`) moved onto the straight line between
@@ -2127,6 +2170,7 @@ fn on_chords(
     vertices: &[[f64; 3]],
     tags: &[Option<Span>],
     spans: &BTreeMap<Span, Chord>,
+    plane_anchors: &BTreeMap<[i64; 2], [f64; 3]>,
 ) -> Result<Option<Vec<[f64; 3]>>> {
     if spans.is_empty() {
         return Ok(None);
@@ -2149,7 +2193,14 @@ fn on_chords(
         let (from, to) = match ends.get(span) {
             Some(known) => *known,
             None => {
-                let found = (surface.evaluate(a[0], a[1])?, surface.evaluate(b[0], b[1])?);
+                let endpoint = |uv: [f64; 2]| -> Result<[f64; 3]> {
+                    if let Some(&p) = plane_anchors.get(&uv_knot_key(uv)) {
+                        Ok(p)
+                    } else {
+                        surface.evaluate(uv[0], uv[1])
+                    }
+                };
+                let found = (endpoint(a)?, endpoint(b)?);
                 ends.insert(*span, found);
                 found
             }
@@ -2171,16 +2222,16 @@ fn on_chords(
 fn tessellate_trimmed(
     surface: &ParametricSurface,
     loops: &[Vec<[f64; 2]>],
-    u_knots: &[f64],
-    v_knots: &[f64],
+    [u_knots, v_knots]: [&[f64]; 2],
     chords: &[[[f64; 2]; 2]],
+    plane_anchors: &BTreeMap<[i64; 2], [f64; 3]>,
     orient: bool,
     max_vertices: usize,
 ) -> Result<ParametricMesh> {
     // Each chord is the span of the loop edge between the same two points, either way
     // round: the loops' points are the samples the chords were taken from.
     let mut by_ends: BTreeMap<EndKeys, Chord> = BTreeMap::new();
-    let key = |p: [f64; 2]| [knot_key(p[0]), knot_key(p[1])];
+    let key = uv_knot_key;
     for &[a, b] in chords {
         by_ends.insert((key(a), key(b)), [a, b]);
         by_ends.insert((key(b), key(a)), [a, b]);
@@ -2197,6 +2248,17 @@ fn tessellate_trimmed(
         }
     }
     let wanted: std::collections::BTreeSet<Span> = spans.keys().copied().collect();
+    if !plane_anchors.is_empty() {
+        let used_anchors = spans
+            .values()
+            .flatten()
+            .map(|&p| key(p))
+            .collect::<std::collections::BTreeSet<_>>();
+        ensure!(
+            plane_anchors.keys().all(|p| used_anchors.contains(p)),
+            "shared plane anchor misses trim chord"
+        );
+    }
     let (points, cells, tags) = trimmed_cells_on(loops, u_knots, v_knots, &wanted)?;
     ensure!(
         points.len() <= max_vertices && points.len() <= u32::MAX as usize,
@@ -2204,8 +2266,16 @@ fn tessellate_trimmed(
     );
     let mut vertices = Vec::with_capacity(points.len());
     let mut normals = Vec::with_capacity(points.len());
+    let mut applied = std::collections::BTreeSet::new();
     for p in &points {
-        vertices.push(surface.evaluate(p[0], p[1])?);
+        let k = key(*p);
+        let position = if let Some(&a) = plane_anchors.get(&k) {
+            applied.insert(k);
+            a
+        } else {
+            surface.evaluate(p[0], p[1])?
+        };
+        vertices.push(position);
         let mut n = surface.normal(p[0], p[1])?;
         if !orient {
             for value in &mut n {
@@ -2214,6 +2284,10 @@ fn tessellate_trimmed(
         }
         normals.push(n);
     }
+    ensure!(
+        applied.len() == plane_anchors.len(),
+        "shared plane anchor misses mesh vertex"
+    );
     let winding = surface.orientation() == orient;
     // The cells' triangles on `vertices`, or `None` where one is a needle.
     let triangulate = |vertices: &[[f64; 3]]| -> Option<Vec<[u32; 3]>> {
@@ -2232,13 +2306,23 @@ fn tessellate_trimmed(
     // Points moved onto their spans (`on_chords`) are kept only where every triangle
     // still has area; anything else in that step leaves the face's points on the
     // surface, as they were before it, so that it never refuses a face.
-    let placed = on_chords(surface, &points, &vertices, &tags, &spans)
-        .ok()
-        .flatten()
-        .and_then(|placed| triangulate(&placed).map(|triangles| (placed, triangles)));
+    let chord_positions = on_chords(surface, &points, &vertices, &tags, &spans, plane_anchors);
+    let held = if plane_anchors.is_empty() {
+        chord_positions.unwrap_or(None)
+    } else {
+        chord_positions?
+    };
+    let placed = held.map(|v| (triangulate(&v), v));
+    ensure!(
+        plane_anchors.is_empty()
+            || placed
+                .as_ref()
+                .is_none_or(|(triangles, _)| triangles.is_some()),
+        "shared plane anchor cannot preserve chord triangles"
+    );
     let (vertices, triangles) = match placed {
-        Some(drawn) => drawn,
-        None => {
+        Some((Some(triangles), drawn)) => (drawn, triangles),
+        _ => {
             let triangles =
                 triangulate(&vertices).context("noncollapsed degenerate parametric triangle")?;
             (vertices, triangles)

@@ -163,6 +163,8 @@ mod rvt_schedule_cli;
 mod samples;
 #[path = "../saved_mesh_limits.rs"]
 mod saved_mesh_limits;
+#[path = "../saved_shared_plane_boundary.rs"]
+mod saved_shared_plane_boundary;
 #[path = "../schema_bbox_marker.rs"]
 mod schema_bbox_marker;
 #[path = "../schema_registry_catalogs.rs"]
