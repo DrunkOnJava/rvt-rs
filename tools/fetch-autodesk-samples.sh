@@ -2,12 +2,13 @@
 # Fetch Autodesk's published sample projects (#421, RE-140) and verify them.
 #
 # Usage:
-#   tools/fetch-autodesk-samples.sh target-dir [first-year [last-year]]
+#   tools/fetch-autodesk-samples.sh target-dir [first-year [last-year [file ...]]]
 #
 # Reads research/autodesk-sample-projects.tsv and downloads each row from
 # Autodesk's own download host into target-dir as <year>-<file>, checking the
 # pinned sha256 and byte count. A mismatch is deleted and reported, and the
 # script exits 1. Files already present with the right hash are left alone.
+# Pass pinned file names after the year bounds to fetch only those projects.
 # The files are Autodesk's, on the host its sample families come from (which
 # phi-ag/rvt lists under CC BY-NC-SA 3.0; these projects' own terms were not
 # checked): they are fetched for a measurement run and never stored in this
@@ -15,16 +16,33 @@
 
 set -euo pipefail
 
-TARGET_DIR="${1:?usage: fetch-autodesk-samples.sh target-dir [first-year [last-year]]}"
+TARGET_DIR="${1:?usage: fetch-autodesk-samples.sh target-dir [first-year [last-year [file ...]]]}"
 FIRST="${2:-0}"
 LAST="${3:-9999}"
+if [ "$#" -ge 3 ]; then shift 3; else shift "$#"; fi
 PINS="$(dirname "$0")/../research/autodesk-sample-projects.tsv"
 mkdir -p "$TARGET_DIR"
+
+# A requested name must occur in the chosen years; a typo should fail the run.
+for requested in "$@"; do
+  if ! awk -F '\t' -v first="$FIRST" -v last="$LAST" -v name="$requested" \
+      '$1 ~ /^[0-9]+$/ && $1 >= first && $1 <= last && $2 == name { found = 1 } END { exit !found }' "$PINS"; then
+    echo "  [MISSING]   no pin for $requested from $FIRST to $LAST" >&2
+    exit 1
+  fi
+done
 
 failed=0
 while IFS=$'\t' read -r year file url sha bytes; do
   case "$year" in ''|\#*) continue ;; esac
   [ "$year" -ge "$FIRST" ] && [ "$year" -le "$LAST" ] || continue
+  if [ "$#" -gt 0 ]; then
+    selected=false
+    for requested in "$@"; do
+      if [ "$file" = "$requested" ]; then selected=true; break; fi
+    done
+    "$selected" || continue
+  fi
   path="$TARGET_DIR/$year-$file"
   if [ -f "$path" ] && [ "$(sha256sum "$path" | cut -d' ' -f1)" = "$sha" ]; then
     echo "  [ok]        $year-$file"

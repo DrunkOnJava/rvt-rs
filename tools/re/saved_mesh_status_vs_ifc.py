@@ -5,9 +5,10 @@ mesh from a partial one (RE-224, W6)?
 Reads `probes/examples/probe_re224_saved_mesh_status.rs`'s output and the rvt-rs
 export beside it (`model.ifc`, made with `--saved-meshes` and kept by
 Measure's `keep_ifc`), and scores every saved-mesh body against Revit's body
-with the same `Tag` as `mesh_bodies_vs_ifc.py` does: exact when every tested
-vertex of each lies within 0.001 ft of the other's surface. A class with more
-than 300 such bodies is scored on an even stride of 300 by Tag.
+with the same `Tag` as `mesh_bodies_vs_ifc.py` does: exact when every vertex
+of each lies within 0.001 ft of the other's surface. A class with more
+than 300 such bodies is scored on the 300 whose Tag has the smallest CRC-32
+(`mesh_bodies_vs_ifc.class_sample`).
 
 It scores only the meshes the export draws, so the export must draw every
 saved mesh: one made with RE-224's gate in `saved_meshes::attach` keeps the
@@ -30,11 +31,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mesh_bodies_vs_ifc import (  # noqa: E402
-    CLASS_CAP,
     SOURCE,
+    class_sample,
     meshes,
-    sample,
     surface_distance,
+    vertices,
     volume,
 )
 
@@ -84,11 +85,10 @@ def main():
             by_class[element.is_a()].append(element.Tag)
     chosen = set()
     for cls, tags in by_class.items():
-        tags = sorted(set(tags), key=lambda t: (len(t), t))
-        step = max(1, -(-len(tags) // CLASS_CAP))
-        chosen.update(tags[::step])
-        if step > 1:
-            print(f"{cls}: {len(tags)} bodies, every {step}th scored")
+        picked = class_sample(tags)
+        chosen.update(picked)
+        if len(picked) < len(set(tags)):
+            print(f"{cls}: {len(set(tags))} bodies, {len(picked)} scored by the smallest CRC-32 of their Tag")
     del model
     ours = meshes(ours_path, tags=chosen, source=SOURCE)
     ref = meshes(revit_path, tags=set(ours))
@@ -99,8 +99,8 @@ def main():
         ref_volume = volume(ref_triangles)
         ratio = volume(our_triangles) / ref_volume if ref_volume > 0 else float("inf")
         far = max(
-            surface_distance(sample(ref_triangles), our_triangles),
-            surface_distance(sample(our_triangles), ref_triangles),
+            surface_distance(vertices(ref_triangles), our_triangles),
+            surface_distance(vertices(our_triangles), ref_triangles),
         )
         scored[tag] = (far <= 0.001, far, ratio, cls, object_type)
     exact = sum(1 for v in scored.values() if v[0])

@@ -137,7 +137,8 @@ or roots), so it works with a client that offers none of them.
   from the JSON). This page does not restate them.
 - A request that carries a progress token gets `notifications/progress` while the
   model decodes (the stages are those of `WalkerControl`: schema parse, candidate
-  scan, element decode, partition scan, saved graphics and saved meshes), and a
+  scan, element decode, partition scan, partition recovery, saved graphics and
+  saved meshes), and a
   last one when the call ends. A cancelled call is cancelled by the client's
   `notifications/cancelled`, which rmcp turns into a cancelled `context.ct`
   (`rmcp` 3.9 `src/service.rs`, the serve loop: it removes the request from its
