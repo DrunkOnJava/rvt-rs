@@ -8,7 +8,9 @@
 #
 # Puts it in TARGET_DIR/ as rac_basic_sample_project.ifc, checked against its pinned sha256 and byte
 # count. A file that does not match is deleted and the script exits 1; a download that fails exits 2
-# (NOT MEASURED). Nothing is stored: the file is fetched for the run (it carries no licence).
+# (NOT MEASURED), and so does a body that is not an IFC file at all: a forum host can answer an
+# automated client with a page of its own, which is the host refusing, not the export changing.
+# Nothing is stored: the file is fetched for the run (it carries no licence).
 set -euo pipefail
 
 TARGET="${1:?usage: fetch-rac-basic-2018-export.sh TARGET_DIR}"
@@ -22,6 +24,11 @@ while IFS=$'\t' read -r kind name url sha bytes; do
   if ! curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --max-time 600 -o "$path" "$url"; then
     rm -f "$path"
     echo "could not download $url"
+    exit 2
+  fi
+  if [ "$(head -c 12 "$path")" != "ISO-10303-21" ]; then
+    rm -f "$path"
+    echo "$url answered with something other than an IFC file"
     exit 2
   fi
   got_sha=$(sha256 "$path")
