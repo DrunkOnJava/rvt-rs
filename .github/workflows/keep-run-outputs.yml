@@ -15,7 +15,10 @@
 # the first kept commit, which citations already link to, is never replaced. With `part: holdout`
 # it keeps each held-out model's `counts.txt`, Measure's own summary counts, as
 # `refs/evidence/<run id>-holdout`, so that the held-out figures the evidence pages cite keep a
-# source (Griffin, 2026-11-22). With `part: log` it keeps the lines of a run's log that the `lines`
+# source (Griffin, 2026-11-22). With `part: summaries` it keeps each held-out and `rac_advanced`
+# model's `counts.txt` and `ifc.sha256` as `refs/evidence/<run id>-summaries`, for the held-out
+# exports the evidence pages call byte for byte as before and the `rac_advanced` pairs' counts
+# (Griffin, 2026-11-27, #2148). With `part: log` it keeps the lines of a run's log that the `lines`
 # pattern finds, as `refs/evidence/<run id>-log`, for a figure a run prints only to its log, such as
 # a viewer test's measurement (#2148); that part takes a run of any workflow of this repository.
 #
@@ -36,9 +39,9 @@ on:
         description: The run whose outputs are kept (a Measure run, but for the log part)
         required: true
       part:
-        description: outputs (the scored outputs), probes (the probes' own output), holdout (the held-out models' summary counts) or log (the log lines `lines` finds), the last three kept beside the first
+        description: outputs (the scored outputs), probes (the probes' own output), holdout (the held-out models' summary counts), summaries (the held-out and rac_advanced models' summary counts and export digests) or log (the log lines `lines` finds), the last four kept beside the first
         type: choice
-        options: [outputs, probes, holdout, log]
+        options: [outputs, probes, holdout, summaries, log]
         default: outputs
       lines:
         description: For the log part only, a Python regular expression; the lines of the run's log it finds are kept
@@ -87,8 +90,9 @@ jobs:
             outputs) ref="refs/evidence/$RUN_ID"; artifacts="measure-head measure-base measure-verdict compare-scorer-diff measure-timing measure-pairs" ;;
             probes) ref="refs/evidence/$RUN_ID-probes"; artifacts="measure-head measure-base" ;;
             holdout) ref="refs/evidence/$RUN_ID-holdout"; artifacts="measure-head measure-base" ;;
+            summaries) ref="refs/evidence/$RUN_ID-summaries"; artifacts="measure-head measure-base" ;;
             log) ref="refs/evidence/$RUN_ID-log"; artifacts="" ;;
-            *) echo "::error::part must be outputs, probes, holdout or log"; exit 1 ;;
+            *) echo "::error::part must be outputs, probes, holdout, summaries or log"; exit 1 ;;
           esac
           if [ "$PART" = log ] && [ -z "$LINES" ]; then
             echo "::error::the log part needs lines, the pattern of the lines to keep"
