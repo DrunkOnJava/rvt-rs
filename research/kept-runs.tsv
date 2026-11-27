@@ -98,3 +98,6 @@ run	commit	kept
 46013208552	7793aa72ca3f758eed85b5a88430ce18a39896c1	head 2559 files for 102 models; base 2557 files for 102 models; verdict 1 file; compare 1 file
 46013208552-summaries	26d000272a8041c3fe5fc5f149bd43e858fc0a43	head 49 files for 24 models; base 49 files for 24 models
 46053386384	8486ca765b11077d9ad9482662c522cf8d1c1ad7	head 18 files for 3 models; verdict 1 file
+46058172915	7c03574288c0abe019fe25d522dfbb96a7b7cae6	head 2613 files for 120 models; base 2611 files for 120 models; verdict 1 file; compare 1 file; timing 3 files
+46062940579	72388f3708ab1fdc59fa7fc78c4dda1c05ffacf6	head 52 files for 10 models; base 51 files for 10 models; verdict 1 file; compare 1 file
+46060234028	f26cd82a54fa4146266753275a46afe9f6f41666	head 2616 files for 121 models; base 2614 files for 121 models; verdict 1 file; compare 1 file; timing 3 files
