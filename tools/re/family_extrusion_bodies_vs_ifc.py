@@ -7,7 +7,7 @@ This is `mesh_bodies_vs_ifc.py` on the elements whose `BodySource` is
 `family_extrusions` instead of `saved_graphics_mesh`: per class and Revit
 type, how many have Revit's volume within 1% and 0.01%, every vertex of each
 body within 0.01 ft and 0.001 ft of the other's surface, and "ref on ours":
-every tested vertex of Revit's body within 0.001 ft of rvt-rs's surface.
+every vertex of Revit's body within 0.001 ft of rvt-rs's surface.
 Bodies only exist in an export made with `--family-extrusions`; without it
 this prints none.
 

@@ -349,7 +349,9 @@ Every material carries `extras: { colourSource, alphaSource }`
 `userData`. Each says where its value comes from:
 
 - `"file"`: the Revit material's own colour, or one minus its own
-  transparency (RE-53).
+  transparency (RE-53). An element drawn in its category's colour whose
+  materials are all transparent takes that alpha too, the least transparent
+  one's, in a material named `Category <class> transparent` (#2109).
 - `"rvt-rs"`: rvt-rs chose it. That covers the category colours above,
   translucent windows and faint rooms included, the mid-grey of a material
   whose colour was not read, and the opaque alpha of one whose transparency
@@ -487,7 +489,8 @@ the wasm boundary:
 | `schema-parse` | 0, then 1 of 1 | Reading the schema |
 | `candidate-scan` | bytes of `Global/Latest` scanned, of its size | Scanning for elements |
 | `element-decode` | scan candidates decoded, of the candidates | Decoding elements |
-| `partition-scan` | 0 with no total where the walk reaches the partitions; then each `Partitions/*` stream inflated for the first time, of all of them (the first pass over the partitions inflates every one, and the handle keeps them, #266); 1 of 1 where the walk ends | Reading partition streams |
+| `partition-scan` | 0 with no total where the walk reaches the partitions; then each `Partitions/*` stream inflated for the first time, of all of them (the first pass over the partitions inflates every one, and the handle keeps them, #266); 1 of 1 where the walk ends; where the recovery below inflates the last stream, that stream reports the recovery's step in its place | Reading partition streams |
+| `partition-recovery` | the steps of the recovery over the partitions' element records, of all of them, once every stream is inflated; all of them where it ends (#1195) | Reading element records |
 | `saved-graphics` | 0, then 1 of 1 | Reading saved graphics |
 | `saved-meshes` | elements meshed, of the elements | Drawing family instances from saved meshes |
 

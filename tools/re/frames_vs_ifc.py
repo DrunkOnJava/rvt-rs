@@ -14,7 +14,8 @@ It prints each file's coordinate reference, IfcMapConversion and site
 placement (translation in metres, rotation about Z in degrees), then fits the
 rigid transform about Z that carries rvt-rs's body centres onto Revit's,
 from the bounding-box centres of up to 200 elements both files tag with the
-same ElementId (walls, columns, slabs, roofs, beams), and the residual left
+same ElementId (walls, columns, slabs, roofs, beams; past 200, those whose Tag
+has the smallest CRC-32, `ifc_common.tag_sample`, #2114), and the residual left
 after it and after Revit's site placement alone. Lengths in metres.
 
 An element is every product of its class with its Tag (a floor Revit splits
@@ -30,6 +31,7 @@ Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
 import math
+import os
 import sys
 
 import ifcopenshell
@@ -37,6 +39,9 @@ import ifcopenshell.geom
 import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ifc_common import tag_sample  # noqa: E402
 
 CLASSES = ("IfcWall", "IfcColumn", "IfcSlab", "IfcRoof", "IfcBeam")
 SAMPLE = 200
@@ -123,8 +128,7 @@ def main(argv):
     header(ours, "rvt-rs")
     site = header(theirs, "Revit")
     common = sorted(tagged(ours) & tagged(theirs), key=lambda t: (len(t), t))
-    step = max(1, -(-len(common) // SAMPLE))
-    sample = set(common[::step])
+    sample = set(tag_sample(common, SAMPLE))
     a_all, b_all = centres(ours, sample, np.eye(4)), centres(theirs, sample, site)
     both = sorted(set(a_all) & set(b_all), key=lambda t: (len(t), t))
     print(f"elements tagged in both: {len(common)}; centres compared: {len(both)}")

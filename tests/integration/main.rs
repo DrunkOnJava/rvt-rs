@@ -69,6 +69,10 @@ mod element_record_stages;
 mod element_records_2025;
 #[path = "../export_decisions_counts.rs"]
 mod export_decisions_counts;
+#[path = "../family_2014_extrusions.rs"]
+mod family_2014_extrusions;
+#[path = "../family_blends.rs"]
+mod family_blends;
 #[path = "../family_instance_ports.rs"]
 mod family_instance_ports;
 #[path = "../field_type_coverage.rs"]
@@ -157,6 +161,8 @@ mod rvt_inspect_cli;
 mod rvt_schedule_cli;
 #[path = "../samples.rs"]
 mod samples;
+#[path = "../saved_mesh_limits.rs"]
+mod saved_mesh_limits;
 #[path = "../schema_bbox_marker.rs"]
 mod schema_bbox_marker;
 #[path = "../schema_registry_catalogs.rs"]
@@ -185,10 +191,13 @@ mod typed_no_geometry_types;
 mod unfilled_openings;
 #[path = "../value_sources_offsets.rs"]
 mod value_sources_offsets;
+#[path = "../views.rs"]
+mod views;
 #[path = "../walker_to_ifc_integration.rs"]
 mod walker_to_ifc_integration;
 #[path = "../wall_profile_openings.rs"]
 mod wall_profile_openings;
+
 #[path = "../witness_registry.rs"]
 mod witness_registry;
 #[path = "../witness_verdict.rs"]

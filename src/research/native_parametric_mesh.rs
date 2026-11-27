@@ -5,6 +5,7 @@ use crate::native_parametric_surface::ParametricSurface;
 use crate::native_saved_mesh::FaceMesh;
 use crate::vector_math::distance;
 use anyhow::{Context, Result, ensure};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 pub struct ParametricMesh {
@@ -48,6 +49,34 @@ pub struct FaceGrid {
     /// parameters (the first is the outer one, the others holes), its last point not
     /// repeated; the face is the part of the grid inside them (#1706).
     pub loops: Vec<Vec<[f64; 2]>>,
+    /// The edges, by object index, that this face and the plane beside it both draw
+    /// straight between the edge's saved points (`keeps_saved_chords`, #2094).
+    pub chord_edges: std::collections::BTreeSet<usize>,
+    /// Each span between two saved points of those edges, in the surface's parameters:
+    /// a trimmed face's vertices along one lie on the line between its ends.
+    pub chords: Vec<[[f64; 2]; 2]>,
+}
+
+/// Whether a face on `surface` and a plane draw an edge they share that crosses both
+/// of the surface's parameters straight between the edge's saved points. Where each
+/// draws such an edge its own way they part by the edge's bow, and the faces measured
+/// to meet once both take the saved points are these:
+/// - a ruled face with a spline profile (#2094), where Revit's export of the BIM4LCA
+///   timber office's flights puts the plane's vertices on those lines;
+/// - a surface of revolution, where the faces parted by up to 0.006 ft on Snowdon
+///   Towers and the BIM4LCA files (#2098);
+/// - a cone, on Snowdon Towers Plumbing (#2098).
+///
+/// A ruled face between plain curves is left out: the one body measured with such an
+/// edge (on Snowdon Towers Architectural) meets no better for the rule.
+fn keeps_saved_chords(surface: &ParametricSurface) -> bool {
+    use crate::native_parametric_surface::Curve;
+    match surface {
+        ParametricSurface::RuledSurf {
+            profile1, profile2, ..
+        } => matches!(profile1, Curve::Hermite { .. }) || matches!(profile2, Curve::Hermite { .. }),
+        ParametricSurface::SurfRev { .. } | ParametricSurface::ConeSurf { .. } => true,
+    }
 }
 
 // A face whose trim is the complete rectangle of its parameters (including analytic
@@ -67,8 +96,7 @@ fn ruled_surface_component(
     // Edge instead; pointer() also covers token-only references.  Malformed
     // disconnected edges are ignored while building this component index so
     // they cannot taint an otherwise resolvable ruled-surface component.
-    let mut adjacency: std::collections::BTreeMap<usize, std::collections::BTreeSet<usize>> =
-        std::collections::BTreeMap::new();
+    let mut adjacency: BTreeMap<usize, std::collections::BTreeSet<usize>> = BTreeMap::new();
     let mut invalid_by_face = std::collections::BTreeSet::new();
     for (edge_index, edge) in g
         .objects
@@ -149,16 +177,25 @@ fn ruled_surface_component(
 /// The most trim loops a face may hold.
 const MAX_TRIM_LOOPS: usize = 64;
 
+/// A loop's edges' samples, and beside each the edge's object index where it is drawn
+/// straight between its saved points.
+type LoopSegments = (Vec<Vec<[f64; 2]>>, Vec<Option<usize>>);
+
 /// The samples of each edge of the loop at `li` of the face `fi`, edge by edge, in the
 /// face's parameters and clamped to the surface's envelope `env`. A loop has at least
-/// `least` edges.
+/// `least` edges. Beside each, where `saved_chords` (the face's surface
+/// `keeps_saved_chords`), the edge's object index if it is one the face draws straight
+/// between its saved points: its other face's surface is a plane, and its samples,
+/// before they are clamped, change both parameters (as the plane's side reads them,
+/// `native_saved_mesh::isoparametric_axis`).
 fn loop_segments(
     g: &ObjectGraph,
     fi: usize,
     li: usize,
     env: [[f64; 2]; 2],
     least: usize,
-) -> Result<Vec<Vec<[f64; 2]>>> {
+    saved_chords: bool,
+) -> Result<LoopSegments> {
     use crate::native_saved_mesh::pointer;
     let l = &g.objects[li];
     ensure!(
@@ -173,6 +210,7 @@ fn loop_segments(
     let mut cur = pointer(g, li, &l.fields["m_next"])?.context("empty trim")?;
     let mut seen = std::collections::BTreeSet::new();
     let mut segments = Vec::new();
+    let mut chord_edges = Vec::new();
     while cur != li {
         ensure!(seen.insert(cur), "trim edge cycle");
         let e = &g.objects[cur];
@@ -199,6 +237,19 @@ fn loop_segments(
             points.push(uv_point(&p["uv"][side])?);
         }
         points.push(uv_point(&ends[1]["uv"][side])?);
+        // An edge whose other face does not resolve to a plane is not one: nothing
+        // here refuses a face that is drawn without it.
+        let chord = saved_chords
+            && crate::native_saved_mesh::isoparametric_axis(&points).is_none()
+            && pointer(g, cur, &faces[1 - side])
+                .ok()
+                .flatten()
+                .and_then(|other| {
+                    let surface = g.objects.get(other)?.fields.get("m_pSurf")?;
+                    pointer(g, other, surface).ok().flatten()
+                })
+                .is_some_and(|si| g.objects.get(si).is_some_and(|s| s.class_name == "Plane"));
+        chord_edges.push(chord.then_some(cur));
         segments.push(points);
         cur = pointer(g, cur, &e.fields["m_next"][side])?.context("null trim next")?;
     }
@@ -218,7 +269,7 @@ fn loop_segments(
             }
         }
     }
-    Ok(segments)
+    Ok((segments, chord_edges))
 }
 
 /// Whether the edges of a loop join end to end in model coordinates, either way
@@ -462,15 +513,27 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     // surface's parameters.
     let mut loops: Vec<Vec<Vec<[f64; 2]>>> = Vec::new();
     let mut seen_loops = std::collections::BTreeSet::new();
+    let saved_chords = keeps_saved_chords(&surface);
+    let mut chord_edges = std::collections::BTreeSet::new();
+    let mut chords = Vec::new();
     let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
     while let Some(li) = next {
         ensure!(seen_loops.insert(li), "trim loop cycle");
         ensure!(loops.len() < MAX_TRIM_LOOPS, "too many trim loops");
-        let segments = loop_segments(g, fi, li, env, if loops.is_empty() { 2 } else { 1 })?;
+        let least = if loops.is_empty() { 2 } else { 1 };
+        let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
         ensure!(
             loop_closes(&surface, &segments)?,
             "disconnected parametric trim in model coordinates"
         );
+        // The spans come from the clamped samples the loop's polygon is made of, so
+        // that a vertex the cells put on one lies on it exactly.
+        for (points, edge) in segments.iter().zip(&edges) {
+            if let Some(edge) = edge {
+                chord_edges.insert(*edge);
+                chords.extend(points.windows(2).map(|w| [w[0], w[1]]));
+            }
+        }
         loops.push(segments);
         next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
     }
@@ -541,6 +604,17 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 angular(profile_reach(profile, min[1], max[1], x_len.max(*y_len))),
                 angular(x_len.max(*y_len)),
             ),
+            // A spline profile (RE-311) is cut into the equal steps its largest
+            // second difference asks for, and a step around the axis takes the
+            // farthest the profile reaches.
+            Curve::Hermite { .. } => {
+                let steps = profile.spline_steps(min[1], max[1], CHORD);
+                let speed = profile.speed(min[1], max[1]);
+                (
+                    angular(profile_reach(profile, min[1], max[1], speed)),
+                    (max[1] - min[1]) / steps as f64,
+                )
+            }
         },
         ParametricSurface::ConeSurf { half_angle, .. } => {
             // The generators are straight: only the angle needs a chord bound.
@@ -605,6 +679,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                             Curve::Ellipse { x_len, y_len, .. } => {
                                 ((r[1] - r[0]).abs() / angular(x_len.max(*y_len))).ceil()
                             }
+                            Curve::Hermite { .. } => c.spline_steps(r[0], r[1], CHORD) as f64,
                         };
                         (chord, steps)
                     };
@@ -637,6 +712,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                         Curve::Ellipse { x_len, y_len, .. } => {
                             ((r[1] - r[0]).abs() / angular(x_len.max(*y_len))).ceil()
                         }
+                        Curve::Hermite { .. } => c.spline_steps(r[0], r[1], CHORD) as f64,
                     }
                 };
                 let corner = |u: f64, v: f64| surface.evaluate(u, v);
@@ -723,6 +799,8 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         bounds: [min, max],
         rectangular,
         loops: polygons,
+        chord_edges,
+        chords,
     })
 }
 
@@ -746,6 +824,7 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
             &grid.loops,
             &grid.u,
             &grid.v,
+            &grid.chords,
             orient,
             2_000_000,
         )?
@@ -981,7 +1060,19 @@ const CUT_BUDGET_EXCEEDED: &str = "trim cut budget exceeded";
 const TRIANGLE_BUDGET: usize = 4_000_000;
 
 /// The points of a trimmed face in (u, v) and its triangles, by their indices.
+#[cfg(test)]
 type Cells = (Vec<[f64; 2]>, Vec<[u32; 3]>);
+/// A trim loop's edge between two of its points: the loop, and the edge's first point.
+type Span = (usize, usize);
+/// The points of a trimmed face in (u, v), its triangles by their indices, and beside
+/// each point the span of [`trimmed_cells_on`]'s `spans` it lies on.
+type TaggedCells = (Vec<[f64; 2]>, Vec<[u32; 3]>, Vec<Option<Span>>);
+/// A span's two ends in the surface's parameters, as `FaceGrid::chords` holds them.
+type Chord = [[f64; 2]; 2];
+/// A span along a strip's edge: the lower and upper `v` of its ends, and which span.
+type Side = (f64, f64, Span);
+/// Two points by their parameters rounded to the knot tolerance.
+type EndKeys = ([i64; 2], [i64; 2]);
 
 /// One trim segment, oriented so that `u0 < u1`.
 #[derive(Clone, Copy)]
@@ -990,6 +1081,8 @@ struct Segment {
     v0: f64,
     u1: f64,
     v1: f64,
+    /// The loop edge it is, where that edge is one of the spans asked about.
+    span: Option<Span>,
 }
 
 impl Segment {
@@ -1104,6 +1197,14 @@ fn point_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     (p[0] - (a[0] + t * dx)).hypot(p[1] - (a[1] + t * dy))
 }
 
+/// [`trimmed_cells_on`] with no spans asked about: the cells alone.
+#[cfg(test)]
+fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> Result<Cells> {
+    let (points, triangles, _) =
+        trimmed_cells_on(loops, u_knots, v_knots, &std::collections::BTreeSet::new())?;
+    Ok((points, triangles))
+}
+
 /// The cells of a face whose trim is not the rectangle of its grid: the region
 /// inside `loops` (every loop closed and its last point not repeated; the holes
 /// are loops inside the first), cut by the grid's `u_knots` into strips and by
@@ -1118,7 +1219,18 @@ fn point_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
 /// runs straight past a vertex of the next strip's, a crack inside the face. The
 /// triangles must cover the area the loops enclose, or the loops cross each other
 /// or themselves. Returns the points in (u, v) and the triangles (#1706).
-fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> Result<Cells> {
+///
+/// Beside each point it returns the span of `spans` it lies on, strictly
+/// between the span's ends: each point is made on the trapezoid edges of the segments
+/// that bound its cells, so the segment it lies on is known when it is made, and no
+/// search is run (#2094). A span along a strip's edge (its two ends at one `u`) holds
+/// the points made on the trapezoid sides at that `u` between its ends.
+fn trimmed_cells_on(
+    loops: &[Vec<[f64; 2]>],
+    u_knots: &[f64],
+    v_knots: &[f64],
+    spans: &std::collections::BTreeSet<Span>,
+) -> Result<TaggedCells> {
     ensure!(
         !loops.is_empty() && loops.iter().all(|ring| ring.len() >= 3),
         "a trim loop needs three points"
@@ -1133,11 +1245,15 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
         "knots must be finite and strictly increasing"
     );
     let mut segments = Vec::new();
-    for ring in loops {
-        for (&a, &b) in ring
+    // The spans along a strip's edge, by their `u` to the knot tolerance: their `v`
+    // range and which span.
+    let mut sides: BTreeMap<i64, Vec<Side>> = BTreeMap::new();
+    for (r, ring) in loops.iter().enumerate() {
+        for (i, (&a, &b)) in ring
             .iter()
             .zip(ring.iter().cycle().skip(1))
             .take(ring.len())
+            .enumerate()
         {
             ensure!(
                 a.iter().chain(&b).all(|x| x.is_finite()),
@@ -1147,8 +1263,16 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                 on_knots(u_knots, a[0]),
                 "a trim point's u is not on the grid's knots"
             );
+            let span = spans.contains(&(r, i)).then_some((r, i));
             // A segment along a strip's edge bounds no strip.
             if (b[0] - a[0]).abs() <= KNOT_TOLERANCE {
+                if let Some(span) = span {
+                    sides.entry(knot_key(a[0])).or_default().push((
+                        a[1].min(b[1]),
+                        a[1].max(b[1]),
+                        span,
+                    ));
+                }
                 continue;
             }
             let (p, q) = if a[0] < b[0] { (a, b) } else { (b, a) };
@@ -1157,9 +1281,20 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                 v0: p[1],
                 u1: q[0],
                 v1: q[1],
+                span,
             });
         }
     }
+    // The span a side point at `u` lies on, strictly between the span's ends.
+    let side_span = |p: [f64; 2]| -> Option<Span> {
+        let key = knot_key(p[0]);
+        sides
+            .range(key.saturating_sub(1)..=key.saturating_add(1))
+            .flat_map(|(_, list)| list.iter())
+            .find(|(lo, hi, _)| p[1] > lo + KNOT_TOLERANCE && p[1] < hi - KNOT_TOLERANCE)
+            .map(|(_, _, span)| *span)
+    };
+    let mut tags: Vec<Option<Span>> = Vec::new();
     let enclosed = enclosed_area(loops);
     ensure!(
         (u_knots.len() - 1).saturating_mul(segments.len()) <= STRIP_BUDGET,
@@ -1168,13 +1303,22 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
     let mut points: Vec<[f64; 2]> = Vec::new();
     let mut triangles: Vec<[u32; 3]> = Vec::new();
     let mut index: std::collections::HashMap<(i64, i64), u32> = std::collections::HashMap::new();
-    let mut vertex = |p: [f64; 2], points: &mut Vec<[f64; 2]>| -> Result<u32> {
-        let key = ((p[0] * 1e9).round() as i64, (p[1] * 1e9).round() as i64);
+    let mut vertex = |p: [f64; 2],
+                      tag: Option<Span>,
+                      points: &mut Vec<[f64; 2]>,
+                      tags: &mut Vec<Option<Span>>|
+     -> Result<u32> {
+        let key = (knot_key(p[0]), knot_key(p[1]));
         if let Some(&i) = index.get(&key) {
+            let held = &mut tags[i as usize];
+            if held.is_none() {
+                *held = tag;
+            }
             return Ok(i);
         }
         let i = u32::try_from(points.len()).context("trim vertex count overflow")?;
         points.push(p);
+        tags.push(tag);
         index.insert(key, i);
         Ok(i)
     };
@@ -1211,6 +1355,20 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
             if high_left - low_left <= KNOT_TOLERANCE && high_right - low_right <= KNOT_TOLERANCE {
                 continue;
             }
+            // A point made on the trapezoid's lower or upper edge lies on that segment.
+            let (bottom, top) = (*pair[0], *pair[1]);
+            let on = |s: &Segment, p: [f64; 2]| {
+                s.span.filter(|_| {
+                    p[0] > s.u0 + KNOT_TOLERANCE
+                        && p[0] < s.u1 - KNOT_TOLERANCE
+                        && (p[1] - s.at(p[0])).abs() <= KNOT_TOLERANCE
+                })
+            };
+            let tag_of = |p: [f64; 2]| {
+                on(&bottom, p)
+                    .or_else(|| on(&top, p))
+                    .or_else(|| side_span(p))
+            };
             let trapezoid = [
                 [left, low_left],
                 [right, low_right],
@@ -1242,7 +1400,7 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                 if piece.len() < 3 {
                     continue;
                 }
-                let first = vertex(piece[0], &mut points)?;
+                let first = vertex(piece[0], tag_of(piece[0]), &mut points, &mut tags)?;
                 for pair in piece[1..].windows(2) {
                     let area = ((pair[0][0] - piece[0][0]) * (pair[1][1] - piece[0][1])
                         - (pair[1][0] - piece[0][0]) * (pair[0][1] - piece[0][1]))
@@ -1251,8 +1409,8 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                         continue;
                     }
                     covered += area;
-                    let b = vertex(pair[0], &mut points)?;
-                    let c = vertex(pair[1], &mut points)?;
+                    let b = vertex(pair[0], tag_of(pair[0]), &mut points, &mut tags)?;
+                    let c = vertex(pair[1], tag_of(pair[1]), &mut points, &mut tags)?;
                     triangles.push([first, b, c]);
                 }
                 ensure!(
@@ -1266,20 +1424,95 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
         !triangles.is_empty() && (covered - enclosed).abs() <= 1e-9 * enclosed.abs().max(1e-9),
         "the trim loops cross each other or themselves"
     );
-    Ok((points, triangles))
+    Ok((points, triangles, tags))
 }
 
-/// The face's cells inside its trim loops (`trimmed_cells`), on the surface. The
-/// triangles turn the way the grid's do for the same orientation.
+/// A parameter rounded to the knot tolerance, as `trimmed_cells` numbers its points.
+fn knot_key(x: f64) -> i64 {
+    (x * 1e9).round() as i64
+}
+
+/// `vertices`, the model points of a trimmed face's `points`, with every point tagged
+/// with a span of `spans` (`trimmed_cells_on`) moved onto the straight line between
+/// the span's ends on the surface, at the same fraction of the span (#2094). `None`
+/// where no point moves. Each point is read once, so the work is the face's points.
+fn on_chords(
+    surface: &ParametricSurface,
+    points: &[[f64; 2]],
+    vertices: &[[f64; 3]],
+    tags: &[Option<Span>],
+    spans: &BTreeMap<Span, Chord>,
+) -> Result<Option<Vec<[f64; 3]>>> {
+    if spans.is_empty() {
+        return Ok(None);
+    }
+    let mut ends: BTreeMap<Span, ([f64; 3], [f64; 3])> = BTreeMap::new();
+    let mut placed = vertices.to_vec();
+    let mut moved = false;
+    for (i, tag) in tags.iter().enumerate() {
+        let Some(span) = tag else {
+            continue;
+        };
+        let Some(&[a, b]) = spans.get(span) else {
+            continue;
+        };
+        let d = [b[0] - a[0], b[1] - a[1]];
+        let length = d[0] * d[0] + d[1] * d[1];
+        if length.is_nan() || length <= 0. {
+            continue;
+        }
+        let (from, to) = match ends.get(span) {
+            Some(known) => *known,
+            None => {
+                let found = (surface.evaluate(a[0], a[1])?, surface.evaluate(b[0], b[1])?);
+                ends.insert(*span, found);
+                found
+            }
+        };
+        let p = points[i];
+        let t = ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1]) / length;
+        if t <= 0. || t >= 1. {
+            continue;
+        }
+        placed[i] = std::array::from_fn(|k| from[k] + t * (to[k] - from[k]));
+        moved = true;
+    }
+    Ok(moved.then_some(placed))
+}
+
+/// The face's cells inside its trim loops (`trimmed_cells`), on the surface, with the
+/// points on `chords` moved onto them where every triangle keeps its area
+/// ([`on_chords`]). The triangles turn the way the grid's do for the same orientation.
 fn tessellate_trimmed(
     surface: &ParametricSurface,
     loops: &[Vec<[f64; 2]>],
     u_knots: &[f64],
     v_knots: &[f64],
+    chords: &[[[f64; 2]; 2]],
     orient: bool,
     max_vertices: usize,
 ) -> Result<ParametricMesh> {
-    let (points, cells) = trimmed_cells(loops, u_knots, v_knots)?;
+    // Each chord is the span of the loop edge between the same two points, either way
+    // round: the loops' points are the samples the chords were taken from.
+    let mut by_ends: BTreeMap<EndKeys, Chord> = BTreeMap::new();
+    let key = |p: [f64; 2]| [knot_key(p[0]), knot_key(p[1])];
+    for &[a, b] in chords {
+        by_ends.insert((key(a), key(b)), [a, b]);
+        by_ends.insert((key(b), key(a)), [a, b]);
+    }
+    let mut spans: BTreeMap<Span, Chord> = BTreeMap::new();
+    if !by_ends.is_empty() {
+        for (r, ring) in loops.iter().enumerate() {
+            for i in 0..ring.len() {
+                let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+                if let Some(chord) = by_ends.get(&(key(a), key(b))) {
+                    spans.insert((r, i), *chord);
+                }
+            }
+        }
+    }
+    let wanted: std::collections::BTreeSet<Span> = spans.keys().copied().collect();
+    let (points, cells, tags) = trimmed_cells_on(loops, u_knots, v_knots, &wanted)?;
     ensure!(
         points.len() <= max_vertices && points.len() <= u32::MAX as usize,
         "parametric mesh vertex budget exceeded"
@@ -1297,18 +1530,35 @@ fn tessellate_trimmed(
         normals.push(n);
     }
     let winding = surface.orientation() == orient;
-    let mut triangles = Vec::with_capacity(cells.len());
-    for [a, b, c] in cells {
-        match keep_triangle(
-            vertices[a as usize],
-            vertices[b as usize],
-            vertices[c as usize],
-        ) {
-            Some(true) => triangles.push(if winding { [a, b, c] } else { [a, c, b] }),
-            Some(false) => {}
-            None => anyhow::bail!("noncollapsed degenerate parametric triangle"),
+    // The cells' triangles on `vertices`, or `None` where one is a needle.
+    let triangulate = |vertices: &[[f64; 3]]| -> Option<Vec<[u32; 3]>> {
+        let mut triangles = Vec::with_capacity(cells.len());
+        for &[a, b, c] in &cells {
+            if keep_triangle(
+                vertices[a as usize],
+                vertices[b as usize],
+                vertices[c as usize],
+            )? {
+                triangles.push(if winding { [a, b, c] } else { [a, c, b] });
+            }
         }
-    }
+        Some(triangles)
+    };
+    // Points moved onto their spans (`on_chords`) are kept only where every triangle
+    // still has area; anything else in that step leaves the face's points on the
+    // surface, as they were before it, so that it never refuses a face.
+    let placed = on_chords(surface, &points, &vertices, &tags, &spans)
+        .ok()
+        .flatten()
+        .and_then(|placed| triangulate(&placed).map(|triangles| (placed, triangles)));
+    let (vertices, triangles) = match placed {
+        Some(drawn) => drawn,
+        None => {
+            let triangles =
+                triangulate(&vertices).context("noncollapsed degenerate parametric triangle")?;
+            (vertices, triangles)
+        }
+    };
     ensure!(
         !triangles.is_empty(),
         "parametric surface produced no triangles"

@@ -34,7 +34,8 @@
 //! all, one tread of its runs' type thick ([`native_tread_landings`]).
 //!
 //! A run's treads all give one `m_runType`, which names the flight's
-//! predefined type in Revit's export ([`native_run_shapes`], #323). A spiral
+//! predefined type in Revit's export ([`native_run_shapes`], #323), 2 only
+//! where the treads also lie about one centre (#2046). A spiral
 //! run's treads give the spiral's centre and each tread's radii and angles
 //! ([`native_spiral_runs`], #357).
 //!
@@ -228,7 +229,8 @@ pub const NATIVE_RUN_SHAPE_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The `IfcStairFlightTypeEnum` value Revit's export writes for a run whose
 /// treads' `m_runType` is `run_type`: `STRAIGHT` for 0 and `SPIRAL` for 2,
-/// the two values measured (#323).
+/// the two values measured (#323). [`native_run_shapes`] gives 2 only for a
+/// run whose treads lie about one centre (#2046).
 pub fn flight_predefined_type(run_type: i64) -> Option<&'static str> {
     match run_type {
         0 => Some("STRAIGHT"),
@@ -241,14 +243,16 @@ pub fn flight_predefined_type(run_type: i64) -> Option<&'static str> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RunShape {
     /// The `m_runType` every one of its treads gives: 0 on a straight run,
-    /// 2 on a spiral one.
+    /// 2 on a spiral one, whose treads lie about one centre (#2046).
     pub run_type: i64,
     /// The plan direction it climbs in, its first tread's `m_runDirProj`.
     pub direction: Option<[f64; 2]>,
 }
 
 /// Each run in `runs` whose native `StairsTreadInfo` records all give one
-/// `m_runType`, with that value and its climb direction (#323).
+/// `m_runType`, with that value and its climb direction (#323). A run whose
+/// treads all give 2 is left out unless they lie about one centre as a spiral
+/// run's do (#2046).
 pub fn native_run_shapes(
     rf: &mut RevitFile,
     runs: &BTreeSet<u64>,
@@ -279,6 +283,38 @@ pub fn native_run_shapes(
             .map(|t| t.get("m_runType").and_then(Fv::as_i64))
             .collect();
         if let [Some(run_type)] = shapes.into_iter().collect::<Vec<_>>().as_slice() {
+            // Treads that all give 2 do not make a spiral run (#2046): on a
+            // Revit 2027 model with no spiral run, Revit's export does not call
+            // three such runs spiral (their flights' types are `USERDEFINED`
+            // with an `ElementType` of `NOTDEFINED`), as revit-ifc's
+            // `StairsExporter.GetValidatedStairFlightType` gives `NOTDEFINED`
+            // for a run whose style is not Straight, Spiral or Winder
+            // (CLEANROOM.md source 5).
+            // Such a run is a spiral only where its treads lie about one centre
+            // as a spiral run's do ([`spiral`]), and its shape is left out
+            // otherwise.
+            if *run_type == 2 {
+                let mut ordered: Vec<(i64, Fv)> = graph
+                    .objects
+                    .iter()
+                    .filter(|o| o.class_name == "StairsTreadInfo")
+                    .map(|o| {
+                        let index = o.fields["m_startRiser"]["m_specifiedIdx"]
+                            .as_i64()
+                            .unwrap_or(i64::MAX);
+                        (index, o.fields.clone())
+                    })
+                    .collect();
+                ordered.sort_by_key(|(index, _)| *index);
+                let ordered: Vec<Fv> = ordered.into_iter().map(|(_, tread)| tread).collect();
+                let spiral_run = graph
+                    .objects
+                    .first()
+                    .and_then(|root| spiral(&root.fields, &ordered));
+                if spiral_run.is_none() {
+                    return Ok(());
+                }
+            }
             out.insert(
                 record.identity.element_id,
                 RunShape {
@@ -1149,17 +1185,19 @@ fn element_id(v: &Fv, name: &str) -> Option<u64> {
 ///   `Monolithic Run` or `Non-Monolithic Run`;
 /// - a `StairsLanding`'s stair and type are the ones `landings` gives (its
 ///   element record's, as Revit 2024 reads them, #2046), a `StairsLandingType`
-///   whose `m_hasMonolithicSupport` is false: `Non-Monolithic Landing`, as the
-///   type byte of Revit 2024's landings gives (RE-65). A monolithic landing
-///   type's family is not measured on any release;
+///   whose `m_hasMonolithicSupport` names the family `Monolithic Landing` or
+///   `Non-Monolithic Landing`, as the type byte of Revit 2024's landings gives
+///   (RE-65, RE-491);
 /// - a `StairsSupport`'s stair is its host's (`m_hostCompId`, a run) and its
 ///   type its `m_typeId`; its family is `Stringer` where every side of its
 ///   stair's type that uses that type (`m_leftSideSupportTypeId`,
 ///   `m_rightSideSupportTypeId`) has support style 1.
 ///
 /// Each type's name is its `SymbolInfo.m_name`. Any other construction or
-/// support style, a monolithic landing, and a part whose stair or type is not
-/// read is left out: none is measured.
+/// support style, and a part whose stair or type is not read, is left out:
+/// none is measured. The family words are the ones an English Revit's export
+/// writes: the file does not hold them, and a Revit in another language
+/// writes its own (RE-491).
 pub fn native_stair_parts(
     rf: &mut RevitFile,
     parts: &BTreeSet<u64>,
@@ -1308,10 +1346,12 @@ pub fn native_stair_parts(
         };
         part(id, stair, type_id, family);
     }
-    // A monolithic landing type's family is not measured, so only a landing
-    // type that is not monolithic names its landing.
     for (&id, &(stair, type_id)) in landings {
-        let family = (monolithic.get(&type_id) == Some(&false)).then_some("Non-Monolithic Landing");
+        let family = match monolithic.get(&type_id) {
+            Some(true) => Some("Monolithic Landing"),
+            Some(false) => Some("Non-Monolithic Landing"),
+            None => None,
+        };
         part(id, stair, type_id, family);
     }
     for (&id, &(host, type_id)) in &supports {

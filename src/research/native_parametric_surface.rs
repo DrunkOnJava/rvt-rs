@@ -97,6 +97,32 @@ pub fn ruled_surface_point(g: &ObjectGraph, si: usize, u: f64, v: f64) -> Result
     surface.evaluate(u, v)
 }
 
+/// One node of a saved `GHermiteSpline` profile (RE-311): the curve passes
+/// through `point` at parameter `t` with derivative `tangent` per unit of
+/// parameter.
+#[derive(Debug, Clone, Copy)]
+pub struct SplineNode {
+    t: f64,
+    point: Point,
+    tangent: Point,
+}
+
+/// The most equal steps a spline profile is cut into to hold a chord error.
+const SPLINE_STEP_CAP: usize = 128;
+
+/// The two nodes of `nodes` the parameter `t` lies between, the last pair
+/// from the last node on. `nodes` holds at least two, in rising order of their
+/// parameter, so the pair is found by halving: a face's grid evaluates its
+/// profile at every one of its points, and a scan of the nodes at each would
+/// cost the points times the nodes the file saves.
+fn spline_segment(nodes: &[SplineNode], t: f64) -> (SplineNode, SplineNode) {
+    let i = nodes
+        .partition_point(|node| node.t <= t)
+        .saturating_sub(1)
+        .min(nodes.len() - 2);
+    (nodes[i], nodes[i + 1])
+}
+
 #[derive(Debug, Clone)]
 pub enum Curve {
     /// RE-443: a null ruled-profile pointer's separately saved point.
@@ -121,6 +147,13 @@ pub enum Curve {
         y: Point,
         x_len: f64,
         y_len: f64,
+        range: [f64; 2],
+    },
+    /// Revit's `GHermiteSpline` (RE-311): a cubic Hermite segment between each
+    /// pair of consecutive nodes, with at least two nodes in rising order of
+    /// their parameter.
+    Hermite {
+        nodes: Vec<SplineNode>,
         range: [f64; 2],
     },
 }
@@ -189,6 +222,39 @@ impl Curve {
                     range: range(&o.fields["m_endParams"], "ellipse range")?,
                 })
             }
+            "GHermiteSpline" => {
+                // A periodic spline is unmeasured, so it is refused.
+                ensure!(
+                    o.fields["m_Periodic"].as_bool() == Some(false),
+                    "periodic spline profile is unmeasured"
+                );
+                let nodes = o.fields["m_NodeArray"]
+                    .as_array()
+                    .context("spline nodes")?
+                    .iter()
+                    .map(|node| -> Result<SplineNode> {
+                        Ok(SplineNode {
+                            t: node["m_iParametr"]
+                                .as_f64()
+                                .context("spline node parameter")?,
+                            point: p(&node["m_iPoint"], "spline node point")?,
+                            tangent: p(&node["m_iTangent"], "spline node tangent")?,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                ensure!(
+                    nodes.len() >= 2
+                        && nodes.iter().all(|node| node.t.is_finite())
+                        && nodes.windows(2).all(|pair| pair[1].t > pair[0].t),
+                    "spline nodes are not in rising order"
+                );
+                let range = range(&o.fields["m_endParams"], "spline range")?;
+                ensure!(
+                    range[0] >= nodes[0].t - 1e-9 && range[1] <= nodes[nodes.len() - 1].t + 1e-9,
+                    "spline range outside its nodes"
+                );
+                Ok(Self::Hermite { nodes, range })
+            }
             name => bail!("unsupported parametric profile curve {name}"),
         }
     }
@@ -220,15 +286,33 @@ impl Curve {
                 *center,
                 add(mul(*x, x_len * t.cos()), mul(*y, y_len * t.sin())),
             ),
+            Self::Hermite { nodes, range } => {
+                let t = t.clamp(range[0], range[1]);
+                let (a, b) = spline_segment(nodes, t);
+                let d = b.t - a.t;
+                let s = (t - a.t) / d;
+                let (s2, s3) = (s * s, s * s * s);
+                let h00 = 2. * s3 - 3. * s2 + 1.;
+                let h10 = s3 - 2. * s2 + s;
+                let h01 = -2. * s3 + 3. * s2;
+                let h11 = s3 - s2;
+                std::array::from_fn(|k| {
+                    h00 * a.point[k]
+                        + h10 * d * a.tangent[k]
+                        + h01 * b.point[k]
+                        + h11 * d * b.tangent[k]
+                })
+            }
         }
     }
     /// The parameter range.
     pub fn range(&self) -> [f64; 2] {
         match self {
             Self::Point(_) => [0., 1.],
-            Self::Line { range, .. } | Self::Arc { range, .. } | Self::Ellipse { range, .. } => {
-                *range
-            }
+            Self::Line { range, .. }
+            | Self::Arc { range, .. }
+            | Self::Ellipse { range, .. }
+            | Self::Hermite { range, .. } => *range,
         }
     }
     fn derivative(&self, t: f64) -> Point {
@@ -241,7 +325,51 @@ impl Curve {
             Self::Ellipse {
                 x, y, x_len, y_len, ..
             } => add(mul(*x, -x_len * t.sin()), mul(*y, y_len * t.cos())),
+            Self::Hermite { nodes, range } => {
+                let t = t.clamp(range[0], range[1]);
+                let (a, b) = spline_segment(nodes, t);
+                let d = b.t - a.t;
+                let s = (t - a.t) / d;
+                let s2 = s * s;
+                let h00 = 6. * s2 - 6. * s;
+                let h10 = 3. * s2 - 4. * s + 1.;
+                let h01 = -6. * s2 + 6. * s;
+                let h11 = 3. * s2 - 2. * s;
+                std::array::from_fn(|k| {
+                    (h00 * a.point[k] + h01 * b.point[k]) / d
+                        + h10 * a.tangent[k]
+                        + h11 * b.tangent[k]
+                })
+            }
         }
+    }
+    /// How many equal parameter steps between `lo` and `hi` hold a spline's
+    /// chord error to `chord` feet (one for any other curve): by the largest
+    /// second difference of 64 samples, at most 128 (`SPLINE_STEP_CAP`).
+    pub fn spline_steps(&self, lo: f64, hi: f64, chord: f64) -> usize {
+        if !matches!(self, Self::Hermite { .. }) {
+            return 1;
+        }
+        const SAMPLES: usize = 64;
+        let h = (hi - lo) / SAMPLES as f64;
+        let mut second = 0.0_f64;
+        for i in 1..SAMPLES {
+            let t = lo + h * i as f64;
+            let (a, b, c) = (self.eval(t - h), self.eval(t), self.eval(t + h));
+            second = second.max(len(sub(add(a, c), mul(b, 2.))));
+        }
+        if !second.is_finite() {
+            return SPLINE_STEP_CAP;
+        }
+        let steps = (SAMPLES as f64 * (second / (8. * chord)).sqrt()).ceil();
+        (steps as usize).clamp(1, SPLINE_STEP_CAP)
+    }
+    /// The greatest length of the derivative at 65 equal steps from `lo` to
+    /// `hi`.
+    pub fn speed(&self, lo: f64, hi: f64) -> f64 {
+        (0..=64)
+            .map(|i| len(self.derivative(lo + (hi - lo) * f64::from(i) / 64.)))
+            .fold(0., f64::max)
     }
 }
 
