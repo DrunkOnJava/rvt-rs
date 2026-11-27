@@ -1,0 +1,15 @@
+IfcBuildingElementProxyType PredefinedType: rvt-rs {'NOTDEFINED': 3}, Revit {'NOTDEFINED': 3}
+IfcDoorType PredefinedType: rvt-rs {'DOOR': 1}, Revit {'DOOR': 1}
+IfcRoofType PredefinedType: rvt-rs {'NOTDEFINED': 1}, Revit {'NOTDEFINED': 1}
+IfcWallType PredefinedType: rvt-rs {'NOTDEFINED': 1}, Revit {'STANDARD': 1}
+IfcWindowType PredefinedType: rvt-rs {'WINDOW': 1}, Revit {'WINDOW': 1}
+IfcSpace PredefinedType, all: rvt-rs {'SPACE': 2}, Revit {'NOTDEFINED': 2}
+other classes (every IfcElement class with a PredefinedType not read above):
+IfcBuildingElementProxy: 9 in both; same 9, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 9}
+IfcDoor: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'DOOR': 1}
+IfcOpeningElement: 4 in both; same 4, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'OPENING': 4}
+IfcRoof: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 1}
+IfcWall: 5 in both; same 5, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 5}
+IfcWindow: 3 in both; same 3, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'WINDOW': 3}
+  not paired by Tag: in Revit's only {}, in rvt-rs's only {}
+exit 0

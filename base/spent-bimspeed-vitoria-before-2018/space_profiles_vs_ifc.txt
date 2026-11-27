@@ -1,0 +1,15 @@
+space profiles: matched by globalid
+space profiles: IfcSpace in rvt-rs 73, in Revit 73, with a body 73 and 73
+space profiles: in both 73, only in rvt-rs 0, only in Revit 0
+space profiles: only in Revit and in rvt-rs without a body 0, paired where the Revit top surface has no area 0
+space profiles: area within 0.1% 72, within 1% 72, off 1
+space profiles: outline within 0.01 ft 71, off 2
+space profiles: vertices within 0.01 ft 18, off 55
+space profiles: boundary within 0.01 ft 72, off 1
+space profiles: area within 0.1% and outline within 0.01 ft 71
+space profiles: lowest and highest vertex within 0.01 ft 73, off 0
+space profiles: rvt-rs room stored solid: 73, area within 0.1% 72, outline within 0.01 ft 71, both 71, boundary within 0.01 ft 72
+space profiles: rvt-rs room stored solid height: 73, lowest and highest vertex within 0.01 ft 73
+  05wgfhjsv9D89ksCy8Zsn6: area 1638.72 vs 1512.29 ft2 (8.36%), vertices 13.617 ft, outline 10.135 ft, boundary 10.135 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 2 in rvt-rs, 1 and 2 in Revit, centroids 1.970 ft apart
+  38S41RSWL4DRSmkNPZeJcT: area 820.34 vs 820.34 ft2 (0.00%), vertices 16.656 ft, outline 6.053 ft, boundary 0.000 ft, room, rvt-rs outline from stored_solid, pieces and holes 1 and 0 in rvt-rs, 1 and 0 in Revit, centroids 0.000 ft apart
+exit 0

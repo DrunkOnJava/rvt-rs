@@ -1,0 +1,31 @@
+   7876  family instance | IfcMember | Name equal | ObjectType equal
+    611  system family | IfcWall | Name equal | ObjectType equal
+    344  family instance | IfcColumn | Name equal | ObjectType equal
+    269  family instance | IfcPlate | Name equal | ObjectType equal
+    266  family instance | IfcDoor | Name equal | ObjectType equal
+    265  family instance | IfcWindow | Name equal | ObjectType equal
+    141  family instance | IfcSanitaryTerminal | Name equal | ObjectType equal
+    100  system family | IfcCurtainWall | Name equal | ObjectType equal
+     98  family instance | IfcFurniture | Name equal | ObjectType equal
+     76  system family | IfcCovering | Name equal | ObjectType equal
+     76  family instance | IfcWasteTerminal | Name equal | ObjectType equal
+     71  family instance | IfcBeam | Name equal | ObjectType equal
+     58  system family | IfcSlab | Name equal | ObjectType equal
+     51  family instance | IfcElectricAppliance | Name differs | ObjectType equal
+     44  system family | IfcShadingDevice | Name equal | ObjectType equal
+     44  family instance | IfcLightFixture | Name equal | ObjectType equal
+     41  system family | IfcRailing | Name equal | ObjectType equal
+     40  family instance | IfcFireSuppressionTerminal | Name equal | ObjectType equal
+     31  system family | IfcStairFlight | Name equal | ObjectType equal
+     14  system family | IfcStair | Name equal | ObjectType equal
+     12  family instance | IfcCovering | Name equal | ObjectType equal
+     12  family instance | IfcPipeSegment | Name equal | ObjectType equal
+      8  system family | IfcBuildingElementProxy | Name equal | ObjectType equal
+      4  system family | IfcRamp | Name equal | ObjectType equal
+      3  family instance | IfcBuildingElementProxy | Name equal | ObjectType equal
+      2  family instance | IfcStair | Name equal | ObjectType differs
+      1  system family | IfcRamp | Name differs | ObjectType equal
+      1  system family | IfcRoof | Name equal | ObjectType equal
+      1  family instance | IfcAirTerminal | Name differs | ObjectType equal
+      2  family instance | IfcStair | ObjectType pattern: other
+exit 0

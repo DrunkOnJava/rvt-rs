@@ -1,0 +1,11 @@
+record-box bodies: 2; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcBuildingElementProxy            2       0       0       0       1       1       0    1.025
+         1  260900-BAS:Default
+         1  284621-FirePanel:Default
+total                              2       0       0       0       1       1       0
+box bodies by class and reason (SavedMeshRefusal, #1645): 2 of 2 have one
+IfcBuildingElementProxy            2
+         1  partial: malformed ruled-surface edge is connected to face ###; malformed ruled-surface edge is connected to face ####; unsupported parametric profile curve GNurbSpline
+         1  partial: unsupported parametric profile curve GNurbSpline
+exit 0

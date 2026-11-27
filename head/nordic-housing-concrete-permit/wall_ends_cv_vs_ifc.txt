@@ -1,0 +1,5 @@
+    690  ends
+    618  ends within 0.001 ft
+    618  ends within 0.01 ft
+    624  ends within 0.1 ft
+exit 0

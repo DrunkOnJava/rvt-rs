@@ -1,0 +1,6 @@
+elements of IfcSlab,IfcShadingDevice in both: 42
+  IfcSlab area within 0.1%: 42
+  IfcSlab outline within 0.01 ft: 42
+  IfcSlab vertices off: 3
+  IfcSlab vertices within 0.01 ft: 39
+exit 0

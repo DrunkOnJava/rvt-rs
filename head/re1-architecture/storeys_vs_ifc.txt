@@ -1,0 +1,7 @@
+73 elements, 39 not on a storey
+     23  IfcFurniture
+      9  IfcBuildingElementProxy
+      7  IfcSanitaryTerminal
+against Revit's export:
+     73  same storey as Revit's
+exit 0

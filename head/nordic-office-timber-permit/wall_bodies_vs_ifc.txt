@@ -1,0 +1,5 @@
+586 walls in the GLB
+    586  compared, axis-parallel
+faces (across), axis-parallel: 586 walls; within 0.001 ft: 585 0.01 ft: 585 0.1 ft: 585 1.0 ft: 586; max 0.500 ft
+ends (along), axis-parallel: 586 walls; within 0.001 ft: 316 0.01 ft: 316 0.1 ft: 368 1.0 ft: 547; max 5.955 ft
+exit 0

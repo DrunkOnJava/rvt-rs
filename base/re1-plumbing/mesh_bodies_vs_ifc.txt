@@ -1,0 +1,107 @@
+saved_graphics_mesh bodies scored: 60; in Revit's export 60
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcFlowFitting                   54       1        0       40        1          39  1.1752
+       30       0        0       20        0          30  PIPE-Elbow - Welded:-
+       10       0        0       10        0           0  PIPE-Tee - Welded:-
+        8       0        0        8        0           8  PIPE-Transition - Welded:-
+        4       0        0        0        0           0  Closet Bend Reducing:-
+        1       1        0        1        1           1  PIPE-Cap:-
+        1       0        0        1        0           0  Tee Vent:-
+IfcFlowTerminal                   6       6        1        6        6           6  1.0005
+        2       2        0        2        2           2  224200-FIXT-Rough In Sink-Wall:Grohe WB265_M
+        1       1        0        1        1           1  224200-FIXT-Rough In Tub-Wall:Tub_M
+        1       1        0        1        1           1  224200-FIXT-Rough In Shower-Wall:Shower_M
+        1       1        0        1        1           1  224200-FIXT-Rough In Sink-Wall:Whirlpool Washer_M
+        1       1        1        1        1           1  223313-WTRHTR-Tankless Electric:28kW
+  444676 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1138, Revit's vertices to rvt-rs's surface 0.01386 ft, rvt-rs's to Revit's 0.03453 ft
+  445080 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1697, Revit's vertices to rvt-rs's surface 0.0008146 ft, rvt-rs's to Revit's 0.02321 ft
+  447845 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1721, Revit's vertices to rvt-rs's surface 0.01723 ft, rvt-rs's to Revit's 0.01929 ft
+  447864 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1721, Revit's vertices to rvt-rs's surface 0.01723 ft, rvt-rs's to Revit's 0.01928 ft
+  445111 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1752, Revit's vertices to rvt-rs's surface 0.0003719 ft, rvt-rs's to Revit's 0.01893 ft
+  445210 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1752, Revit's vertices to rvt-rs's surface 0.0003719 ft, rvt-rs's to Revit's 0.01893 ft
+  445172 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1752, Revit's vertices to rvt-rs's surface 0.0003716 ft, rvt-rs's to Revit's 0.01892 ft
+  444721 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1182, Revit's vertices to rvt-rs's surface 0.0125 ft, rvt-rs's to Revit's 0.01758 ft
+  447350 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, Revit's vertices to rvt-rs's surface 2.917e-06 ft, rvt-rs's to Revit's 0.01037 ft
+  447354 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, Revit's vertices to rvt-rs's surface 2.917e-06 ft, rvt-rs's to Revit's 0.01037 ft
+  447179 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, Revit's vertices to rvt-rs's surface 2.348e-06 ft, rvt-rs's to Revit's 0.01037 ft
+  447243 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, Revit's vertices to rvt-rs's surface 2.59e-06 ft, rvt-rs's to Revit's 0.01037 ft
+  447596 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, Revit's vertices to rvt-rs's surface 2.593e-06 ft, rvt-rs's to Revit's 0.01037 ft
+  447376 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, Revit's vertices to rvt-rs's surface 2.11e-06 ft, rvt-rs's to Revit's 0.01037 ft
+  444370 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.3194, Revit's vertices to rvt-rs's surface 2.681e-06 ft, rvt-rs's to Revit's 0.008922 ft
+  volume 447573 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008686 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 444107 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008686 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 444376 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008685 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447694 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008684 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 444613 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008685 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 443907 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008684 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 444489 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008686 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447555 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008686 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 443937 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008686 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447723 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008685 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 444095 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008686 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447762 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008685 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 447676 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008684 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 444599 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, farthest vertex 0.008685 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0004
+    Revit shells 1, signed volumes (cubic ft): 0.0004
+  volume 444370 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.3194, farthest vertex 0.008922 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0002
+    Revit shells 1, signed volumes (cubic ft): 0.0002
+shell readings: 53 volume outliers read shell by shell: 7 explained by inscribed end faces, 0 explained by faces Revit's export holds twice, 46 another reason, 0 unread
+  reading 443813 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 443897 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 443905 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 443907 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 443937 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 443941 IfcFlowFitting 'PIPE-Tee - Welded:-': volume ratio 1.1441, other: other 1 (volume ratio 1.1441..1.1441, end-face area ratio 1.2040..1.2040: the volume ratio is not the end faces' area ratio)
+  reading 444095 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 444103 IfcFlowFitting 'PIPE-Tee - Welded:-': volume ratio 1.1441, other: other 1 (volume ratio 1.1441..1.1441, end-face area ratio 1.2040..1.2040: the volume ratio is not the end faces' area ratio)
+  reading 444107 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 444370 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.3194, other: other 1 (volume ratio 1.3194..1.3194, end-face area ratio 1.1993..1.1993: the volume ratio is not the end faces' area ratio)
+  reading 444373 IfcFlowFitting 'PIPE-Transition - Welded:-': volume ratio 1.0975, other: other 1 (volume ratio 1.0975..1.0975, end-face area ratio 1.1353..1.1353: the end faces' area ratios disagree)
+  reading 444376 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 444392 IfcFlowFitting 'PIPE-Tee - Welded:-': volume ratio 1.1441, other: other 1 (volume ratio 1.1441..1.1441, end-face area ratio 1.2040..1.2040: the volume ratio is not the end faces' area ratio)
+  reading 444396 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 444489 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 444497 IfcFlowFitting 'PIPE-Tee - Welded:-': volume ratio 1.1441, other: other 1 (volume ratio 1.1441..1.1441, end-face area ratio 1.2040..1.2040: the volume ratio is not the end faces' area ratio)
+  reading 444503 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 444599 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 444607 IfcFlowFitting 'PIPE-Tee - Welded:-': volume ratio 1.1441, other: other 1 (volume ratio 1.1441..1.1441, end-face area ratio 1.2040..1.2040: the volume ratio is not the end faces' area ratio)
+  reading 444613 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.2092, other: other 1 (volume ratio 1.2092..1.2092, end-face area ratio 1.1012..1.1012: the volume ratio is not the end faces' area ratio)
+  reading 444676 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1138, other: explained 1 (volume ratio 1.0734..1.0734, end-face area ratio 1.0734..1.0734), other 1 (volume ratio 1.1280..1.1280, end-face area ratio 1.0745..1.0745: the volume ratio is not the end faces' area ratio)
+  reading 444721 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1182, other: other 1 (volume ratio 1.1182..1.1182, end-face area ratio 1.0713..1.0713: the volume ratio is not the end faces' area ratio)
+  reading 445080 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1697, other: other 1 (volume ratio 1.1697..1.1697, end-face area ratio 1.0568..1.0568: the volume ratio is not the end faces' area ratio)
+  reading 445111 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1752, other: other 1 (volume ratio 1.1752..1.1752, end-face area ratio 1.0623..1.0623: the volume ratio is not the end faces' area ratio)
+  reading 445172 IfcFlowFitting 'PIPE-Elbow - Welded:-': volume ratio 1.1752, other: other 1 (volume ratio 1.1752..1.1752, end-face area ratio 1.0623..1.0623: the volume ratio is not the end faces' area ratio)
+  reading 447185 IfcFlowFitting 'PIPE-Transition - Welded:-': volume ratio 1.0824, explained: explained 1 (volume ratio 1.0824..1.0824, end-face area ratio 1.0824..1.0824)
+  reading 447187 IfcFlowFitting 'PIPE-Transition - Welded:-': volume ratio 1.0824, explained: explained 1 (volume ratio 1.0824..1.0824, end-face area ratio 1.0824..1.0824)
+  reading 447598 IfcFlowFitting 'PIPE-Transition - Welded:-': volume ratio 1.0824, explained: explained 1 (volume ratio 1.0824..1.0824, end-face area ratio 1.0824..1.0824)
+  reading 447692 IfcFlowFitting 'PIPE-Transition - Welded:-': volume ratio 1.0824, explained: explained 1 (volume ratio 1.0824..1.0824, end-face area ratio 1.0824..1.0824)
+  reading 447735 IfcFlowFitting 'PIPE-Transition - Welded:-': volume ratio 1.0824, explained: explained 1 (volume ratio 1.0824..1.0824, end-face area ratio 1.0824..1.0824)
+exit 0

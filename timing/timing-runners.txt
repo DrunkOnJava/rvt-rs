@@ -1,0 +1,5 @@
+- shard 1 (samples 2024): INTEL(R) XEON(R) PLATINUM 8573C
+- shard 2 (housing, reference models): AMD EPYC 9V45 96-Core Processor
+- shard 3 (timber office, samples 2027 on): Intel(R) Xeon(R) 6975P-C
+- shard 4 (samples to 2023, samples 2026): AMD EPYC 9V74 80-Core Processor
+- shard 5 (offices, samples 2025): Intel(R) Xeon(R) 6975P-C

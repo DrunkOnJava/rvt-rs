@@ -1,0 +1,5 @@
+   1222  ends
+    946  ends within 0.001 ft
+    947  ends within 0.01 ft
+    960  ends within 0.1 ft
+exit 0

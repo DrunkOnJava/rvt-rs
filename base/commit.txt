@@ -1,0 +1,1 @@
+6d33d7d2ccba12771be3796e06fbdd93392106b2 research(elements): the beam-end probe reads each end along the beam's own line by the column's own outline, and checks itself on a model it turns (#1839) (#2093)

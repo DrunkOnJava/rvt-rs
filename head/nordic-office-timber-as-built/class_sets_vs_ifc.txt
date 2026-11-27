@@ -1,0 +1,34 @@
+Revit's export: 10866 paired elements and spaces, 0 untagged and 2 repeated Tags left out
+rvt-rs's export: 10865 paired elements and spaces, 0 untagged and 0 repeated Tags left out
+class                             revit   same  other absent  other classes
+IfcAirTerminal                        1      1      0      0  
+IfcBeam                              71     71      0      0  
+IfcBuildingElementProxy              11     11      0      0  
+IfcColumn                           344    344      0      0  
+IfcCovering                          88     88      0      0  
+IfcCurtainWall                      100    100      0      0  
+IfcDoor                             266    266      0      0  
+IfcElectricAppliance                 51     51      0      0  
+IfcFireSuppressionTerminal           40     40      0      0  
+IfcFurniture                         98     98      0      0  
+IfcLightFixture                      44     44      0      0  
+IfcMember                          7876   7876      0      0  
+IfcPipeSegment                       12     12      0      0  
+IfcPlate                            269    269      0      0  
+IfcRailing                           41     41      0      0  
+IfcRamp                               5      5      0      0  
+IfcRoof                               1      1      0      0  
+IfcSanitaryTerminal                 141    141      0      0  
+IfcShadingDevice                     44     44      0      0  
+IfcSlab                              58     58      0      0  
+IfcSpace                            306    305      0      1  
+IfcStair                             16     16      0      0  
+IfcStairFlight                       31     31      0      0  
+IfcWall                             611    611      0      0  
+IfcWasteTerminal                     76     76      0      0  
+IfcWindow                           265    265      0      0  
+written as another class, by Revit's category and export value, and rvt-rs's:
+extra in rvt-rs's export, by class:
+missing IfcSpace (1):
+  3M4BY9f2fEkQXYemrsO6jr  'CHASE:3128929'  'CHASE'  storey 'Level_03'  category '-'  export as '-'
+exit 0

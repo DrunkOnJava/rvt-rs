@@ -1,0 +1,4 @@
+openings with no filler: 1
+openings with no filler voiding Revit's wall: 1
+doors and windows not in Revit's export: 0
+exit 0

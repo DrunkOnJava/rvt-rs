@@ -1,0 +1,18 @@
+IfcColumnType PredefinedType: rvt-rs {'COLUMN': 175}, Revit {'COLUMN': 175}
+IfcDoorType PredefinedType: rvt-rs {'DOOR': 10}, Revit {'DOOR': 10}
+IfcShadingDeviceType PredefinedType: rvt-rs {'NOTDEFINED': 2}, Revit {'NOTDEFINED': 2}
+IfcSlabType PredefinedType: rvt-rs {'FLOOR': 5, 'ROOF': 2}, Revit {'FLOOR': 5, 'ROOF': 2}
+IfcWallType PredefinedType: rvt-rs {'NOTDEFINED': 4}, Revit {'STANDARD': 4}
+IfcWindowType PredefinedType: rvt-rs {'WINDOW': 1}, Revit {'WINDOW': 1}
+IfcGrid PredefinedType, all: rvt-rs {}, Revit {'-': 3}
+IfcSpace PredefinedType, all: rvt-rs {'SPACE': 116}, Revit {'SPACE': 116}
+IfcSlab: 80 in both; same 80, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'FLOOR': 78, 'ROOF': 2}
+other classes (every IfcElement class with a PredefinedType not read above):
+IfcColumn: 256 in both; same 256, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'COLUMN': 256}
+IfcDoor: 132 in both; same 132, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'DOOR': 132}
+IfcOpeningElement: 201 in both; same 201, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'OPENING': 201}
+IfcShadingDevice: 20 in both; same 20, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 20}
+IfcWall: 360 in both; same 360, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 360}
+IfcWindow: 6 in both; same 6, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'WINDOW': 6}
+  not paired by Tag: in Revit's only {}, in rvt-rs's only {}
+exit 0

@@ -1,0 +1,125 @@
+Revit values on objects rvt-rs writes: 5207; equal: 3640; different: 0; missing: 1567; rvt-rs values Revit does not write: 57
+values on a key that more than one object of Revit's export holds, scored against the object held, in the totals above (#1576): 54 on 10 such keys; equal 12, different 0, missing 42
+values on a key that more than one object of Revit's export holds, whose objects hold different values, counted apart (#1576): 0 on 0 such keys
+  Pset_BeamCommon.IsExternal: 2, equal 1, different 0, missing 1
+  Pset_BeamCommon.Reference: 2, equal 1, different 0, missing 1
+  Pset_BeamCommon.Slope: 1, equal 1, different 0, missing 0
+  Pset_BeamCommon.Span: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 1, different 0, missing 0
+  Pset_BuildingElementProxyCommon.Reference: 48, equal 35, different 0, missing 13
+  Pset_BuildingStoreyCommon.AboveGround: 7, equal 7, different 0, missing 0
+  Pset_ColumnCommon.IsExternal: 120, equal 114, different 0, missing 6
+  Pset_ColumnCommon.LoadBearing: 120, equal 120, different 0, missing 0
+  Pset_ColumnCommon.Reference: 120, equal 114, different 0, missing 6
+  Pset_CurtainWallCommon.IsExternal: 9, equal 5, different 0, missing 4
+  Pset_CurtainWallCommon.Reference: 9, equal 0, different 0, missing 9
+  Pset_DistributionFlowElementCommon.Reference: 178, equal 0, different 0, missing 178
+  Pset_DoorCommon.IsExternal: 68, equal 0, different 0, missing 68
+  Pset_DoorCommon.Reference: 68, equal 68, different 0, missing 0
+  Pset_DoorCommon.ThermalTransmittance: 68, equal 0, different 0, missing 68
+  Pset_EnvironmentalImpactIndicators.Reference: 1341, equal 1159, different 0, missing 182
+  Pset_ManufacturerTypeInformation.Manufacturer: 78, equal 0, different 0, missing 78
+  Pset_MemberCommon.Reference: 208, equal 206, different 0, missing 2
+  Pset_MemberCommon.Span: 206, equal 206, different 0, missing 0
+  Pset_PipeFittingTypeCommon.Reference: 128, equal 128, different 0, missing 0
+  Pset_PipeSegmentTypeCommon.Reference: 140, equal 140, different 0, missing 0
+  Pset_PlateCommon.Reference: 67, equal 67, different 0, missing 0
+  Pset_PlateCommon.ThermalTransmittance: 67, equal 0, different 0, missing 67
+  Pset_RailingCommon.Height: 14, equal 0, different 0, missing 14
+  Pset_RailingCommon.IsExternal: 14, equal 0, different 0, missing 14
+  Pset_RailingCommon.Reference: 14, equal 0, different 0, missing 14
+  Pset_ReinforcementBarPitchOfBeam.Reference: 2, equal 1, different 0, missing 1
+  Pset_ReinforcementBarPitchOfColumn.Reference: 120, equal 114, different 0, missing 6
+  Pset_ReinforcementBarPitchOfSlab.Reference: 19, equal 9, different 0, missing 10
+  Pset_ReinforcementBarPitchOfWall.Reference: 256, equal 239, different 0, missing 17
+  Pset_RoofCommon.IsExternal: 8, equal 0, different 0, missing 8
+  Pset_RoofCommon.ProjectedArea: 8, equal 0, different 0, missing 8
+  Pset_RoofCommon.Reference: 8, equal 8, different 0, missing 0
+  Pset_RoofCommon.TotalArea: 8, equal 0, different 0, missing 8
+  Pset_SlabCommon.IsExternal: 19, equal 0, different 0, missing 19
+  Pset_SlabCommon.LoadBearing: 9, equal 0, different 0, missing 9
+  Pset_SlabCommon.PitchAngle: 15, equal 9, different 0, missing 6
+  Pset_SlabCommon.Reference: 19, equal 9, different 0, missing 10
+  Pset_SlabCommon.ThermalTransmittance: 10, equal 0, different 0, missing 10
+  Pset_SpaceCommon.Reference: 73, equal 73, different 0, missing 0
+  Pset_StairCommon.IsExternal: 6, equal 0, different 0, missing 6
+  Pset_StairCommon.NumberOfRiser: 6, equal 0, different 0, missing 6
+  Pset_StairCommon.NumberOfTreads: 6, equal 0, different 0, missing 6
+  Pset_StairCommon.Reference: 6, equal 0, different 0, missing 6
+  Pset_StairCommon.RiserHeight: 6, equal 0, different 0, missing 6
+  Pset_StairCommon.TreadLength: 6, equal 0, different 0, missing 6
+  Pset_StairFlightCommon.NosingLength: 6, equal 0, different 0, missing 6
+  Pset_StairFlightCommon.NumberOfRiser: 6, equal 0, different 0, missing 6
+  Pset_StairFlightCommon.NumberOfTreads: 6, equal 0, different 0, missing 6
+  Pset_StairFlightCommon.Reference: 6, equal 0, different 0, missing 6
+  Pset_StairFlightCommon.RiserHeight: 6, equal 0, different 0, missing 6
+  Pset_StairFlightCommon.TreadLength: 6, equal 0, different 0, missing 6
+  Pset_StairFlightCommon.TreadLengthAtOffset: 6, equal 0, different 0, missing 6
+  Pset_WallCommon.ExtendToStructure: 247, equal 247, different 0, missing 0
+  Pset_WallCommon.IsExternal: 256, equal 247, different 0, missing 9
+  Pset_WallCommon.LoadBearing: 247, equal 0, different 0, missing 247
+  Pset_WallCommon.Reference: 256, equal 239, different 0, missing 17
+  Pset_WallCommon.ThermalTransmittance: 247, equal 0, different 0, missing 247
+  Pset_WindowCommon.IsExternal: 70, equal 0, different 0, missing 70
+  Pset_WindowCommon.Reference: 70, equal 70, different 0, missing 0
+  Pset_WindowCommon.ThermalTransmittance: 62, equal 0, different 0, missing 62
+Revit values the saved file does not decide, counted apart (RE-277, #1193): Pset_ColumnCommon.Slope 114
+Revit values known to be wrong, left out (RE-235 §5, RE-269): Pset_MemberCommon.IsExternal on curtain members 206
+Revit values known to be wrong, left out (RE-235 §5, RE-269): Pset_MemberCommon.IsExternal on types 2
+Revit values known to be wrong, left out (RE-235 §5, RE-269): Pset_PlateCommon.IsExternal on curtain members 67
+Revit values on openings rvt-rs does not write (a door or wall cut in a further host, a curtain wall's or cabinet's cut), not scored: 10
+  Pset_EnvironmentalImpactIndicators.Reference: 5
+  Pset_OpeningElementCommon.Reference: 5
+IFC4 properties IFC2X3's definitions do not have, which Revit's IFC2X3 export cannot write, not scored: 1
+  Pset_BeamCommon.Roll: 1
+IFC2X3 lengths IFC4 holds as quantities, not scored here: 484
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+  Pset_BeamCommon.LoadBearing: 2, 0
+  Pset_EnvironmentalImpactIndicators.Reference: 0, 1
+  Pset_OpeningElementCommon.Reference: 0, 1
+  Pset_PipeSegmentOccurrence.InvertElevation: 45, 0
+  Pset_WallCommon.ExtendToStructure: 4, 0
+  Pset_WallCommon.IsExternal: 4, 0
+Revit's most common values where rvt-rs writes none:
+  Pset_WallCommon.LoadBearing: ('IfcBoolean', False) x247; on IfcWallStandardCase x235, IfcWall x12
+  Pset_WallCommon.ThermalTransmittance: ('IfcThermalTransmittanceMeasure', 1.98863636136041) x131, ('IfcThermalTransmittanceMeasure', 2.82987944786393) x35, ('IfcThermalTransmittanceMeasure', 0.866309574379078) x31, ('IfcThermalTransmittanceMeasure', 0.803690660732993) x26; on IfcWallStandardCase x227, IfcWall x12, IfcWallType x8
+  Pset_EnvironmentalImpactIndicators.Reference: ('IfcIdentifier', 'Tubo') x102, ('IfcIdentifier', 'LKS_T1 29cm') x9, ('IfcIdentifier', '2.3 L') x8, ('IfcIdentifier', '500') x8; on IfcFlowSegment x104, IfcRailing x14, IfcCurtainWall x9, IfcWallType x9
+  Pset_DistributionFlowElementCommon.Reference: ('IfcIdentifier', 'Tubo') x102, ('IfcIdentifier', 'Estándar') x74, ('IfcIdentifier', 'Canalón') x2; on IfcFlowSegment x104, IfcFlowFitting x74
+  Pset_ManufacturerTypeInformation.Manufacturer: ('IfcLabel', 'Revit') x64, None x14; on IfcDoor x64, IfcBuildingElementProxy x13, IfcBuildingElementProxyType x1
+  Pset_WindowCommon.IsExternal: ('IfcBoolean', True) x70; on IfcWindow x70
+  Pset_DoorCommon.IsExternal: ('IfcBoolean', False) x64, ('IfcBoolean', True) x4; on IfcDoor x68
+  Pset_DoorCommon.ThermalTransmittance: ('IfcThermalTransmittanceMeasure', 3.7021) x68; on IfcDoor x68
+  Pset_PlateCommon.ThermalTransmittance: ('IfcThermalTransmittanceMeasure', 6.7069) x67; on IfcPlate x67
+  Pset_WindowCommon.ThermalTransmittance: ('IfcThermalTransmittanceMeasure', 2.8) x17, ('IfcThermalTransmittanceMeasure', 3.8) x16, ('IfcThermalTransmittanceMeasure', 3.2) x14, ('IfcThermalTransmittanceMeasure', 5.0) x9; on IfcWindow x62
+  Pset_SlabCommon.IsExternal: ('IfcBoolean', False) x13, ('IfcBoolean', True) x6; on IfcSlab x15, IfcSlabType x4
+  Pset_ReinforcementBarPitchOfWall.Reference: ('IfcLabel', 'LKS_T1 29cm') x9, ('IfcLabel', 'LKS_T2 23cm') x1, ('IfcLabel', 'LKS_T3 23cm') x1, ('IfcLabel', 'LKS_T4 23.8cm') x1; on IfcWallType x9, IfcWallStandardCase x6, IfcWall x2
+  Pset_WallCommon.Reference: ('IfcIdentifier', 'LKS_T1 29cm') x9, ('IfcIdentifier', 'LKS_T2 23cm') x1, ('IfcIdentifier', 'LKS_T3 23cm') x1, ('IfcIdentifier', 'LKS_T4 23.8cm') x1; on IfcWallType x9, IfcWallStandardCase x6, IfcWall x2
+  Pset_RailingCommon.Height: ('IfcPositiveLengthMeasure', 0.5) x8, ('IfcPositiveLengthMeasure', 1.1) x6; on IfcRailing x14
+  Pset_RailingCommon.IsExternal: ('IfcBoolean', False) x14; on IfcRailing x14
+  Pset_RailingCommon.Reference: ('IfcIdentifier', '500') x8, ('IfcIdentifier', '1100 mm') x6; on IfcRailing x14
+  Pset_BuildingElementProxyCommon.Reference: ('IfcIdentifier', '2.3 L') x8, ('IfcIdentifier', 'Contador gas') x1, ('IfcIdentifier', 'Rejilla de ventilacion') x1, ('IfcIdentifier', 'Caja') x1; on IfcBuildingElementProxy x8, IfcBuildingElementProxyType x5
+  Pset_SlabCommon.ThermalTransmittance: ('IfcThermalTransmittanceMeasure', 1.80515759312321) x5, ('IfcThermalTransmittanceMeasure', 0.480258971202169) x3, ('IfcThermalTransmittanceMeasure', 1.97496032445777) x2; on IfcSlab x7, IfcSlabType x3
+  Pset_ReinforcementBarPitchOfSlab.Reference: ('IfcLabel', 'LKS-Cubierta Generica 4') x4, ('IfcLabel', 'LKS-Cubierta Generica 30') x2, ('IfcLabel', 'LKS_T6 32.7cm') x1, ('IfcLabel', 'LKS_T7 34.2cm') x1; on IfcSlab x6, IfcSlabType x4
+  Pset_SlabCommon.Reference: ('IfcIdentifier', 'LKS-Cubierta Generica 4') x4, ('IfcIdentifier', 'LKS-Cubierta Generica 30') x2, ('IfcIdentifier', 'LKS_T6 32.7cm') x1, ('IfcIdentifier', 'LKS_T7 34.2cm') x1; on IfcSlab x6, IfcSlabType x4
+  Pset_SlabCommon.LoadBearing: ('IfcBoolean', True) x9; on IfcSlab x9
+  Pset_CurtainWallCommon.Reference: ('IfcIdentifier', 'LKS-INCRUSTADO') x4, ('IfcIdentifier', 'LKS-VACIO') x3, ('IfcIdentifier', 'LKS-celosia') x2; on IfcCurtainWall x9
+  Pset_WallCommon.IsExternal: ('IfcBoolean', False) x9; on IfcWallType x9
+  Pset_RoofCommon.IsExternal: ('IfcBoolean', True) x8; on IfcSlab x6, IfcRoof x2
+  Pset_RoofCommon.ProjectedArea: ('IfcAreaMeasure', 3.76996704852644) x2, ('IfcAreaMeasure', 2.63096698983302) x2, ('IfcAreaMeasure', 186.427767984915) x1, ('IfcAreaMeasure', 6.44840786126493) x1; on IfcSlab x6, IfcRoof x2
+  Pset_RoofCommon.TotalArea: ('IfcAreaMeasure', 3.77742092585388) x2, ('IfcAreaMeasure', 2.63096698983302) x2, ('IfcAreaMeasure', 203.798064104308) x1, ('IfcAreaMeasure', 6.5504709926363) x1; on IfcSlab x6, IfcRoof x2
+  Pset_StairCommon.IsExternal: ('IfcBoolean', False) x6; on IfcStair x6
+  Pset_StairCommon.NumberOfRiser: ('IfcCountMeasure', 18.0) x4, ('IfcCountMeasure', 5.0) x1, ('IfcCountMeasure', 21.0) x1; on IfcStair x6
+  Pset_StairCommon.NumberOfTreads: ('IfcCountMeasure', 17.0) x4, ('IfcCountMeasure', 4.0) x1, ('IfcCountMeasure', 20.0) x1; on IfcStair x6
+  Pset_StairCommon.Reference: ('IfcIdentifier', 'LKS_GEN_Hormigon in-situ') x6; on IfcStair x6
+  Pset_StairCommon.RiserHeight: ('IfcPositiveLengthMeasure', 0.166666666666667) x4, ('IfcPositiveLengthMeasure', 0.169230769230769) x2; on IfcStair x6
+  Pset_StairCommon.TreadLength: ('IfcPositiveLengthMeasure', 0.28) x6; on IfcStair x6
+  Pset_StairFlightCommon.NosingLength: ('IfcLengthMeasure', 0.0) x6; on IfcStairFlight x6
+  Pset_StairFlightCommon.NumberOfRiser: ('IfcCountMeasure', 18.0) x4, ('IfcCountMeasure', 5.0) x1, ('IfcCountMeasure', 21.0) x1; on IfcStairFlight x6
+  Pset_StairFlightCommon.NumberOfTreads: ('IfcCountMeasure', 17.0) x4, ('IfcCountMeasure', 4.0) x1, ('IfcCountMeasure', 20.0) x1; on IfcStairFlight x6
+  Pset_StairFlightCommon.Reference: ('IfcIdentifier', 'LKS_GEN_Tramo in-situ') x6; on IfcStairFlight x6
+  Pset_StairFlightCommon.RiserHeight: ('IfcPositiveLengthMeasure', 0.166666666666667) x4, ('IfcPositiveLengthMeasure', 0.169230769230769) x2; on IfcStairFlight x6
+  Pset_StairFlightCommon.TreadLength: ('IfcPositiveLengthMeasure', 0.28) x6; on IfcStairFlight x6
+  Pset_StairFlightCommon.TreadLengthAtOffset: ('IfcPositiveLengthMeasure', 0.28) x6; on IfcStairFlight x6
+  Pset_SlabCommon.PitchAngle: ('IfcPlaneAngleMeasure', 0.0) x4, ('IfcPlaneAngleMeasure', 0.06283185307179605) x2; on IfcSlab x6
+exit 0

@@ -1,0 +1,13 @@
+space overlaps: stored solid: 73 rooms; walls: above 0.1% of the area on 35, above 1% on 27, above 5% on 26, largest 100.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
+space overlaps: upward faces, stored solid: 73 paired rooms, area within 0.1% of Revit's on 72
+space overlaps: downward faces, stored solid: 73 paired rooms, area within 0.1% of Revit's on 73
+space overlaps: every face, stored solid: 73 paired rooms, area within 0.1% of Revit's on 73
+  38S41RSWL4DRSmkNPZeJeP: stored_solid, up 19.60, floor 19.60, every face 19.60 ft2 (Revit up 19.60, floor 19.60, every face 19.60 ft2), inside walls 19.60 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  05wgfhjsv9D89ksCy8ZsmB: stored_solid, up 13.07, floor 13.07, every face 13.07 ft2 (Revit up 13.07, floor 13.07, every face 13.07 ft2), inside walls 13.07 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  05wgfhjsv9D89ksCy8ZsmG: stored_solid, up 19.58, floor 19.58, every face 19.58 ft2 (Revit up 19.58, floor 19.58, every face 19.58 ft2), inside walls 19.58 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  05wgfhjsv9D89ksCy8Zsnc: stored_solid, up 13.07, floor 13.07, every face 13.07 ft2 (Revit up 13.07, floor 13.07, every face 13.07 ft2), inside walls 13.07 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  05wgfhjsv9D89ksCy8Zsnl: stored_solid, up 19.58, floor 19.58, every face 19.58 ft2 (Revit up 19.58, floor 19.58, every face 19.58 ft2), inside walls 19.58 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  05wgfhjsv9D89ksCy8Zsnr: stored_solid, up 13.07, floor 13.07, every face 13.07 ft2 (Revit up 13.07, floor 13.07, every face 13.07 ft2), inside walls 13.07 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  05wgfhjsv9D89ksCy8Zsnw: stored_solid, up 19.58, floor 19.58, every face 19.58 ft2 (Revit up 19.58, floor 19.58, every face 19.58 ft2), inside walls 19.58 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+  38S41RSWL4DRSmkNPZeJey: stored_solid, up 13.08, floor 13.08, every face 13.08 ft2 (Revit up 13.08, floor 13.08, every face 13.08 ft2), inside walls 13.08 ft2 (100.00%), inside other rooms 0.00 ft2 (0.00%)
+exit 0

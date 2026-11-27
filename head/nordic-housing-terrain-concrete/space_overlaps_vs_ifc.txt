@@ -1,0 +1,13 @@
+space overlaps: stored solid: 8 rooms; walls: above 0.1% of the area on 0, above 1% on 0, above 5% on 0, largest 0.00%; other rooms: above 0.1% on 0, above 1% on 0, above 5% on 0, largest 0.00%
+space overlaps: upward faces, stored solid: 8 paired rooms, area within 0.1% of Revit's on 8
+space overlaps: downward faces, stored solid: 8 paired rooms, area within 0.1% of Revit's on 8
+space overlaps: every face, stored solid: 8 paired rooms, area within 0.1% of Revit's on 8
+  1wonheAkf4OAzuszk3Vqge: stored_solid, up 193.75, floor 193.75, every face 193.75 ft2 (Revit up 193.75, floor 193.75, every face 193.75 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  1wonheAkf4OAzuszk3Vqgl: stored_solid, up 134.55, floor 134.55, every face 134.55 ft2 (Revit up 134.55, floor 134.55, every face 134.55 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  1wonheAkf4OAzuszk3VqgG: stored_solid, up 134.55, floor 134.55, every face 134.55 ft2 (Revit up 134.55, floor 134.55, every face 134.55 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  1wonheAkf4OAzuszk3VqgO: stored_solid, up 134.55, floor 134.55, every face 134.55 ft2 (Revit up 134.55, floor 134.55, every face 134.55 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  1wonheAkf4OAzuszk3VqjW: stored_solid, up 134.55, floor 134.55, every face 134.55 ft2 (Revit up 134.55, floor 134.55, every face 134.55 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  1wonheAkf4OAzuszk3Vqje: stored_solid, up 150.69, floor 150.69, every face 150.69 ft2 (Revit up 150.69, floor 150.69, every face 150.69 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  21XBuM_T5CzvWFLIZMmjDd: stored_solid, up 64.58, floor 64.58, every face 64.58 ft2 (Revit up 64.58, floor 64.58, every face 64.58 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+  21XBuM_T5CzvWFLIZMmjsk: stored_solid, up 86.11, floor 86.11, every face 86.11 ft2 (Revit up 86.11, floor 86.11, every face 86.11 ft2), inside walls 0.00 ft2 (0.00%), inside other rooms 0.00 ft2 (0.00%)
+exit 0

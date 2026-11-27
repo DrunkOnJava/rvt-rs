@@ -1,0 +1,30 @@
+saved_graphics_mesh bodies scored: 17; in Revit's export 17
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcBuildingElementProxy           9       9        9        9        9           9  1.0000
+        3       3        3        3        3           3  Muntin Pattern_2x2:Muntin Pattern_2x2
+        3       3        3        3        3           3  Trim-Window-Exterior-Flat:with Sill
+        3       3        3        3        3           3  Trim-Window-Interior-Flat:Picture Frame
+IfcWindow                         3       3        3        3        3           3  1.0000
+        3       3        3        3        3           3  Window-Fixed:24" x 36"
+IfcMember                         2       2        2        2        2           2  1.0000
+        2       2        2        2        2           2  Stringer:Stringer - 50 mm Width
+IfcRailing                        2       2        2        2        2           2  1.0000
+        2       2        2        2        2           2  Railing:Railing 1
+IfcDoor                           1       1        0        1        0           0  1.0002
+        1       1        0        1        0           0  Door-Passage-Single-Full_Lite:36" x 84" Storefront
+  6644 IfcDoor 'Door-Passage-Single-Full_Lite:36" x 84" Storefront': volume ratio 1.0002, Revit's vertices to rvt-rs's surface 0.002748 ft, rvt-rs's to Revit's 0.008483 ft
+  12563 IfcBuildingElementProxy 'Trim-Window-Exterior-Flat:with Sill': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.029e-06 ft, rvt-rs's to Revit's 1.955e-06 ft
+  12576 IfcBuildingElementProxy 'Trim-Window-Exterior-Flat:with Sill': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.029e-06 ft, rvt-rs's to Revit's 1.637e-06 ft
+  12541 IfcBuildingElementProxy 'Trim-Window-Exterior-Flat:with Sill': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.029e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12898 IfcRailing 'Railing:Railing 1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 8.968e-07 ft, rvt-rs's to Revit's 1.953e-06 ft
+  12902 IfcRailing 'Railing:Railing 1': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 8.968e-07 ft, rvt-rs's to Revit's 1.953e-06 ft
+  12560 IfcWindow 'Window-Fixed:24" x 36"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.832e-06 ft, rvt-rs's to Revit's 1.832e-06 ft
+  12575 IfcBuildingElementProxy 'Muntin Pattern_2x2:Muntin Pattern_2x2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12573 IfcWindow 'Window-Fixed:24" x 36"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12540 IfcBuildingElementProxy 'Muntin Pattern_2x2:Muntin Pattern_2x2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12562 IfcBuildingElementProxy 'Muntin Pattern_2x2:Muntin Pattern_2x2': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12577 IfcBuildingElementProxy 'Trim-Window-Interior-Flat:Picture Frame': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12564 IfcBuildingElementProxy 'Trim-Window-Interior-Flat:Picture Frame': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12542 IfcBuildingElementProxy 'Trim-Window-Interior-Flat:Picture Frame': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+  12538 IfcWindow 'Window-Fixed:24" x 36"': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.624e-06 ft, rvt-rs's to Revit's 1.624e-06 ft
+exit 0
