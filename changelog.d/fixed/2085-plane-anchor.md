@@ -6,8 +6,11 @@
   shares an edge with by at most 0.00039 ft, the flat face's own saved sample is
   taken (the plane anchor); before, the flat face was refused as `shared curved
   edge leaves adjacent plane`, and with it the body. Both were fitted to that one
-  family on one save, which Measure does not hold, and Griffin chose to turn
-  them on by default. On the models Measure reads they draw one body more: a
-  cooktop on each of Autodesk's `rac_basic` saves of 2023 to 2027, whose saved
-  mesh spans its record box to the millimetre and which no Revit export checks (Measure 46058172915). No other export
-  changes.
+  family on one save, which Measure does not hold, with a 4,000,000-value graph
+  budget: at the default limit of 1,000,000 the chairs' saved graphics are
+  refused before either rule is reached (`rvt-ifc --saved-mesh-graph-values`
+  raises it). Griffin chose to turn both on by default. On the models Measure
+  reads, the plane anchor draws one body more, a cooktop on each of Autodesk's
+  `rac_basic` saves of 2023 to 2027, whose saved mesh spans its record box to
+  the millimetre and which no Revit export checks; the coordinated join takes no
+  face (Measure 46058172915, 46060234028). No other export changes.

@@ -132,7 +132,7 @@
 //!     than two do;
 //!   exportkeep graph=<ElementId> face=<n> surface=<class> loop=<n> at=<k> keep=<P|Q> width=<ft>:
 //!     a gap the export's coordinated join takes, by the function the export calls
-//!     (`native_saved_mesh::coordinated_join_keeps`), whether or not it is switched on, with its
+//!     (`native_saved_mesh::coordinated_join_keeps`), with its
 //!     width in the join's own measure (along a plane or cylinder, in model coordinates on a
 //!     revolved face); `exportkeeps gaps=<n> keep_q=<n> keep_p=<n> widest=<ft>` totals the file;
 //!   pairrings rings_with_gaps=<n> rings_the_join_touches=<n> rings_the_join_closes=<n>: the
@@ -764,7 +764,7 @@ static ORIENTS: Mutex<Vec<OrientRow>> = Mutex::new(Vec::new());
 /// (keeps Q, width in the join's own measure).
 static EXPORT_KEEPS: Mutex<Vec<(bool, f64)>> = Mutex::new(Vec::new());
 /// The export's coordinated join on each loop of `fi`, by
-/// `native_saved_mesh::coordinated_join_keeps`, whether or not it is switched on.
+/// `native_saved_mesh::coordinated_join_keeps`.
 fn report_export_keeps(id: u64, fi: usize, class: &str, graph: &ObjectGraph) {
     for (loop_index, li) in face_loops(graph, fi).into_iter().enumerate() {
         let Ok(keeps) = rvt::research::native_saved_mesh::coordinated_join_keeps(graph, fi, li)
