@@ -685,6 +685,13 @@ measure_sample() { # sample
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
     # #1437: every space of the sample's export says what it is.
     wanted space_kinds_vs_ifc && score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
+    # #2148: the 2018 save's rooms paired by GlobalId with a forum user's Revit 2018 export of
+    # it (research/rac-basic-2018-export.tsv), counts only: without --list the scorer prints
+    # no GlobalId or name. Not cached, as nothing derived from that export may be.
+    local phased="${SAMPLE_DIR:-}/phased/rac_basic_sample_project.ifc"
+    if [ "$(basename "$sample")" = 2018-rac_basic_sample_project.rvt ] && [ -s "$phased" ]; then
+      wanted spaces_by_globalid_vs_ifc && score "$dir/spaces_by_globalid_vs_ifc.txt" "$SCORERS/spaces_by_globalid_vs_ifc.py" "$dir/model.ifc" "$phased"
+    fi
   fi
   # The gates job scores these again, from nothing else (#1881).
   if [ -n "${GATE_DIR:-}" ] && [ -s "$dir/model.ifc" ] && gate_sample "$sample"; then
