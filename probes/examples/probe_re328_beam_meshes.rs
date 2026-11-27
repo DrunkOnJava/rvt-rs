@@ -32,6 +32,15 @@
 //! `box_overshoot`, the same for the record box's own extent along the line.
 //! Counts only: no element id, name or coordinate is printed.
 //!
+//! #2158: for each control whose mesh decodes whole it also prints
+//! `census section_ratio depth` and `census section_ratio width`, the body's depth and width
+//! over the mesh's extent across the line in the same direction, by bucket, and
+//! `section_ratio_max`, the largest of each. A body much deeper than the
+//! beam's own mesh is a record box that holds more than the beam: on a Revit
+//! 2024 project reported on #2158, nine beams drawn along their line got the
+//! box's 8.3 m height as their depth. The census reads every control, not only
+//! the first 400 the lines above score.
+//!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re328_beam_meshes -- model.rvt
 //! ```
@@ -204,6 +213,21 @@ fn overshoot(centre: [f64; 3], d: [f64; 3], length: f64, mesh: &Extents) -> f64 
     )
 }
 
+/// A body's size across the line over the mesh's extent there, by bucket.
+fn ratio_bucket(ratio: f64) -> &'static str {
+    match ratio {
+        r if r.is_nan() => "nan",
+        r if r <= 1.01 => "<=1.01",
+        r if r <= 1.1 => "<=1.1",
+        r if r <= 1.5 => "<=1.5",
+        r if r <= 2.0 => "<=2",
+        r if r <= 3.0 => "<=3",
+        r if r <= 5.0 => "<=5",
+        r if r <= 10.0 => "<=10",
+        _ => ">10",
+    }
+}
+
 /// `feet` as the least power of ten above it, or `0` within [`MATCH_FEET`].
 fn decade(feet: f64) -> String {
     if feet.is_nan() || feet <= MATCH_FEET {
@@ -270,6 +294,15 @@ fn main() -> anyhow::Result<()> {
         }
     }
     controls.sort_by_key(|control| control.id);
+    // #2158: the section census reads every control.
+    let census: Vec<Control> = controls
+        .iter()
+        .map(|control| Control {
+            id: control.id,
+            bbox: control.bbox,
+            body: control.body,
+        })
+        .collect();
     controls.truncate(CONTROL_CAP);
     println!("beams {}", beams.len());
     println!("targets {}", targets.len());
@@ -277,7 +310,7 @@ fn main() -> anyhow::Result<()> {
     let selected: BTreeSet<u64> = targets
         .iter()
         .map(|t| u64::from(t.id))
-        .chain(controls.iter().map(|c| u64::from(c.id)))
+        .chain(census.iter().map(|c| u64::from(c.id)))
         .collect();
     let mut meshes: BTreeMap<u64, Mesh> = BTreeMap::new();
     if !selected.is_empty() {
@@ -388,6 +421,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
+    let mut ratio_max = [0.0_f64; 2];
     for control in &controls {
         let body = control.body;
         let d = body.direction;
@@ -428,6 +462,42 @@ fn main() -> anyhow::Result<()> {
             ),
         );
     }
+    for control in &census {
+        let body = control.body;
+        let d = body.direction;
+        let Some(mesh) = meshes.get(&u64::from(control.id)) else {
+            bump(&mut counts, "census mesh none");
+            continue;
+        };
+        if mesh.partial {
+            bump(&mut counts, "census mesh partial");
+            continue;
+        }
+        let Some((u, w)) = frame(d) else { continue };
+        let seen = extents(&mesh.points, d, u, w);
+        let depth = body.depth_feet / (seen.up.1 - seen.up.0);
+        let width = body.width_feet / (seen.across.1 - seen.across.0);
+        bump(
+            &mut counts,
+            format!("census section_ratio depth {}", ratio_bucket(depth)),
+        );
+        bump(
+            &mut counts,
+            format!("census section_ratio width {}", ratio_bucket(width)),
+        );
+        if depth.is_finite() {
+            ratio_max[0] = ratio_max[0].max(depth);
+        }
+        if width.is_finite() {
+            ratio_max[1] = ratio_max[1].max(width);
+        }
+    }
+    println!(
+        "census {} section_ratio_max depth {:.3} width {:.3}",
+        census.len(),
+        ratio_max[0],
+        ratio_max[1]
+    );
     for (key, n) in &counts {
         println!("{key} {n}");
     }
