@@ -1,0 +1,2 @@
+IfcSpace: rvt-rs 14, Revit 17, in both 14, only rvt-rs 0, only Revit 3
+exit 0
