@@ -11,7 +11,8 @@
 //! refusing an incomplete export, checking the quality mode) stays with it.
 
 use super::saved_meshes::{
-    SavedMeshScope, attach_scoped_with_control, default_scope, note_not_offered,
+    SavedMeshLimits, SavedMeshScope, attach_scoped_with_limits_and_control, default_scope,
+    note_not_offered,
 };
 use super::{
     DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, IfcModel, PlaceholderExporter,
@@ -77,6 +78,8 @@ pub struct ExportOptions {
     pub mode: ExportQualityMode,
     /// Which bodies are drawn from saved graphics.
     pub saved_meshes: SavedMeshChoice,
+    /// Per-graph resource limits for the Saved mesh pass.
+    pub saved_mesh_limits: SavedMeshLimits,
     /// Draw a family instance from its family's own extrusions where they
     /// reproduce its saved mesh (`--family-extrusions`): implies the saved
     /// graphics of every boxed element.
@@ -140,6 +143,7 @@ impl Default for ExportOptions {
             kind: ExportKind::Document,
             mode: ExportQualityMode::Scaffold,
             saved_meshes: SavedMeshChoice::Default,
+            saved_mesh_limits: SavedMeshLimits::default(),
             family_extrusions: false,
             revit_property_sets: false,
             revit_set_placement: false,
@@ -170,6 +174,15 @@ impl ExportOptions {
     #[must_use]
     pub fn with_saved_meshes(mut self, saved_meshes: SavedMeshChoice) -> Self {
         self.saved_meshes = saved_meshes;
+        self
+    }
+
+    /// Set resource limits for this export's Saved mesh pass.
+    ///
+    /// The pass follows the policy set by [`with_saved_meshes`](Self::with_saved_meshes).
+    #[must_use]
+    pub fn with_saved_mesh_limits(mut self, limits: SavedMeshLimits) -> Self {
+        self.saved_mesh_limits = limits;
         self
     }
 
@@ -738,7 +751,13 @@ fn run_export_steps(
         }
     };
     if let Some(scope) = scope {
-        match attach_scoped_with_control(rf, &mut model, scope, control) {
+        match attach_scoped_with_limits_and_control(
+            rf,
+            &mut model,
+            scope,
+            options.saved_mesh_limits,
+            control,
+        ) {
             Ok(report) => {
                 recount_exported(&mut diagnostics, &model);
                 if report.candidates > 0 {
