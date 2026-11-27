@@ -86,8 +86,8 @@ fn office_views_sheets_and_viewports_are_read() {
         }
     }
     // Every sheet has a number. Not every one has a name: the office's sheet
-    // O-00 reads with an empty `m_viewName` on four of its six files, and
-    // whether Revit shows a name there is not checked.
+    // O-00 (1336117) reads with no name on all six of its files, and whether
+    // Revit shows a name there is not checked.
     for sheet in &catalog.sheets {
         assert!(!sheet.number.is_empty(), "sheet {} has a number", sheet.id);
     }
