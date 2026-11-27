@@ -131,19 +131,21 @@ FINDINGS = re.compile(r"^findings \d+$", re.M)
 
 
 def validation_state(root, model):
-    """(validation read, rules read, the limit in MB it was skipped over or None) for one export.
+    """(validation read, rules read, the limit in MB it was skipped over or None, validation run)
+    for one export.
 
     `schema.txt` holds a `validate:` section and a `rules:` section, each with a `findings N`
     line when its check read the file; a check that timed out or did not read it leaves none.
     A held-out model's scrubbed `counts.txt` keeps the same as `schema validate: findings N`
-    and `schema rules: findings N`. A run without the `schema` step, a family, or a model with
-    no export writes neither."""
+    and `schema rules: findings N`, or `not read` where the check left no count. A run without
+    the `schema` step, a family, or a model with no export writes neither: the last value says
+    whether the validation was run at all, so one that timed out on an export stands apart."""
     schema = (read(os.path.join(root, model, "schema.txt")) or b"").decode(errors="replace")
     counts = (read(os.path.join(root, model, "counts.txt")) or b"").decode(errors="replace")
     for text in (schema, counts):
         match = SKIPPED.search(text)
         if match:
-            return False, False, int(match.group(1))
+            return False, False, int(match.group(1)), False
 
     def section(name, until):
         """The lines between `name:` and `until:` in `schema.txt`."""
@@ -161,7 +163,8 @@ def validation_state(root, model):
         re.search(r"^schema validate: findings \d+$", counts, re.M))
     rules = bool(FINDINGS.search(section("rules", "property sets"))) or bool(
         re.search(r"^schema rules: findings \d+$", counts, re.M))
-    return validate, rules, None
+    ran = "validate:" in schema.splitlines() or bool(re.search(r"^schema validate: ", counts, re.M))
+    return validate, rules, None, ran
 
 
 def validation(head, base):
@@ -172,25 +175,29 @@ def validation(head, base):
         names = models(root)
         if names is None:
             continue
-        both, rules_missing, skipped, missing = 0, [], [], []
+        both, rules_missing, unread, skipped, missing = 0, [], [], [], []
         for model in names:
-            validate, rules, limit = validation_state(root, model)
+            validate, rules, limit, ran = validation_state(root, model)
             if limit is not None:
                 skipped.append((model, limit))
             elif validate and rules:
                 both += 1
             elif validate:
                 rules_missing.append(model)
+            elif ran:
+                unread.append(model)
             else:
                 missing.append(model)
         line = f"- Validation (IfcOpenShell and the EXPRESS rules) at {side}: both read on {both} of {len(names)} exports"
         if rules_missing:
             line += f"; **the rules not read on {len(rules_missing)}**: {named(rules_missing)}"
+        if unread:
+            line += f"; **the validation not read on {len(unread)}** (it timed out or could not read the file): {named(unread)}"
         if skipped:
             over = " or ".join(f"{mb} MB" for mb in sorted({mb for _, mb in skipped}))
             line += f"; **{len(skipped)} skipped for size (over {over})**: {named([m for m, _ in skipped])}"
         if missing:
-            line += f"; {len(missing)} not validated (the families, which are not validated, a run without the `schema` step, a check that timed out, or no export): {named(missing)}"
+            line += f"; {len(missing)} not validated (the families, which are not validated, a run without the `schema` step, or no export): {named(missing)}"
         print(line)
 
 
