@@ -79,6 +79,7 @@ use super::mesh_wall_quantities::{
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
+use std::num::NonZeroUsize;
 
 /// `BodySource` of a body drawn from the element's saved graphics.
 pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
@@ -336,6 +337,30 @@ pub fn default_scope(rf: &mut crate::RevitFile) -> Option<SavedMeshScope> {
         .then_some(SavedMeshScope::All)
 }
 
+/// Resource limits for reading Saved graphics when attaching meshes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SavedMeshLimits {
+    max_graph_values: NonZeroUsize,
+}
+
+impl Default for SavedMeshLimits {
+    fn default() -> Self {
+        Self {
+            max_graph_values: NonZeroUsize::new(1_000_000).unwrap(),
+        }
+    }
+}
+
+impl SavedMeshLimits {
+    /// Set the maximum number of field values read from one Saved graphics
+    /// graph. A graph beyond the limit remains unavailable to the attach pass.
+    /// The object, depth, and file budgets do not depend on this setting.
+    pub fn with_max_graph_values(mut self, maximum: NonZeroUsize) -> Self {
+        self.max_graph_values = maximum;
+        self
+    }
+}
+
 /// Replace each bounding-box body with the element's saved mesh, where the
 /// file holds one and all of it decodes.
 pub fn attach(rf: &mut crate::RevitFile, model: &mut IfcModel) -> anyhow::Result<SavedMeshReport> {
@@ -359,6 +384,19 @@ pub fn attach_scoped_with_control(
     rf: &mut crate::RevitFile,
     model: &mut IfcModel,
     scope: SavedMeshScope,
+    control: &crate::control::WalkerControl,
+) -> anyhow::Result<SavedMeshReport> {
+    attach_scoped_with_limits_and_control(rf, model, scope, SavedMeshLimits::default(), control)
+}
+
+/// Same as [`attach_scoped_with_control`], with a caller-supplied Saved
+/// graphics resource limit. A graph that does not fit keeps the normal
+/// per-element Saved refusal and fallback.
+pub fn attach_scoped_with_limits_and_control(
+    rf: &mut crate::RevitFile,
+    model: &mut IfcModel,
+    scope: SavedMeshScope,
+    limits: SavedMeshLimits,
     control: &crate::control::WalkerControl,
 ) -> anyhow::Result<SavedMeshReport> {
     let mut report = SavedMeshReport::default();
@@ -555,7 +593,7 @@ pub fn attach_scoped_with_control(
             .chain(instances.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
-        max_graph_values: 1_000_000,
+        max_graph_values: limits.max_graph_values.get(),
         max_graph_objects: 1_000_000,
         value_source: Some("saved_graphics"),
         ..Default::default()
