@@ -12,11 +12,12 @@ use rvt::{
     ifc::{
         ExportDiagnostics, ExportKind, ExportOptions, ExportQualityMode, SavedMeshChoice,
         run_export_with_limits,
+        saved_meshes::SavedMeshLimits,
         step_writer::{StepOptions, write_step_to, write_step_to_with_space_materials},
     },
     walker::WalkerLimits,
 };
-use std::path::PathBuf;
+use std::{num::NonZeroUsize, path::PathBuf};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 #[value(rename_all = "kebab-case")]
@@ -92,6 +93,11 @@ struct Args {
     /// 2024 to 2027 where Revit raised their base (RE-340).
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     saved_meshes: bool,
+    /// Limit the field values read from one Saved graphics graph.
+    /// Graphs beyond the limit keep their usual fallback. The default is
+    /// 1,000,000. The selected Saved scope and other reading limits apply.
+    #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
+    saved_mesh_graph_values: Option<NonZeroUsize>,
     /// Keep every element as its record's bounding box, and the walls that
     /// embed a curtain wall as their record's body, instead of the mesh Revit
     /// saved for them. Reading every box's saved graphics takes 1.04 to 1.92 times
@@ -429,10 +435,15 @@ fn export_options(args: &Args) -> ExportOptions {
     } else {
         SavedMeshChoice::Default
     };
+    let limits = SavedMeshLimits::default();
+    let limits = args
+        .saved_mesh_graph_values
+        .map_or(limits, |maximum| limits.with_max_graph_values(maximum));
     ExportOptions::default()
         .with_kind(kind)
         .with_mode(args.mode.into())
         .with_saved_meshes(saved_meshes)
+        .with_saved_mesh_limits(limits)
         .with_family_extrusions(args.family_extrusions)
         .with_revit_property_sets(args.revit_property_sets)
         .with_revit_set_placement(args.revit_set_placement)
