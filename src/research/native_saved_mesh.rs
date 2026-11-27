@@ -2183,10 +2183,9 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             CylinderTessellationProfile::default(),
         )?));
     }
-    if matches!(
-        p.class_name.as_str(),
-        "SurfRev" | "RuledSurf" | "ConeSurf" | "HermiteSurf"
-    ) {
+    // `HermiteSurf` (RE-460) is read on the research branch only: on `main` such a face is refused
+    // as an unsupported surface until its bodies are measured against Revit's exports (#2085).
+    if matches!(p.class_name.as_str(), "SurfRev" | "RuledSurf" | "ConeSurf") {
         return Ok(Some(crate::native_parametric_mesh::face(g, fi)?));
     }
     ensure!(

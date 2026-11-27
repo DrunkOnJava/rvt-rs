@@ -1175,10 +1175,10 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         // #2085 (candidate, `research/2085-chairs` only): a loop that does not join within
         // 1e-7 joins at the smallest of `LOOP_JOIN_BOUNDS` that closes it whole; a loop that
         // already closes keeps the strict path unchanged.
+        // The loop join (`LOOP_JOIN_BOUNDS`) stays on the research branch: on `main` a loop that
+        // does not close within `STRICT_JOIN` goes to the coordinated join or is refused (#2085).
         let (bound, keep) = if loop_closes(&surface, &segments)? {
             (STRICT_JOIN, Keeps::new())
-        } else if let Some(bound) = loop_join_bound(&surface, &segments)? {
-            (bound, Keeps::new())
         } else {
             // #2085: the gaps the coordinated join takes; the polygon
             // still refuses the loop if any other gap is at or over the touching bound.
