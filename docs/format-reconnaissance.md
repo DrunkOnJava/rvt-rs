@@ -2847,3 +2847,14 @@ it is off the axis, so a target is reported only where it lies on it. The
 reader is `rvt::research::views` (`rvt-views` with the `unstable-research` feature, and `probes/examples/probe_1117_views.rs`);
 the centre rule and the camera are experimental, and the catalog's evidence
 boundary is in `docs/views.md`.
+
+## Addendum — adjacent trim ends placed through their own face (2026-11-22)
+
+The `piecenbr` diagnostic in `probe_2085_trim_breaks` places neighbouring loop edges through a plane or cylinder. The `ownnbr` diagnostic uses the cached evaluator for the neighbouring face itself, including supported parametric surfaces. It reports distances from each adjacent edge to the gap's two ends and the separation of the nearest endpoints of the shared and adjacent edges in that face's loop.
+
+On the BIM4LCA Office Concrete As-Built model, the probe adds 228 readable neighbour rows across 73 gaps, with 30 gap sides read through parametric evaluators. All 1,752 previous rows match the baseline. At the `1e-7` ft bound, 10 scored sides have an adjacent endpoint that joins the shared edge and coincides with one gap end, where Revit's raw IFC vertices contain only one of those ends. Revit keeps that same end on seven sides and the other end on three. The join distance is a diagnostic for the stored loop. See [#2085](https://github.com/DrunkOnJava/rvt-rs/issues/2085).
+
+## Addendum — RE-498 the coordinated join and the plane anchor, fitted to one chair family (2026-11-27)
+
+On a contributor's chair family (one Revit 2024 save, not in Measure), two neighbouring cylinder or revolved rings part at the same stored end of the one edge they share, one reading the gap `last/first` and the other `first/first` or `last/last`; at all 8,960 such cylinder corners both name the same stored point, and Revit's export holds it. At four plane edges of the family a curved face's end sample leaves the plane by about 3.88e-4 ft, and Revit's export holds the plane's own sample at all 896 such ends. The coordinated join keeps the named point (gaps under 3.75e-4 ft) and the plane anchor takes the plane's sample (within 3.9e-4 ft); both are on by default. On Measure's models the anchor draws one body more, a cooktop on each `rac_basic` save of 2023 to 2027, and the join takes no face. Both were measured on the chairs above the default graph limit, whose 1,789,525 values `main` refuses at 1,000,000.
+
