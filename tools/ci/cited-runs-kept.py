@@ -4,7 +4,7 @@ The README and the evidence pages (docs/supported-profile.md, docs/reference-mod
 docs/evidence.md, docs/status.md) cite workflow runs by id, and GitHub deletes a run's artifacts
 90 days after it ran. research/kept-runs.tsv lists every cited run: its outputs kept under
 refs/evidence/<run> by .github/workflows/keep-run-outputs.yml, or `-` and why where nothing was
-left to keep. A row named `<run>-probes` or `<run>-holdout` is a commit kept beside the run's
+left to keep. A row named `<run>-probes`, `<run>-holdout` or `<run>-summaries` is a commit kept beside the run's
 first; the run itself still needs its own row. A page that cites a new run without a row lets
 that run's outputs expire unkept, so this fails until the workflow has kept it and its row is in.
 """
