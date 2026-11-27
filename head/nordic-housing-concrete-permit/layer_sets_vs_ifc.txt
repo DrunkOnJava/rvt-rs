@@ -1,0 +1,19 @@
+IfcOpenShell cannot mesh: RuntimeError: No suitable IfcRepresentation found
+      1  IfcOpenShell cannot mesh Revit's element
+      1  layer count: Revit's export names no layers
+    893  layer names: Revit's, in Revit's order
+      6  layer names: none written
+      1  layer sets whose count differs from Revit's
+    441  layer sets written
+    181  positions compared
+    259  positions not comparable
+    441  set name = Revit's Family:Type
+  layer spans within 0.001 ft of Revit's: 179 of 181
+  layer spans within 0.01 ft of Revit's: 179 of 181
+  layer spans within 0.1 ft of Revit's: 181 of 181
+  worst [(0.0, '1426918', 'IfcWall'), (0.0, '1538867', 'IfcWall'), (0.0, '1534703', 'IfcWall'), (0.0656, '1407283', 'IfcSlab'), (0.0656, '1683955', 'IfcSlab')]
+  whole layer sets within 0.001 ft of Revit's: 440 of 440
+  whole layer sets within 0.01 ft of Revit's: 440 of 440
+  whole layer sets within 0.1 ft of Revit's: 440 of 440
+  worst [(0.0, '1975381', 'IfcWall'), (0.0, '1567990', 'IfcStair'), (0.0, '1567905', 'IfcStair'), (0.0, '1567962', 'IfcStair'), (0.0, '1863740', 'IfcStair')]
+exit 0

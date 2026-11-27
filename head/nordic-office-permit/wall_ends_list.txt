@@ -1,0 +1,175 @@
+straight and angled walls in both: 589; both ends within 0.001 ft: 439
+BodySource | start (Revit's joins there) | end (Revit's joins there) | walls; short/long = rvt-rs's wall shorter/longer there
+    268  partition_element_record_join_trimmed | start ok [free] | end ok [free]
+    158  partition_wall_centreline_layer_joins | start ok [free] | end ok [free]
+     25  partition_element_record_join_trimmed | start long [free] | end ok [free]
+     22  partition_element_record_join_trimmed | start ok [free] | end long [free]
+     15  partition_element_record_join_trimmed | start long [free] | end long [free]
+     14  partition_wall_centreline_layer_joins | start long [free] | end ok [free]
+     12  partition_element_record_join_trimmed | start short [free] | end ok [free]
+     11  partition_wall_centreline | start long [free] | end long [free]
+      9  partition_wall_centreline_layer_joins | start ok [free] | end long [free]
+      9  saved_graphics_mesh | start ok [free] | end ok [free]
+      9  partition_wall_centreline_layer_joins | start short [free] | end ok [free]
+      8  partition_wall_centreline_layer_joins | start ok [free] | end short [free]
+      7  partition_element_record_join_trimmed | start ok [free] | end short [free]
+      6  partition_wall_centreline | start long [free] | end ok [free]
+      4  partition_wall_centreline | start ok [free] | end ok [free]
+      3  partition_wall_centreline_layer_joins | start long [free] | end long [free]
+      2  partition_wall_centreline | start ok [free] | end long [free]
+      2  partition_element_record_join_trimmed | start short [free] | end long [free]
+      2  partition_element_record_join_trimmed | start short [free] | end short [free]
+      2  saved_graphics_mesh | start short [free] | end short [free]
+      1  saved_graphics_mesh | start short [free] | end ok [free]
+the 150 walls with an end off by more than 0.001 ft, largest first (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):
+  1630903 partition_element_record_join_trimmed 'US-2' start +1.4928 end -0.0000 start[] end[] path 0
+  3039425 partition_element_record_join_trimmed 'US-2' start +1.4928 end +0.0000 start[] end[] path 0
+  1429758 partition_wall_centreline_layer_joins 'US-1' start +1.3287 end -0.0000 start[] end[] path 0
+  1348536 partition_wall_centreline_layer_joins 'US-1' start -1.3287 end -0.0000 start[] end[] path 0
+  1348463 partition_wall_centreline_layer_joins 'US-1' start -1.3287 end -0.0000 start[] end[] path 0
+  1348537 partition_wall_centreline_layer_joins 'US-1' start -1.3287 end +0.0000 start[] end[] path 0
+  1348325 partition_wall_centreline_layer_joins 'US-1' start -1.3287 end +0.0000 start[] end[] path 0
+  1348462 partition_wall_centreline_layer_joins 'US-1' start -0.0000 end -1.3287 start[] end[] path 0
+  1348326 partition_wall_centreline_layer_joins 'US-1' start -1.3287 end -0.0000 start[] end[] path 0
+  1341937 partition_element_record_join_trimmed 'US-1' start +1.3287 end +0.0000 start[] end[] path 0
+  1408782 partition_element_record_join_trimmed 'VS-1' start -1.3123 end +0.0000 start[] end[] path 0
+  1352175 partition_wall_centreline_layer_joins 'VS-3' start -1.3123 end +0.0000 start[] end[] path 0
+  1450967 partition_wall_centreline 'VS-1' start -0.6562 end -1.3123 start[] end[] path 0
+  1378271 partition_wall_centreline 'VS-1' start -0.0000 end -1.3123 start[] end[] path 0
+  2771983 partition_wall_centreline 'VS-2' start -0.8202 end -1.3123 start[] end[] path 0
+  2500465 partition_wall_centreline_layer_joins 'VS-11' start +0.0000 end -1.3123 start[] end[] path 0
+  2293083 partition_wall_centreline_layer_joins 'VS-11' start -1.3123 end +0.0000 start[] end[] path 0
+  3066118 partition_wall_centreline_layer_joins 'VS-3' start -0.0000 end -1.3123 start[] end[] path 0
+  1457415 partition_wall_centreline 'VS-2' start -1.3123 end -0.6562 start[] end[] path 0
+  1795193 partition_element_record_join_trimmed 'VS-2' start -1.3123 end -1.3123 start[] end[] path 0
+  1457512 partition_element_record_join_trimmed 'VS-2' start -1.3123 end -1.3123 start[] end[] path 0
+  1536389 partition_element_record_join_trimmed 'VS-2' start -0.3281 end -1.3123 start[] end[] path 0
+  1457120 partition_wall_centreline 'VS-2' start -1.3123 end -0.6562 start[] end[] path 0
+  1421018 partition_wall_centreline 'VS-4' start -1.3123 end -0.9843 start[] end[] path 0
+  2495471 partition_wall_centreline_layer_joins 'VS-11' start +0.0000 end -1.3123 start[] end[] path 0
+  2294997 partition_element_record_join_trimmed 'VS-2' start +0.0000 end -1.3123 start[] end[] path 0
+  1815056 partition_wall_centreline 'VS-2' start -0.6562 end -1.3123 start[] end[] path 0
+  1812674 partition_wall_centreline 'VS-2' start -0.6562 end -1.3123 start[] end[] path 0
+  3116544 partition_element_record_join_trimmed 'VS-2' start -1.3123 end -0.3281 start[] end[] path 0
+  1536395 partition_element_record_join_trimmed 'VS-2' start -0.3281 end -1.3123 start[] end[] path 0
+  2294995 partition_wall_centreline_layer_joins 'VS-11' start -1.3123 end +0.0000 start[] end[] path 0
+  2293158 partition_element_record_join_trimmed 'VS-11' start +0.3018 end -1.3123 start[] end[] path 0
+  2500585 partition_wall_centreline_layer_joins 'VS-11' start -1.3123 end +0.0000 start[] end[] path 0
+  2495620 partition_wall_centreline_layer_joins 'VS-11' start -1.3123 end +0.0000 start[] end[] path 0
+  1621552 partition_wall_centreline_layer_joins 'US-5' start -0.0000 end +1.1647 start[] end[] path 0
+  1450979 partition_element_record_join_trimmed 'VS-1' start -1.1483 end -0.0000 start[] end[] path 0
+  1660027 partition_element_record_join_trimmed 'VS-11' start -0.9547 end -1.1188 start[] end[] path 0
+  2116087 partition_element_record_join_trimmed 'VS-1' start -1.0663 end -0.6562 start[] end[] path 0
+  1435142 partition_element_record_join_trimmed 'VS-2' start -1.0663 end -0.0000 start[] end[] path 0
+  1892122 partition_element_record_join_trimmed 'VS-1' start -0.9843 end +0.0000 start[] end[] path 0
+  1479272 partition_element_record_join_trimmed 'VS-1' start -0.9843 end -0.0000 start[] end[] path 0
+  1671972 partition_wall_centreline_layer_joins 'US-4' start +0.0000 end +0.9843 start[] end[] path 0
+  1892045 partition_element_record_join_trimmed 'VS-1' start -0.9843 end -0.0000 start[] end[] path 0
+  1815844 partition_element_record_join_trimmed 'VS-1' start -0.9843 end -0.0000 start[] end[] path 0
+  1450983 partition_wall_centreline 'VS-1' start -0.9843 end -0.4921 start[] end[] path 0
+  2591233 partition_element_record_join_trimmed 'VS-4' start -0.9678 end +0.0000 start[] end[] path 0
+  2632439 partition_element_record_join_trimmed 'VS-2' start +0.0000 end -0.9678 start[] end[] path 0
+  1795418 partition_element_record_join_trimmed 'VS-11' start -0.9252 end -0.9252 start[] end[] path 0
+  1746324 partition_element_record_join_trimmed 'VS-11' start -0.9252 end -0.9252 start[] end[] path 0
+  1415781 partition_element_record_join_trimmed 'VS-1' start -0.8727 end -0.8727 start[] end[] path 0
+  1491862 partition_wall_centreline_layer_joins 'US-2' start +0.8694 end +0.0000 start[] end[] path 0
+  2990126 partition_element_record_join_trimmed 'VS-4' start -0.8694 end +0.0000 start[] end[] path 0
+  2988588 partition_element_record_join_trimmed 'VS-4' start -0.8694 end -0.0000 start[] end[] path 0
+  1728066 partition_element_record_join_trimmed 'VS-2' start +0.0000 end -0.8694 start[] end[] path 0
+  1820566 partition_element_record_join_trimmed 'VS-2' start +0.0000 end -0.8694 start[] end[] path 0
+  3054728 partition_wall_centreline_layer_joins 'US-2' start +0.8694 end +0.0000 start[] end[] path 0
+  3074316 partition_element_record_join_trimmed 'US-2' start +0.8694 end +0.0000 start[] end[] path 0
+  3101438 partition_element_record_join_trimmed 'VS-2' start -0.8202 end +0.0000 start[] end[] path 0
+  3011915 partition_element_record_join_trimmed 'VS-2' start +0.0000 end -0.8202 start[] end[] path 0
+  2989214 partition_element_record_join_trimmed 'VS-2' start -0.8202 end +0.0000 start[] end[] path 0
+  1728013 partition_element_record_join_trimmed 'VS-4' start -0.1640 end -0.8202 start[] end[] path 0
+  1436343 partition_element_record_join_trimmed 'VS-2' start +0.0000 end -0.8202 start[] end[] path 0
+  1815838 partition_element_record_join_trimmed 'VS-1' start +0.0000 end -0.8202 start[] end[] path 0
+  1746098 partition_element_record_join_trimmed 'VS-3' start -0.8202 end -0.0000 start[] end[] path 0
+  1445086 partition_element_record_join_trimmed 'VS-2' start -0.8202 end -0.0000 start[] end[] path 0
+  1795192 partition_wall_centreline_layer_joins 'VS-3' start -0.8202 end +0.0000 start[] end[] path 0
+  1457511 partition_wall_centreline_layer_joins 'VS-3' start -0.8202 end +0.0000 start[] end[] path 0
+  2182047 partition_wall_centreline_layer_joins 'VS-3' start +0.0000 end -0.8202 start[] end[] path 0
+  2179281 partition_wall_centreline_layer_joins 'VS-3' start +0.0000 end -0.8202 start[] end[] path 0
+  2176481 partition_wall_centreline_layer_joins 'VS-3' start -0.1936 end -0.8202 start[] end[] path 0
+  1344124 partition_wall_centreline_layer_joins 'US-1' start +0.0000 end +0.7136 start[] end[] path 0
+  1892033 partition_wall_centreline 'VS-1' start -0.6562 end -0.1640 start[] end[] path 0
+  1450970 partition_wall_centreline 'VS-1' start -0.6562 end +0.0000 start[] end[] path 0
+  1450965 partition_wall_centreline 'VS-1' start -0.6562 end -0.6562 start[] end[] path 0
+  2041385 partition_wall_centreline_layer_joins 'VS-11' start -0.6562 end +0.0000 start[] end[] path 0
+  2041479 partition_wall_centreline_layer_joins 'VS-11' start +0.0000 end -0.6562 start[] end[] path 0
+  3123868 partition_element_record_join_trimmed 'VS-3' start -0.0000 end +0.6562 start[] end[] path 0
+  3023846 partition_element_record_join_trimmed 'VS-3' start -0.0000 end +0.6562 start[] end[] path 0
+  1421023 partition_element_record_join_trimmed 'VS-4' start +0.0000 end -0.6562 start[] end[] path 0
+  1892039 partition_element_record_join_trimmed 'VS-1' start +0.0000 end -0.6562 start[] end[] path 0
+  1450972 partition_element_record_join_trimmed 'VS-1' start +0.0000 end -0.6562 start[] end[] path 0
+  1815926 partition_wall_centreline 'VS-1' start -0.6562 end +0.0000 start[] end[] path 0
+  3435263 partition_wall_centreline 'VS-6' start -0.6562 end -0.0000 start[] end[] path 0
+  1795284 partition_wall_centreline 'VS-2' start -0.6562 end -0.0820 start[] end[] path 0
+  1892053 partition_element_record_join_trimmed 'VS-1' start +0.0000 end -0.6562 start[] end[] path 0
+  1892047 partition_element_record_join_trimmed 'VS-1' start -0.6562 end -0.6562 start[] end[] path 0
+  1815855 partition_element_record_join_trimmed 'VS-1' start +0.0000 end -0.6562 start[] end[] path 0
+  1815846 partition_element_record_join_trimmed 'VS-1' start -0.6562 end -0.0000 start[] end[] path 0
+  1714038 partition_element_record_join_trimmed 'VS-1' start +0.0000 end -0.6562 start[] end[] path 0
+  1450988 partition_element_record_join_trimmed 'VS-1' start -0.6562 end -0.0000 start[] end[] path 0
+  1630142 partition_element_record_join_trimmed 'VS-1' start -0.6562 end -0.6562 start[] end[] path 0
+  1351840 partition_element_record_join_trimmed 'VS-1' start -0.6562 end +0.0000 start[] end[] path 0
+  1892041 partition_wall_centreline 'VS-1' start -0.6562 end -0.0000 start[] end[] path 0
+  2989442 partition_wall_centreline_layer_joins 'VS-3' start -0.0000 end -0.6562 start[] end[] path 0
+  1815840 partition_wall_centreline 'VS-1' start -0.6562 end -0.0000 start[] end[] path 0
+  1489317 partition_element_record_join_trimmed 'VS-2' start -0.6562 end -0.0000 start[] end[] path 0
+  3063732 partition_element_record_join_trimmed 'VS-2' start -0.0000 end -0.6562 start[] end[] path 0
+  1486440 partition_element_record_join_trimmed 'US-2' start +0.3281 end -0.6562 start[] end[] path 0
+  2114504 partition_wall_centreline 'VS-1' start -0.0000 end -0.6562 start[] end[] path 0
+  1493966 partition_element_record_join_trimmed 'US-7' start +0.5741 end -0.0000 start[] end[] path 0
+  2601475 partition_wall_centreline 'VS-2' start -0.4921 end -0.0000 start[] end[] path 0
+  3121888 partition_wall_centreline_layer_joins 'VS-3' start +0.4921 end +0.0000 start[] end[] path 0
+  3121307 partition_wall_centreline_layer_joins 'VS-3' start +0.4921 end +0.0000 start[] end[] path 0
+  3015330 partition_wall_centreline_layer_joins 'VS-3' start +0.4921 end +0.0000 start[] end[] path 0
+  2606131 partition_element_record_join_trimmed 'VS-2' start -0.4101 end -0.0000 start[] end[] path 0
+  2181501 partition_element_record_join_trimmed 'VS-11' start +0.0000 end -0.3281 start[] end[] path 0
+  1815832 partition_element_record_join_trimmed 'VS-1' start -0.3281 end +0.0000 start[] end[] path 0
+  1421022 partition_element_record_join_trimmed 'VS-4' start -0.3281 end +0.0000 start[] end[] path 0
+  2639982 partition_element_record_join_trimmed 'VS-2' start -0.3281 end +0.0000 start[] end[] path 0
+  1415780 partition_element_record_join_trimmed 'VS-1' start -0.3281 end -0.3281 start[] end[] path 0
+  3112714 partition_wall_centreline_layer_joins 'VS-3' start +0.0000 end +0.3281 start[] end[] path 0
+  2002804 partition_element_record_join_trimmed 'VS-2' start +0.0000 end -0.3281 start[] end[] path 0
+  2002928 partition_element_record_join_trimmed 'VS-2' start -0.3281 end -0.3281 start[] end[] path 0
+  1795283 partition_element_record_join_trimmed 'VS-2' start -0.3281 end +0.0000 start[] end[] path 0
+  2991697 partition_wall_centreline_layer_joins 'US-2' start +0.0000 end +0.3281 start[] end[] path 0
+  2655484 partition_wall_centreline_layer_joins 'VS-11' start -0.0000 end +0.3018 start[] end[] path 0
+  2177212 saved_graphics_mesh 'VS-11' start +0.3018 end -0.0000 start[] end[] path 0
+  2500674 partition_element_record_join_trimmed 'VS-11' start +0.0000 end +0.3018 start[] end[] path 0
+  1656493 partition_element_record_join_trimmed 'VS-11' start +0.3018 end +0.3018 start[] end[] path 0
+  1795396 saved_graphics_mesh 'VS-11' start +0.3018 end +0.3018 start[] end[] path 0
+  1746444 partition_element_record_join_trimmed 'VS-11' start +0.0591 end +0.3018 start[] end[] path 0
+  3123950 partition_element_record_join_trimmed 'VS-3' start -0.0000 end +0.2854 start[] end[] path 0
+  3123953 partition_wall_centreline_layer_joins 'VS-3' start +0.2854 end -0.0000 start[] end[] path 0
+  3123872 partition_element_record_join_trimmed 'VS-3' start +0.0000 end +0.2854 start[] end[] path 0
+  3104893 partition_element_record_join_trimmed 'VS-3' start +0.0000 end +0.2854 start[] end[] path 0
+  3095056 partition_wall_centreline_layer_joins 'VS-3' start -0.2461 end +0.0000 start[] end[] path 0
+  3119279 partition_wall_centreline_layer_joins 'VS-3' start -0.0000 end -0.2461 start[] end[] path 0
+  1795538 partition_wall_centreline_layer_joins 'VS-11' start -0.2428 end -0.2428 start[] end[] path 0
+  1761883 partition_wall_centreline_layer_joins 'VS-3' start -0.1640 end -0.2133 start[] end[] path 0
+  2500586 partition_element_record_join_trimmed 'VS-11' start -0.0000 end +0.1936 start[] end[] path 0
+  2177158 partition_element_record_join_trimmed 'VS-11' start +0.1936 end -0.0000 start[] end[] path 0
+  1795397 partition_element_record_join_trimmed 'VS-3' start +0.0000 end -0.1936 start[] end[] path 0
+  1656495 partition_element_record_join_trimmed 'VS-3' start +0.0000 end -0.1936 start[] end[] path 0
+  1656494 partition_element_record_join_trimmed 'VS-3' start +0.0000 end -0.1936 start[] end[] path 0
+  2174880 partition_element_record_join_trimmed 'VS-11' start +0.1936 end -0.0000 start[] end[] path 0
+  2179171 partition_element_record_join_trimmed 'VS-11' start -0.1936 end -0.0000 start[] end[] path 0
+  1795194 partition_element_record_join_trimmed 'VS-11' start -0.0000 end -0.1936 start[] end[] path 0
+  1457513 partition_element_record_join_trimmed 'VS-11' start -0.0000 end -0.1936 start[] end[] path 0
+  1619525 partition_element_record_join_trimmed 'VS-2' start -0.1640 end -0.0000 start[] end[] path 0
+  1347199 partition_wall_centreline_layer_joins 'US-7' start +0.0000 end +0.1230 start[] end[] path 0
+  3128241 partition_wall_centreline_layer_joins 'VS-3' start +0.1214 end -0.0000 start[] end[] path 0
+  3128245 partition_wall_centreline_layer_joins 'VS-3' start -0.0000 end +0.1214 start[] end[] path 0
+  3064420 partition_element_record_join_trimmed 'VS-2' start +0.0000 end -0.1050 start[] end[] path 0
+  1746302 partition_element_record_join_trimmed 'VS-11' start +0.0591 end +0.0000 start[] end[] path 0
+  1693193 saved_graphics_mesh 'VS-11' start +0.0427 end +0.0427 start[] end[] path 0
+  3184043 partition_wall_centreline_layer_joins 'VS-3' start +0.0427 end -0.0000 start[] end[] path 0
+  3125734 partition_element_record_join_trimmed 'VS-3' start +0.0427 end -0.0000 start[] end[] path 0
+  3126909 partition_element_record_join_trimmed 'VS-3' start +0.0427 end -0.0000 start[] end[] path 0
+  3274528 partition_element_record_join_trimmed 'VS-3' start +0.0427 end -0.0000 start[] end[] path 0
+  3274527 partition_element_record_join_trimmed 'VS-3' start +0.0427 end -0.0000 start[] end[] path 0
+exit 0

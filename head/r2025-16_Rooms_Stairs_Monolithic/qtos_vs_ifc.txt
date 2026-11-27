@@ -1,0 +1,63 @@
+Revit quantities on objects rvt-rs writes: 93; equal: 60; different: 0; missing: 33; rvt-rs quantities Revit does not write: 0
+Revit values known to be wrong, left out (RE-235 §5): Qto_OpeningElementBaseQuantities.Height 1
+Revit values known to be wrong, left out (RE-235 §5): Qto_OpeningElementBaseQuantities.Width 1
+walls whose curve and its cut-back curve differ, either of which Revit's export may write as their Length, counted apart (RE-252): 3
+walls whose Length is rvt-rs's curve's: 2; Revit's Axis's: 3; neither: 0
+walls rvt-rs gives a Length and Revit's export does not, against the length of Revit's Axis (within 1e-4 ft): equal 0; differ 0; no Axis 0
+walls the two exports give different types, their differing Width counted apart (RE-253): 0
+walls the two exports give different types, their other differing wall quantities counted apart (RE-253, RE-388): 0
+walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): 0
+  Qto_BuildingElementProxyQuantities.NetSurfaceArea: 9, equal 0, different 0, missing 9
+  Qto_BuildingElementProxyQuantities.NetVolume: 9, equal 6, different 0, missing 3
+  Qto_DoorBaseQuantities.Area: 1, equal 1, different 0, missing 0
+  Qto_DoorBaseQuantities.Height: 1, equal 1, different 0, missing 0
+  Qto_DoorBaseQuantities.Width: 1, equal 1, different 0, missing 0
+  Qto_OpeningElementBaseQuantities.Depth: 4, equal 4, different 0, missing 0
+  Qto_OpeningElementBaseQuantities.Height: 3, equal 0, different 0, missing 3
+  Qto_OpeningElementBaseQuantities.Width: 3, equal 0, different 0, missing 3
+  Qto_RailingBaseQuantities.Length: 2, equal 2, different 0, missing 0
+  Qto_SpaceBaseQuantities.GrossCeilingArea: 2, equal 0, different 0, missing 2
+  Qto_SpaceBaseQuantities.GrossFloorArea: 2, equal 0, different 0, missing 2
+  Qto_SpaceBaseQuantities.GrossVolume: 2, equal 0, different 0, missing 2
+  Qto_SpaceBaseQuantities.Height: 2, equal 2, different 0, missing 0
+  Qto_SpaceBaseQuantities.NetFloorArea: 2, equal 0, different 0, missing 2
+  Qto_SpaceBaseQuantities.NetVolume: 2, equal 2, different 0, missing 0
+  Qto_StairFlightBaseQuantities.Length: 1, equal 1, different 0, missing 0
+  Qto_StairFlightBaseQuantities.NetVolume: 1, equal 1, different 0, missing 0
+  Qto_WallBaseQuantities.GrossFootprintArea: 5, equal 2, different 0, missing 3
+  Qto_WallBaseQuantities.GrossSideArea: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.GrossVolume: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.Height: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.Length: 2, equal 2, different 0, missing 0
+  Qto_WallBaseQuantities.NetSideArea: 5, equal 4, different 0, missing 1
+  Qto_WallBaseQuantities.NetVolume: 5, equal 5, different 0, missing 0
+  Qto_WallBaseQuantities.Width: 5, equal 5, different 0, missing 0
+  Qto_WindowBaseQuantities.Area: 3, equal 3, different 0, missing 0
+  Qto_WindowBaseQuantities.Height: 3, equal 3, different 0, missing 0
+  Qto_WindowBaseQuantities.Width: 3, equal 3, different 0, missing 0
+values on a key that more than one object of Revit's export holds, counted apart (#1576): 8 of Revit's on 1 such keys, and 0 of rvt-rs's with none in the object held
+  on a repeated key, Qto_RoofBaseQuantities.NetArea: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_RoofBaseQuantities.ProjectedArea: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.GrossArea: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.GrossVolume: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.Length: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.NetArea: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.NetVolume: 1; against the object held: equal 0, different 0, missing 1
+  on a repeated key, Qto_SlabBaseQuantities.Perimeter: 1; against the object held: equal 0, different 0, missing 1
+entities Revit writes each missing quantity on:
+  Qto_BuildingElementProxyQuantities.NetSurfaceArea: 9; on IfcBuildingElementProxy x9
+  Qto_OpeningElementBaseQuantities.Height: 3; on IfcOpeningElement x3
+  Qto_OpeningElementBaseQuantities.Width: 3; on IfcOpeningElement x3
+  Qto_BuildingElementProxyQuantities.NetVolume: 3; on IfcBuildingElementProxy x3
+  Qto_WallBaseQuantities.GrossFootprintArea: 3; on IfcWall x3
+  Qto_SpaceBaseQuantities.GrossCeilingArea: 2; on IfcSpace x2
+  Qto_SpaceBaseQuantities.GrossFloorArea: 2; on IfcSpace x2
+  Qto_SpaceBaseQuantities.GrossVolume: 2; on IfcSpace x2
+  Qto_SpaceBaseQuantities.NetFloorArea: 2; on IfcSpace x2
+  Qto_WallBaseQuantities.GrossSideArea: 1; on IfcWall x1
+  Qto_WallBaseQuantities.GrossVolume: 1; on IfcWall x1
+  Qto_WallBaseQuantities.Height: 1; on IfcWall x1
+  Qto_WallBaseQuantities.NetSideArea: 1; on IfcWall x1
+rvt-rs quantities Revit does not write:
+largest differences (rvt-rs, Revit; SI units):
+exit 0

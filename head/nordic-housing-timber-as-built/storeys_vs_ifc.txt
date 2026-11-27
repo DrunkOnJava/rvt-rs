@@ -1,0 +1,15 @@
+1659 elements, 232 not on a storey
+    106  IfcFurniture
+     54  IfcSanitaryTerminal
+     41  IfcElectricAppliance
+     15  IfcCovering
+     14  IfcWasteTerminal
+      2  IfcBuildingElementProxy
+against Revit's export:
+   1620  same storey as Revit's
+     15  on no storey; Revit's is a storey
+      9  on no storey; Revit's is another container
+      3  a different storey from Revit's
+      1  on a storey; Revit contains it in <IfcSpace>
+  different, by type: IfcRailing 2, IfcRamp 1
+exit 0

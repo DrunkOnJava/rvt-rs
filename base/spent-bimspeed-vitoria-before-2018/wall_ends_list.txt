@@ -1,0 +1,123 @@
+straight and angled walls in both: 247; both ends within 0.001 ft: 164
+BodySource | start (Revit's joins there) | end (Revit's joins there) | walls; short/long = rvt-rs's wall shorter/longer there
+     33  partition_element_record_join_trimmed | start ok [ATPATH] | end ok [ATSTART]
+     29  partition_element_record_join_trimmed | start ok [ATEND] | end ok [ATSTART]
+     29  partition_element_record_join_trimmed | start ok [ATEND] | end ok [ATPATH]
+     18  partition_element_record_join_trimmed | start long [ATEND] | end long [ATSTART]
+     18  partition_element_record_join_trimmed | start ok [ATPATH] | end ok [ATPATH]
+     16  partition_element_record_join_trimmed | start ok [ATEND+ATSTART] | end ok [ATSTART]
+     14  partition_element_record_join_trimmed | start long [ATEND] | end ok [ATSTART]
+     13  partition_element_record_join_trimmed | start long [ATEND] | end long [ATPATH]
+      8  partition_element_record_join_trimmed | start ok [ATEND+ATSTART] | end ok [ATPATH]
+      8  partition_element_record_join_trimmed | start ok [ATSTART+ATSTART] | end ok [ATPATH]
+      8  partition_element_record_join_trimmed | start long [ATPATH] | end ok [ATSTART]
+      7  partition_element_record_join_trimmed | start long [ATEND] | end ok [ATEND]
+      5  partition_element_record_join_trimmed | start ok [ATEND] | end ok [ATSTART+ATSTART]
+      4  partition_element_record_join_trimmed | start ok [ATSTART] | end ok [ATSTART+ATSTART]
+      4  partition_element_record_join_trimmed | start long [ATSTART] | end ok [ATEND]
+      4  partition_element_record_join_trimmed | start ok [ATSTART+ATSTART] | end ok [ATSTART+ATSTART]
+      3  partition_element_record_join_trimmed | start long [ATPATH] | end ok [ATEND]
+      3  partition_element_record_join_trimmed | start ok [ATEND] | end long [ATPATH]
+      2  partition_element_record_join_trimmed | start long [ATEND+ATSTART] | end long [ATEND+ATSTART]
+      2  partition_element_record_join_trimmed | start ok [ATEND] | end ok [ATEND]
+      2  partition_element_record_join_trimmed | start long [ATPATH] | end long [ATPATH]
+      2  partition_element_record_join_trimmed | start ok [ATSTART] | end ok [ATSTART]
+      2  partition_element_record_join_trimmed | start ok [ATSTART] | end ok [ATEND]
+      1  partition_element_record_join_trimmed | start ok [ATEND+ATEND] | end ok [ATSTART]
+      1  partition_element_record_join_trimmed | start short [ATPATH] | end short [ATPATH]
+      1  partition_element_record_join_trimmed | start ok [free] | end long [free]
+      1  partition_element_record_join_trimmed | start long [ATPATH] | end ok [ATPATH]
+      1  partition_element_record_join_trimmed | start long [ATEND] | end ok [ATPATH]
+      1  partition_element_record_join_trimmed | start ok [ATSTART] | end long [ATSTART]
+      1  partition_element_record_join_trimmed | start ok [ATSTART] | end ok [free]
+      1  partition_element_record_join_trimmed | start long [free] | end long [ATEND+ATSTART]
+      1  partition_element_record_join_trimmed | start long [ATEND] | end ok [ATEND+ATSTART]
+      1  partition_element_record_join_trimmed | start long [ATEND+ATEND] | end ok [ATPATH]
+      1  partition_element_record_join_trimmed | start ok [free] | end ok [free]
+      1  partition_element_record_join_trimmed | start ok [ATEND] | end long [ATSTART]
+      1  partition_element_record_join_trimmed | start ok [free] | end ok [ATPATH]
+the 83 walls with an end off by more than 0.001 ft, largest first (tag, BodySource, type, start and end shortfall ft, Revit's joins at start, at end, walls meeting its path):
+  537930 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start +0.0000 end -0.9516 start[] end[] path 0
+  554872 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0972 end -0.9308 start[('554873', 'ATPATH')] end[('1801807', 'ATPATH')] path 5
+  554748 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.8926 end -0.5616 start[('554742', 'ATEND')] end[('554749', 'ATSTART')] path 2
+  554960 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.8926 end -0.5616 start[('554954', 'ATEND')] end[('554961', 'ATSTART')] path 2
+  554854 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.8926 end -0.5616 start[('554848', 'ATEND')] end[('554855', 'ATSTART')] path 2
+  683336 partition_element_record_join_trimmed 'Muro básico:LKS_T3 23cm' start -0.7584 end -0.0892 start[('531235', 'ATEND'), ('531709', 'ATSTART')] end[('529332', 'ATSTART'), ('531709', 'ATEND')] path 0
+  531709 partition_element_record_join_trimmed 'Muro básico:LKS_T3 23cm' start -0.7584 end -0.0892 start[('531235', 'ATEND'), ('683336', 'ATSTART')] end[('529332', 'ATSTART'), ('683336', 'ATEND')] path 0
+  554958 partition_element_record_join_trimmed 'Muro básico:LKS_T3 23cm' start -0.7546 end +0.0000 start[('554851', 'ATPATH')] end[('1144262', 'ATSTART')] path 2
+  554746 partition_element_record_join_trimmed 'Muro básico:LKS_T3 23cm' start -0.7546 end +0.0000 start[('538454', 'ATPATH')] end[('1143477', 'ATSTART')] path 2
+  554851 partition_element_record_join_trimmed 'Muro básico:LKS_T3 23cm' start -0.7546 end +0.0000 start[('1801807', 'ATPATH')] end[('554745', 'ATEND')] path 4
+  683339 partition_element_record_join_trimmed 'Muro básico:LKS_T3 23cm' start -0.6671 end -0.0000 start[('653631', 'ATEND'), ('683338', 'ATEND')] end[('652557', 'ATPATH')] path 0
+  538734 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4249 end -0.5634 start[('538451', 'ATEND')] end[('538871', 'ATSTART')] path 2
+  554848 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4782 end -0.0008 start[('554847', 'ATEND')] end[('554854', 'ATSTART')] path 1
+  554742 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4782 end -0.0008 start[('554741', 'ATEND')] end[('554748', 'ATSTART')] path 1
+  554954 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4782 end -0.0008 start[('554953', 'ATEND')] end[('554960', 'ATSTART')] path 1
+  538451 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4782 end -0.2181 start[('538450', 'ATEND')] end[('538734', 'ATSTART')] path 1
+  530077 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4781 end -0.4250 start[('529868', 'ATEND')] end[('683338', 'ATSTART')] path 0
+  554844 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4689 end +0.0000 start[('1144110', 'ATEND')] end[('554845', 'ATSTART')] path 1
+  554950 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4689 end +0.0000 start[('1144262', 'ATEND')] end[('554951', 'ATSTART')] path 1
+  554738 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4689 end +0.0000 start[('1143477', 'ATEND')] end[('554739', 'ATSTART')] path 1
+  554959 partition_element_record_join_trimmed 'Muro básico:LKS_T8 23cm' start -0.4631 end -0.0000 start[('554952', 'ATSTART')] end[('554951', 'ATEND')] path 2
+  554853 partition_element_record_join_trimmed 'Muro básico:LKS_T8 23cm' start -0.4631 end -0.0000 start[('554846', 'ATSTART')] end[('554845', 'ATEND')] path 2
+  554747 partition_element_record_join_trimmed 'Muro básico:LKS_T8 23cm' start -0.4631 end -0.0000 start[('554740', 'ATSTART')] end[('554739', 'ATEND')] path 2
+  532085 partition_element_record_join_trimmed 'Muro básico:LKS_T8 23cm' start -0.4593 end -0.0000 start[('529725', 'ATPATH')] end[('529445', 'ATEND')] path 0
+  538456 partition_element_record_join_trimmed 'Muro básico:LKS_T8 23cm' start -0.4593 end -0.0000 start[('538449', 'ATSTART')] end[('538448', 'ATEND')] path 2
+  653631 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.2181 end -0.4540 start[] end[('683338', 'ATEND'), ('683339', 'ATSTART')] path 0
+  574750 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.4249 end -0.0000 start[('574744', 'ATEND')] end[('574751', 'ATSTART')] path 0
+  538871 partition_element_record_join_trimmed 'Muro básico:LKS_T4 23.8cm' start -0.4182 end -0.1640 start[('538734', 'ATEND')] end[('541621', 'ATPATH')] path 1
+  554749 partition_element_record_join_trimmed 'Muro básico:LKS_T4 23.8cm' start -0.4173 end +0.0000 start[('554748', 'ATEND')] end[('1143785', 'ATSTART')] path 1
+  554961 partition_element_record_join_trimmed 'Muro básico:LKS_T4 23.8cm' start -0.4173 end +0.0000 start[('554960', 'ATEND')] end[('554978', 'ATEND')] path 1
+  554855 partition_element_record_join_trimmed 'Muro básico:LKS_T4 23.8cm' start -0.4173 end +0.0000 start[('554854', 'ATEND')] end[('554872', 'ATPATH')] path 1
+  529725 partition_element_record_join_trimmed 'Muro básico:LKS_T1 29cm' start +0.3773 end +0.3773 start[('538449', 'ATPATH')] end[('539826', 'ATPATH')] path 4
+  542062 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('541901', 'ATEND')] end[('538451', 'ATPATH')] path 0
+  554981 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('554980', 'ATEND')] end[('554954', 'ATPATH')] path 0
+  554875 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('554874', 'ATEND')] end[('554848', 'ATPATH')] path 0
+  554769 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('554768', 'ATEND')] end[('554742', 'ATPATH')] path 0
+  542260 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('542200', 'ATEND')] end[('538734', 'ATPATH')] path 0
+  541798 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.3558 end +0.0000 start[('538734', 'ATPATH')] end[('541901', 'ATSTART')] path 2
+  554979 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.3558 end +0.0000 start[('554960', 'ATPATH')] end[('554980', 'ATSTART')] path 2
+  554873 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.3558 end +0.0000 start[('554854', 'ATPATH')] end[('554874', 'ATSTART')] path 1
+  554767 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.3558 end +0.0000 start[('554748', 'ATPATH')] end[('554768', 'ATSTART')] path 1
+  554983 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('554982', 'ATEND')] end[('554960', 'ATPATH')] path 0
+  554877 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('554876', 'ATEND')] end[('554854', 'ATPATH')] path 0
+  554771 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('554770', 'ATEND')] end[('554748', 'ATPATH')] path 0
+  543552 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('543494', 'ATEND')] end[('538447', 'ATPATH')] path 0
+  554993 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('554992', 'ATEND')] end[('554950', 'ATPATH')] path 0
+  554887 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('554886', 'ATEND')] end[('554844', 'ATPATH')] path 0
+  554781 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1939 end -0.3558 start[('554780', 'ATEND')] end[('554738', 'ATPATH')] path 0
+  554957 partition_element_record_join_trimmed 'Muro básico:LKS_T3 23cm' start -0.2592 end -0.2592 start[('574751', 'ATPATH')] end[('574748', 'ATPATH')] path 2
+  574744 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.2319 end -0.2181 start[('574743', 'ATEND')] end[('574750', 'ATSTART')] path 0
+  683338 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.2183 end +0.0000 start[('530077', 'ATEND')] end[('653631', 'ATEND'), ('683339', 'ATSTART')] path 0
+  706632 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1859 end -0.1859 start[('706542', 'ATEND')] end[('706704', 'ATSTART')] path 0
+  706787 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1843 end -0.1843 start[('706704', 'ATEND')] end[('706542', 'ATSTART')] path 0
+  706416 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1743 end -0.0090 start[('706347', 'ATEND')] end[('706468', 'ATSTART')] path 0
+  706347 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1735 end -0.0141 start[('706284', 'ATEND')] end[('706416', 'ATSTART')] path 0
+  706468 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1691 end -0.1710 start[('706416', 'ATEND')] end[('706284', 'ATSTART')] path 0
+  706912 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1671 end -0.1671 start[('706847', 'ATEND')] end[('706947', 'ATSTART')] path 0
+  706031 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1634 end -0.1653 start[('705933', 'ATEND')] end[('706109', 'ATSTART')] path 0
+  705842 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.1644 end -0.1639 start[('706109', 'ATEND')] end[('705933', 'ATSTART')] path 0
+  1144110 partition_element_record_join_trimmed 'Muro básico:LKS_T4 23.8cm' start -0.1640 end +0.0000 start[('554885', 'ATPATH')] end[('554844', 'ATSTART')] path 1
+  538448 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.1537 end +0.0000 start[('538447', 'ATEND')] end[('538456', 'ATEND')] path 1
+  554951 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.1537 end +0.0000 start[('554950', 'ATEND')] end[('554959', 'ATEND')] path 1
+  554845 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.1537 end +0.0000 start[('554844', 'ATEND')] end[('554853', 'ATEND')] path 1
+  554739 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.1537 end +0.0000 start[('554738', 'ATEND')] end[('554747', 'ATEND')] path 1
+  574741 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.1537 end +0.0000 start[('574740', 'ATEND')] end[('574749', 'ATEND')] path 0
+  574751 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.1537 end +0.0000 start[('574750', 'ATEND')] end[('574753', 'ATSTART')] path 1
+  574748 partition_element_record_join_trimmed 'Muro básico:LKS_T4B 15.8cm' start -0.0000 end -0.1537 start[('574752', 'ATSTART')] end[('574740', 'ATSTART')] path 1
+  554978 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0972 end +0.0000 start[('554979', 'ATPATH')] end[('554961', 'ATEND')] path 3
+  554766 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0972 end +0.0000 start[('554767', 'ATPATH')] end[('1143785', 'ATPATH')] path 3
+  541621 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0972 end +0.0000 start[('541798', 'ATPATH')] end[('1142786', 'ATSTART')] path 4
+  529445 partition_element_record_join_trimmed 'Muro básico:LKS_T8 23cm' start -0.0892 end +0.0000 start[('529332', 'ATEND')] end[('532085', 'ATEND')] path 0
+  1142592 partition_element_record_join_trimmed 'Muro básico:LKS_T4 23.8cm' start -0.0000 end -0.0820 start[('538455', 'ATEND')] end[('538447', 'ATSTART')] path 1
+  554973 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0000 end -0.0656 start[('554972', 'ATEND')] end[('554953', 'ATPATH')] path 0
+  554867 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0000 end -0.0656 start[('554866', 'ATEND')] end[('554847', 'ATPATH')] path 0
+  554761 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0000 end -0.0656 start[('554760', 'ATEND')] end[('554741', 'ATPATH')] path 0
+  554980 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0419 end +0.0000 start[('554979', 'ATEND')] end[('554981', 'ATSTART')] path 0
+  554874 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0419 end +0.0000 start[('554873', 'ATEND')] end[('554875', 'ATSTART')] path 0
+  554768 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0419 end +0.0000 start[('554767', 'ATEND')] end[('554769', 'ATSTART')] path 0
+  541901 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0419 end -0.0000 start[('541798', 'ATEND')] end[('542062', 'ATSTART')] path 0
+  706704 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0271 end -0.0258 start[('706632', 'ATEND')] end[('706787', 'ATSTART')] path 0
+  706542 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0258 end -0.0271 start[('706787', 'ATEND')] end[('706632', 'ATSTART')] path 0
+  706284 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0079 end -0.0079 start[('706468', 'ATEND')] end[('706347', 'ATSTART')] path 0
+  705933 partition_element_record_join_trimmed 'Muro básico:LKS_T9 10cm' start -0.0013 end +0.0000 start[('705842', 'ATEND')] end[('706031', 'ATSTART')] path 0
+exit 0

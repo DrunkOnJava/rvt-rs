@@ -1,0 +1,7 @@
+      1  IfcCurtainWall: neither aggregates
+      4  IfcDoor: neither aggregates
+      1  IfcDoor: same whole
+     10  IfcMember: same whole
+      2  IfcPlate: same whole
+      1  IfcRailing: neither aggregates
+exit 0

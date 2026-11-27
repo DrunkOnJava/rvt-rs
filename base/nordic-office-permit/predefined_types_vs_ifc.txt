@@ -1,0 +1,54 @@
+IfcAirTerminalType PredefinedType: rvt-rs {'USERDEFINED': 1}, Revit {'USERDEFINED': 1}
+IfcBeamType PredefinedType: rvt-rs {'BEAM': 1}, Revit {'BEAM': 1}
+IfcBuildingElementProxyType PredefinedType: rvt-rs {'NOTDEFINED': 3, 'USERDEFINED': 1}, Revit {'NOTDEFINED': 3, 'USERDEFINED': 1}
+IfcColumnType PredefinedType: rvt-rs {'COLUMN': 6}, Revit {'COLUMN': 345}
+IfcCoveringType PredefinedType: rvt-rs {'CEILING': 6}, Revit {'CEILING': 6}
+IfcCurtainWallType PredefinedType: rvt-rs {'NOTDEFINED': 5}, Revit {'NOTDEFINED': 5}
+IfcDoorType PredefinedType: rvt-rs {'DOOR': 88, 'TRAPDOOR': 5}, Revit {'DOOR': 88, 'TRAPDOOR': 5}
+IfcElectricApplianceType PredefinedType: rvt-rs {'DISHWASHER': 4, 'ELECTRICCOOKER': 8, 'FRIDGE_FREEZER': 3, 'USERDEFINED': 1}, Revit {'DISHWASHER': 4, 'ELECTRICCOOKER': 8, 'FRIDGE_FREEZER': 3, 'USERDEFINED': 1}
+IfcFireSuppressionTerminalType PredefinedType: rvt-rs {'HOSEREEL': 15}, Revit {'HOSEREEL': 15}
+IfcFurnitureType PredefinedType: rvt-rs {'NOTDEFINED': 8, 'USERDEFINED': 36}, Revit {'NOTDEFINED': 8, 'USERDEFINED': 36}
+IfcLightFixtureType PredefinedType: rvt-rs {'SECURITYLIGHTING': 3}, Revit {'SECURITYLIGHTING': 3}
+IfcMemberType PredefinedType: rvt-rs {'MULLION': 669}, Revit {'MULLION': 669}
+IfcPipeSegmentType PredefinedType: rvt-rs {'GUTTER': 1}, Revit {'GUTTER': 1}
+IfcPlateType PredefinedType: rvt-rs {'CURTAIN_PANEL': 123}, Revit {'CURTAIN_PANEL': 123}
+IfcRailingType PredefinedType: rvt-rs {'GUARDRAIL': 4, 'HANDRAIL': 2, 'NOTDEFINED': 1}, Revit {}
+IfcRampType PredefinedType: rvt-rs {'STRAIGHT_RUN_RAMP': 1}, Revit {'STRAIGHT_RUN_RAMP': 4}
+IfcSanitaryTerminalType PredefinedType: rvt-rs {'NOTDEFINED': 1, 'SHOWER': 2, 'SINK': 7, 'WASHHANDBASIN': 9, 'WCSEAT': 4}, Revit {'SHOWER': 2, 'SINK': 7, 'WASHHANDBASIN': 9, 'WCSEAT': 4}
+IfcSlabType PredefinedType: rvt-rs {'BASESLAB': 1, 'FLOOR': 5, 'LANDING': 2, 'ROOF': 6}, Revit {'BASESLAB': 1, 'FLOOR': 5, 'LANDING': 3, 'ROOF': 6}
+IfcStairFlightType PredefinedType: rvt-rs {'SPIRAL': 1, 'STRAIGHT': 1}, Revit {'SPIRAL': 1, 'STRAIGHT': 1}
+IfcStairType PredefinedType: rvt-rs {'DOUBLE_RETURN_STAIR': 1, 'HALF_TURN_STAIR': 1, 'NOTDEFINED': 1, 'SPIRAL_STAIR': 1, 'STRAIGHT_RUN_STAIR': 1}, Revit {'DOUBLE_RETURN_STAIR': 1, 'HALF_TURN_STAIR': 1, 'NOTDEFINED': 1, 'SPIRAL_STAIR': 1, 'STRAIGHT_RUN_STAIR': 1}
+IfcWallType PredefinedType: rvt-rs {'PARAPET': 1, 'PARTITIONING': 9, 'PLUMBINGWALL': 1, 'SHEAR': 3, 'SOLIDWALL': 12}, Revit {'PARAPET': 1, 'PARTITIONING': 9, 'PLUMBINGWALL': 1, 'SHEAR': 3, 'SOLIDWALL': 12}
+IfcWasteTerminalType PredefinedType: rvt-rs {'FLOORTRAP': 4, 'ROOFDRAIN': 2}, Revit {'FLOORTRAP': 4, 'ROOFDRAIN': 2}
+IfcWindowType PredefinedType: rvt-rs {'WINDOW': 6}, Revit {'WINDOW': 6}
+IfcDistributionPort PredefinedType, all: rvt-rs {'CABLE': 43, 'PIPE': 24}, Revit {'CABLE': 43, 'PIPE': 24}
+IfcGrid PredefinedType, all: rvt-rs {}, Revit {'-': 8}
+IfcSpace PredefinedType, all: rvt-rs {'NOTDEFINED': 1, 'PARKING': 1, 'SPACE': 264, 'USERDEFINED': 42}, Revit {'NOTDEFINED': 1, 'PARKING': 1, 'SPACE': 264, 'USERDEFINED': 42}
+IfcStair: 16 in both; same 16, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'DOUBLE_RETURN_STAIR': 10, 'HALF_TURN_STAIR': 1, 'NOTDEFINED': 2, 'SPIRAL_STAIR': 1, 'STRAIGHT_RUN_STAIR': 2}
+IfcStairFlight: 35 in both; same 35, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'SPIRAL': 1, 'STRAIGHT': 34}
+IfcSlab: 63 in both; same 63, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'BASESLAB': 8, 'FLOOR': 18, 'LANDING': 27, 'ROOF': 10}
+IfcMember: 10031 in both; same 10031, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'MULLION': 10031}
+IfcFurniture: 98 in both; same 98, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 36, 'USERDEFINED': 62}
+IfcSpace: 87 in both; same 87, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 1, 'PARKING': 1, 'SPACE': 43, 'USERDEFINED': 42}
+other classes (every IfcElement class with a PredefinedType not read above):
+IfcAirTerminal: 1 in both; same 1, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'USERDEFINED': 1}
+IfcBeam: 8 in both; same 8, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'BEAM': 8}
+IfcBuildingElementProxy: 12 in both; same 12, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 11, 'USERDEFINED': 1}
+IfcColumn: 345 in both; same 345, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'COLUMN': 345}
+IfcCovering: 75 in both; same 75, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'CEILING': 75}
+IfcCurtainWall: 220 in both; same 220, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'NOTDEFINED': 220}
+IfcDoor: 269 in both; same 269, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'DOOR': 259, 'TRAPDOOR': 10}
+IfcElectricAppliance: 51 in both; same 51, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'DISHWASHER': 16, 'ELECTRICCOOKER': 18, 'FRIDGE_FREEZER': 16, 'USERDEFINED': 1}
+IfcFireSuppressionTerminal: 40 in both; same 40, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'HOSEREEL': 40}
+IfcLightFixture: 43 in both; same 43, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'SECURITYLIGHTING': 43}
+IfcOpeningElement: 568 in both; same 568, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'OPENING': 559, 'RECESS': 9}
+IfcPipeSegment: 12 in both; same 12, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'GUTTER': 12}
+IfcPlate: 269 in both; same 269, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'CURTAIN_PANEL': 269}
+IfcRailing: 41 in both; same 41, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'GUARDRAIL': 8, 'HANDRAIL': 32, 'NOTDEFINED': 1}
+IfcRamp: 5 in both; same 5, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'STRAIGHT_RUN_RAMP': 5}
+IfcSanitaryTerminal: 144 in both; same 144, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'SHOWER': 10, 'SINK': 47, 'WASHHANDBASIN': 42, 'WCSEAT': 45}
+IfcWall: 589 in both; same 589, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'PARAPET': 4, 'PARTITIONING': 438, 'PLUMBINGWALL': 2, 'SHEAR': 53, 'SOLIDWALL': 92}
+IfcWasteTerminal: 78 in both; same 78, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'FLOORTRAP': 62, 'ROOFDRAIN': 16}
+IfcWindow: 265 in both; same 265, differs 0, unset in rvt-rs 0, NOTDEFINED where Revit writes none 0; Revit's: {'WINDOW': 265}
+  not paired by Tag: in Revit's only {'IfcOpeningElement': 59, 'IfcRampFlight': 1}, in rvt-rs's only {'IfcColumn': 1, 'IfcOpeningElement': 3, 'IfcSanitaryTerminal': 1}
+exit 0

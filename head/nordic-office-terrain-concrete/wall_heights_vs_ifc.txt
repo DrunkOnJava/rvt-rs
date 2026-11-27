@@ -1,0 +1,12 @@
+walls in both files: 2 (rvt-rs 2, Revit 2); offset -0.000000 ft
+  base and top Revit's: 2
+plan turn Revit - rvt-rs: 40.329626 degrees (median wall-middle residual 0.0001 ft)
+surfaces rvt-rs: 0 bodies, 0 triangles
+surfaces Revit: 0 bodies, 0 triangles
+cut by the 0 floors, roofs and footings whose plan box overlaps the wall:
+  base: uncut and Revit's: 2
+  top: uncut and Revit's: 2
+wall tag:1351524 rvt-rs 177.1654 193.2415 122.4038 242.2201 99.1137 100.2620 Revit 177.1654 193.2415
+wall tag:1387731 rvt-rs 182.0866 196.5223 122.4038 296.2603 121.3250 121.8178 Revit 182.0866 196.5223
+
+exit 0

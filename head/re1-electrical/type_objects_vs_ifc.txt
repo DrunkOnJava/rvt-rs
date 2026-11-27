@@ -1,0 +1,11 @@
+Revit types 49 elements; 49 of them are in ours
+typed in ours: 49 of 49
+  entity agrees: 49 of 49
+  name agrees: 49 of 49
+  tag agrees: 49 of 49
+  global_id agrees: 49 of 49
+typed in ours but not in Revit's export: 0
+untyped in ours, by class: {}
+TypeName carried: 49 of 49; equal to Revit's type: 49
+type objects in ours: 21
+exit 0

@@ -1,0 +1,42 @@
+saved_graphics_mesh bodies scored: 43; in Revit's export 43
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcFlowFitting                   35      32       32       32       32          32  1.0000
+       15      15       15       15       15          15  Rect Duct Transition - Angle:-
+       10      10       10       10       10          10  Rect Duct Elbow - Mitered:-
+        6       6        6        6        6           6  Rect Duct Tee:-
+        3       0        0        0        0           0  Closet Bend Reducing:-
+        1       1        1        1        1           1  Rect Endcap:-
+IfcFlowTerminal                   7       7        7        7        7           7  1.0000
+        6       6        6        6        6           6  233713-AIRTRM-Supply Diffuser:300x150
+        1       1        1        1        1           1  233713-AIRTRM-Return Grille:600x600
+IfcBuildingElementProxy           1       1        1        1        1           1  1.0000
+        1       1        1        1        1           1  237313-AHU:7kw
+  442037 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1427, Revit's vertices to rvt-rs's surface 0.02005 ft, rvt-rs's to Revit's 0.02095 ft
+  442040 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1427, Revit's vertices to rvt-rs's surface 0.02005 ft, rvt-rs's to Revit's 0.02095 ft
+  442191 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1427, Revit's vertices to rvt-rs's surface 0.02005 ft, rvt-rs's to Revit's 0.02095 ft
+  434968 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.602e-06 ft, rvt-rs's to Revit's 1.671e-06 ft
+  439228 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.381e-06 ft, rvt-rs's to Revit's 1.797e-06 ft
+  439123 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.1e-06 ft, rvt-rs's to Revit's 2.1e-06 ft
+  439119 IfcFlowFitting 'Rect Duct Tee:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.1e-06 ft, rvt-rs's to Revit's 2.1e-06 ft
+  490317 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.973e-06 ft, rvt-rs's to Revit's 1.977e-06 ft
+  439211 IfcFlowFitting 'Rect Duct Elbow - Mitered:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.708e-06 ft, rvt-rs's to Revit's 1.708e-06 ft
+  491634 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.708e-06 ft, rvt-rs's to Revit's 1.708e-06 ft
+  433690 IfcFlowTerminal '233713-AIRTRM-Supply Diffuser:300x150': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.708e-06 ft, rvt-rs's to Revit's 1.708e-06 ft
+  438989 IfcFlowFitting 'Rect Endcap:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.671e-06 ft, rvt-rs's to Revit's 1.671e-06 ft
+  438950 IfcFlowFitting 'Rect Duct Elbow - Mitered:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.671e-06 ft, rvt-rs's to Revit's 1.671e-06 ft
+  438920 IfcFlowFitting 'Rect Duct Transition - Angle:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.671e-06 ft, rvt-rs's to Revit's 1.671e-06 ft
+  438918 IfcFlowFitting 'Rect Duct Tee:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 1.671e-06 ft, rvt-rs's to Revit's 1.671e-06 ft
+  volume 442037 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1427, farthest vertex 0.02095 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0021
+    Revit shells 1, signed volumes (cubic ft): 0.0018
+  volume 442191 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1427, farthest vertex 0.02095 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0021
+    Revit shells 1, signed volumes (cubic ft): 0.0018
+  volume 442040 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1427, farthest vertex 0.02095 ft
+    rvt-rs shells 1, signed volumes (cubic ft): 0.0021
+    Revit shells 1, signed volumes (cubic ft): 0.0018
+shell readings: 3 volume outliers read shell by shell: 0 explained by inscribed end faces, 0 explained by faces Revit's export holds twice, 3 another reason, 0 unread
+  reading 442037 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1427, other: other 1 (volume ratio 1.1427..1.1427, end-face area ratio 1.0698..1.0698: the volume ratio is not the end faces' area ratio)
+  reading 442040 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1427, other: other 1 (volume ratio 1.1427..1.1427, end-face area ratio 1.0698..1.0698: the volume ratio is not the end faces' area ratio)
+  reading 442191 IfcFlowFitting 'Closet Bend Reducing:-': volume ratio 1.1427, other: other 1 (volume ratio 1.1427..1.1427, end-face area ratio 1.0698..1.0698: the volume ratio is not the end faces' area ratio)
+exit 0

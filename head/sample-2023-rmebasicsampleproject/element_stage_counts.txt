@@ -1,0 +1,29 @@
+Revit 2023, layout 2023, 1 streams
+  markers: 12727
+  declared_id: 12723
+  frame_outside_stream: 0
+  category_out_of_range: 121
+  box_not_valid: 0
+  no_declared_id: 4
+  records: 12602
+  id_from_enclosing_record: 0
+  not_placed_instances: 1362
+  placed_instances: 11240
+  without_volume: 3063
+  with_volume: 8177
+  superseded: 0
+  nested_components: 0
+  selected: 8177
+  in_non_primary_design_option: 0
+  not_in_export_phase: 0
+  nested_in_door_or_window: 0
+  category_not_exported: 1408
+  handed_to_export: 6769
+  stream_not_read: 0
+  written_to_model: 6763
+  id_already_held: 0
+  below_min_confidence: 0
+  not_written_by_class: {'Mass': 6}
+  exported.building_elements: 6763
+ok
+exit 0

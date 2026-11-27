@@ -1,0 +1,6 @@
+266 IfcDoor in rvt-rs's file; tolerance 0.01 ft
+     76 no host wall in rvt-rs's file
+    190 rvt-rs's box is Revit's
+      6 Revit's body centred on the wall
+    184 Revit's body off the wall's centre
+exit 0

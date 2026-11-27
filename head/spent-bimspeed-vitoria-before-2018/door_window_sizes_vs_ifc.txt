@@ -1,0 +1,9 @@
+IfcDoor: 68 matched by Tag, OverallWidth and OverallHeight equal 68  differ 0  $ 0
+IfcWindow: 70 matched by Tag, OverallWidth and OverallHeight equal 64  differ 0  $ 6
+  IfcWindow 616640: Revit 3.9370 x 4.8228 ft, rvt-rs $
+  IfcWindow 630549: Revit 2.1982 x 2.0341 ft, rvt-rs $
+  IfcWindow 635633: Revit 2.4278 x 4.7572 ft, rvt-rs $
+  IfcWindow 635639: Revit 3.8058 x 4.8228 ft, rvt-rs $
+  IfcWindow 804765: Revit 1.8193 x 1.2395 ft, rvt-rs $
+  IfcWindow 804843: Revit 1.8193 x 1.2395 ft, rvt-rs $
+exit 0

@@ -1,0 +1,8 @@
+elements of IfcSlab,IfcShadingDevice in both: 2
+  IfcSlab area within 0.1%: 2
+  IfcSlab outline off: 1
+  IfcSlab outline within 0.01 ft: 1
+  IfcSlab vertices off: 1
+  IfcSlab vertices within 0.01 ft: 1
+  1354434 IfcSlab: area 2307.64 vs 2307.64 ft2 (0.00%), vertices 23.599 ft, outline 19.275 ft
+exit 0

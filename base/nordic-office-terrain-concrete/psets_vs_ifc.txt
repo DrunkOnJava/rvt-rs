@@ -1,0 +1,45 @@
+Revit values on objects rvt-rs writes: 113; equal: 87; different: 0; missing: 26; rvt-rs values Revit does not write: 0
+values on a key that more than one object of Revit's export holds, scored against the object held, in the totals above (#1576): 20 on 5 such keys; equal 15, different 0, missing 5
+values on a key that more than one object of Revit's export holds, whose objects hold different values, counted apart (#1576): 0 on 0 such keys
+  Pset_BuildingCommon.IsLandmarked: 1, equal 1, different 0, missing 0
+  Pset_BuildingCommon.NumberOfStoreys: 1, equal 0, different 0, missing 1
+  Pset_BuildingCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_BuildingElementProxyCommon.IsExternal: 3, equal 1, different 0, missing 2
+  Pset_BuildingElementProxyCommon.Reference: 2, equal 1, different 0, missing 1
+  Pset_BuildingStoreyCommon.AboveGround: 4, equal 3, different 0, missing 1
+  Pset_BuildingStoreyCommon.Reference: 4, equal 3, different 0, missing 1
+  Pset_BuildingSystemCommon.Reference: 1, equal 0, different 0, missing 1
+  Pset_EnvironmentalImpactIndicators.Reference: 23, equal 23, different 0, missing 0
+  Pset_OpeningElementCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_RailingCommon.Height: 1, equal 1, different 0, missing 0
+  Pset_RailingCommon.IsExternal: 1, equal 1, different 0, missing 0
+  Pset_RailingCommon.Reference: 1, equal 1, different 0, missing 0
+  Pset_RampCommon.IsExternal: 6, equal 6, different 0, missing 0
+  Pset_RampCommon.Reference: 6, equal 6, different 0, missing 0
+  Pset_RampFlightCommon.Reference: 6, equal 0, different 0, missing 6
+  Pset_ReinforcementBarPitchOfWall.Reference: 2, equal 2, different 0, missing 0
+  Pset_SpaceCommon.IsExternal: 10, equal 9, different 0, missing 1
+  Pset_SpaceCommon.Reference: 9, equal 9, different 0, missing 0
+  Pset_SpaceHeaterTypeCommon.Reference: 9, equal 0, different 0, missing 9
+  Pset_WallCommon.ExtendToStructure: 2, equal 2, different 0, missing 0
+  Pset_WallCommon.IsExternal: 4, equal 2, different 0, missing 2
+  Pset_WallCommon.LoadBearing: 2, equal 2, different 0, missing 0
+  Pset_WallCommon.Reference: 2, equal 2, different 0, missing 0
+  Pset_WasteTerminalTypeCommon.Reference: 11, equal 11, different 0, missing 0
+Revit values the project's own property set file places, out of scope (RE-239), not scored: 14
+  Pset_SpaceOccupancyRequirements.OccupancyType: 7
+  Pset_SpaceOccupancyRequirements.ParkingUnits: 7
+rvt-rs values Revit does not write, on objects Revit writes and on others:
+Revit's most common values where rvt-rs writes none:
+  Pset_SpaceHeaterTypeCommon.Reference: ('IfcIdentifier', 'AP') x2, ('IfcIdentifier', 'CARLOT 10') x1, ('IfcIdentifier', 'BICYCLE PARKING 3') x1, ('IfcIdentifier', 'BICYCLE PARKING 4') x1; on IfcSpace x9
+  Pset_RampFlightCommon.Reference: ('IfcIdentifier', 'AP-ajoramppi') x5, ('IfcIdentifier', 'AP-ulkoluiska') x1; on IfcRampFlight x5, IfcRamp x1
+  Pset_BuildingElementProxyCommon.IsExternal: ('IfcBoolean', False) x2; on IfcBuilding x1, IfcBuildingElementProxyType x1
+  Pset_WallCommon.IsExternal: ('IfcBoolean', True) x2; on IfcWallType x2
+  Pset_BuildingCommon.NumberOfStoreys: ('IfcInteger', 3) x1; on IfcBuilding x1
+  Pset_BuildingCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_BuildingElementProxyCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_BuildingStoreyCommon.AboveGround: ('IfcLogical', 'UNKNOWN') x1; on IfcBuilding x1
+  Pset_BuildingStoreyCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_BuildingSystemCommon.Reference: ('IfcIdentifier', 'Project Information') x1; on IfcBuilding x1
+  Pset_SpaceCommon.IsExternal: ('IfcBoolean', False) x1; on IfcSpaceType x1
+exit 0

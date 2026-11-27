@@ -1,0 +1,13 @@
+Revit types 10469 elements; 10469 of them are in ours
+typed in ours: 10469 of 10469
+  entity agrees: 10468 of 10469
+  name agrees: 0 of 10469
+  tag agrees: 10200 of 10469
+  global_id agrees: 10096 of 10469
+typed in ours but not in Revit's export: 51
+untyped in ours, by class: {}
+disagreements: {('name', 'IfcBuildingElementProxy'): 11, ('name', 'IfcWall'): 586, ('name', 'IfcColumn'): 340, ('global_id', 'IfcColumn'): 339, ('name', 'IfcDoor'): 266, ('name', 'IfcSlab'): 59, ('name', 'IfcPlate'): 269, ('global_id', 'IfcDoor'): 29, ('name', 'IfcMember'): 7872, ('name', 'IfcCurtainWall'): 98, ('name', 'IfcRamp'): 4, ('global_id', 'IfcRamp'): 3, ('name', 'IfcStair'): 16, ('name', 'IfcStairFlight'): 31, ('name', 'IfcSanitaryTerminal'): 141, ('name', 'IfcWindow'): 265, ('name', 'IfcCovering'): 74, ('name', 'IfcFurniture'): 98, ('name', 'IfcWasteTerminal'): 76, ('name', 'IfcElectricAppliance'): 51, ('entity', 'IfcSlab'): 1, ('name', 'IfcBeam'): 71, ('name', 'IfcAirTerminal'): 1, ('global_id', 'IfcFurniture'): 2, ('name', 'IfcPipeSegment'): 12, ('name', 'IfcShadingDevice'): 44, ('name', 'IfcLightFixture'): 44, ('name', 'IfcFireSuppressionTerminal'): 40}
+left out, Revit writes a value: {('tag', 'IfcPlate'): 269}
+TypeName carried: 10469 of 10469; equal to Revit's type: 10469
+type objects in ours: 1407
+exit 0

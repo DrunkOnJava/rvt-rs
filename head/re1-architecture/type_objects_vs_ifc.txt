@@ -1,0 +1,12 @@
+Revit types 73 elements; 73 of them are in ours
+typed in ours: 73 of 73
+  entity agrees: 73 of 73
+  name agrees: 73 of 73
+  tag agrees: 71 of 73
+  global_id agrees: 73 of 73
+typed in ours but not in Revit's export: 0
+untyped in ours, by class: {}
+left out, Revit writes a value: {('tag', 'IfcPlate'): 2}
+TypeName carried: 73 of 73; equal to Revit's type: 73
+type objects in ours: 66
+exit 0

@@ -1,0 +1,54 @@
+unfilled openings in Revit's export: 48; in rvt-rs's: 21; both: 20
+IfcDoor in IfcDoor:
+  revit: 1
+IfcDoor in IfcWall:
+  revit: 18
+  written: 2
+  box compared: 2
+  box within 0.01 ft: 2
+  volume compared: 2
+  volume within 0.01 %: 2
+  GlobalId equal: 2
+  Name equal: 2
+  PredefinedType equal: 2
+  Pset_OpeningElementCommon.Reference equal: 2
+  Pset_EnvironmentalImpactIndicators.Reference equal: 2
+  Depth in Revit's: 2
+  Depth equal: 2
+IfcSlab in IfcSlab:
+  revit: 1
+IfcWindow in IfcWall:
+  revit: 3
+none in IfcCovering:
+  revit: 7
+none in IfcSlab:
+  revit: 11
+  written: 11
+  box compared: 11
+  box within 0.01 ft: 11
+  volume compared: 11
+  volume within 0.01 %: 11
+  Name equal: 11
+  PredefinedType equal: 11
+  Pset_OpeningElementCommon.Reference equal: 11
+  Pset_EnvironmentalImpactIndicators.Reference equal: 11
+none in IfcWall:
+  revit: 7
+  written: 7
+  box compared: 7
+  box within 0.01 ft: 7
+  volume compared: 7
+  volume within 0.01 %: 7
+  GlobalId equal: 7
+  Name equal: 7
+  PredefinedType equal: 7
+  Pset_OpeningElementCommon.Reference equal: 7
+  Pset_EnvironmentalImpactIndicators.Reference equal: 7
+  Depth in Revit's: 7
+  Depth equal: 7
+written that Revit's export does not: 1
+  none in IfcWall: 1
+written that Revit's export does not, where its export is IFC2X3, counted apart (an IFC2X3 view removes no value): 0
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+  extra: none in IfcWall, Tag 1732546 in 1427469
+exit 0

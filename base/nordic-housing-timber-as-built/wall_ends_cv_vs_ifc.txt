@@ -1,0 +1,5 @@
+    734  ends
+    603  ends within 0.001 ft
+    603  ends within 0.01 ft
+    623  ends within 0.1 ft
+exit 0

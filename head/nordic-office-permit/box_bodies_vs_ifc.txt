@@ -1,0 +1,28 @@
+record-box bodies: 71; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcSanitaryTerminal               54       0       0       2      52       0       0    0.168
+        19  IDO Glow washbasin 11461_11561:PA-4
+        15  Sense_Public_allas:PA-3.LE
+        10  Shower_columns_15486:SU-1
+IfcStair                          14       0       0       0       0       0      14      nan
+IfcColumn                          1       0       0       0       0       0       1      nan
+IfcCurtainWall                     1       0       0       0       0       0       1      nan
+IfcRailing                         1       0       0       0       1       0       0    0.001
+         1  Railing:KAI-6
+total                             71       0       0       2      53       0      16
+box bodies by class and reason (SavedMeshRefusal, #1645): 71 of 71 have one
+IfcSanitaryTerminal               54
+        19  partial: malformed ruled-surface edge is connected to face ####
+        15  partial: a trim loop does not close in the surface's parameters; disconnected UV boundary; disconnected parametric trim in model coordinates; unsupported surface HermiteSurf
+        10  partial: scaled instance mode is not qualified
+         8  partial: unsupported surface HermiteSurf
+         2  partial: unsupported faceted topology
+IfcStair                          14
+        14  not_a_candidate: whole_drawn_by_its_parts
+IfcColumn                          1
+         1  no_saved_mesh
+IfcCurtainWall                     1
+         1  not_a_candidate: whole_drawn_by_its_parts
+IfcRailing                         1
+         1  partial: unsupported surface HermiteSurf
+exit 0

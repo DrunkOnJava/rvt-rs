@@ -1,0 +1,15 @@
+    414  family instance | IfcMember | Name equal | ObjectType equal
+     25  family instance | IfcWasteTerminal | Name equal | ObjectType equal
+     21  family instance | IfcGeographicElement | Name equal | ObjectType equal
+     14  system family | IfcWall | Name equal | ObjectType equal
+      8  family instance | IfcBeam | Name equal | ObjectType equal
+      5  family instance | IfcColumn | Name equal | ObjectType equal
+      4  family instance | IfcBuildingElementProxy | Name equal | ObjectType equal
+      4  system family | IfcCurtainWall | Name equal | ObjectType equal
+      2  system family | IfcRailing | Name equal | ObjectType equal
+      2  system family | IfcSlab | Name equal | ObjectType equal
+      2  system family | IfcGeographicElement | Name equal | ObjectType equal
+      1  system family | IfcRamp | Name differs | ObjectType equal
+      1  system family | IfcStair | Name equal | ObjectType equal
+      1  system family | IfcStairFlight | Name equal | ObjectType equal
+exit 0

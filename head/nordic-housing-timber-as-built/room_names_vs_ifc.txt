@@ -1,0 +1,46 @@
+  Pyörähdysympyrä 43:Turning Free Space 1500:1399673: storey ours Level_01 Revit None
+  Pyörähdysympyrä 1:Turning Free Space 1500:1399700: storey ours Level_01 Revit None
+  Pyörähdysympyrä 2:Turning Free Space 1500:1498848: storey ours Level_01 Revit None
+  Pyörähdysympyrä 4:Turning Free Space 1500:1546465: storey ours Level_02 Revit None
+  Pyörähdysympyrä 6:Turning Free Space 1500:1551210: storey ours Level_03 Revit None
+  Pyörähdysympyrä 7:Turning Free Space 1500:1551344: storey ours Level_03 Revit None
+  Pyörähdysympyrä 8:Turning Free Space 1500:1551391: storey ours Level_03 Revit None
+  Pyörähdysympyrä 11:Turning Free Space 1500:1567106: storey ours Level_04 Revit None
+  Pyörähdysympyrä 12:Turning Free Space 1500:1672322: storey ours Level_02 Revit None
+  Pyörähdysympyrä 13:Turning Free Space 1500:1672399: storey ours Level_03 Revit None
+  Pyörähdysympyrä 14:Turning Free Space 1500:1672408: storey ours Level_04 Revit None
+  Pyörähdysympyrä 15:Turning Free Space 1500:1693688: storey ours Level_01 Revit None
+  Pyörähdysympyrä 16:Turning Free Space 1500:1698190: storey ours Level_03 Revit None
+  Pyörähdysympyrä 17:Turning Free Space 1500:1698326: storey ours Level_02 Revit None
+  Pyörähdysympyrä 18:Turning Free Space 1500:1698347: storey ours Level_02 Revit None
+  Pyörähdysympyrä 10:Turning Free Space 1500:1698425: storey ours Level_04 Revit None
+  Pyörähdysympyrä 19:Turning Free Space 1500:1698446: storey ours Level_04 Revit None
+  Pyörähdysympyrä 20:Turning Free Space 1500:1714068: storey ours Basement Revit None
+  Pyörähdysympyrä 21:Turning Free Space 1500:1719749: storey ours Level_02 Revit None
+  Pyörähdysympyrä 22:Turning Free Space 1500:1720355: storey ours Basement Revit None
+  Pyörähdysympyrä 23:Turning Free Space 1500:1723946: storey ours Basement Revit None
+  Pyörähdysympyrä 24:Turning Free Space 1500:1759208: storey ours Level_03 Revit None
+  Pyörähdysympyrä 25:Turning Free Space 1500:1759229: storey ours Level_04 Revit None
+  Pyörähdysympyrä 26:Turning Free Space 1500:1818732: storey ours Level_01 Revit None
+  Pyörähdysympyrä 27:Turning Free Space 1500:1824289: storey ours Level_01 Revit None
+  VOLUME:VOLUME:1876779: storey ours Foundations Revit None
+  Pyörähdysympyrä 42:Turning Free Space 1300:1883948: storey ours Level_02 Revit None
+  Pyörähdysympyrä 28:Turning Free Space 1300:1883965: storey ours Level_02 Revit None
+  Pyörähdysympyrä 29:Turning Free Space 1300:1884006: storey ours Level_02 Revit None
+  Pyörähdysympyrä 30:Turning Free Space 1300:1884172: storey ours Level_03 Revit None
+  Pyörähdysympyrä 31:Turning Free Space 1300:1884181: storey ours Level_03 Revit None
+  Pyörähdysympyrä 32:Turning Free Space 1300:1884190: storey ours Level_03 Revit None
+  Pyörähdysympyrä 33:Turning Free Space 1300:1884229: storey ours Level_04 Revit None
+  Pyörähdysympyrä 34:Turning Free Space 1300:1884238: storey ours Level_04 Revit None
+  Pyörähdysympyrä 35:Turning Free Space 1300:1884247: storey ours Level_04 Revit None
+  Pyörähdysympyrä 36:Turning Free Space 1500:1886946: storey ours Level_03 Revit None
+  Pyörähdysympyrä 9:Turning Free Space 1500:1887001: storey ours Level_04 Revit None
+  Pyörähdysympyrä 37:Turning Free Space 1500:1887010: storey ours Level_04 Revit None
+  Pyörähdysympyrä 38:Turning Free Space 1500:1887040: storey ours Level_02 Revit None
+  Pyörähdysympyrä 39:Turning Free Space 1500:1887049: storey ours Level_02 Revit None
+  Pyörähdysympyrä 40:Turning Free Space 1500:1903542: storey ours Basement Revit None
+  Pyörähdysympyrä 41:Turning Free Space 1500:1961067: storey ours Level_01 Revit None
+  Pyörähdysympyrä 3:Turning Free Space 1500:2361166: storey ours Basement Revit None
+spaces in both: storey equal 104, different 43
+rooms: 147; Revit's number and name 147, different 0, not in the reference 0
+exit 0

@@ -1,0 +1,12 @@
+Revit types 126 elements; 16 of them are in ours
+typed in ours: 16 of 16
+  entity agrees: 16 of 16
+  name agrees: 0 of 16
+  tag agrees: 16 of 16
+  global_id agrees: 16 of 16
+typed in ours but not in Revit's export: 6
+untyped in ours, by class: {}
+disagreements: {('name', 'IfcBuildingElementProxy'): 1, ('name', 'IfcWall'): 2, ('name', 'IfcGeographicElement'): 1, ('name', 'IfcRamp'): 1, ('name', 'IfcWasteTerminal'): 11}
+TypeName carried: 16 of 16; equal to Revit's type: 16
+type objects in ours: 16
+exit 0

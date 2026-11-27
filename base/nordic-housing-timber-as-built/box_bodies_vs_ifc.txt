@@ -1,0 +1,26 @@
+record-box bodies: 58; fill = Revit's body volume / its bounding box
+class                              n     box     90%     50%    <50%   >100%  no ref   median
+IfcSanitaryTerminal               40       0       0       0      29       0      11    0.136
+        11  Suihku 1:SU-1
+         7  Allas:PA-1
+         6  seinäwc-istuin:WC-2
+IfcDoor                           11       0       0       0      11       0       0    0.156
+         6  UO-5:UO-5.12x23v
+         4  O-5:O-5.9x21sauna
+         1  UO-5:UO-5.12x21o
+IfcStair                           7       0       0       0       0       0       7      nan
+total                             58       0       0       0      40       0      18
+box bodies by class and reason (SavedMeshRefusal, #1645): 58 of 58 have one
+IfcSanitaryTerminal               40
+        11  no_saved_mesh
+        11  partial: scaled instance mode is not qualified
+         7  partial: unsupported surface HermiteSurf
+         6  partial: unsupported parametric profile curve GHermiteSpline; unsupported parametric profile curve GNurbSpline
+         5  partial: missing current symbol graphics #######
+IfcDoor                           11
+         7  partial: missing current symbol graphics #######
+         4  partial: multiple cylinder trim loops unsupported
+IfcStair                           7
+         7  not_a_candidate: whole_drawn_by_its_parts
+fill ARK_NordicLCA_Housing_Timber_As-Built_Revit.ifc: IfcOpenShell cannot process 5 Body items of 5 parts, which their meshes leave out (#2133): IfcTriangulatedFaceSet: Failed to process shape 5
+exit 0

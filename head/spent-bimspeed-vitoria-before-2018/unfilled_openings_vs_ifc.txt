@@ -1,0 +1,9 @@
+unfilled openings in Revit's export: 5; in rvt-rs's: 1; both: 0
+IfcSlab in IfcSlab:
+  revit: 5
+written that Revit's export does not: 0
+written that Revit's export does not, where its export is IFC2X3, counted apart (an IFC2X3 view removes no value): 1
+  IfcDoor in IfcWall: 1
+written that Revit's export does not but its export of a sibling file does, counted apart: 0
+  extra, IFC2X3 export: IfcDoor in IfcWall, Tag 582148 in 554979
+exit 0

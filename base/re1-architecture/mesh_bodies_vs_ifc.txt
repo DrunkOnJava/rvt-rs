@@ -1,0 +1,63 @@
+saved_graphics_mesh bodies scored: 55; in Revit's export 55
+class                             n  vol 1% vol .01%  0.01 ft 0.001 ft ref on ours  median volume ratio
+IfcFurnishingElement             21      21       19       21       18          21  1.0000
+        4       4        4        4        4           4  Tatatami Kantoma-NON-COLLECTUS:-
+        3       3        3        3        3           3  Cabinet, Upper Doors Double-NON-COLLECTUS:-
+        3       3        3        3        3           3  Cabinet, Base Doors and Drawers-NON-COLLECTUS:-
+        1       1        1        1        0           1  Chair, Lounge-NON-COLLECTUS:-
+        1       1        1        1        0           1  Sofa, 3-Seat-NON-COLLECTUS:-
+        1       1        1        1        1           1  Table, Coffee-NON-COLLECTUS:-
+IfcMember                        10      10       10       10       10          10  1.0000
+       10      10       10       10       10          10  Rectangular Mullion:-
+IfcBuildingElementProxy           9       9        8        9        8           9  1.0000
+        2       2        2        2        2           2  Soap Dish - NON-COLLECTUS:-
+        1       1        1        1        1           1  TV - NON-COLLECTUS:-
+        1       1        0        1        0           1  Dispenser, Toilet Paper - NON-COLLECTUS:-
+        1       1        1        1        1           1  Microwave, Under Cabinet - NON-COLLECTUS:-
+        1       1        1        1        1           1  Refrigerator, Mini - NON-COLLECTUS:-
+        1       1        1        1        1           1  Hook, Garment and Towel - NON-COLLECTUS:-
+IfcFlowTerminal                   7       5        3        3        2           3  1.0024
+        1       1        0        0        0           0  Toilet, Two Piece - NON-COLLECTUS:-
+        1       1        0        0        0           0  Sink, Kitchen, Small - NON-COLLECTUS:-
+        1       1        1        1        1           1  Shower Stall - NON-COLLECTUS:-
+        1       0        0        0        0           0  Shower Head, Hand Held Sprayer - NON-COLLECTUS:-
+        1       1        1        1        1           1  Japanese Soaking Tub-NON-COLLECTUS:-
+        1       0        0        0        0           0  Sink, Lavatory, Countertop - NON-COLLECTUS:-
+IfcDoor                           5       5        5        5        5           5  1.0000
+        2       2        2        2        2           2  Single-Flush:Single-Flush
+        1       1        1        1        1           1  Door-Double-Sliding:84" x 94"
+        1       1        1        1        1           1  Door-Double-Sliding:60" x 94"
+        1       1        1        1        1           1  Door-Curtain-Wall-Double-Glas:69" x 72"
+IfcPlate                          2       2        2        2        2           2  1.0000
+        2       2        2        2        2           2  System Panel:-
+IfcRailing                        1       0        0        0        0           0  1.0175
+        1       0        0        0        0           0  Railing:-
+  359466 IfcFlowTerminal 'Toilet, Two Piece - NON-COLLECTUS:-': volume ratio 1.0024, Revit's vertices to rvt-rs's surface 0.004032 ft, rvt-rs's to Revit's 0.01299 ft
+  462556 IfcRailing 'Railing:-': volume ratio 1.0175, Revit's vertices to rvt-rs's surface 0.01068 ft, rvt-rs's to Revit's 0.01112 ft
+  361394 IfcFlowTerminal 'Sink, Kitchen, Small - NON-COLLECTUS:-': volume ratio 1.0093, Revit's vertices to rvt-rs's surface 0.003656 ft, rvt-rs's to Revit's 0.0103 ft
+  374128 IfcFlowTerminal 'Sink, Lavatory, Countertop - NON-COLLECTUS:-': volume ratio 1.0104, Revit's vertices to rvt-rs's surface 0.003655 ft, rvt-rs's to Revit's 0.0103 ft
+  369643 IfcFlowTerminal 'Shower Head, Hand Held Sprayer - NON-COLLECTUS:-': volume ratio 1.1046, Revit's vertices to rvt-rs's surface 0.00103 ft, rvt-rs's to Revit's 0.01007 ft
+  355849 IfcFurnishingElement 'Table, Round-NON-COLLECTUS:-': volume ratio 1.0033, Revit's vertices to rvt-rs's surface 0.0006431 ft, rvt-rs's to Revit's 0.005089 ft
+  351456 IfcFurnishingElement 'Chair, Lounge-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 0.0009802 ft, rvt-rs's to Revit's 0.002038 ft
+  352342 IfcFurnishingElement 'Sofa, 3-Seat-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 0.0008459 ft, rvt-rs's to Revit's 0.001638 ft
+  377331 IfcFlowTerminal 'Washing Machine - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 0.0008648 ft, rvt-rs's to Revit's 0.00158 ft
+  360331 IfcBuildingElementProxy 'Dispenser, Toilet Paper - NON-COLLECTUS:-': volume ratio 1.0047, Revit's vertices to rvt-rs's surface 0.0009143 ft, rvt-rs's to Revit's 0.001552 ft
+  379016 IfcFurnishingElement 'Table, Low-NON-COLLECTUS:-': volume ratio 0.9999, Revit's vertices to rvt-rs's surface 0.0008866 ft, rvt-rs's to Revit's 0.0007615 ft
+  370475 IfcBuildingElementProxy 'Hook, Garment and Towel - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 0.0002806 ft, rvt-rs's to Revit's 0.0002524 ft
+  378158 IfcFurnishingElement 'Tatatami Kantoma-NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 2.051e-07 ft, rvt-rs's to Revit's 3.422e-06 ft
+  371363 IfcBuildingElementProxy 'Towel Bar - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.396e-06 ft, rvt-rs's to Revit's 3.419e-06 ft
+  364890 IfcBuildingElementProxy 'Microwave, Under Cabinet - NON-COLLECTUS:-': volume ratio 1.0000, Revit's vertices to rvt-rs's surface 3.309e-06 ft, rvt-rs's to Revit's 2.974e-06 ft
+  volume 374128 IfcFlowTerminal 'Sink, Lavatory, Countertop - NON-COLLECTUS:-': volume ratio 1.0104, farthest vertex 0.0103 ft
+    rvt-rs shells 5, signed volumes (cubic ft): 0.0314 0.0045 0.0045 0.0045 0.0032
+    Revit shells 5, signed volumes (cubic ft): 0.0315 0.0044 0.0044 0.0042 0.0032
+  volume 462556 IfcRailing 'Railing:-': volume ratio 1.0175, farthest vertex 0.01112 ft
+    rvt-rs shells 4, signed volumes (cubic ft): 1.6469 0.2055 0.0650 0.0650
+    Revit shells 4, signed volumes (cubic ft): 1.6469 0.1714 0.0650 0.0650
+  volume 369643 IfcFlowTerminal 'Shower Head, Hand Held Sprayer - NON-COLLECTUS:-': volume ratio 1.1046, farthest vertex 0.01007 ft
+    rvt-rs shells 16, signed volumes (cubic ft): 0.0163 0.0063 0.0060 0.0055 0.0016 0.0009 0.0009 0.0009
+    Revit shells 16, signed volumes (cubic ft): 0.0162 0.0057 0.0045 0.0039 0.0015 0.0009 0.0009 0.0009
+shell readings: 3 volume outliers read shell by shell: 1 explained by inscribed end faces, 0 explained by faces Revit's export holds twice, 2 another reason, 0 unread
+  reading 369643 IfcFlowTerminal 'Shower Head, Hand Held Sprayer - NON-COLLECTUS:-': volume ratio 1.1046, other: equal 7, explained 4 (volume ratio 1.0052..1.0147, end-face area ratio 1.0033..1.0077), other 5 (volume ratio 1.0173..1.3997, end-face area ratio 1.0000..1.0787: no round end face in rvt-rs's shell; the end faces' area ratios disagree; the volume ratio is not the end faces' area ratio)
+  reading 374128 IfcFlowTerminal 'Sink, Lavatory, Countertop - NON-COLLECTUS:-': volume ratio 1.0104, other: equal 2, explained 2 (volume ratio 1.0247..1.0247, end-face area ratio 1.0247..1.0247), other 1 (volume ratio 1.0838..1.0838, end-face area ratio 1.0096..1.0096: the end faces' area ratios disagree)
+  reading 462556 IfcRailing 'Railing:-': volume ratio 1.0175, explained: equal 3, explained 1 (volume ratio 1.1994..1.1994, end-face area ratio 1.2000..1.2000)
+exit 0

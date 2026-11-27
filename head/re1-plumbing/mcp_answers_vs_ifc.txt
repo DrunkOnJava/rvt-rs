@@ -1,0 +1,68 @@
+  open_model
+  list_elements: 123 rows
+  get_element: 15 elements
+mcp answers: consistency basis: the export of this run
+mcp answers: consistency protocol: 5 compared, 0 differ
+mcp answers: consistency counts: 26 compared, 0 differ
+mcp answers: elements the export folds into the body of another element, not rows: 0
+mcp answers: rows that are opening elements, which the diagnostics do not count as building elements: 0
+mcp answers: IfcPipeFitting: 54 rows
+mcp answers: IfcPipeSegment: 63 rows
+mcp answers: IfcSanitaryTerminal: 6 rows
+mcp answers: rows listed: 123
+mcp answers: consistency parameter values: 1 compared, 0 differ
+mcp answers: consistency element membership: 123 compared, 0 differ
+mcp answers: consistency element entities: 123 compared, 0 differ
+mcp answers: consistency element names: 123 compared, 0 differ
+mcp answers: consistency element long names: 123 compared, 0 differ
+mcp answers: consistency element ids: 123 compared, 0 differ
+mcp answers: consistency element predefined types: 123 compared, 0 differ
+mcp answers: consistency element storeys: 123 compared, 0 differ
+mcp answers: IFC openings the writer cuts for doors and windows, in no row: 0
+mcp answers: IFC elements and spaces: 123
+mcp answers: consistency levels: 2 compared, 0 differ
+mcp answers: consistency rooms: 0 compared, 0 differ
+mcp answers: rooms: 0
+mcp answers: rooms with an area: 0
+mcp answers: rooms without an area: 0
+mcp answers: rooms of space kind room: 0
+mcp answers: rooms of space kind area: 0
+mcp answers: rooms of space kind mep_space: 0
+mcp answers: rooms of space kind family_instance: 0
+mcp answers: rooms with no space kind: 0
+mcp answers: rooms with an arc in their outline: 0
+mcp answers: consistency details: 15 compared, 0 differ
+mcp answers: consistency type objects: 15 compared, 0 differ
+mcp answers: type objects: plate types the export writes with no Tag, whose id is not compared: 0
+mcp answers: consistency type object sets: 15 compared, 0 differ
+mcp answers: get_element property and quantity sets compared: 105
+mcp answers: consistency diagnostics: 1 compared, 0 differ
+mcp answers: consistency export hash: 1 compared, 0 differ
+mcp answers: classes: Revit export, elements and spaces paired: 123
+mcp answers: classes: Revit export, elements left out for no Tag: 0
+mcp answers: classes: Revit export, elements left out for a repeated Tag: 0
+mcp answers: classes: the answers, elements and spaces paired: 123
+mcp answers: classes: the answers, rows left out for no Tag: 0
+mcp answers: classes: the answers, rows left out for a repeated Tag: 0
+mcp answers: class IfcFlowFitting: revit 54, same 0, other 54, absent 0
+mcp answers: class IfcFlowSegment: revit 63, same 0, other 63, absent 0
+mcp answers: class IfcFlowTerminal: revit 6, same 0, other 6, absent 0
+mcp answers: consistency class sets: 123 compared, 0 differ
+mcp answers: storeys: rows the answers and Revit export share: 123
+mcp answers: storeys: rows on the same storey as in Revit: 123
+mcp answers: rooms: in the answers: 0
+mcp answers: rooms: Revit spaces with a body: 0
+mcp answers: rooms: paired by GlobalId: 0
+mcp answers: rooms: paired with an area in the answers: 0
+mcp answers: rooms: paired without an area in the answers: 0
+mcp answers: rooms: area within 0.1% of Revit: 0
+mcp answers: rooms: area within 1% of Revit: 0
+mcp answers: rooms: area more than 1% from Revit: 0
+mcp answers: values: sampled rows the answers and Revit export share: 15
+mcp answers: values: property values Revit export does not write: 35
+mcp answers: values: property values in the answers: 35
+mcp answers: values: property or quantity values Revit writes that the answers lack: 60
+mcp answers: values: quantity values Revit export does not write: 15
+mcp answers: values: quantity values in the answers: 15
+mcp answers: consistency PASS: every check equal
+exit 0
