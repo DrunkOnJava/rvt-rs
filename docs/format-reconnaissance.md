@@ -2803,6 +2803,22 @@ RE-495's shared points between two cylinder faces were refined to 0.00025 ft, a 
 
 Plane and cylinder faces refused as `disconnected UV boundary` have rings already open in the edge points the file stores: on the BIM4LCA housing and office the largest gap is under 0.00001 ft on 134 of 302 and 80 of 123 plane rings and on 39 of 65 and 4 of 12 cylinder rings, many cylinder rings parting only in their angle; those from 0.00001 to 0.0001 ft are not read, and from 0.0001 ft up to 0.0015 ft a piece of edge looks missing. Ends closer than 0.00001 ft along the surface (a chord on a plane, a helix on a cylinder) are now one point; wider gaps stay refused (Griffin, 2026-11-21). On `main` that draws two office curtain mullions within 0.000003 ft of Revit's bodies and gives four walls base quantities equal to Revit's, with nothing newly refused. See [RE-497](../reports/element-framing/RE-497-touching-ring-ends.md).
 
+### Emitted plane/cylinder boundaries (2026-11-26)
+
+`probe_plane_cylinder_shared_boundary` constructs a plane and unit
+cylinder with agreeing stored edge samples. It compares the sorted
+ordered chains extracted from the final triangles. The level cut has
+14 segments on each face. On the oblique cut, both sides have 32
+segments before cylinder strip clipping. The final plane has 32 and
+the cylinder has 44. The result holds after reversing the stored
+samples or swapping the face slots. The disagreement and off-plane
+controls retain their existing refusals.
+
+Run `cargo run --profile ci -p rvt-probes --example probe_plane_cylinder_shared_boundary`
+to print the generated cases. Add `-- --check` to require matching
+emitted chains and check that their vertices lie on the plane. The
+oblique cases currently fail that assertion.
+
 ## Addendum — views, sheets and placed viewports from the native records (#1117, 2026-11-26)
 
 A view is a `DBView*` record on channel 102; a sheet is a `DBViewDrafting` whose
