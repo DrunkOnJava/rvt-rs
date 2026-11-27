@@ -1179,8 +1179,8 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             (STRICT_JOIN, Keeps::new())
         } else if let Some(bound) = loop_join_bound(&surface, &segments)? {
             (bound, Keeps::new())
-        } else if crate::native_saved_mesh::coordinated_join() {
-            // #2085, research branch only: the gaps the coordinated join takes; the polygon
+        } else {
+            // #2085: the gaps the coordinated join takes; the polygon
             // still refuses the loop if any other gap is at or over the touching bound.
             let keep: Keeps = crate::native_saved_mesh::coordinated_join_keeps(g, fi, li)?
                 .into_iter()
@@ -1201,8 +1201,6 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 );
             }
             (LOOP_JOIN_BOUNDS[LOOP_JOIN_BOUNDS.len() - 1], keep)
-        } else {
-            anyhow::bail!("disconnected parametric trim in model coordinates")
         };
         bounds.push(bound);
         keeps.push(keep);

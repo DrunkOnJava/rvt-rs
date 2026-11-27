@@ -4,7 +4,6 @@ use crate::native_parameters::ObjectGraph;
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::OnceLock;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FaceMesh {
     pub face_index: usize,
@@ -887,13 +886,13 @@ fn refined_plane_edge(
         samples.len() == original.len(),
         "shared edge sample count mismatch"
     );
-    // #2085, research branch only (`RVT_2085_PLANE_ANCHOR`): an end sample of the curved face's
+    // #2085: an end sample of the curved face's
     // that leaves the plane, within `PLANE_ANCHOR_LIMIT` of the plane's own saved sample there,
     // is taken as that saved sample, which Revit's export holds at a contributor's chairs. The
     // samples between must still lie on the plane.
     let last = samples.len() - 1;
     let anchor = |i: usize| -> Result<Option<[f64; 2]>> {
-        if !plane_anchor() || project(samples[i]).is_ok() {
+        if project(samples[i]).is_ok() {
             return Ok(None);
         }
         let q = evaluate(samples[i])?;
@@ -1012,14 +1011,6 @@ fn refined_plane_edge(
         .collect()
 }
 
-/// #2085, research branch only: set `RVT_2085_PLANE_ANCHOR` to take, at a plane's edge
-/// shared with a curved face, an end sample that leaves the plane as the plane's own saved
-/// sample there. Off, every export is as before.
-fn plane_anchor() -> bool {
-    static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("RVT_2085_PLANE_ANCHOR").is_some())
-}
-
 /// How far, in feet, a curved face's end sample may lie from the plane's saved sample that
 /// the anchor takes: just over the 3.88e-4 ft a contributor's chairs part by at their four
 /// plane edges (#2085), fitted to one family on one save.
@@ -1088,28 +1079,16 @@ fn ring_impl(
     limit: usize,
 ) -> Result<Vec<[f64; 2]>> {
     let segments = ring_segments(g, index, face, li, refine, limit)?;
-    // A loop whose neighbours cannot be read joins as before: the test-only join fails closed.
-    let keeps = if coordinated_join() {
-        coordinated_keeps(g, index, face, li)
-            .map(|keeps| {
-                keeps
-                    .into_iter()
-                    .map(|(at, (keep, _))| (at, keep))
-                    .collect()
-            })
-            .unwrap_or_default()
-    } else {
-        BTreeMap::new()
-    };
+    // A loop whose neighbours cannot be read joins as before: the coordinated join fails closed.
+    let keeps = coordinated_keeps(g, index, face, li)
+        .map(|keeps| {
+            keeps
+                .into_iter()
+                .map(|(at, (keep, _))| (at, keep))
+                .collect()
+        })
+        .unwrap_or_default();
     joined_ring_keeping(segments, || step_length(g, index, face), &keeps)
-}
-
-/// #2085, research branch only: set `RVT_2085_COORDINATED_JOIN` to join the stored gaps two
-/// rings hold where the chair save's measured rule says which end Revit keeps. Off, every
-/// export is as before.
-pub(crate) fn coordinated_join() -> bool {
-    static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("RVT_2085_COORDINATED_JOIN").is_some())
 }
 
 /// The widest gap the coordinated join takes, in feet: just over the widest of the 40 chair
