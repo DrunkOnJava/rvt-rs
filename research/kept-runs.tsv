@@ -86,3 +86,7 @@ run	commit	kept
 42109657349-log	ed933f84fff1da6d9d96ad06f0c5d90c577fd2c3	log 3 lines from 3 jobs
 42125048710-log	85fff80ddfdb56867adec0cd497daff060f5dfad	log 8 lines from 3 jobs
 42556745265-holdout	b979b8cfce303b87ac1e356bc1a36ca3922b4660	head 19 files for 18 models; base 19 files for 18 models
+41707934595-summaries	6d7bdd702a59fcd4ca26527ec3e20ed4ea783a19	head 11 files for 5 models; base 11 files for 5 models
+41741114199-summaries	71bbb38d45316fb5a943f4467ef9776de88ffe72	head 37 files for 18 models; base 37 files for 18 models
+42017400629-summaries	ee28453ad615df7b3de2f08e7d17d54079958f95	head 49 files for 24 models; base 49 files for 24 models
+42027776156-summaries	ea5ae74efc0d43bb0eccd3879c1015b74a827afa	head 49 files for 24 models; base 49 files for 24 models
