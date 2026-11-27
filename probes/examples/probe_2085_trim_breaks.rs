@@ -5,8 +5,9 @@
 //! face's surface and needs each edge to meet the last within 1e-7 in model coordinates,
 //! either way round, and the last to meet the first. A small gap says the tolerance is too
 //! tight for the surface's evaluation; a large one, that the edges' parameters are not
-//! where the surface puts them, or that the loop's edges are out of order. Built on
-//! `research/2085-chairs` (its 4,000,000-value graph budget, and #1941's `HermiteSurf`).
+//! where the surface puts them, or that the loop's edges are out of order. It reads with a
+//! 4,000,000-value graph budget, and puts `HermiteSurf` faces (RE-460) to `face_grid` itself:
+//! the export does not route such a face there on `main`.
 //!
 //! For every element the export writes and every symbol its graphics name, each face of
 //! its saved graphics is put to `native_parametric_mesh::face_grid`; for a face refused with

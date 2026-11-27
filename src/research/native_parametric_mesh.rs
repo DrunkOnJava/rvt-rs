@@ -940,7 +940,7 @@ fn loop_join_bound(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> R
     Ok(None)
 }
 
-/// #2085, with `RVT_2085_COORDINATED_JOIN` set: the gaps of a loop the coordinated join takes, by where each is
+/// #2085: the gaps of a loop the coordinated join takes, by where each is
 /// in the loop (0 the closing gap), and whether it keeps Q, the next edge's end, or P, the
 /// loop's own last point ([`crate::native_saved_mesh::coordinated_join_keeps`]).
 type Keeps = BTreeMap<usize, bool>;
@@ -1146,11 +1146,11 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         ensure!(loops.len() < MAX_TRIM_LOOPS, "too many trim loops");
         let least = if loops.is_empty() { 2 } else { 1 };
         let (segments, edges) = loop_segments(g, fi, li, env, least, saved_chords)?;
-        // A loop that does not close within `STRICT_JOIN` is refused, unless
-        // `RVT_2085_COORDINATED_JOIN` is set and the coordinated join takes its gaps (#2085).
+        // A loop that does not close within `STRICT_JOIN` is refused, unless the coordinated
+        // join takes its gaps (#2085).
         let (bound, keep) = if loop_closes(&surface, &segments)? {
             (STRICT_JOIN, Keeps::new())
-        } else if crate::native_saved_mesh::coordinated_join() {
+        } else {
             // The gaps the coordinated join takes; the polygon still refuses the loop if any
             // other gap is at or over the touching bound.
             let keep: Keeps = crate::native_saved_mesh::coordinated_join_keeps(g, fi, li)?
@@ -1172,8 +1172,6 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 );
             }
             (LOOP_JOIN_BOUNDS[LOOP_JOIN_BOUNDS.len() - 1], keep)
-        } else {
-            anyhow::bail!("disconnected parametric trim in model coordinates")
         };
         bounds.push(bound);
         keeps.push(keep);
