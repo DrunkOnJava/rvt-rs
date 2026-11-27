@@ -1,0 +1,1 @@
+01b5af37f7e7d186ac7b60e4c49b85ffdab36dd6 fix(elements): the 32-bit export filters apply on Revit 2016 to 2023 only, and a Level frame takes an enclosing id only as a Level with a name block (#1261) (RE-315)
