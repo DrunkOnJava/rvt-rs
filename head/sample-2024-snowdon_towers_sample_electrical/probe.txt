@@ -1,0 +1,43 @@
+file 2024-snowdon_towers_sample_electrical.rvt release 2024
+families 218
+families-with-blends 14
+unbuilt family-657179 1036939 a blend section has an arc
+unbuilt family-667434 1079624 a blend section has an arc
+blend family-679510 1128579 void false vertices 4+4 mesh complete volume_rel 5.714e-1 corners 0.000000000 exchanged 0.650854140 verdict volume differs, corners on the mesh as read
+blend family-679510 1128630 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.650854140 verdict volume agrees, corners on the mesh as read
+unbuilt family-689233 1167051 a blend section has an arc
+blend family-689233 1167286 void false vertices 4+4 mesh complete volume_rel 1.577e-16 corners 0.000000000 exchanged 0.707106781 verdict volume agrees, corners on the mesh as read
+blend family-689233 1167320 void false vertices 4+4 mesh complete volume_rel - corners 0.000000000 exchanged 0.707106781 verdict volume not compared, corners on the mesh as read
+blend family-690206 1170607 void false vertices 4+4 mesh complete volume_rel 3.153e-16 corners 0.000000000 exchanged 0.707106781 verdict volume agrees, corners on the mesh as read
+blend family-690206 1170671 void false vertices 4+4 mesh complete volume_rel 5.714e-1 corners 0.000000000 exchanged 0.707106781 verdict volume differs, corners on the mesh as read
+unbuilt family-694812 1191549 a blend section has an arc
+unbuilt family-694812 1191578 a blend section has an arc
+unbuilt family-697646 1199552 a blend section has an arc
+blend family-697646 1199706 void false vertices 4+4 mesh complete volume_rel 1.566e-16 corners 0.000000000 exchanged 1.187184271 verdict volume agrees, corners on the mesh as read
+blend family-697646 1199730 void false vertices 4+4 mesh complete volume_rel 1.566e-16 corners 0.000000000 exchanged 1.133455876 verdict volume agrees, corners on the mesh as read
+unbuilt family-704262 1222919 a blend section has an arc
+blend family-704262 1223031 void false vertices 4+4 mesh complete volume_rel 3.891e-16 corners 0.000000000 exchanged 0.022391715 verdict volume agrees, corners on the mesh as read
+blend family-704262 1223052 void false vertices 4+4 mesh complete volume_rel 1.297e-16 corners 0.000000000 exchanged 0.080734476 verdict volume agrees, corners on the mesh as read
+blend family-704262 1223073 void false vertices 4+4 mesh complete volume_rel 6.485e-16 corners 0.000000000 exchanged 0.080734476 verdict volume agrees, corners on the mesh as read
+unbuilt family-707019 1233155 a blend section has an arc
+blend family-707019 1233198 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.044270833 verdict volume agrees, corners on the mesh as read
+blend family-707019 1233224 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.044270833 verdict volume agrees, corners on the mesh as read
+blend family-707019 1233259 void false vertices 4+4 mesh complete volume_rel 3.497e-16 corners 0.000000000 exchanged 0.044270833 verdict volume agrees, corners on the mesh as read
+blend family-711027 1251065 void false vertices 4+4 mesh none verdict no saved mesh
+unbuilt family-725403 1275669 a blend section has an arc
+blend family-725403 1275715 void false vertices 4+4 mesh complete volume_rel 2.542e-16 corners 0.000000000 exchanged 0.011428243 verdict volume agrees, corners on the mesh as read
+blend family-725403 1275741 void false vertices 4+4 mesh complete volume_rel 1.271e-16 corners 0.000000000 exchanged 0.036554950 verdict volume agrees, corners on the mesh as read
+blend family-725403 1275776 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.036554950 verdict volume agrees, corners on the mesh as read
+unbuilt family-1387142 1388141 a blend section has an arc
+unbuilt family-1387142 1388162 a blend section has an arc
+unbuilt family-1388580 1389549 a blend section has an arc
+unbuilt family-1388580 1389570 a blend section has an arc
+unbuilt family-1490935 1491968 a blend section has an arc
+tally blends 32
+tally read 18
+tally read: no saved mesh 1
+tally read: volume agrees, corners on the mesh as read 14
+tally read: volume differs, corners on the mesh as read 2
+tally read: volume not compared, corners on the mesh as read 1
+tally refused: a blend section has an arc 14
+exit 0

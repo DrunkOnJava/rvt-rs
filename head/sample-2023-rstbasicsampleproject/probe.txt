@@ -1,0 +1,4 @@
+file 2023-rstbasicsampleproject.rvt release 2023
+families 50
+families-with-blends 0
+exit 0

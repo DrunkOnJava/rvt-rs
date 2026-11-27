@@ -1,0 +1,4 @@
+file 2022-rstbasicsampleproject.rvt release 2022
+families 50
+families-with-blends 0
+exit 0

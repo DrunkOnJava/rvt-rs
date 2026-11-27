@@ -1,0 +1,19 @@
+file 2024-snowdon_towers_sample_architectural.rvt release 2024
+families 288
+families-with-blends 6
+blend family-1759932 1760084 void false vertices 6+6 mesh none verdict no saved mesh
+blend family-1759932 1760113 void false vertices 6+6 mesh none verdict no saved mesh
+blend family-1759932 1760142 void false vertices 6+6 mesh none verdict no saved mesh
+blend family-1759932 1760171 void false vertices 6+6 mesh none verdict no saved mesh
+blend family-1764470 1764701 void false vertices 4+4 mesh complete volume_rel 1.205e-15 corners 0.000000000 exchanged 0.250000000 verdict volume agrees, corners on the mesh as read
+blend family-1836072 1836253 void false vertices 4+4 mesh none verdict no saved mesh
+blend family-1849217 1849314 void false vertices 4+4 mesh complete volume_rel 8.025e-16 corners 0.000000000 exchanged 0.059055118 verdict volume agrees, corners on the mesh as read
+blend family-1922094 1922461 void false vertices 4+4 mesh complete volume_rel 2.314e-15 corners 0.000000000 exchanged 0.393082547 verdict volume agrees, corners on the mesh as read
+unbuilt family-2274435 2274610 a blend section has an arc
+unbuilt family-2274435 2274619 a blend section has an arc
+tally blends 10
+tally read 8
+tally read: no saved mesh 5
+tally read: volume agrees, corners on the mesh as read 3
+tally refused: a blend section has an arc 2
+exit 0

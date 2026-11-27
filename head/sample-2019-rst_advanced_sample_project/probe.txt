@@ -1,0 +1,4 @@
+file 2019-rst_advanced_sample_project.rvt release 2019
+families 145
+families-with-blends 0
+exit 0

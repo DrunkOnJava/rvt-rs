@@ -1,0 +1,2 @@
+file bim4gib-ARC-A-2020.rfa release 2020
+exit 0

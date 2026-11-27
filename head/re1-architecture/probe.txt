@@ -1,0 +1,12 @@
+file RE1-Architecture.rvt release 2025
+families 51
+families-with-blends 2
+blend family-357967 358180 void false vertices 32+32 mesh complete volume_rel 2.552e-2 corners 0.000000000 exchanged 0.020833333 verdict volume differs, corners on the mesh as read
+blend family-357967 358285 void false vertices 32+32 mesh complete volume_rel - corners 0.000000000 exchanged 0.021169776 verdict volume not compared, corners on the mesh as read
+unbuilt family-368698 369461 a blend section has an arc
+tally blends 3
+tally read 2
+tally read: volume differs, corners on the mesh as read 1
+tally read: volume not compared, corners on the mesh as read 1
+tally refused: a blend section has an arc 1
+exit 0

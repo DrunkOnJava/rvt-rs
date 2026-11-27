@@ -1,0 +1,1 @@
+3aed43e6f933a194732ec0a8492c584bd161d78c probe(probes): the blend probe prints a file's name, not its path, so its output can be kept (RE-490)

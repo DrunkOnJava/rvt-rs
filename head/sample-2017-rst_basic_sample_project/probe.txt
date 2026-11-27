@@ -1,0 +1,4 @@
+file 2017-rst_basic_sample_project.rvt release 2017
+families 50
+families-with-blends 0
+exit 0

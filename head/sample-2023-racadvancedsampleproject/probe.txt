@@ -1,0 +1,23 @@
+file 2023-racadvancedsampleproject.rvt release 2023
+families 116
+families-with-blends 4
+blend family-102903 285625 void false vertices 4+4 mesh complete volume_rel 4.061e-15 corners 0.000000000 exchanged 0.117851130 verdict volume agrees, corners on the mesh as read
+blend family-102903 285638 void false vertices 4+4 mesh complete volume_rel 5.199e-15 corners 0.000000000 exchanged 0.117851130 verdict volume agrees, corners on the mesh as read
+blend family-102903 285651 void false vertices 4+4 mesh complete volume_rel 1.300e-15 corners 0.000000000 exchanged 0.117851130 verdict volume agrees, corners on the mesh as read
+blend family-102903 285664 void false vertices 4+4 mesh complete volume_rel 1.625e-16 corners 0.000000000 exchanged 0.117851130 verdict volume agrees, corners on the mesh as read
+unbuilt family-235381 303993 open loop
+unbuilt family-235381 304028 open loop
+unbuilt family-235381 304049 open loop
+unbuilt family-235381 304059 open loop
+unbuilt family-236087 304618 open loop
+unbuilt family-236087 304653 open loop
+unbuilt family-236087 304674 open loop
+unbuilt family-236087 304684 open loop
+blend family-239471 307666 void false vertices 4+4 mesh complete volume_rel 6.316e-1 corners 2.428039859 exchanged 2.425178069 verdict volume differs, corners off the mesh either way
+blend family-239471 307679 void false vertices 4+4 mesh complete volume_rel 4.432e-1 corners 1.104574963 exchanged 1.092278121 verdict volume differs, corners off the mesh either way
+tally blends 14
+tally read 6
+tally read: volume agrees, corners on the mesh as read 4
+tally read: volume differs, corners off the mesh either way 2
+tally refused: open loop 8
+exit 0

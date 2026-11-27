@@ -1,0 +1,13 @@
+file RE1-Plumbing.rvt release 2025
+families 23
+families-with-blends 2
+unbuilt family-245575 246304 a blend section has an arc
+blend family-245575 246350 void false vertices 4+4 mesh complete volume_rel 2.542e-16 corners 0.000000000 exchanged 0.011428243 verdict volume agrees, corners on the mesh as read
+blend family-245575 246376 void false vertices 4+4 mesh complete volume_rel 1.271e-16 corners 0.000000000 exchanged 0.036554950 verdict volume agrees, corners on the mesh as read
+blend family-245575 246411 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.036554950 verdict volume agrees, corners on the mesh as read
+unbuilt family-251105 251898 a blend section has an arc
+tally blends 5
+tally read 3
+tally read: volume agrees, corners on the mesh as read 3
+tally refused: a blend section has an arc 2
+exit 0

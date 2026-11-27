@@ -1,0 +1,4 @@
+file RE1-Electrical.rvt release 2025
+families 27
+families-with-blends 0
+exit 0

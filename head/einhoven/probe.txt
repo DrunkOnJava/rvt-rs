@@ -1,0 +1,4 @@
+file Revit_IFC5_Einhoven.rvt release 2023
+families 12
+families-with-blends 0
+exit 0

@@ -1,0 +1,2 @@
+file rac_basic_sample_family-2018.rfa release 2018
+exit 0

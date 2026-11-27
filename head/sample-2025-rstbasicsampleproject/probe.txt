@@ -1,0 +1,4 @@
+file 2025-rstbasicsampleproject.rvt release 2025
+families 50
+families-with-blends 0
+exit 0

@@ -1,0 +1,47 @@
+file 2025-rmebasicsampleproject.rvt release 2025
+families 159
+families-with-blends 14
+blend family-359968 769027 void false vertices 4+4 mesh none verdict no saved mesh
+blend family-359968 769085 void false vertices 4+4 mesh none verdict no saved mesh
+blend family-359968 769100 void false vertices 4+4 mesh none verdict no saved mesh
+blend family-361965 770774 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.695971241 verdict volume agrees, corners on the mesh as read
+blend family-361965 770797 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.695971241 verdict volume agrees, corners on the mesh as read
+blend family-361965 770820 void false vertices 4+4 mesh complete volume_rel 1.654e-16 corners 0.000000000 exchanged 0.695971241 verdict volume agrees, corners on the mesh as read
+blend family-361965 770884 void false vertices 4+4 mesh complete volume_rel 5.714e-1 corners 0.000000000 exchanged 0.695971241 verdict volume differs, corners on the mesh as read
+unbuilt family-362903 771500 a blend section has an arc
+unbuilt family-362903 771598 a blend section has an arc
+unbuilt family-362903 771623 a blend section has an arc
+blend family-362903 771690 void false vertices 4+4 mesh complete volume_rel 1.642e-16 corners 0.000000000 exchanged 1.168488456 verdict volume agrees, corners on the mesh as read
+blend family-362903 771713 void false vertices 4+4 mesh complete volume_rel 1.642e-16 corners 0.000000000 exchanged 1.115606177 verdict volume agrees, corners on the mesh as read
+unbuilt family-363790 772329 a blend section has an arc
+unbuilt family-363790 772425 a blend section has an arc
+unbuilt family-363790 772436 a blend section has an arc
+blend family-363790 772616 void false vertices 4+4 mesh complete volume_rel 1.654e-16 corners 0.000000000 exchanged 0.695971241 verdict volume agrees, corners on the mesh as read
+blend family-363790 772650 void false vertices 4+4 mesh complete volume_rel - corners 0.000000000 exchanged 0.695971241 verdict volume not compared, corners on the mesh as read
+blend family-370033 774891 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.333333333 verdict volume agrees, corners on the mesh as read
+blend family-371854 775768 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.333333333 verdict volume agrees, corners on the mesh as read
+unbuilt family-376463 778357 a blend section has an arc
+unbuilt family-376463 778390 a blend section has an arc
+blend family-378530 779188 void false vertices 4+4 mesh complete volume_rel 1.310e-16 corners 0.000000000 exchanged 0.093750000 verdict volume agrees, corners on the mesh as read
+blend family-541405 791138 void false vertices 4+4 mesh complete volume_rel 2.198e-16 corners 0.000000000 exchanged 0.000000000 verdict volume agrees, corners on the mesh either way
+unbuilt family-542324 791898 a blend section has an arc
+unbuilt family-598551 805258 a blend section has an arc
+unbuilt family-598551 805279 a blend section has an arc
+blend family-598551 805319 void false vertices 4+4 mesh complete volume_rel 1.777e-16 corners 0.000000000 exchanged 0.044270833 verdict volume agrees, corners on the mesh as read
+blend family-598551 805344 void false vertices 4+4 mesh complete volume_rel 1.777e-16 corners 0.000000000 exchanged 0.044270833 verdict volume agrees, corners on the mesh as read
+blend family-598551 805379 void false vertices 4+4 mesh complete volume_rel 1.777e-16 corners 0.000000000 exchanged 0.044270833 verdict volume agrees, corners on the mesh as read
+unbuilt family-602982 809387 a blend section has an arc
+blend family-602982 809420 void false vertices 4+4 mesh complete volume_rel 1.648e-16 corners 0.000000000 exchanged 0.080734476 verdict volume agrees, corners on the mesh as read
+blend family-602982 809442 void false vertices 4+4 mesh complete volume_rel 3.296e-16 corners 0.000000000 exchanged 0.080734476 verdict volume agrees, corners on the mesh as read
+unbuilt family-602982 809581 a blend section has an arc
+unbuilt family-662481 833685 a blend section has an arc
+unbuilt family-672281 842830 a blend section has an arc
+tally blends 35
+tally read 20
+tally read: no saved mesh 3
+tally read: volume agrees, corners on the mesh as read 14
+tally read: volume agrees, corners on the mesh either way 1
+tally read: volume differs, corners on the mesh as read 1
+tally read: volume not compared, corners on the mesh as read 1
+tally refused: a blend section has an arc 15
+exit 0

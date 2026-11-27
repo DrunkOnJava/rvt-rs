@@ -1,0 +1,4 @@
+file 2026-rstbasicsampleproject.rvt release 2026
+families 50
+families-with-blends 0
+exit 0

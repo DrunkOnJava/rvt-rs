@@ -1,0 +1,39 @@
+file 2025-racbasicsampleproject.rvt release 2025
+families 94
+families-with-blends 7
+unbuilt family-285361 1010324 a blend section has an arc
+unbuilt family-285361 1010881 a blend section has an arc
+unbuilt family-287257 1011922 a blend section has an arc
+unbuilt family-287257 1011949 a blend section has an arc
+unbuilt family-287257 1011976 a blend section has an arc
+unbuilt family-287257 1012002 a blend section has an arc
+unbuilt family-287257 1012019 a blend section has an arc
+unbuilt family-287257 1012026 a blend section has an arc
+unbuilt family-287257 1012033 a blend section has an arc
+unbuilt family-287257 1012040 a blend section has an arc
+unbuilt family-287257 1012118 a blend section has an arc
+unbuilt family-287257 1012143 a blend section has an arc
+unbuilt family-494351 1015422 a blend section has an arc
+unbuilt family-732643 1038767 a blend section has an arc
+unbuilt family-732643 1038790 a blend section has an arc
+unbuilt family-732643 1038825 a blend section has an arc
+unbuilt family-732643 1038847 a blend section has an arc
+unbuilt family-732643 1038959 a blend section has an arc
+unbuilt family-732643 1039000 a blend section has an arc
+unbuilt family-732643 1039094 a blend section has an arc
+unbuilt family-907804 1056542 a blend section has an arc
+unbuilt family-907804 1056563 a blend section has an arc
+blend family-990657 1068840 void false vertices 4+4 mesh complete volume_rel 1.433e-16 corners 0.000000000 exchanged 0.139194248 verdict volume agrees, corners on the mesh as read
+blend family-990657 1068864 void false vertices 4+4 mesh complete volume_rel 2.904e-1 corners 0.000000000 exchanged 0.139194248 verdict volume differs, corners on the mesh as read
+blend family-990657 1068885 void false vertices 4+4 mesh complete volume_rel - corners 2.995361905 exchanged 2.992125984 verdict volume not compared, corners off the mesh either way
+blend family-990657 1068910 void false vertices 4+4 mesh complete volume_rel 2.904e-1 corners 2.995361905 exchanged 2.992125984 verdict volume differs, corners off the mesh either way
+unbuilt family-993162 1070369 a blend section has an arc
+unbuilt family-993162 1070406 a blend section has an arc
+tally blends 28
+tally read 4
+tally read: volume agrees, corners on the mesh as read 1
+tally read: volume differs, corners off the mesh either way 1
+tally read: volume differs, corners on the mesh as read 1
+tally read: volume not compared, corners off the mesh either way 1
+tally refused: a blend section has an arc 24
+exit 0

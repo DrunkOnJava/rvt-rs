@@ -1,0 +1,23 @@
+file RE1-Mechanical.rvt release 2025
+families 23
+families-with-blends 3
+blend family-3430 25046 void false vertices 4+4 mesh none verdict no saved mesh
+blend family-3430 25104 void false vertices 4+4 mesh none verdict no saved mesh
+blend family-3430 25119 void false vertices 4+4 mesh none verdict no saved mesh
+blend family-3478 27050 void false vertices 4+4 mesh complete volume_rel 4.080e-16 corners 0.000000000 exchanged 0.707106781 verdict volume agrees, corners on the mesh as read
+blend family-3478 27073 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.707106781 verdict volume agrees, corners on the mesh as read
+blend family-3478 27096 void false vertices 4+4 mesh complete volume_rel 0.000e0 corners 0.000000000 exchanged 0.707106781 verdict volume agrees, corners on the mesh as read
+blend family-3478 27160 void false vertices 4+4 mesh complete volume_rel 5.714e-1 corners 0.000000000 exchanged 0.707106781 verdict volume differs, corners on the mesh as read
+unbuilt family-3491 27876 a blend section has an arc
+unbuilt family-3491 27972 a blend section has an arc
+unbuilt family-3491 27983 a blend section has an arc
+blend family-3491 28163 void false vertices 4+4 mesh complete volume_rel 3.153e-16 corners 0.000000000 exchanged 0.707106781 verdict volume agrees, corners on the mesh as read
+blend family-3491 28197 void false vertices 4+4 mesh complete volume_rel - corners 0.000000000 exchanged 0.707106781 verdict volume not compared, corners on the mesh as read
+tally blends 12
+tally read 9
+tally read: no saved mesh 3
+tally read: volume agrees, corners on the mesh as read 4
+tally read: volume differs, corners on the mesh as read 1
+tally read: volume not compared, corners on the mesh as read 1
+tally refused: a blend section has an arc 3
+exit 0

@@ -1,0 +1,2 @@
+file bim4gib-REV-B-2020.rfa release 2020
+exit 0

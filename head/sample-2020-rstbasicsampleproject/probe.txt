@@ -1,0 +1,4 @@
+file 2020-rstbasicsampleproject.rvt release 2020
+families 50
+families-with-blends 0
+exit 0

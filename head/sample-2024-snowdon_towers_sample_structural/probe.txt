@@ -1,0 +1,8 @@
+file 2024-snowdon_towers_sample_structural.rvt release 2024
+families 185
+families-with-blends 1
+blend family-976959 977824 void false vertices 4+4 mesh complete volume_rel - corners 0.000000000 exchanged 0.000000000 verdict volume not compared, corners on the mesh either way
+tally blends 1
+tally read 1
+tally read: volume not compared, corners on the mesh either way 1
+exit 0
