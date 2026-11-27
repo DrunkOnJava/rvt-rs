@@ -9,7 +9,10 @@ diff leaves out `ifc.sha256` and `diagnostics.json`. This prints, above that lis
   (each model's `probe.txt`, the `probe: exit N` line it adds to `counts.txt`, and
   `areas_across_saves*.txt`), with the first lines that do;
 - with a probe, the most common lines the probe printed across the models, and
-  the models whose probe did not exit 0.
+  the models whose probe did not exit 0;
+- the exports whose IfcOpenShell validation and EXPRESS rules were skipped for
+  their size, on each side, which the run otherwise says only in each model's
+  `schema.txt` (#2103).
 
 It judges nothing against a pull request's registered rows; those stay the
 reader's. A directory or file that is missing is said to be missing.
@@ -26,6 +29,9 @@ MOST_NAMED = 40
 MOST_LINES = 25
 HEAD_ONLY = re.compile(r"(probe\.txt|areas_across_saves[^ /]*\.txt)$")
 PROBE_EXIT = re.compile(r"^\+?probe: exit (\d+)$")
+# measure-reference-models.sh writes this in `schema.txt`; the held-out scrub keeps it in
+# `counts.txt` with a `schema: ` prefix.
+SKIPPED = re.compile(r"^(?:schema: )?validate: skipped, over (\d+) MB$", re.M)
 
 
 def models(root):
@@ -121,6 +127,35 @@ def scorer_residue(path):
     print("```")
 
 
+def skipped_validation(root):
+    """(model, the limit in MB it was over) of each export whose validation was skipped for its size."""
+    out = []
+    for model in models(root) or []:
+        for name in ("schema.txt", "counts.txt"):
+            text = read(os.path.join(root, model, name))
+            match = SKIPPED.search((text or b"").decode(errors="replace"))
+            if match:
+                out.append((model, int(match.group(1))))
+                break
+    return out
+
+
+def validation(head, base):
+    """Say which exports were not validated: a model a check never reads must not read as
+    one it passed (#2103)."""
+    for side, root in (("head", head), ("base", base)):
+        if models(root) is None:
+            continue
+        skipped = skipped_validation(root)
+        if skipped:
+            limits = sorted({mb for _, mb in skipped})
+            over = " or ".join(f"{mb} MB" for mb in limits)
+            print(f"- Validation (IfcOpenShell and the EXPRESS rules): **skipped on {len(skipped)} export{'' if len(skipped) == 1 else 's'} over {over}** "
+                  f"at {side}: {named([m for m, _ in skipped])}")
+        else:
+            print(f"- Validation (IfcOpenShell and the EXPRESS rules): no export skipped for size at {side}")
+
+
 def probes(head):
     counts, ran, failed = collections.Counter(), 0, []
     for model in models(head):
@@ -168,6 +203,7 @@ def main(argv):
         compare(head, base, "diagnostics.json", "Diagnostics (`diagnostics.json`)")
         if diff:
             scorer_residue(diff)
+    validation(head, base)
     probes(head)
     print()
 
