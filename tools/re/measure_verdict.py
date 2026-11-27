@@ -163,7 +163,8 @@ def validation_state(root, model):
         re.search(r"^schema validate: findings \d+$", counts, re.M))
     rules = bool(FINDINGS.search(section("rules", "property sets"))) or bool(
         re.search(r"^schema rules: findings \d+$", counts, re.M))
-    ran = "validate:" in schema.splitlines() or bool(re.search(r"^schema validate: ", counts, re.M))
+    # A held-out validation that timed out leaves only the scrub's `schema rules: not read`.
+    ran = "validate:" in schema.splitlines() or bool(re.search(r"^schema (?:validate|rules): ", counts, re.M))
     return validate, rules, None, ran
 
 
