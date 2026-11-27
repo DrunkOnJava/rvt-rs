@@ -127,45 +127,70 @@ def scorer_residue(path):
     print("```")
 
 
-VALIDATED = re.compile(r"^validate:\nfindings \d+$|^schema validate: findings \d+$", re.M)
+FINDINGS = re.compile(r"^findings \d+$", re.M)
 
 
 def validation_state(root, model):
-    """`validated`, `skipped` (with the limit in MB it was over) or `not validated`: a run with
-    `scorers=none`, a check that did not run, or a model with no export writes no line."""
-    for name in ("schema.txt", "counts.txt"):
-        text = (read(os.path.join(root, model, name)) or b"").decode(errors="replace")
+    """(validation read, rules read, the limit in MB it was skipped over or None) for one export.
+
+    `schema.txt` holds a `validate:` section and a `rules:` section, each with a `findings N`
+    line when its check read the file; a check that timed out or did not read it leaves none.
+    A held-out model's scrubbed `counts.txt` keeps the same as `schema validate: findings N`
+    and `schema rules: findings N`. A run without the `schema` step, a family, or a model with
+    no export writes neither."""
+    schema = (read(os.path.join(root, model, "schema.txt")) or b"").decode(errors="replace")
+    counts = (read(os.path.join(root, model, "counts.txt")) or b"").decode(errors="replace")
+    for text in (schema, counts):
         match = SKIPPED.search(text)
         if match:
-            return "skipped", int(match.group(1))
-        if VALIDATED.search(text):
-            return "validated", None
-    return "not validated", None
+            return False, False, int(match.group(1))
+
+    def section(name, until):
+        """The lines between `name:` and `until:` in `schema.txt`."""
+        lines = schema.splitlines()
+        if f"{name}:" not in lines:
+            return ""
+        out = []
+        for line in lines[lines.index(f"{name}:") + 1:]:
+            if line == f"{until}:":
+                break
+            out.append(line)
+        return "\n".join(out)
+
+    validate = bool(FINDINGS.search(section("validate", "rules"))) or bool(
+        re.search(r"^schema validate: findings \d+$", counts, re.M))
+    rules = bool(FINDINGS.search(section("rules", "property sets"))) or bool(
+        re.search(r"^schema rules: findings \d+$", counts, re.M))
+    return validate, rules, None
 
 
 def validation(head, base):
-    """Say which exports were validated, which were skipped for size and which were not
-    validated at all, on each side: a model a check never read must not read as one it
-    passed (#2103)."""
+    """Say, on each side, how many exports IfcOpenShell's validation and the EXPRESS rules read,
+    which they skipped for size, which the rules did not read, and which nothing validated: a
+    model a check never read must not read as one it passed (#2103)."""
     for side, root in (("head", head), ("base", base)):
         names = models(root)
         if names is None:
             continue
-        validated, skipped, missing = 0, [], []
+        both, rules_missing, skipped, missing = 0, [], [], []
         for model in names:
-            state, limit = validation_state(root, model)
-            if state == "validated":
-                validated += 1
-            elif state == "skipped":
+            validate, rules, limit = validation_state(root, model)
+            if limit is not None:
                 skipped.append((model, limit))
+            elif validate and rules:
+                both += 1
+            elif validate:
+                rules_missing.append(model)
             else:
                 missing.append(model)
-        line = f"- Validation (IfcOpenShell and the EXPRESS rules) at {side}: {validated} of {len(names)} exports validated"
+        line = f"- Validation (IfcOpenShell and the EXPRESS rules) at {side}: both read on {both} of {len(names)} exports"
+        if rules_missing:
+            line += f"; **the rules not read on {len(rules_missing)}**: {named(rules_missing)}"
         if skipped:
             over = " or ".join(f"{mb} MB" for mb in sorted({mb for _, mb in skipped}))
             line += f"; **{len(skipped)} skipped for size (over {over})**: {named([m for m, _ in skipped])}"
         if missing:
-            line += f"; {len(missing)} not validated (the families, which are not validated, a run without the `schema` step, or no export): {named(missing)}"
+            line += f"; {len(missing)} not validated (the families, which are not validated, a run without the `schema` step, a check that timed out, or no export): {named(missing)}"
         print(line)
 
 
