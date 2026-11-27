@@ -687,7 +687,9 @@ measure_sample() { # sample
     wanted space_kinds_vs_ifc && score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
     # #2148: the 2018 save's rooms paired by GlobalId with a forum user's Revit 2018 export of
     # it (research/rac-basic-2018-export.tsv), counts only: without --list the scorer prints
-    # no GlobalId or name. Not cached, as nothing derived from that export may be.
+    # no GlobalId or name. `score`, not `cscore`: the score cache keeps nothing read from that
+    # export. The counts line is public, as the artifact uploads it, and a reused base side's
+    # results carry it.
     local phased="${SAMPLE_DIR:-}/phased/rac_basic_sample_project.ifc"
     if [ "$(basename "$sample")" = 2018-rac_basic_sample_project.rvt ] && [ -s "$phased" ]; then
       wanted spaces_by_globalid_vs_ifc && score "$dir/spaces_by_globalid_vs_ifc.txt" "$SCORERS/spaces_by_globalid_vs_ifc.py" "$dir/model.ifc" "$phased"

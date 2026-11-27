@@ -1274,8 +1274,9 @@ all 13 releases, and a public Revit 2018 export of it holds all 14. They are
 left out by that change's default and written with `--phase "Working Drawings"`,
 which writes 14 of that export's 17 spaces by GlobalId and changes no other
 entity (Measure runs [41784415396](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41784415396) and [41784419457](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41784419457)).
-Since #1359 the default export writes the same 14 rooms, and every Measure run of
-the 2018 save pairs them with that export, keeping only the counts (#2148; run
+Since #1359 the default export writes the same 14 rooms, and a Measure run of the
+2018 save with the default scorers pairs them with that export when its host
+answers, keeping only the counts (#2148; run
 [46053386384](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46053386384), kept: [the counts][kept-47]). Revit 2014
 and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
