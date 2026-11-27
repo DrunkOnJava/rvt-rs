@@ -31,6 +31,37 @@ The volume is exact for straight edges between corresponding vertices: the area 
 
 Which offset belongs to which sketch is not in the record's field names. Volume and bounding box do not tell the two pairings apart (both give the same). The corners do: with the first sketch at -1001804 and the second at -1001805 every corner lies on a vertex of the saved mesh (largest distance 0.00000 ft), and with the pairing exchanged the corners miss by 0.47 ft on the column and 0.12 ft on the four others.
 
+## Corpus run (2026-11-27)
+
+`probe_re490_family_blends` reads every blend of 83 files with `FormDocument::blend`: 18 files of the family corpus, Autodesk's 59 sample projects of Revit 2015 to 2027 (the families each project has loaded) and six reference models. 48 of them hold a blend; the family corpus holds none. Counts only (Measure run 46029833703 at `3aed43e6`). The family corpus's Revit 2014 file could not be fetched, as its host now answers 404. The first run (44483325377 at `808c2a3e`, 2026-11-19) read it and refused it as a Revit 2014 file, so it held no blend that run counted, and every count below is the same in both runs; whether it holds a blend, now that 2014 families open (RE-489), is not measured.
+
+| What the reader does | Blends |
+|---|---:|
+| Found | 1,260 |
+| Refused: a section has an arc | 604 |
+| Refused: open loop | 104 |
+| Read | 552 |
+
+Of the 552 read, 484 have a complete saved mesh and 68 none.
+
+| Against the saved mesh | Blends |
+|---|---:|
+| Volume agrees, corners on the mesh with the offsets paired as read | 343 |
+| Volume agrees, corners on the mesh with either pairing | 13 |
+| Volume differs (by 10% or more on 46), corners on the mesh as read | 48 |
+| No volume to compare, corners on the mesh as read | 25 |
+| No volume to compare, corners on the mesh with either pairing | 1 |
+| Corners more than a foot off the mesh with either pairing (40 with a volume that differs, 14 with none) | 54 |
+
+- **The pairing holds:** no blend fits only with the offsets exchanged, 0 of 552.
+- **Agreement in full:** 356 of the 484 with a complete mesh agree in volume and corners.
+- **Saves repeat:** the sample projects are a few projects saved by thirteen releases, so a blend is counted once in each save. By project, family and ElementId there are 147 distinct blends: 96 agree in full, 15 have their corners on the mesh and another volume, 10 have no volume to compare, 6 have their corners off the mesh and 20 have no saved mesh. Each comes out the same way in every save.
+- **Not explained:** the 54 whose corners are off the mesh, the 48 whose corners fit and whose volume does not (the vertex correspondence, or a cut by another form), and the 26 with no volume to compare.
+
+Reproduce: `gh workflow run measure.yml --ref main -f ref=3aed43e6f933a194732ec0a8492c584bd161d78c -f base=none -f families=true -f samples=true -f scorers=none -f probe=probe_re490_family_blends`.
+
+Kept output: `refs/evidence/46029833703-probes` (commit `f3266325`), one `probe.txt` per file.
+
 ## Not decided
 
 - Five blends from two families, every section a four-vertex outline of straight edges, in planes parallel to a base plane. Whether the pairing by order holds for a blend whose sketches were created in the other order is not measured.

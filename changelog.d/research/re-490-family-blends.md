@@ -12,4 +12,8 @@
   Not read: arcs in a section, holes, sections of different vertex counts
   or not in parallel planes, a swept blend, and the corner-to-corner
   correspondence where the loops start at different vertices (measured only
-  where the loops' order matches). Contributed by mageaustralia.
+  where the loops' order matches). Over 83 files of the family corpus,
+  Autodesk's samples and reference models it reads 552 of 1,260 blends (604
+  have an arc, 104 an open loop), and 356 of the 484 with a complete saved
+  mesh agree in volume and corners; none fits only with the offsets
+  exchanged. Contributed by mageaustralia.
