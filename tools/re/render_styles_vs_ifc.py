@@ -99,22 +99,26 @@ def main():
         if found:
             revit[tag] = {transparency(style) > 0 for style in found}
     rows = collections.Counter()
+    unmatched = collections.Counter()
     for tag, (category, materials) in elements.items():
         if tag not in revit:
             rows[(category, "no styled body in Revit's export")] += 1
             continue
         kinds = revit[tag]
         known = [by_name[name] for name in materials if name in by_name]
-        unknown = len(materials) - len(known)
+        unknown = [name for name in materials if name not in by_name]
+        unmatched.update((category, name) for name in unknown)
         ours = {t > 0 for t in known}
         theirs = "both" if kinds == {True, False} else ("see-through" if kinds == {True} else "opaque")
         mine = "both" if ours == {True, False} else ("see-through" if ours == {True} else ("opaque" if ours == {False} else "none known"))
         rows[(category, f"Revit {theirs}, rvt-rs {mine}")] += 1
         if unknown:
-            rows[(category, "parts naming a material Revit's export has no style for")] += 1
+            rows[(category, "elements judged without some of their materials (no style of that name in Revit's export)")] += 1
     print(f"render styles: {len(elements)} elements in the probe, {len(revit)} with a styled body in Revit's export")
     for (category, what), n in sorted(rows.items()):
         print(f"render styles:   {category} {what}: {n}")
+    for (category, name), n in sorted(unmatched.items(), key=lambda kv: (-kv[1], kv[0]))[:20]:
+        print(f"render styles:   unmatched {category} material {name!r} on {n} elements")
     for category in sorted({c for c, _ in rows}):
         both = rows[(category, "Revit both, rvt-rs both")]
         both_all = sum(n for (c, w), n in rows.items() if c == category and w.startswith("Revit both"))
