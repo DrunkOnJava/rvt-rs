@@ -58,6 +58,13 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f racadv=true -f models="racadv-*" -f scorers=space_profiles_vs_ifc
 #
+# A run that measures Autodesk's 2018 rac_basic_sample_project with the default
+# scorers (or one that names spaces_by_globalid_vs_ifc) also pairs its rooms by
+# GlobalId with a forum user's Revit 2018 export of it, when its host answers
+# (research/rac-basic-2018-export.tsv, no licence, #2148): the export is fetched
+# for the run and never stored or cached, and only the counts are written, in
+# the sample's spaces_by_globalid_vs_ifc.txt.
+#
 # With `holdout`, the held-out models (research/holdout-models.tsv, RE-252,
 # and research/holdout-archive-models.tsv, #1261), for checking a rule against
 # files it was not derived on: only their summary counts are uploaded
@@ -1088,6 +1095,21 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # SAMPLE_YEARS is the first and last year.
           tools/fetch-autodesk-samples.sh _samples $SAMPLE_YEARS
+          # #2148: a forum user's Revit 2018 export of rac_basic_sample_project, which the
+          # 2018 save's rooms are paired with by GlobalId, counts only. An unreachable host is
+          # NOT MEASURED, and the shard's results are then not kept for later runs; a file that
+          # no longer matches its pin fails the run. The export itself is never cached.
+          if [ -f _samples/2018-rac_basic_sample_project.rvt ]; then
+            set +e
+            tools/ci/fetch-rac-basic-2018-export.sh _samples/phased
+            status=$?
+            set -e
+            case "$status" in
+              0) ;;
+              2) echo "::warning::the Revit 2018 export of rac_basic_sample_project NOT MEASURED: it could not be downloaded" ; : > "$RUNNER_TEMP/not-measured" ;;
+              *) echo "::error::the Revit 2018 export of rac_basic_sample_project no longer matches its pin (research/rac-basic-2018-export.tsv)"; exit 1 ;;
+            esac
+          fi
       - name: Measure
         if: steps.reuse.outputs.cache-hit != 'true'
         env:

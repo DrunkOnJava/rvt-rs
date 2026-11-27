@@ -1273,7 +1273,11 @@ has a room outside its last phase and such an export: Autodesk's
 all 13 releases, and a public Revit 2018 export of it holds all 14. They are
 left out by that change's default and written with `--phase "Working Drawings"`,
 which writes 14 of that export's 17 spaces by GlobalId and changes no other
-entity (Measure runs [41784415396](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41784415396) and [41784419457](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41784419457)). Revit 2014
+entity (Measure runs [41784415396](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41784415396) and [41784419457](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41784419457)).
+Since #1359 the default export writes the same 14 rooms, and a Measure run of the
+2018 save with the default scorers pairs them with that export when its host
+answers, keeping only the counts (#2148; run
+[46053386384](https://github.com/DrunkOnJava/rvt-rs/actions/runs/46053386384), kept: [the counts][kept-47]). Revit 2014
 and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
@@ -2333,3 +2337,4 @@ acceptance limits are 0.3048 mm sampled distance and 0.01% volume error.
 [kept-44]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/348187501f1f97da8a417acdf44b26784595a1c9?recursive=1
 [kept-45]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/ee28453ad615df7b3de2f08e7d17d54079958f95?recursive=1
 [kept-46]: https://api.github.com/repos/DrunkOnJava/rvt-rs/git/trees/ea5ae74efc0d43bb0eccd3879c1015b74a827afa?recursive=1
+[kept-47]: https://raw.githubusercontent.com/DrunkOnJava/rvt-rs/8486ca765b11077d9ad9482662c522cf8d1c1ad7/head/sample-2018-rac_basic_sample_project/spaces_by_globalid_vs_ifc.txt
