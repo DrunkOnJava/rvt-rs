@@ -2483,15 +2483,15 @@ mod tests {
         let triangle = vec![vec![[0., 0.], [2., 0.], [0., 2.]]];
         let (points, _) = check(&triangle, &[0., 1., 2.], &[0., 1., 2.], 2.0);
         // The diagonal crosses u = 1 at v = 1 and v = 1 at u = 1: one point, not two.
-        assert!(
-            points
-                .iter()
-                .any(|p| (p[0] - 1.0).abs() < 1e-12 && (p[1] - 1.0).abs() < 1e-12)
-        );
+        let at_the_crossing = points
+            .iter()
+            .filter(|p| (p[0] - 1.0).abs() < 1e-12 && (p[1] - 1.0).abs() < 1e-12)
+            .count();
+        assert_eq!(at_the_crossing, 1, "{points:?}");
     }
 
     #[test]
-    fn a_strip_with_two_bars_gets_two_trapezoids() {
+    fn a_strip_with_two_bars_is_covered_without_its_notch() {
         // A C opening to the right: right of u = 1 the strips hold a bar below and a bar above.
         let c = vec![vec![
             [0., 0.],
