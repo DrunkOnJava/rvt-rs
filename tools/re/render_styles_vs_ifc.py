@@ -116,7 +116,8 @@ def main():
     revit = {}
     for product in model.by_type("IfcProduct"):
         tag = getattr(product, "Tag", None)
-        if tag not in elements or product.Representation is None:
+        # An opening carries the Tag of the door or window that fills it: it is not that element.
+        if tag not in elements or product.Representation is None or product.is_a("IfcFeatureElementSubtraction"):
             continue
         found = []
         seen = set()
@@ -152,7 +153,7 @@ def main():
     shapes = []
     for product in model.by_type("IfcProduct"):
         tag = getattr(product, "Tag", None)
-        if tag not in revit or revit[tag] != {True, False} or tag not in areas:
+        if tag not in revit or revit[tag] != {True, False} or tag not in areas or product.is_a("IfcFeatureElementSubtraction"):
             continue
         try:
             shape = ifcopenshell.geom.create_shape(settings, product)
