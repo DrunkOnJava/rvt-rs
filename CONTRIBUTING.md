@@ -146,7 +146,7 @@ the workspace was read against this rule): `tools/ci/unit-test-counts.txt`
 lists each file's unit tests, and the PII guard job fails when a file gains or
 loses one. A change that adds a pure helper's failure-mode test raises that
 file's number in the same commit and says why in the pull request, and lands
-only with a second reviewer's approval and the advisor's sign-off. Hand-made
+only after a second maintainer review, which the maintainers arrange. Hand-made
 malformed bytes for a reader of untrusted files go in a `hardening` target
 under `tests/` (such as `tests/history_hardening.rs`), not in `src/`.
 

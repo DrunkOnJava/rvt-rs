@@ -5,13 +5,14 @@ Unit tests are banned in this repository except a few for a pure helper (CONTRIB
 "Tests"). On 2026-11-27 every one of them was read against that rule, and Griffin chose to
 freeze the count there: a file that gains a unit test, or a new file that holds one, fails
 this check until the change raises its number here on purpose, so the exception cannot
-grow unread. A file whose count falls fails too, so the list stays exact. A raise needs
-another agent's approval and the advisor's sign-off before it lands (Griffin, 2026-11-27).
+grow unread. A file whose count falls fails too, so the list stays exact. A raise needs a
+second maintainer review before it lands, which the maintainers arrange (Griffin, 2026-11-27).
 
 A unit test is a `#[test]` attribute, or a namespaced or named one such as `#[tokio::test]`,
 `#[test_case(..)]` or one with arguments (at the start of a line, whatever follows it), in a
-tracked `.rs` file under a crate's `src/` folder, `src/**/tests/` included; the end-to-end
-targets in each crate's top-level `tests/` folder are not counted.
+tracked `.rs` file outside a crate's top-level `tests/` folder (a `tests` folder with no `src`
+above it), where the end-to-end targets live; `src/**/tests/`, `examples/` and `benches/` are
+counted.
 
 Usage: python3 tools/ci/unit-test-counts.py [--write]
 """
@@ -32,7 +33,11 @@ def counted():
     files = subprocess.run(["git", "ls-files", "*.rs"], check=True, capture_output=True, text=True).stdout.split()
     out = {}
     for path in files:
-        if "src" not in pathlib.PurePosixPath(path).parts[:-1]:
+        # The end-to-end targets: a `tests` folder with no `src` above it (the top-level
+        # `tests/` of a crate). A `tests` folder inside `src/` is counted, and so are
+        # `examples/`, `benches/` and any other source a test attribute can sit in.
+        parts = pathlib.PurePosixPath(path).parts[:-1]
+        if "tests" in parts and "src" not in parts[: parts.index("tests")]:
             continue
         n = sum(1 for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines() if TEST.match(line))
         if n:
@@ -68,7 +73,7 @@ def main():
         print(f"::error file={path}::{path} holds {is_} unit tests and the list says {was}: it {how} {abs(is_ - was)}")
     print("Unit tests are frozen (Griffin, 2026-11-27). A new one must be a pure helper's, tested on the ways it can fail;")
     print("if it is, raise the file's number in tools/ci/unit-test-counts.txt in the same change and say why in the PR;")
-    print("a raise lands only with another agent's approval and the advisor's sign-off.")
+    print("a raise lands only after a second maintainer review, which the maintainers arrange.")
     return 1
 
 
