@@ -334,6 +334,11 @@ jobs:
       - name: Run the pure helpers' unit tests
         if: runner.os == 'Linux' && matrix.label != 'msrv'
         run: cargo test --profile ci --lib
+      # The evidence harness's own unit tests (tools/stream_evidence), which ran
+      # in no job until Griffin chose to run them (2026-11-27).
+      - name: Run the evidence harness's unit tests
+        if: runner.os == 'Linux' && matrix.label != 'msrv'
+        run: cargo test --profile ci -p stream-evidence --lib
       # Real-file, end-to-end CLI and contract checks only; the manifest
       # names every tests/*.rs target and the script fails on one it does
       # not classify, so a new target cannot run or skip unnoticed (#206).
@@ -1917,6 +1922,10 @@ jobs:
       # docs.
       - name: API docs cite only reported RE findings and no planning labels
         run: python3 tools/ci/api-doc-ids.py
+      # Unit tests are frozen at the count read on 2026-11-27 (Griffin): a file
+      # that gains or loses one fails until tools/ci/unit-test-counts.txt says so.
+      - name: Unit tests stay at their listed count
+        run: python3 -I tools/ci/unit-test-counts.py
       - name: Every run the evidence pages cite is kept or recorded (#2124)
         run: python3 tools/ci/cited-runs-kept.py
       # The saved-graphics pass builds only the fields in SAVED_GRAPHICS_FIELDS

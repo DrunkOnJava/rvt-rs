@@ -141,6 +141,14 @@ rings tile its outline, a function of 2D rings), with its failure modes
 tested; CI's test job runs these with `cargo test --lib` on Linux, beside
 the doc tests and the `tests/` targets.
 
+The count is frozen (the maintainer's, 2026-11-27, after every unit test in
+the workspace was read against this rule): `tools/ci/unit-test-counts.txt`
+lists each file's unit tests, and the PII guard job fails when a file gains or
+loses one. A change that adds a pure helper's failure-mode test raises that
+file's number in the same commit and says why in the pull request. Hand-made
+malformed bytes for a reader of untrusted files go in a `hardening` target
+under `tests/` (such as `tests/history_hardening.rs`), not in `src/`.
+
 ## What's welcome
 
 - **Bug reports** with a minimal reproducer (the smallest `.rfa`

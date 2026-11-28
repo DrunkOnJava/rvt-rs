@@ -20,7 +20,9 @@
 #   hardening replays inputs that crashed or overran a parser of untrusted
 #             files (fuzz findings) through the public API: run, as a
 #             parser of hostile input must keep surviving them (the
-#             maintainer's choice, 2026-10-05, C9)
+#             maintainer's choice, 2026-10-05, C9); and hand-made malformed
+#             bytes a reader must refuse, which no real file holds
+#             (Griffin, 2026-11-27)
 #
 # `skip=` leaves out the synthetic-fixture tests inside a real-file target.
 #
@@ -36,6 +38,7 @@
 # tools/check-local.sh runs `cargo test -p rvt-rs-mcp`.
 
 hardening fuzz_regressions
+hardening history_hardening
 real      arc_wall_corpus
 real      category_type_phase
 real      cfb_roundtrip_delta
