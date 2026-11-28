@@ -1,0 +1,28 @@
+# Unit tests per source file, frozen on 2026-11-27 (Griffin): read tools/ci/unit-test-counts.py.
+# Raise a number only in a change that adds a pure helper's failure-mode test, say why, and land it
+# only with another agent's approval and the advisor's sign-off.
+  10 rvt-mcp/src/root.rs
+   5 src/cli.rs
+   7 src/ifc/element_diff.rs
+   7 src/ifc/export_content.rs
+  29 src/ifc/export_content/wall_profile.rs
+   9 src/ifc/gltf.rs
+  49 src/ifc/mesh_volume.rs
+  14 src/ifc/mesh_wall_quantities.rs
+   7 src/ifc/step_writer.rs
+  10 src/redact.rs
+  18 src/research/element_record_plan_profiles.rs
+  13 src/research/graph_value.rs
+   9 src/research/native_graphics_traversal.rs
+  21 src/research/native_parametric_mesh.rs
+  15 src/research/native_phases.rs
+  61 src/research/native_saved_mesh.rs
+   7 src/research/native_saved_scene.rs
+  27 src/research/partition_area_records.rs
+   5 src/research/partition_compound_structure.rs
+   3 src/research/partition_room_parameters.rs
+  11 src/research/partition_schema_mvp/mullion_ends.rs
+   4 src/research/partition_schema_mvp/records.rs
+  10 src/research/partition_schema_mvp/walls.rs
+   2 src/research/views.rs
+   4 tools/stream_evidence/src/lib.rs

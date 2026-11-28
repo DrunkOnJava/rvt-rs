@@ -81,6 +81,8 @@ mod field_type_coverage;
 mod fitting_nominal_diameter;
 #[path = "../fuzz_regressions.rs"]
 mod fuzz_regressions;
+#[path = "../history_hardening.rs"]
+mod history_hardening;
 #[path = "../ifc_export_overrides.rs"]
 mod ifc_export_overrides;
 #[path = "../ifc_roundtrip.rs"]

@@ -1889,6 +1889,25 @@ fn a_working_directory_that_is_too_broad_gives_no_root() {
     }
 }
 
+/// An empty `RVT_MCP_ROOT` names no folder: a server started from `/` with it
+/// set to nothing has no root, as with the variable unset, and says why.
+#[cfg(unix)]
+#[test]
+fn an_empty_root_variable_names_no_folder() {
+    let (project, _sibling) = project_and_sibling("root-empty-env");
+    let model = project.join("model.rvt");
+    let mut server = Raw::start_with_env(&[], Path::new("/"), &[("RVT_MCP_ROOT", OsStr::new(""))]);
+    let text = refusal(&tool(
+        &mut server,
+        1,
+        "open_model",
+        json!({ "model": model }),
+    ));
+    assert!(text.contains("--root"), "{text}");
+    assert!(text.contains("the top of a file system"), "{text}");
+    server.finish();
+}
+
 /// A folder inside the home folder is a root, and `RVT_MCP_ROOT` and `--root`
 /// pick one whatever the working directory is, the flag first.
 #[cfg(unix)]

@@ -436,38 +436,4 @@ mod tests {
         assert_eq!(too_broad(Path::new("/people/alexis"), &homes()), None);
         assert_eq!(too_broad(Path::new("/srv/models"), &homes()), None);
     }
-
-    #[test]
-    fn no_root_picked_and_a_broad_working_directory_leaves_the_reach_unset() {
-        let unset = Reach::choose(false, None, None, Ok(PathBuf::from("/")), &homes()).unwrap();
-        let message = unset.limit().unwrap_err();
-        assert!(message.contains("--root"), "{message}");
-        assert!(message.contains(ROOT_ENV), "{message}");
-        assert!(message.contains("the top of a file system"), "{message}");
-    }
-
-    #[test]
-    fn unconfined_wins_over_everything_and_a_picked_root_over_the_working_directory() {
-        let anywhere = Reach::choose(true, Some(Path::new("/nope")), None, Ok("/".into()), &[]);
-        assert!(matches!(anywhere, Ok(Reach::Anywhere)));
-        // A root that is not there is an error, not a fall back to the working directory.
-        let missing = Reach::choose(
-            false,
-            Some(Path::new("/definitely/not/here")),
-            None,
-            Ok(PathBuf::from("/work/project")),
-            &homes(),
-        );
-        assert!(missing.is_err());
-        // An empty environment value is no value.
-        let empty = Reach::choose(
-            false,
-            None,
-            Some(OsStr::new("")),
-            Ok(PathBuf::from("/")),
-            &homes(),
-        )
-        .unwrap();
-        assert!(empty.limit().is_err());
-    }
 }
