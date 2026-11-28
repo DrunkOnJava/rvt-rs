@@ -1,5 +1,6 @@
 # Unit tests per source file, frozen on 2026-11-27 (Griffin): read tools/ci/unit-test-counts.py.
-# Raise a number only in a change that adds a pure helper's failure-mode test, and say why.
+# Raise a number only in a change that adds a pure helper's failure-mode test, say why, and land it
+# only with another agent's approval and the advisor's sign-off.
   10 rvt-mcp/src/root.rs
    5 src/cli.rs
    7 src/ifc/element_diff.rs

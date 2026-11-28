@@ -5,7 +5,8 @@ Unit tests are banned in this repository except a few for a pure helper (CONTRIB
 "Tests"). On 2026-11-27 every one of them was read against that rule, and Griffin chose to
 freeze the count there: a file that gains a unit test, or a new file that holds one, fails
 this check until the change raises its number here on purpose, so the exception cannot
-grow unread. A file whose count falls fails too, so the list stays exact.
+grow unread. A file whose count falls fails too, so the list stays exact. A raise needs
+another agent's approval and the advisor's sign-off before it lands (Griffin, 2026-11-27).
 
 A unit test is a `#[test]` attribute (at the start of a line, whatever follows it) in a
 tracked `.rs` file under a crate's `src/` folder, `src/**/tests/` included; the end-to-end
@@ -61,7 +62,8 @@ def main():
         how = "gained" if is_ > was else "lost"
         print(f"::error file={path}::{path} holds {is_} unit tests and the list says {was}: it {how} {abs(is_ - was)}")
     print("Unit tests are frozen (Griffin, 2026-11-27). A new one must be a pure helper's, tested on the ways it can fail;")
-    print("if it is, raise the file's number in tools/ci/unit-test-counts.txt in the same change, and say why in the PR.")
+    print("if it is, raise the file's number in tools/ci/unit-test-counts.txt in the same change and say why in the PR;")
+    print("a raise lands only with another agent's approval and the advisor's sign-off.")
     return 1
 
 
