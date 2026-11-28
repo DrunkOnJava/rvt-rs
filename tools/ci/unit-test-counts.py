@@ -8,7 +8,8 @@ this check until the change raises its number here on purpose, so the exception 
 grow unread. A file whose count falls fails too, so the list stays exact. A raise needs
 another agent's approval and the advisor's sign-off before it lands (Griffin, 2026-11-27).
 
-A unit test is a `#[test]` attribute (at the start of a line, whatever follows it) in a
+A unit test is a `#[test]` attribute, or a namespaced one such as `#[tokio::test]` (at the
+start of a line, whatever follows it), in a
 tracked `.rs` file under a crate's `src/` folder, `src/**/tests/` included; the end-to-end
 targets in each crate's top-level `tests/` folder are not counted.
 
@@ -20,7 +21,8 @@ import subprocess
 import sys
 
 LIST = pathlib.Path(__file__).with_name("unit-test-counts.txt")
-TEST = re.compile(r"^\s*#\[test\]")
+# `#[test]` and the namespaced kinds (`#[tokio::test]`, `#[wasm_bindgen_test]`) alike.
+TEST = re.compile(r"^\s*#\[(?:[a-z_]+::)?[a-z_]*test\]")
 
 
 def counted():
