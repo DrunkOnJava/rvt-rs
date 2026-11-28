@@ -24,7 +24,8 @@ LIST = pathlib.Path(__file__).with_name("unit-test-counts.txt")
 # `#[test]`, the namespaced and named kinds (`#[tokio::test]`, `#[wasm_bindgen_test]`,
 # `#[test_case(..)]`) and any of them with arguments (`#[tokio::test(flavor = ..)]`); never
 # `#[cfg(test)]`, whose name is not a test's.
-TEST = re.compile(r"^\s*#\[(?:[a-z_]+::)*[a-z_]*test[a-z_]*(?:\(.*\))?\]")
+# The name is enough, followed by `]` or `(`: rustfmt splits a long attribute across lines.
+TEST = re.compile(r"^\s*#\[(?:[a-z_]+::)*[a-z_]*test[a-z_]*[(\]]")
 
 
 def counted():
