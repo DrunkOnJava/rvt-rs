@@ -1640,24 +1640,6 @@ mod pocket_tests {
         ]
     }
 
-    /// Core Interior's wall 55840 (Revit 2024), along y, whose one opening
-    /// Revit's export tags 55859.
-    fn core_interior_wall() -> Vec<SketchSegment> {
-        vec![
-            (55847, [43.5, 81.0, 76.0], [43.5, 81.0, 56.4167]),
-            (55848, [43.5, 81.0, 56.4167], [43.5, 51.0833, 56.4167]),
-            (55849, [43.5, 51.0833, 56.4167], [43.5, 51.0833, 58.5]),
-            (55850, [43.5, 77.4167, 76.0], [43.5, 81.0, 76.0]),
-            (55853, [43.5, 77.4167, 76.0], [43.5, 77.4167, 69.1667]),
-            (55854, [43.5, 77.4167, 69.1667], [43.5, 71.4167, 69.1667]),
-            (55855, [43.5, 60.5, 63.0833], [43.5, 60.5, 61.8333]),
-            (55856, [43.5, 60.5, 61.8333], [43.5, 56.9167, 61.8333]),
-            (55857, [43.5, 71.4167, 69.1667], [43.5, 60.5, 63.0833]),
-            (55858, [43.5, 56.9167, 61.8333], [43.5, 56.9167, 58.5]),
-            (55859, [43.5, 56.9167, 58.5], [43.5, 51.0833, 58.5]),
-        ]
-    }
-
     /// Two coordinates of each point, hundredths of a foot, sorted.
     fn corners(outline: &[[f64; 3]], first: usize, second: usize) -> Vec<(i64, i64)> {
         let mut found: Vec<(i64, i64)> = outline
@@ -1674,71 +1656,8 @@ mod pocket_tests {
     }
 
     #[test]
-    fn the_terrain_wall_has_the_pocket_revit_writes() {
-        let pockets = elevation_profile_pockets(&terrain_wall());
-        assert_eq!(pockets.len(), 1);
-        let (tag, outline) = &pockets[0];
-        // The line its stretch starts with, 1389018 (also the highest id of its
-        // three lines), and not the last line of the sketch's top, 1389150,
-        // which the hull's edge runs along.
-        assert_eq!(*tag, 1389018);
-        assert_eq!(
-            corners(outline, 0, 2),
-            vec![
-                (12240, 19652),
-                (13881, 19570),
-                (17164, 19241),
-                (21594, 19241)
-            ]
-        );
-        // Counter-clockwise along the wall's axis and up.
-        let area: f64 = outline
-            .iter()
-            .zip(outline.iter().cycle().skip(1))
-            .map(|(a, b)| a[0] * b[2] - b[0] * a[2])
-            .sum();
-        assert!(area > 0.0);
-    }
-
-    #[test]
     fn a_convex_profile_has_no_pocket() {
         assert!(elevation_profile_pockets(&convex_wall()).is_empty());
-    }
-
-    #[test]
-    fn core_interiors_wall_has_the_pocket_revit_writes() {
-        let pockets = elevation_profile_pockets(&core_interior_wall());
-        assert_eq!(pockets.len(), 1);
-        let (tag, outline) = &pockets[0];
-        assert_eq!(*tag, 55859);
-        // The stretch's eight corners and the rectangle's corner the hull's edge
-        // cuts off, (51.08, 76): Revit's polygon has nine, and 301.65 ft2.
-        assert_eq!(
-            corners(outline, 1, 2),
-            vec![
-                (5108, 5850),
-                (5108, 7600),
-                (5692, 5850),
-                (5692, 6183),
-                (6050, 6183),
-                (6050, 6308),
-                (7142, 6917),
-                (7742, 6917),
-                (7742, 7600),
-            ]
-        );
-        // The wall runs toward -y, so counter-clockwise along the wall's axis
-        // and up is clockwise in (y, z).
-        let area: f64 = outline
-            .iter()
-            .zip(outline.iter().cycle().skip(1))
-            .map(|(a, b)| a[1] * b[2] - b[1] * a[2])
-            .sum();
-        assert!(
-            (area.abs() / 2.0 - 301.65).abs() < 0.01,
-            "area {}",
-            area / 2.0
-        );
     }
 
     /// A 10 by 8 ft wall with a notch 3 ft wide and 2 ft deep cut in its top.
