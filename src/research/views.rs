@@ -705,7 +705,7 @@ mod tests {
         wrong["m_targetPos"] = serde_json::json!([1.0, 0.0, 0.0]);
         assert_eq!(Camera::from(&wrong, &view).expect("camera").target, None);
         // A skewed basis is not a camera.
-        let mut skewed = fields;
+        let mut skewed = fields.clone();
         skewed["m_boundedSpace"]["m_basis"][1] = serde_json::json!([0.6, 0.8, 0.0]);
         assert!(Camera::from(&skewed, &view).is_none());
         // The view plane and the viewer must agree.
@@ -714,6 +714,6 @@ mod tests {
             "m_vertDir": [0.0, 0.0, 1.0],
             "m_viewDir": [1.0, 0.0, 0.0]
         });
-        assert!(Camera::from(&skewed, &inconsistent).is_none());
+        assert!(Camera::from(&fields, &inconsistent).is_none());
     }
 }
