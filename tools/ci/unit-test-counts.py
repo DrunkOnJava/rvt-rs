@@ -7,25 +7,28 @@ freeze the count there: a file that gains a unit test, or a new file that holds 
 this check until the change raises its number here on purpose, so the exception cannot
 grow unread. A file whose count falls fails too, so the list stays exact.
 
-A unit test is a `#[test]` line in a tracked `.rs` file outside any `tests/` folder; the
-end-to-end targets under `tests/` are not counted.
+A unit test is a `#[test]` attribute (at the start of a line, whatever follows it) in a
+tracked `.rs` file under a crate's `src/` folder, `src/**/tests/` included; the end-to-end
+targets in each crate's top-level `tests/` folder are not counted.
 
 Usage: python3 tools/ci/unit-test-counts.py [--write]
 """
 import pathlib
+import re
 import subprocess
 import sys
 
 LIST = pathlib.Path(__file__).with_name("unit-test-counts.txt")
+TEST = re.compile(r"^\s*#\[test\]")
 
 
 def counted():
     files = subprocess.run(["git", "ls-files", "*.rs"], check=True, capture_output=True, text=True).stdout.split()
     out = {}
     for path in files:
-        if "tests" in pathlib.PurePosixPath(path).parts[:-1]:
+        if "src" not in pathlib.PurePosixPath(path).parts[:-1]:
             continue
-        n = sum(1 for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines() if line.strip() == "#[test]")
+        n = sum(1 for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines() if TEST.match(line))
         if n:
             out[path] = n
     return out
