@@ -20,6 +20,10 @@
 //!     the names of the materials its visible parts' styles are, `?<id>` for a style the file
 //!     names no material for; `tools/re/render_styles_vs_ifc.py` sets them beside the surface
 //!     styles Revit's export gives the element (Revit names a surface style after its material).
+//!   area<TAB><ElementId><TAB><material name><TAB><square feet>
+//!     for each material an element's visible parts name, the summed area of those parts'
+//!     triangles, so that the see-through area of an element can be set beside the area
+//!     Revit's export draws with a see-through style (`tools/re/render_styles_vs_ifc.py`).
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_2112_render_styles -- MODEL.rvt
@@ -110,6 +114,36 @@ fn main() -> Result<()> {
             parts.len(),
             materials.join("|")
         );
+        let mut areas: BTreeMap<String, f64> = BTreeMap::new();
+        for part in &parts {
+            let name = u32::try_from(part.render_style_id)
+                .ok()
+                .and_then(|id| names.get(&id))
+                .cloned()
+                .unwrap_or_else(|| format!("?{}", part.render_style_id));
+            let corner = |i: u32| part.vertices.get(i as usize).copied();
+            let area: f64 = part
+                .triangles
+                .iter()
+                .filter_map(|t| Some((corner(t[0])?, corner(t[1])?, corner(t[2])?)))
+                .map(|(a, b, c)| {
+                    let (u, v) = (
+                        [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+                        [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
+                    );
+                    let n = [
+                        u[1] * v[2] - u[2] * v[1],
+                        u[2] * v[0] - u[0] * v[2],
+                        u[0] * v[1] - u[1] * v[0],
+                    ];
+                    (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0
+                })
+                .sum();
+            *areas.entry(name).or_default() += area;
+        }
+        for (name, area) in &areas {
+            println!("area\t{}\t{name}\t{area:.6}", element.identity.element_id);
+        }
     }
     for (cat, [elements, one, several, parts, unstyled]) in &tally {
         println!(

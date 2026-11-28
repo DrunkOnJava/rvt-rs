@@ -15,6 +15,11 @@ The rows (#2112, registered before the first run):
    parts name both kinds on at least 95 per cent.
 2. Of those Revit draws with one kind only, rvt-rs's parts name that kind alone on at least
    95 per cent.
+3. Per part, not per element (#2112's own question): of the elements Revit draws with both
+   kinds, the see-through area of rvt-rs's parts (the summed triangle area of the parts whose
+   material Revit draws see-through) is within 10 per cent of the see-through area of Revit's
+   body (its triangles meshed by IfcOpenShell, grouped by the surface style each carries) on at
+   least 90 per cent. Area in square feet on both sides.
 
 Prints counts only, lines starting `render styles:`.
 
@@ -27,8 +32,25 @@ import re
 import sys
 
 import ifcopenshell
+import ifcopenshell.geom
 
 ELEMENT = re.compile(r"^element tag=(\d+) category=(\w+) parts=\d+ materials=(.*)$")
+SQUARE_FEET_PER_SQUARE_METRE = 10.763910416709722
+
+
+def triangle_areas(shape):
+    """Each triangle's area in square metres and the index of the style it carries."""
+    verts = shape.geometry.verts
+    faces = shape.geometry.faces
+    ids = shape.geometry.material_ids
+    out = []
+    for k in range(0, len(faces), 3):
+        a, b, c = (verts[3 * faces[k + j]: 3 * faces[k + j] + 3] for j in range(3))
+        u = [b[i] - a[i] for i in range(3)]
+        v = [c[i] - a[i] for i in range(3)]
+        n = (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0])
+        out.append(((n[0] ** 2 + n[1] ** 2 + n[2] ** 2) ** 0.5 / 2.0, ids[k // 3] if k // 3 < len(ids) else -1))
+    return out
 
 
 def transparency(style):
@@ -73,7 +95,12 @@ def main():
         print(__doc__)
         return 2
     elements = {}
+    areas = collections.defaultdict(dict)
     for line in open(args[0], encoding="utf-8", errors="replace"):
+        if line.startswith("area\t"):
+            _, tag, name, value = line.rstrip("\n").split("\t")
+            areas[tag][name] = float(value)
+            continue
         match = ELEMENT.match(line.rstrip("\n"))
         if match:
             elements[match.group(1)] = (match.group(2), match.group(3).split("|") if match.group(3) else [])
@@ -119,6 +146,35 @@ def main():
         print(f"render styles:   {category} {what}: {n}")
     for (category, name), n in sorted(unmatched.items(), key=lambda kv: (-kv[1], kv[0]))[:20]:
         print(f"render styles:   unmatched {category} material {name!r} on {n} elements")
+    # Row 3: per element Revit draws with both kinds, the see-through share of the area.
+    settings = ifcopenshell.geom.settings()
+    ratios = collections.defaultdict(list)
+    shapes = []
+    for product in model.by_type("IfcProduct"):
+        tag = getattr(product, "Tag", None)
+        if tag not in revit or revit[tag] != {True, False} or tag not in areas:
+            continue
+        try:
+            shape = ifcopenshell.geom.create_shape(settings, product)
+        except Exception:
+            ratios[elements[tag][0]].append(None)
+            continue
+        shapes.append(shape)
+        clear = sum(area for area, style in triangle_areas(shape)
+                    if 0 <= style < len(shape.geometry.materials)
+                    and float(getattr(shape.geometry.materials[style], "transparency", 0) or 0) > 0)
+        theirs = clear * SQUARE_FEET_PER_SQUARE_METRE
+        ours = sum(a for name, a in areas[tag].items() if by_name.get(name, 0.0) > 0)
+        ratios[elements[tag][0]].append((ours, theirs))
+    for category in sorted(ratios):
+        pairs = ratios[category]
+        unmeshed = sum(1 for p in pairs if p is None)
+        pairs = [p for p in pairs if p is not None]
+        close = sum(1 for ours, theirs in pairs if theirs > 0 and abs(ours - theirs) <= 0.10 * theirs)
+        print(f"render styles: {category} row 3: {close} of {len(pairs)} within 10 per cent of Revit's see-through area"
+              + (f"; {unmeshed} not meshed by IfcOpenShell" if unmeshed else ""))
+        for ours, theirs in sorted(pairs, key=lambda p: (p[0] / p[1]) if p[1] else float("inf"))[:3] + sorted(pairs, key=lambda p: (p[0] / p[1]) if p[1] else float("inf"))[-3:]:
+            print(f"render styles:   {category} see-through ft2 rvt-rs {ours:.3f} Revit {theirs:.3f}")
     for category in sorted({c for c, _ in rows}):
         both = rows[(category, "Revit both, rvt-rs both")]
         both_all = sum(n for (c, w), n in rows.items() if c == category and w.startswith("Revit both"))
