@@ -23,6 +23,6 @@
    3 src/research/partition_room_parameters.rs
   11 src/research/partition_schema_mvp/mullion_ends.rs
    4 src/research/partition_schema_mvp/records.rs
-  10 src/research/partition_schema_mvp/walls.rs
+   8 src/research/partition_schema_mvp/walls.rs
    2 src/research/views.rs
    4 tools/stream_evidence/src/lib.rs
